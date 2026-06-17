@@ -308,26 +308,58 @@ button { font-family: inherit; cursor: pointer; }
 .reveal.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
 
-/* ─── Carnet digital premium (estilo app, claro + dorado, con QR) ──────────── */
+/* ─── Carnet vertical (componente único: landing + área de miembro) ────────── */
 .cn-wrap { display: flex; justify-content: center; padding: 8px 0 16px; }
-.cn-card { width: 360px; max-width: 100%; background: #fbf8f0; color: #14140f; border-radius: 24px;
-  overflow: hidden; position: relative; padding-bottom: 26px; box-shadow: 0 30px 70px rgba(0,0,0,.55); }
-.cn-head { height: 104px; background: linear-gradient(120deg, #f0d873 0%, #c9a227 55%, #8a6f15 100%);
-  display: flex; align-items: flex-start; justify-content: center; padding-top: 16px; }
-.cn-logo { height: 26px; filter: brightness(0) invert(1); opacity: .92; } /* logo blanco sobre el dorado */
-.cn-foto { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; background: #fff;
-  border: 5px solid #fbf8f0; position: absolute; top: 52px; left: 50%; transform: translateX(-50%); }
-.cn-foto-ph { display: flex; align-items: center; justify-content: center; font-family: var(--display);
-  font-weight: 800; font-size: 40px; color: #c9a227; }
-.cn-body { padding: 62px 24px 0; text-align: center; }
-.cn-nom { font-family: var(--display); font-size: 23px; font-weight: 800; letter-spacing: -.5px; }
-.cn-badge { display: inline-block; margin: 9px 0 20px; padding: 6px 16px; border-radius: 999px; font-size: 12.5px;
-  font-weight: 700; background: linear-gradient(120deg, #f0d873, #c9a227); color: #1a1500;
-  text-transform: uppercase; letter-spacing: .5px; }
-.cn-qr { background: #fff; border-radius: 16px; padding: 14px; display: inline-block; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
-.cn-qr img { display: block; width: 196px; height: 196px; image-rendering: pixelated; }
-.cn-num { font-family: ui-monospace, "SF Mono", monospace; letter-spacing: 2px; font-size: 19px; font-weight: 700; margin-top: 18px; color: #222; }
-.cn-foot { font-size: 12px; color: #8a8a82; margin-top: 4px; }
+.cn { width: 100%; max-width: 300px; margin: 0 auto; border-radius: 22px; overflow: hidden;
+  position: relative; padding-bottom: 22px; box-shadow: 0 26px 60px rgba(0,0,0,.5);
+  background: #14141b; color: #fff; text-align: center; }
+.cn-head { height: 90px; display: flex; align-items: flex-start; justify-content: center; padding-top: 16px; position: relative; }
+.cn-logo { height: 24px; filter: brightness(0) invert(1); }      /* logo Olimpia+Olimpistas en blanco */
+.cn-photo { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; background: #fff;
+  position: absolute; top: 46px; left: 50%; transform: translateX(-50%); border: 4px solid #14141b; z-index: 2; }
+.cn-photo-ph { display: flex; align-items: center; justify-content: center; font-size: 34px; }
+.cn-name { font-family: var(--display); font-weight: 800; font-size: 19px; margin-top: 54px; padding: 0 16px; }
+.cn-level { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; opacity: .85; margin: 4px 0 16px; }
+.cn-qr { background: #fff; border-radius: 14px; padding: 10px; display: inline-block; box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+.cn-qr img { display: block; width: 124px; height: 124px; image-rendering: pixelated; }
+.cn-qr-empty { width: 124px; height: 124px; display: flex; align-items: center; justify-content: center;
+  color: #9aa0a6; font-size: 12px; padding: 0; }
+.cn-num { font-family: ui-monospace, monospace; letter-spacing: 2px; font-size: 14px; font-weight: 700; margin-top: 14px; }
+.cn-foot { font-size: 9.5px; letter-spacing: 1.5px; opacity: .55; margin-top: 5px; }
+
+/* Variante GRATIS — blanco y negro (franjeado del Decano) */
+.cn--olimpista { background: #15151b; color: #fff; }
+.cn--olimpista .cn-head { background: #000; }
+.cn--olimpista .cn-head::after { content: ""; position: absolute; bottom: 0; left: 0; right: 0; height: 7px;
+  background: repeating-linear-gradient(90deg, #fff 0 16px, #000 16px 32px); }
+.cn--olimpista .cn-photo { border-color: #15151b; }
+.cn--olimpista .cn-photo-ph { color: #fff; }
+
+/* Variante PREMIUM — dorado */
+.cn--premium { background: #fbf8f0; color: #14140f; }
+.cn--premium .cn-head { background: linear-gradient(120deg, #f0d873 0%, #c9a227 55%, #8a6f15 100%); }
+.cn--premium .cn-photo { border-color: #fbf8f0; }
+.cn--premium .cn-photo-ph { color: #c9a227; }
+.cn--premium .cn-level { color: #a8842a; opacity: 1; }
+.cn--premium .cn-num { color: #222; }
+
+/* Variante KIDS — infantil y colorido */
+.cn--kids { background: #fff7fb; color: #2a2330; }
+.cn--kids .cn-head { background: linear-gradient(120deg, #ff6b9d 0%, #ff9f43 50%, #ffd24d 100%); }
+.cn--kids .cn-photo { border-color: #fff7fb; }
+.cn--kids .cn-photo-ph { color: #ff6b9d; }
+.cn--kids .cn-level { color: #e0497b; opacity: 1; }
+.cn--kids .cn-num { color: #5a3a52; }
+.cn--kids { border: 2px solid #ffd24d; }
+
+/* Columna de nivel en la landing (carnet + precio + CTA + beneficios) */
+.tier { position: relative; }
+.tier .cn { margin-bottom: 18px; }
+.tier-ribbon { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); z-index: 5;
+  background: linear-gradient(120deg, var(--oro-claro), var(--oro)); color: #1a1500; font-family: var(--display);
+  font-weight: 800; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 5px 14px;
+  border-radius: 999px; box-shadow: var(--glow); }
+.tier-destacado .cn { box-shadow: 0 0 0 2px var(--oro), 0 26px 60px rgba(0,0,0,.55); }
 
 /* ─── Responsive (al final: deben ganar por orden a las reglas base) ──────── */
 @media (max-width: 920px) {

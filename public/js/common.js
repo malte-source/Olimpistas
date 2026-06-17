@@ -53,6 +53,36 @@ window.OLI = (function () {
     try { return await api("/auth/yo"); } catch { return null; }
   }
 
+  // Genera un QR (data URL) si el generador está disponible.
+  function makeQR(text) {
+    try { if (!window.qrcode) return ""; const qr = window.qrcode(0, "M"); qr.addData(String(text)); qr.make(); return qr.createDataURL(5, 2); }
+    catch (e) { return ""; }
+  }
+
+  // Carnet vertical reutilizable (landing + área de miembro). Color por nivel vía .cn--slug.
+  function carnet(o) {
+    o = o || {};
+    const slug = o.tierSlug || "olimpista";
+    const nombre = o.nombre || "Tu nombre";
+    const nivel = o.tierNombre || "Olimpista";
+    const numero = o.numero || "OLI-••••••••";
+    const avatar = o.foto
+      ? `<img class="cn-photo" src="${o.foto}" alt="" />`
+      : `<div class="cn-photo cn-photo-ph">${o.icono || "★"}</div>`;
+    const qr = o.qr
+      ? `<div class="cn-qr"><img src="${o.qr}" alt="QR de miembro" /></div>`
+      : `<div class="cn-qr cn-qr-empty">Tu QR</div>`;
+    return `<div class="cn cn--${slug}">
+      <div class="cn-head"><img class="cn-logo" src="/assets/logo-horizontal.svg" alt="Olimpistas" /></div>
+      ${avatar}
+      <div class="cn-name">${nombre}</div>
+      <div class="cn-level">${nivel}</div>
+      ${qr}
+      <div class="cn-num">${numero}</div>
+      <div class="cn-foot">MIEMBRO · OLIMPISTAS</div>
+    </div>`;
+  }
+
   // Registrar el Service Worker (PWA) — solo en producción. En localhost se evita
   // para que el cache-first del SW no sirva JS/CSS viejos durante el desarrollo.
   const esLocal = ["localhost", "127.0.0.1", ""].includes(location.hostname);
@@ -81,5 +111,5 @@ window.OLI = (function () {
     }
   });
 
-  return { api, gs, precioTier, artGradient, artSvg, toast, yo };
+  return { api, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet };
 })();

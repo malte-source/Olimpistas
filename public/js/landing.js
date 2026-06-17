@@ -1,6 +1,6 @@
 /* landing.js — embudo de captación: registro gratis + upsell a Kids/Premium. */
 (function () {
-  const { api, precioTier, artSvg, toast, yo } = window.OLI;
+  const { api, precioTier, toast, yo, carnet, makeQR } = window.OLI;
   let CONFIG = null;
   let SESSION = null;
   let intentTier = null; // nivel que se quiso comprar antes de registrarse
@@ -103,16 +103,16 @@
 
   function renderTiers() {
     const cont = document.getElementById("tiers");
+    const previewQR = makeQR("https://olimpistas.olimpia.com"); // QR genérico para la vista previa
     cont.innerHTML = CONFIG.tiers.map((t) => {
       const p = precioTier(t);
       const bullets = t.beneficios.map((b) => `<li>${b}</li>`).join("");
+      const carnetHtml = carnet({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre",
+        numero: "OLI-••••••••", icono: ICONOS[t.slug], qr: previewQR });
       return `
-      <div class="tier">
-        <div class="tier-card">
-          <div class="art">${artSvg(t.slug, t.nombre, ICONOS[t.slug] || "●")}</div>
-          ${t.destacado ? '<span class="badge">Empezá acá</span>' : ""}
-          <div class="meta"><h3>${t.nombre}</h3><span>${t.subtitulo}</span></div>
-        </div>
+      <div class="tier ${t.destacado ? "tier-destacado" : ""}">
+        ${t.destacado ? '<span class="tier-ribbon">Empezá acá</span>' : ""}
+        ${carnetHtml}
         <div class="price"><div class="big">${p.big}</div><div class="small">${p.small}</div></div>
         <button class="btn cta ${t.nivel === 0 ? "" : "btn-ghost"}" data-tier="${t.slug}">${t.cta}</button>
         <ul class="benefits">${bullets}</ul>
