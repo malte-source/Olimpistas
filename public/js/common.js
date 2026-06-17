@@ -73,7 +73,10 @@ window.OLI = (function () {
       ? `<div class="cn-qr"><img src="${o.qr}" alt="QR de miembro" /></div>`
       : `<div class="cn-qr cn-qr-empty">Tu QR</div>`;
     return `<div class="cn cn--${slug}">
-      <div class="cn-head"><img class="cn-logo" src="/assets/logo-horizontal.svg" alt="Olimpistas" /></div>
+      <div class="cn-head">
+        <img class="cn-escudo" src="/assets/escudo.svg" alt="Olimpia" />
+        <span class="cn-wordmark">OLIMPISTAS</span>
+      </div>
       ${avatar}
       <div class="cn-name">${nombre}</div>
       <div class="cn-level">${nivel}</div>
