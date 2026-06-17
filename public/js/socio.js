@@ -322,26 +322,50 @@
     catch (e) { toast(e.message); }
   }
 
-  // ─── Carnet ──────────────────────────────────────────────────────────────────
+  // ─── Carnet digital premium (con QR escaneable) ──────────────────────────────
   async function vCarnet() {
     view().innerHTML = '<p class="muted">Cargando…</p>';
     try {
       const { carnet } = await api("/carnet");
+      const verifyUrl = location.origin + "/c/" + encodeURIComponent(carnet.numero);
+      const qrSrc = makeQR(verifyUrl);
+      const inicial = (carnet.nombre || "O").trim()[0].toUpperCase();
       const foto = carnet.foto
-        ? `<img src="${carnet.foto}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;border:2px solid ${carnet.color}" alt="" />`
-        : `<img src="/assets/logo.svg" width="42" alt="" />`;
+        ? `<img class="cn-foto" src="${carnet.foto}" alt="" />`
+        : `<div class="cn-foto cn-foto-ph">${inicial}</div>`;
+      const desde = new Date(carnet.desde).toLocaleDateString("es-PY");
       view().innerHTML = `
         <div class="section" style="border:none;padding-top:8px">
-          <h2>Mi carnet digital</h2><p class="lead">Tu identidad de Olimpista, siempre con vos.</p>
-          <div class="carnet" style="border-color:${carnet.color}">
-            <div class="top">${foto}<span class="tier-name" style="color:${carnet.color}">${carnet.tier}</span></div>
-            <div><div class="nom">${carnet.nombre}</div><div class="num">${carnet.numero}</div></div>
-            <div class="foot">Olimpista desde ${new Date(carnet.desde).toLocaleDateString("es-PY")} · Olimpistas</div>
+          <h2>Mi carnet digital</h2>
+          <p class="lead">Mostralo en el estadio y en la tienda oficial.</p>
+          <div class="cn-wrap">
+            <div class="cn-card">
+              <div class="cn-head">
+                <img src="/assets/logo-horizontal.svg" alt="Olimpistas" class="cn-logo" />
+              </div>
+              ${foto}
+              <div class="cn-body">
+                <div class="cn-nom">${carnet.nombre}</div>
+                <div class="cn-badge">Nivel · ${carnet.tier}</div>
+                <div class="cn-qr">${qrSrc ? `<img src="${qrSrc}" alt="QR de socio" />` : '<p class="muted">QR no disponible</p>'}</div>
+                <div class="cn-num">${carnet.numero}</div>
+                <div class="cn-foot">Olimpista desde ${desde}</div>
+              </div>
+            </div>
           </div>
         </div>`;
     } catch (e) {
       view().innerHTML = `<div class="section" style="border:none"><h2>Carnet no disponible</h2><p class="lead">${e.message}</p></div>`;
     }
+  }
+
+  // Genera un QR (data URL) con el generador vendorizado.
+  function makeQR(text) {
+    try {
+      const qr = window.qrcode(0, "M");
+      qr.addData(text); qr.make();
+      return qr.createDataURL(6, 2);
+    } catch (e) { return ""; }
   }
 
   const val = (id) => (document.getElementById(id)?.value || "").trim();
