@@ -13,7 +13,9 @@ const postgres = require("postgres");
 function uid(prefix) { return `${prefix}_${crypto.randomBytes(8).toString("hex")}`; }
 
 function createPgStore({ databaseUrl }) {
-  const sql = postgres(databaseUrl, { max: 5, idle_timeout: 20 });
+  // prepare:false → requerido por el pooler de Supabase en modo transacción (PgBouncer).
+  // ssl:'require'  → Supabase exige TLS. max:5 por instancia (el pooler maneja el resto).
+  const sql = postgres(databaseUrl, { max: 5, idle_timeout: 20, prepare: false, ssl: "require" });
 
   return {
     kind: "postgres",

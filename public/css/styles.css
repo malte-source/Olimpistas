@@ -284,3 +284,21 @@ button { font-family: inherit; cursor: pointer; }
 @media (max-width: 400px) {
   .why { grid-template-columns: 1fr; }
 }
+
+/* Pantallas grandes (monitores 27"–32"+): aprovechar el ancho y agrandar el gancho. */
+@media (min-width: 1500px) {
+  .wrap { max-width: 1340px; }
+  .hero { min-height: 720px; }
+  .hero h1 { font-size: 64px; }
+  .hero p.sub { font-size: 20px; max-width: 720px; }
+  .btn-hero { font-size: 19px; padding: 18px 40px; }
+  .mundo-h { font-size: 42px; }
+  .contador-num { font-size: 96px; }
+  .contador-lbl { font-size: 21px; }
+  .globo-stage { max-width: 1120px; }
+  .globo { min-height: 560px; }
+  .top-paises { width: 270px; padding: 20px 22px; }
+  .top-paises h4 { font-size: 13px; }
+  .tp-row { font-size: 15px; padding: 8px 0; }
+  .section h2 { font-size: 32px; }
+}

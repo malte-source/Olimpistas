@@ -1,0 +1,10 @@
+# Lo que NO se sube a Cloud Build (la imagen se arma con el Dockerfile + npm ci).
+.git
+.gitignore
+node_modules
+npm-debug.log
+.env
+.env.local
+data/.olimpistas-state.json
+*.md
+scripts/

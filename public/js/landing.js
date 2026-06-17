@@ -36,12 +36,13 @@
     esperarGlobe(() => {
       const gl = window.OLI_GLOBE.create(document.getElementById("globo"), {
         onFlagClick: (d) => mostrarPopup(d),
+        maxH: 640, flagBase: 16,
       });
       if (!gl) return;
       const puntos = (stats.puntos && stats.puntos.length) ? stats.puntos : stats.porPais;
       gl.setData(puntos);
       const foco = puntos[0] || { lat: -23.4, lng: -58.4 };
-      gl.pov({ lat: foco.lat, lng: foco.lng, altitude: 2.0 }, 1400);
+      gl.pov({ lat: foco.lat, lng: foco.lng, altitude: 1.85 }, 1400);
     });
   }
 
