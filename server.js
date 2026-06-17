@@ -55,7 +55,8 @@ const sendPage = (file) => (_req, res) => {
   res.sendFile(path.join(PUBLIC, file));
 };
 app.get("/", sendPage("index.html"));
-app.get("/socio", sendPage("socio.html"));
+app.get("/miembro", sendPage("socio.html"));
+app.get("/socio", (_req, res) => res.redirect(301, "/miembro")); // compat: links viejos
 
 // 404 JSON para /api, fallback a landing para el resto.
 app.use((req, res) => {

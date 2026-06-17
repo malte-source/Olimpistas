@@ -21,7 +21,7 @@
     if (pago) {
       try { await api("/pagos/confirmar-simulado", { method: "POST", body: { pedidoId: pago } }); toast("¡Pago confirmado!"); }
       catch (e) { toast(e.message); }
-      history.replaceState({}, "", "/socio");
+      history.replaceState({}, "", "/miembro");
       SESSION = await yo();
     }
     renderProgreso();
@@ -347,7 +347,7 @@
               <div class="cn-body">
                 <div class="cn-nom">${carnet.nombre}</div>
                 <div class="cn-badge">Nivel · ${carnet.tier}</div>
-                <div class="cn-qr">${qrSrc ? `<img src="${qrSrc}" alt="QR de socio" />` : '<p class="muted">QR no disponible</p>'}</div>
+                <div class="cn-qr">${qrSrc ? `<img src="${qrSrc}" alt="QR de miembro" />` : '<p class="muted">QR no disponible</p>'}</div>
                 <div class="cn-num">${carnet.numero}</div>
                 <div class="cn-foot">Olimpista desde ${desde}</div>
               </div>

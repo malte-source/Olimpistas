@@ -48,7 +48,7 @@ const TIERS = [
     beneficios: [
       "Carnet digital de Olimpista",
       "Contenido y novedades exclusivas del Decano",
-      "Participás en sorteos para socios",
+      "Participás en sorteos para miembros",
       "Enterate primero de preventas y lanzamientos",
     ],
     cta: "Hacete Olimpista gratis",

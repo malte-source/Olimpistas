@@ -90,14 +90,14 @@
 
   function renderNav() {
     const btn = document.getElementById("accederBtn");
-    if (SESSION) { btn.textContent = "Mi cuenta"; btn.onclick = () => (location.href = "/socio"); }
+    if (SESSION) { btn.textContent = "Mi cuenta"; btn.onclick = () => (location.href = "/miembro"); }
     else { btn.textContent = "Ingresar"; btn.onclick = () => openModal("login"); }
     const navCta = document.getElementById("navCta");
     if (navCta) navCta.style.display = SESSION ? "none" : "";
   }
 
   function empezarGratis() {
-    if (SESSION) return (location.href = "/socio");
+    if (SESSION) return (location.href = "/miembro");
     openModal("registro");
   }
 
@@ -126,16 +126,16 @@
   async function unirse(tierSlug) {
     const tier = CONFIG.tiers.find((t) => t.slug === tierSlug);
     if (!SESSION) { intentTier = tierSlug; return openModal("registro"); }
-    if (!tier || tier.nivel === 0) return (location.href = "/socio"); // ya sos Olimpista
+    if (!tier || tier.nivel === 0) return (location.href = "/miembro"); // ya sos Olimpista
     try {
       const r = await api("/membresia/unirse", { method: "POST", body: { tier: tierSlug } });
-      if (r.gratis) return (location.href = "/socio");
-      location.href = r.pago.urlPago; // simulado → /socio?pago_simulado=… | real → URL de PAGOPAR
+      if (r.gratis) return (location.href = "/miembro");
+      location.href = r.pago.urlPago; // simulado → /miembro?pago_simulado=… | real → URL de PAGOPAR
     } catch (e) { toast(e.message); }
   }
 
   async function confirmarSimulado(pedidoId) {
-    try { await api("/pagos/confirmar-simulado", { method: "POST", body: { pedidoId } }); location.href = "/socio"; }
+    try { await api("/pagos/confirmar-simulado", { method: "POST", body: { pedidoId } }); location.href = "/miembro"; }
     catch (e) { toast(e.message); }
   }
 
@@ -176,7 +176,7 @@
       const intent = intentTier; intentTier = null;
       const tier = intent && CONFIG.tiers.find((t) => t.slug === intent);
       if (tier && tier.nivel > 0) unirse(intent); // quería un nivel pago → al pago
-      else location.href = "/socio";
+      else location.href = "/miembro";
     } catch (e) { errEl.textContent = e.message; }
   }
 
