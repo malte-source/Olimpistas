@@ -203,25 +203,46 @@ button { font-family: inherit; cursor: pointer; }
 .perfil .field input:focus, .perfil .field select:focus { outline: none; border-color: var(--oro); }
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
-/* ─── Olimpistas en el mundo: contador + globo ────────────────────────────── */
-.contador { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 4px 0 24px; }
-.contador-num { font-size: 52px; font-weight: 800; letter-spacing: -1px;
+/* ─── Olimpistas en el mundo: el gancho. Globo grande y protagonista. ──────── */
+.mundo { text-align: center; position: relative; overflow: hidden; }
+.mundo-h { font-size: 34px; margin: 0 0 14px; }
+.contador { display: inline-flex; align-items: baseline; gap: 12px; flex-wrap: wrap; justify-content: center; margin: 0 0 6px; }
+.contador-num { font-size: 72px; font-weight: 800; letter-spacing: -2px;
   background: linear-gradient(90deg, var(--oro-claro), var(--oro)); -webkit-background-clip: text;
   background-clip: text; color: transparent; line-height: 1; }
-.contador-lbl { font-size: 17px; color: var(--gris); }
+.contador-lbl { font-size: 18px; color: var(--gris); }
 .contador-lbl strong { color: var(--blanco); }
-.globo-wrap { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: center; }
-.globo { width: 100%; min-height: 360px; display: flex; align-items: center; justify-content: center; }
+
+.globo-stage { position: relative; max-width: 920px; margin: 18px auto 0; }
+/* Resplandor dorado detrás del globo para que destaque sobre el negro. */
+.globo-stage::before { content: ""; position: absolute; inset: 6% 18%; z-index: 0;
+  background: radial-gradient(circle, rgba(201,162,39,.18) 0%, rgba(201,162,39,0) 65%); pointer-events: none; }
+.globo { position: relative; z-index: 1; width: 100%; min-height: 420px; display: flex; align-items: center; justify-content: center; }
 .globo canvas { outline: none; }
-.top-paises { background: var(--negro-2); border: 1px solid var(--linea); border-radius: var(--radio); padding: 18px 20px; }
-.top-paises h4 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--gris); }
-.tp-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--linea); font-size: 14px; }
+
+/* Top países: tarjeta "glass" flotando a la derecha del globo. */
+.top-paises { position: absolute; top: 8px; right: 0; z-index: 3; width: 230px; text-align: left;
+  background: rgba(20,20,27,.72); backdrop-filter: blur(10px); border: 1px solid var(--linea);
+  border-radius: var(--radio); padding: 16px 18px; box-shadow: var(--sombra); }
+.top-paises h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--gris); }
+.tp-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--linea); font-size: 13.5px; }
 .tp-row:last-child { border-bottom: none; }
 .tp-row strong { color: var(--oro); }
-.globo-note { text-align: center; color: var(--gris); font-size: 14px; margin-top: 18px; }
+
+/* Popup al tocar una bandera: ciudad + país. */
+.globo-popup { position: absolute; left: 50%; bottom: 14px; z-index: 4; transform: translateX(-50%);
+  background: rgba(11,11,15,.9); backdrop-filter: blur(8px); border: 1px solid var(--oro);
+  border-radius: 12px; padding: 10px 18px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  box-shadow: var(--sombra); min-width: 180px; }
+.globo-popup[hidden] { display: none; }
+.globo-popup strong { font-size: 15px; }
+.globo-popup span { font-size: 13px; color: var(--oro-claro); }
+
+.globo-note { color: var(--gris); font-size: 14px; margin-top: 22px; }
 .globo-note a { color: var(--oro); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
 .ubic { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
-.perfil-globo { width: 100%; max-width: 420px; margin: 0 auto; min-height: 240px; cursor: grab; }
+.perfil-globo { width: 100%; max-width: 460px; margin: 0 auto; min-height: 300px; cursor: grab; }
 
 /* ─── Responsive (al final: deben ganar por orden a las reglas base) ──────── */
 @media (max-width: 920px) {
@@ -253,8 +274,11 @@ button { font-family: inherit; cursor: pointer; }
   .topbar { gap: 10px; }
   .topbar #hola { display: none; }
   .modal { padding: 22px; }
-  .globo-wrap { grid-template-columns: 1fr; gap: 16px; }
-  .contador-num { font-size: 40px; }
+  .mundo-h { font-size: 24px; }
+  .contador-num { font-size: 50px; }
+  .globo { min-height: 320px; }
+  .top-paises { position: static; width: auto; margin-top: 16px; backdrop-filter: none; }
+  .globo-stage::before { inset: 10% 5%; }
 }
 
 @media (max-width: 400px) {

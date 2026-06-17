@@ -48,6 +48,14 @@ function createPgStore({ databaseUrl }) {
         WHERE pais_iso IS NOT NULL AND pais_iso <> ''
         GROUP BY pais_iso`;
     },
+    async contarPorCiudad() {
+      return sql`
+        SELECT pais_iso, COALESCE(ciudad, '') AS ciudad, COUNT(*)::int AS count,
+               AVG(lat) AS lat, AVG(lng) AS lng
+        FROM socios WHERE pais_iso IS NOT NULL AND pais_iso <> ''
+        GROUP BY pais_iso, COALESCE(ciudad, '')
+        ORDER BY count DESC LIMIT 600`;
+    },
     async updateSocio(id, patch) {
       const [s] = await sql`UPDATE socios SET ${sql(patch)} WHERE id = ${id} RETURNING *`;
       return s || null;

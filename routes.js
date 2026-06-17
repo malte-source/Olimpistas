@@ -62,7 +62,9 @@ function buildRouter() {
   let _stats = null, _statsTs = 0;
   async function getStats() {
     if (_stats && Date.now() - _statsTs < 30000) return _stats;  // cache 30s
-    const [total, porPaisRaw] = await Promise.all([store.contarTotal(), store.contarPorPais()]);
+    const [total, porPaisRaw, porCiudadRaw] = await Promise.all([
+      store.contarTotal(), store.contarPorPais(), store.contarPorCiudad(),
+    ]);
     const porPais = porPaisRaw
       .map((r) => {
         const c = paisCentroide(r.pais_iso);
@@ -70,7 +72,18 @@ function buildRouter() {
       })
       .filter(Boolean)
       .sort((a, b) => b.count - a.count);
-    _stats = { total, paises: porPais.length, porPais, actualizado: new Date().toISOString() };
+    // Puntos del globo (banderas): por ciudad, con coords exactas o centroide del país.
+    const puntos = porCiudadRaw
+      .map((r) => {
+        const c = paisCentroide(r.pais_iso);
+        const lat = r.lat != null ? Number(r.lat) : (c ? c.lat : null);
+        const lng = r.lng != null ? Number(r.lng) : (c ? c.lng : null);
+        if (lat == null) return null;
+        return { iso: r.pais_iso, pais: paisNombre(r.pais_iso), ciudad: r.ciudad || "", count: r.count, lat, lng };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.count - a.count);
+    _stats = { total, paises: porPais.length, porPais, puntos, actualizado: new Date().toISOString() };
     _statsTs = Date.now();
     return _stats;
   }
@@ -118,12 +131,20 @@ function buildRouter() {
     for (const key of ["nombre", "whatsapp", "ciudad"]) {
       if (typeof b[key] === "string") patch[key] = b[key].trim().slice(0, 120);
     }
-    // País: se recibe el código ISO; guardamos iso + nombre legible.
+    // País: acepta código ISO ("PY") o nombre ("Paraguay"); guardamos iso + nombre.
     if (typeof b.pais === "string") {
-      const iso = b.pais.trim().toUpperCase();
-      if (iso && !PAISES[iso]) throw httpError(400, "País inválido");
-      patch.pais_iso = iso;
-      patch.pais = iso ? paisNombre(iso) : "";
+      const raw = b.pais.trim();
+      if (!raw) { patch.pais_iso = ""; patch.pais = ""; }
+      else {
+        let iso = raw.toUpperCase();
+        if (!PAISES[iso]) {
+          const porNombre = Object.keys(PAISES).find((k) => PAISES[k].nombre.toLowerCase() === raw.toLowerCase());
+          iso = porNombre || null;
+        }
+        if (!iso) throw httpError(400, "País inválido");
+        patch.pais_iso = iso;
+        patch.pais = paisNombre(iso);
+      }
     }
     // Ubicación exacta (opcional): lat/lng numéricos y dentro de rango.
     if (b.lat != null && b.lng != null) {

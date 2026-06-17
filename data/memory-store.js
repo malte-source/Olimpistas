@@ -142,6 +142,22 @@ function createMemoryStore({ filePath = null } = {}) {
       for (const s of db.socios) if (s.pais_iso) m[s.pais_iso] = (m[s.pais_iso] || 0) + 1;
       return Object.entries(m).map(([pais_iso, count]) => ({ pais_iso, count }));
     },
+    // Agregado por ciudad: cada punto del globo (bandera) con ciudad + país.
+    async contarPorCiudad() {
+      const g = {};
+      for (const s of db.socios) {
+        if (!s.pais_iso) continue;
+        const ciudad = (s.ciudad || "").trim();
+        const k = s.pais_iso + "|" + ciudad.toLowerCase();
+        const row = g[k] || (g[k] = { pais_iso: s.pais_iso, ciudad, count: 0, latSum: 0, lngSum: 0, n: 0 });
+        row.count++;
+        if (s.lat != null && s.lng != null) { row.latSum += s.lat; row.lngSum += s.lng; row.n++; }
+      }
+      return Object.values(g).map((r) => ({
+        pais_iso: r.pais_iso, ciudad: r.ciudad, count: r.count,
+        lat: r.n ? r.latSum / r.n : null, lng: r.n ? r.lngSum / r.n : null,
+      }));
+    },
     async updateSocio(id, patch) {
       const s = db.socios.find(x => x.id === id);
       if (!s) return null;

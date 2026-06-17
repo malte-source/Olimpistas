@@ -35,13 +35,25 @@
     document.getElementById("globoCta").onclick = () => empezarGratis();
     esperarGlobe(() => {
       const gl = window.OLI_GLOBE.create(document.getElementById("globo"), {
-        onFlagClick: (d) => toast(`${d.nombre}: ${Number(d.count).toLocaleString("es-PY")} Olimpistas`),
+        onFlagClick: (d) => mostrarPopup(d),
       });
       if (!gl) return;
-      gl.setData(stats.porPais);
-      const foco = stats.porPais[0] || { lat: -23.4, lng: -58.4 };
-      gl.pov({ lat: foco.lat, lng: foco.lng, altitude: 2.2 }, 1400);
+      const puntos = (stats.puntos && stats.puntos.length) ? stats.puntos : stats.porPais;
+      gl.setData(puntos);
+      const foco = puntos[0] || { lat: -23.4, lng: -58.4 };
+      gl.pov({ lat: foco.lat, lng: foco.lng, altitude: 2.0 }, 1400);
     });
+  }
+
+  let _popT = null;
+  function mostrarPopup(d) {
+    const el = document.getElementById("globoPopup");
+    if (!el) return;
+    const lugar = d.ciudad ? `${d.ciudad}, ${d.pais}` : (d.pais || d.nombre || "");
+    el.innerHTML = `<strong>${lugar}</strong><span>${Number(d.count).toLocaleString("es-PY")} Olimpista${d.count === 1 ? "" : "s"}</span>`;
+    el.hidden = false;
+    clearTimeout(_popT);
+    _popT = setTimeout(() => { el.hidden = true; }, 4500);
   }
 
   function esperarGlobe(cb) {
