@@ -238,7 +238,31 @@ button { font-family: inherit; cursor: pointer; }
 .globo { position: relative; z-index: 1; width: 100%; height: 600px; border-radius: var(--radio); overflow: hidden; }
 .globo canvas { outline: none; }
 /* Marcador de bandera y popup de MapLibre (tema oscuro Olimpia) */
-.mapa-flag { cursor: pointer; line-height: 0; }
+.mapa-flag { cursor: pointer; line-height: 0; position: relative; }
+/* Ondeo al viento (sobre la img, para no chocar con el transform de posición de MapLibre) */
+.mapa-flag img { transform-origin: 16% 60%; animation: flagWave 2.4s ease-in-out infinite, flagIn .5s ease both; }
+.mapa-flag:hover img { animation-duration: 1s, .5s; }
+/* Halo dorado pulsante en la base */
+.mapa-flag::after { content: ""; position: absolute; bottom: -3px; left: 18%; width: 12px; height: 4px;
+  transform: translateX(-50%); border-radius: 50%; background: rgba(201,162,39,.9);
+  box-shadow: 0 0 10px 3px rgba(201,162,39,.6); animation: flagPulse 2.4s ease-in-out infinite; }
+@keyframes flagWave {
+  0%, 100% { transform: rotate(0deg) skewY(0deg); }
+  20% { transform: rotate(2deg) skewY(-3deg); }
+  45% { transform: rotate(-1.5deg) skewY(2deg); }
+  70% { transform: rotate(1deg) skewY(-1.2deg); }
+}
+@keyframes flagIn {
+  0% { opacity: 0; transform: translateY(-12px) scale(.5); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes flagPulse {
+  0%, 100% { opacity: .5; transform: translateX(-50%) scale(.85); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.25); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mapa-flag img, .mapa-flag::after { animation: none; }
+}
 .maplibregl-popup-content { background: rgba(11,11,15,.94); color: var(--blanco); border: 1px solid var(--oro);
   border-radius: 12px; padding: 10px 16px; box-shadow: var(--sombra); text-align: center; }
 .maplibregl-popup-content strong { display: block; font-size: 15px; }
@@ -330,7 +354,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* Variante GRATIS — blanco y negro (franjeado del Decano) */
 .cn--olimpista { background: #15151b; color: #fff; }
-.cn--olimpista .cn-head { background: #000; }
+.cn--olimpista .cn-head { background: #18181f; } /* gris muy oscuro: deja leer el escudo B/N */
 .cn--olimpista .cn-head::after { content: ""; position: absolute; bottom: 0; left: 0; right: 0; height: 7px;
   background: repeating-linear-gradient(90deg, #fff 0 16px, #000 16px 32px); }
 .cn--olimpista .cn-photo { border-color: #15151b; }
