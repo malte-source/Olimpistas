@@ -17,19 +17,30 @@ const { createPgStore }     = require("./pg-store");
 
 let _store = null;
 
+function memoria() {
+  const filePath = process.env.OLIMPISTAS_PERSIST === "0"
+    ? null
+    : path.join(__dirname, ".olimpistas-state.json");
+  console.log("[olimpistas] store: memoria" + (filePath ? " (persistida a JSON)" : ""));
+  return createMemoryStore({ filePath });
+}
+
 function getStore() {
   if (_store) return _store;
-  const dbUrl = process.env.OLIMPISTAS_DATABASE_URL;
-  if (dbUrl) {
-    _store = createPgStore({ databaseUrl: dbUrl });
-    console.log("[olimpistas] store: Postgres");
-  } else {
-    const filePath = process.env.OLIMPISTAS_PERSIST === "0"
-      ? null
-      : path.join(__dirname, ".olimpistas-state.json");
-    _store = createMemoryStore({ filePath });
-    console.log("[olimpistas] store: memoria" + (filePath ? " (persistida a JSON)" : ""));
+  const dbUrl = (process.env.OLIMPISTAS_DATABASE_URL || "").trim();
+  if (/^postgres(ql)?:\/\//.test(dbUrl)) {
+    try {
+      _store = createPgStore({ databaseUrl: dbUrl });
+      console.log("[olimpistas] store: Postgres");
+      return _store;
+    } catch (e) {
+      // URL mal formada u otro fallo al construir → NO tiramos abajo el sitio.
+      console.error("[olimpistas] OLIMPISTAS_DATABASE_URL inválida (" + e.message + "). Uso store en memoria.");
+    }
+  } else if (dbUrl) {
+    console.error("[olimpistas] OLIMPISTAS_DATABASE_URL no parece una URL postgres. Uso store en memoria.");
   }
+  _store = memoria();
   return _store;
 }
 
