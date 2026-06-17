@@ -1,0 +1,35 @@
+<svg viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Estadio">
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="18%" r="90%">
+      <stop offset="0" stop-color="#23232f"/>
+      <stop offset="55%" stop-color="#101018"/>
+      <stop offset="100%" stop-color="#060609"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#c9a227" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#c9a227" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="pitch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d3a24"/>
+      <stop offset="1" stop-color="#0a1710"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <!-- haces de luz -->
+  <polygon points="300,0 200,520 460,520" fill="url(#beam)"/>
+  <polygon points="800,0 700,540 940,540" fill="url(#beam)"/>
+  <polygon points="1300,0 1180,520 1440,520" fill="url(#beam)"/>
+  <!-- tribuna (puntitos = hinchada) -->
+  <g fill="#ffffff" opacity="0.08">
+    <rect x="0" y="120" width="1600" height="360"/>
+  </g>
+  <g fill="#c9a227" opacity="0.10">
+    <rect x="0" y="120" width="1600" height="14"/>
+    <rect x="0" y="180" width="1600" height="14"/>
+    <rect x="0" y="240" width="1600" height="14"/>
+  </g>
+  <!-- cancha -->
+  <ellipse cx="800" cy="940" rx="1100" ry="320" fill="url(#pitch)"/>
+  <ellipse cx="800" cy="940" rx="1100" ry="320" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="3"/>
+  <line x1="0" y1="700" x2="1600" y2="700" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2"/>
+</svg>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi cuenta — Olimpistas</title>
+  <link rel="icon" href="/assets/logo.svg" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style> body { background: var(--negro); } .wrap { padding-top: 0; } </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="brand" href="/"><img src="/assets/logo.svg" alt="" /> Olimpistas</a>
+      <div class="nav-right">
+        <span id="hola" class="muted"></span>
+        <button class="btn btn-ghost" id="logoutBtn">Salir</button>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="membresia">Mi membresía</button>
+      <button class="tab" data-tab="contenido">Olimpia Play</button>
+      <button class="tab" data-tab="sorteos">Sorteos</button>
+      <button class="tab" data-tab="preventas">Preventas</button>
+      <button class="tab" data-tab="carnet">Mi carnet</button>
+    </div>
+
+    <div id="view"><p class="muted">Cargando…</p></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/js/common.js"></script>
+  <script src="/js/socio.js"></script>
+</body>
+</html>

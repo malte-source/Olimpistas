@@ -1,0 +1,165 @@
+/* Olimpistas — estilos. Branding Olimpia: blanco/negro (franjeado) + dorado copas. */
+:root {
+  --negro: #0b0b0f;
+  --negro-2: #14141b;
+  --blanco: #ffffff;
+  --gris: #9aa0a6;
+  --gris-2: #6b7280;
+  --oro: #c9a227;
+  --oro-claro: #e7c64b;
+  --linea: rgba(255, 255, 255, 0.12);
+  --radio: 16px;
+  --sombra: 0 20px 60px rgba(0, 0, 0, 0.45);
+  --max: 1180px;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--negro);
+  color: var(--blanco);
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
+
+.wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+/* ─── Nav ─────────────────────────────────────────────────────────────────── */
+.nav {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 32px;
+}
+.brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 20px; letter-spacing: 0.2px; }
+.brand img { width: 38px; height: 38px; }
+.nav-right { display: flex; align-items: center; gap: 16px; }
+.lang { background: transparent; border: none; color: var(--blanco); font-size: 14px; opacity: 0.9; display: flex; align-items: center; gap: 6px; }
+.btn {
+  border: none; border-radius: 10px; padding: 11px 22px; font-weight: 600; font-size: 14px;
+  background: var(--oro); color: #1a1500; transition: transform .12s ease, filter .12s ease;
+}
+.btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn-ghost { background: transparent; border: 1.5px solid var(--linea); color: var(--blanco); }
+.btn-ghost:hover { border-color: var(--oro); }
+.btn-block { width: 100%; }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* ─── Hero ────────────────────────────────────────────────────────────────── */
+.hero {
+  position: relative; min-height: 760px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding-top: 120px;
+}
+.hero-bg { position: absolute; inset: 0; z-index: 0; }
+.hero-bg img, .hero-bg svg { width: 100%; height: 100%; object-fit: cover; }
+.hero-bg::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(11,11,15,.55) 0%, rgba(11,11,15,.45) 40%, rgba(11,11,15,.92) 100%);
+}
+.hero-inner { position: relative; z-index: 2; width: 100%; text-align: center; }
+.hero h1 { font-size: 52px; line-height: 1.05; margin: 0 0 14px; font-weight: 800; letter-spacing: -1px; }
+.hero p.sub { font-size: 18px; color: #d7d7de; max-width: 640px; margin: 0 auto 8px; }
+.hero .pill { display: inline-block; margin-bottom: 22px; padding: 6px 14px; border-radius: 999px;
+  background: rgba(201,162,39,.16); color: var(--oro-claro); font-size: 13px; font-weight: 600; border: 1px solid rgba(201,162,39,.35); }
+
+/* ─── Tarjetas de tiers ───────────────────────────────────────────────────── */
+.tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin: 40px auto 0; max-width: var(--max); }
+.tier { display: flex; flex-direction: column; }
+.tier-card {
+  position: relative; border-radius: var(--radio); aspect-ratio: 1.6 / 1; overflow: hidden;
+  box-shadow: var(--sombra); border: 1px solid var(--linea);
+}
+.tier-card .art { position: absolute; inset: 0; }
+.tier-card .art svg, .tier-card .art img { width: 100%; height: 100%; object-fit: cover; }
+.tier-card .meta { position: absolute; left: 18px; top: 16px; z-index: 2; }
+.tier-card .meta h3 { margin: 0; font-size: 19px; font-weight: 700; }
+.tier-card .meta span { font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; opacity: .8; }
+.tier-card .badge { position: absolute; right: 14px; top: 14px; z-index: 2; background: var(--oro); color:#1a1500;
+  font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; }
+
+.price { margin: 16px 0 4px; }
+.price .big { font-size: 22px; font-weight: 800; }
+.price .small { font-size: 13px; color: var(--gris); }
+.tier .cta { margin: 12px 0 14px; }
+.benefits { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; }
+.benefits li { font-size: 13.5px; color: #cfcfd6; display: flex; gap: 9px; align-items: flex-start; line-height: 1.35; }
+.benefits li::before { content: "✓"; color: var(--oro); font-weight: 700; }
+
+.ver-todas { display: block; text-align: center; margin: 40px auto 60px; color: var(--blanco);
+  text-decoration: underline; text-underline-offset: 4px; font-size: 14px; opacity: .85; }
+
+/* ─── Secciones internas / socio ──────────────────────────────────────────── */
+.section { padding: 56px 0; border-top: 1px solid var(--linea); }
+.section h2 { font-size: 28px; margin: 0 0 6px; }
+.section .lead { color: var(--gris); margin: 0 0 28px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.card {
+  background: var(--negro-2); border: 1px solid var(--linea); border-radius: var(--radio); overflow: hidden;
+  display: flex; flex-direction: column; transition: transform .15s ease, border-color .15s ease;
+}
+.card:hover { transform: translateY(-3px); border-color: rgba(201,162,39,.4); }
+.card .thumb { aspect-ratio: 16/9; position: relative; }
+.card .thumb svg, .card .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.card .lock { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.62); backdrop-filter: blur(2px); flex-direction: column; gap: 8px; }
+.card .lock span { font-size: 13px; color: var(--oro-claro); }
+.card .body { padding: 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.card .body h4 { margin: 0; font-size: 16px; }
+.card .body p { margin: 0; font-size: 13px; color: var(--gris); flex: 1; }
+.chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--linea); color: var(--gris); align-self: flex-start; text-transform: uppercase; letter-spacing: .5px; }
+.chip.on { color: var(--oro); border-color: rgba(201,162,39,.5); }
+
+/* ─── Carnet ──────────────────────────────────────────────────────────────── */
+.carnet {
+  width: 380px; max-width: 100%; aspect-ratio: 1.585/1; border-radius: 18px; padding: 24px;
+  background: linear-gradient(135deg, #1a1a22 0%, #000 100%); border: 1px solid var(--oro);
+  display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--sombra);
+}
+.carnet .top { display: flex; justify-content: space-between; align-items: center; }
+.carnet .tier-name { color: var(--oro); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; font-size: 13px; }
+.carnet .num { font-family: ui-monospace, monospace; letter-spacing: 2px; font-size: 18px; }
+.carnet .nom { font-size: 20px; font-weight: 700; }
+.carnet .foot { font-size: 11px; color: var(--gris); }
+
+/* ─── Modal ───────────────────────────────────────────────────────────────── */
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; display: none;
+  align-items: center; justify-content: center; padding: 20px; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--negro-2); border: 1px solid var(--linea); border-radius: var(--radio);
+  width: 420px; max-width: 100%; padding: 28px; box-shadow: var(--sombra); }
+.modal h3 { margin: 0 0 4px; font-size: 22px; }
+.modal .muted { color: var(--gris); font-size: 14px; margin: 0 0 20px; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 13px; color: var(--gris); margin-bottom: 6px; }
+.field input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--linea);
+  background: #0d0d13; color: var(--blanco); font-size: 14px; }
+.field input:focus { outline: none; border-color: var(--oro); }
+.switch { text-align: center; margin-top: 14px; font-size: 13px; color: var(--gris); }
+.switch a { color: var(--oro); cursor: pointer; }
+.error { color: #ff6b6b; font-size: 13px; margin: 4px 0 0; min-height: 16px; }
+
+/* ─── Header socio ────────────────────────────────────────────────────────── */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--linea); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0; }
+.tab { padding: 9px 18px; border-radius: 999px; border: 1px solid var(--linea); background: transparent; color: var(--gris); font-size: 14px; }
+.tab.active { background: var(--blanco); color: #000; border-color: var(--blanco); font-weight: 600; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--oro); color:#1a1500;
+  padding: 12px 22px; border-radius: 10px; font-weight: 600; z-index: 200; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.hidden { display: none !important; }
+
+/* ─── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 920px) {
+  .tiers { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 38px; }
+  .nav { padding: 16px 20px; }
+}
+@media (max-width: 560px) {
+  .tiers { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,13 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Olimpia">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e7c64b"/>
+      <stop offset="1" stop-color="#c9a227"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 2 58 12 58 34C58 50 46 60 32 62 18 60 6 50 6 34L6 12Z" fill="#0b0b0f" stroke="url(#g)" stroke-width="2.5"/>
+  <circle cx="32" cy="30" r="15" fill="none" stroke="url(#g)" stroke-width="4"/>
+  <path d="M32 16 L34.6 25.2 L44 25.2 L36.5 30.8 L39.2 40 L32 34.4 L24.8 40 L27.5 30.8 L20 25.2 L29.4 25.2 Z" fill="url(#g)"/>
+  <rect x="20" y="48" width="24" height="3.5" rx="1.5" fill="#ffffff"/>
+  <rect x="20" y="53.5" width="24" height="3.5" rx="1.5" fill="url(#g)"/>
+</svg>

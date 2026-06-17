@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.local
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Estado del store en memoria (demo, no versionar)
+data/.olimpistas-state.json
