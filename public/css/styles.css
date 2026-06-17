@@ -10,11 +10,15 @@
   --linea: rgba(255, 255, 255, 0.12);
   --radio: 16px;
   --sombra: 0 20px 60px rgba(0, 0, 0, 0.45);
+  --glow: 0 10px 30px rgba(201, 162, 39, 0.35);
+  --display: "Archivo", "Inter", system-ui, sans-serif;
   --max: 1180px;
   font-synthesis: none;
 }
 
 * { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
 
 html, body {
   margin: 0;
@@ -24,6 +28,9 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Títulos con fuente display fuerte (look deportivo/premium). */
+h1, h2, h3, .brand, .mundo-h, .contador-num, .price .big { font-family: var(--display); letter-spacing: -0.5px; }
+
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
 
@@ -31,9 +38,15 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ─── Nav ─────────────────────────────────────────────────────────────────── */
 .nav {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 50;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 22px 32px;
+  padding: 18px 32px;
+  transition: background .25s ease, backdrop-filter .25s ease, padding .25s ease, box-shadow .25s ease;
+}
+/* Al hacer scroll, la nav se vuelve "glass" y persistente (CTA siempre visible). */
+.nav.scrolled {
+  background: rgba(11,11,15,.82); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--linea); padding-top: 12px; padding-bottom: 12px;
 }
 .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 20px; letter-spacing: 0.2px; }
 .brand img { width: 38px; height: 38px; }
@@ -42,12 +55,13 @@ button { font-family: inherit; cursor: pointer; }
 .nav-right { display: flex; align-items: center; gap: 16px; }
 .lang { background: transparent; border: none; color: var(--blanco); font-size: 14px; opacity: 0.9; display: flex; align-items: center; gap: 6px; }
 .btn {
-  border: none; border-radius: 10px; padding: 11px 22px; font-weight: 600; font-size: 14px;
-  background: var(--oro); color: #1a1500; transition: transform .12s ease, filter .12s ease;
+  border: none; border-radius: 11px; padding: 12px 24px; font-weight: 700; font-size: 14px;
+  background: linear-gradient(135deg, var(--oro-claro), var(--oro)); color: #1a1500;
+  transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
 }
-.btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn:hover { filter: brightness(1.05); transform: translateY(-2px); box-shadow: var(--glow); }
 .btn-ghost { background: transparent; border: 1.5px solid var(--linea); color: var(--blanco); }
-.btn-ghost:hover { border-color: var(--oro); }
+.btn-ghost:hover { border-color: var(--oro); background: rgba(201,162,39,.08); box-shadow: none; }
 .btn-block { width: 100%; }
 .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
@@ -62,11 +76,15 @@ button { font-family: inherit; cursor: pointer; }
 .hero-bg picture { display: block; width: 100%; height: 100%; }
 .hero-bg::after {
   content: ""; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(11,11,15,.55) 0%, rgba(11,11,15,.45) 40%, rgba(11,11,15,.92) 100%);
+  background:
+    radial-gradient(120% 80% at 50% 35%, rgba(11,11,15,0) 30%, rgba(11,11,15,.65) 100%),
+    linear-gradient(180deg, rgba(11,11,15,.6) 0%, rgba(11,11,15,.35) 38%, rgba(11,11,15,.96) 100%);
 }
 .hero-inner { position: relative; z-index: 2; width: 100%; text-align: center; }
-.hero h1 { font-size: 52px; line-height: 1.05; margin: 0 0 14px; font-weight: 800; letter-spacing: -1px; }
-.hero p.sub { font-size: 18px; color: #d7d7de; max-width: 640px; margin: 0 auto 8px; }
+.hero h1 { font-size: 68px; line-height: 1.0; margin: 0 0 16px; font-weight: 900; letter-spacing: -2px;
+  text-shadow: 0 4px 30px rgba(0,0,0,.5); }
+.hero p.sub { font-size: 19px; color: #e6e6ec; max-width: 660px; margin: 0 auto 8px; line-height: 1.5;
+  text-shadow: 0 2px 12px rgba(0,0,0,.5); }
 .hero .pill { display: inline-block; margin-bottom: 22px; padding: 6px 14px; border-radius: 999px;
   background: rgba(201,162,39,.16); color: var(--oro-claro); font-size: 13px; font-weight: 600; border: 1px solid rgba(201,162,39,.35); }
 
@@ -252,6 +270,44 @@ button { font-family: inherit; cursor: pointer; }
 .ubic { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
 .perfil-globo { width: 100%; max-width: 520px; margin: 0 auto; height: 300px; border-radius: var(--radio); overflow: hidden; }
 
+/* ─── Pase de estética PRO ────────────────────────────────────────────────── */
+/* Hero: CTA con brillo + indicador de scroll */
+.btn-hero { box-shadow: var(--glow); }
+.btn-hero:hover { box-shadow: 0 14px 40px rgba(201,162,39,.5); }
+.hero-note { letter-spacing: .2px; }
+
+/* Eyebrow: etiqueta dorada arriba de los títulos de sección */
+.eyebrow { display: inline-block; font-family: var(--display); font-size: 12px; font-weight: 700;
+  letter-spacing: 2.5px; text-transform: uppercase; color: var(--oro);
+  padding: 5px 12px; border: 1px solid rgba(201,162,39,.35); border-radius: 999px; margin-bottom: 14px; }
+
+/* Más aire y profundidad en secciones */
+.section { padding: 80px 0; }
+.section h2 { font-size: 34px; line-height: 1.1; }
+.section .lead { font-size: 16.5px; max-width: 620px; }
+
+/* Glow sutil de fondo en secciones clave */
+#beneficios, #planes { position: relative; }
+#planes::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(60% 50% at 50% 0%, rgba(201,162,39,.07) 0%, transparent 70%); }
+#planes .wrap { position: relative; z-index: 1; }
+
+/* Tarjetas "why" con hover */
+.why-item { transition: transform .18s ease, border-color .18s ease, background .18s ease; }
+.why-item:hover { transform: translateY(-4px); border-color: rgba(201,162,39,.45); background: #181820; }
+
+/* Tier destacado (gratis): anillo dorado + leve realce */
+.tier { transition: transform .18s ease; }
+.tier:hover { transform: translateY(-4px); }
+.tier:has(.badge) .tier-card { border-color: var(--oro); box-shadow: 0 0 0 2px rgba(201,162,39,.5), var(--sombra); }
+.tier-card { transition: border-color .18s ease, box-shadow .18s ease; }
+.badge { box-shadow: var(--glow); }
+
+/* Animación de aparición al hacer scroll */
+.reveal { opacity: 0; transform: translateY(26px); transition: opacity .6s ease, transform .6s ease; }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
 /* ─── Responsive (al final: deben ganar por orden a las reglas base) ──────── */
 @media (max-width: 920px) {
   .tiers { grid-template-columns: repeat(2, 1fr); }
@@ -296,9 +352,9 @@ button { font-family: inherit; cursor: pointer; }
 /* Pantallas grandes (monitores 27"–32"+): aprovechar el ancho y agrandar el gancho. */
 @media (min-width: 1500px) {
   .wrap { max-width: 1340px; }
-  .hero { min-height: 720px; }
-  .hero h1 { font-size: 64px; }
-  .hero p.sub { font-size: 20px; max-width: 720px; }
+  .hero { min-height: 760px; }
+  .hero h1 { font-size: 84px; }
+  .hero p.sub { font-size: 21px; max-width: 740px; }
   .btn-hero { font-size: 19px; padding: 18px 40px; }
   .mundo-h { font-size: 42px; }
   .contador-num { font-size: 96px; }
@@ -308,5 +364,5 @@ button { font-family: inherit; cursor: pointer; }
   .top-paises { width: 270px; padding: 20px 22px; }
   .top-paises h4 { font-size: 13px; }
   .tp-row { font-size: 15px; padding: 8px 0; }
-  .section h2 { font-size: 32px; }
+  .section h2 { font-size: 40px; }
 }

@@ -17,6 +17,8 @@
     renderNav();
     wireModal();
     document.getElementById("heroCta").onclick = () => empezarGratis();
+    const navCta = document.getElementById("navCta");
+    if (navCta) navCta.onclick = () => empezarGratis();
     document.querySelectorAll("[data-stub]").forEach((a) =>
       a.addEventListener("click", (e) => { e.preventDefault(); toast("Próximamente"); })
     );
@@ -90,6 +92,8 @@
     const btn = document.getElementById("accederBtn");
     if (SESSION) { btn.textContent = "Mi cuenta"; btn.onclick = () => (location.href = "/socio"); }
     else { btn.textContent = "Ingresar"; btn.onclick = () => openModal("login"); }
+    const navCta = document.getElementById("navCta");
+    if (navCta) navCta.style.display = SESSION ? "none" : "";
   }
 
   function empezarGratis() {

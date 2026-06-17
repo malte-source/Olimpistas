@@ -63,5 +63,23 @@ window.OLI = (function () {
     navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
   }
 
+  // Pase de estética: nav "glass" al scrollear + aparición de secciones al entrar en viewport.
+  window.addEventListener("DOMContentLoaded", () => {
+    const nav = document.querySelector(".nav");
+    if (nav) {
+      const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 30);
+      onScroll();
+      window.addEventListener("scroll", onScroll, { passive: true });
+    }
+    const els = document.querySelectorAll(".section, .why-item");
+    if ("IntersectionObserver" in window && els.length) {
+      els.forEach((e) => e.classList.add("reveal"));
+      const io = new IntersectionObserver((ents) => {
+        ents.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+      }, { threshold: 0.06, rootMargin: "0px 0px -6% 0px" });
+      els.forEach((e) => io.observe(e));
+    }
+  });
+
   return { api, gs, precioTier, artGradient, artSvg, toast, yo };
 })();

@@ -19,15 +19,16 @@
   <meta property="og:type" content="website" />
   <meta property="og:image" content="/assets/icon-512.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/vendor/maplibre-gl.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=4" />
+  <link rel="stylesheet" href="/css/styles.css?v=5" />
 </head>
 <body>
   <header class="nav">
     <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg" alt="Olimpistas" /></a>
     <div class="nav-right">
       <button class="btn btn-ghost" id="accederBtn">Ingresar</button>
+      <button class="btn" id="navCta">Hacete Olimpista</button>
     </div>
   </header>
 
@@ -53,6 +54,7 @@
   <!-- Olimpistas en el mundo: contador + globo (el gancho) -->
   <section class="section mundo" id="mundo">
     <div class="wrap">
+      <span class="eyebrow">El mundo del Decano</span>
       <h2 class="mundo-h">Olimpistas en el mundo</h2>
       <div class="contador">
         <span class="contador-num" id="contadorNum">—</span>
@@ -70,6 +72,7 @@
   <!-- Por qué sumarte -->
   <section class="section" id="beneficios">
     <div class="wrap">
+      <span class="eyebrow">Por qué sumarte</span>
       <h2>Una comunidad mundial de Olimpistas</h2>
       <p class="lead">Estés donde estés, sé parte del Decano. Esto es lo que te llevás:</p>
       <div class="why">
@@ -84,6 +87,7 @@
   <!-- Niveles -->
   <section class="section" id="planes">
     <div class="wrap">
+      <span class="eyebrow">Niveles</span>
       <h2>Elegí tu nivel</h2>
       <p class="lead">Empezá gratis. Cuando quieras, subí a Kids o Premium.</p>
       <div class="tiers" id="tiers"><!-- tiers van acá --></div>
@@ -131,9 +135,9 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="/js/common.js?v=4"></script>
+  <script src="/js/common.js?v=5"></script>
   <script src="/assets/vendor/maplibre-gl.js" defer></script>
-  <script src="/js/globe.js?v=4" defer></script>
-  <script src="/js/landing.js?v=4"></script>
+  <script src="/js/globe.js?v=5" defer></script>
+  <script src="/js/landing.js?v=5"></script>
 </body>
 </html>
