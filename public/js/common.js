@@ -53,5 +53,10 @@ window.OLI = (function () {
     try { return await api("/auth/yo"); } catch { return null; }
   }
 
+  // Registrar el Service Worker (PWA). No bloquea ni rompe si falla.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  }
+
   return { api, gs, precioTier, artGradient, artSvg, toast, yo };
 })();

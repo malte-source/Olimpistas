@@ -157,7 +157,7 @@ function buildRouter() {
     res.json({ ok: true });
   }));
 
-  // ─── Contenido exclusivo (Olimpia Play) ─────────────────────────────────────
+  // ─── Contenido exclusivo (Olimpia Media+) ───────────────────────────────────
   r.get("/contenido", auth.attachSocio, wrap(async (req, res) => {
     const membresia = req.socio ? await store.getMembresia(req.socio.id) : null;
     const items = (await store.listContenido()).map((c) => ({

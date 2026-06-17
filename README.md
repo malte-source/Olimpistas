@@ -9,9 +9,13 @@ nutre para venderles desde membresías hasta intangibles.
 - **Registro mínimo** (nombre, email, contraseña) → alta automática como Olimpista gratis.
 - **Barra de progreso de perfil:** post-registro se incentiva completar WhatsApp, foto,
   país y ciudad para enriquecer la base.
-- **Beneficios** detrás del registro: Olimpia Play, sorteos, preventas y carnet digital.
+- **Beneficios** detrás del registro: Olimpia Media+, sorteos, preventas y carnet digital.
+- **PWA instalable** y **mobile-first** (manifest, service worker, íconos, safe-area).
 - No es la tienda ni la web principal de Olimpia (esas ya existen); está pensado para
   **vincularse a la web de Olimpia como un apartado**.
+
+> Para aguantar picos fuertes de tráfico (50k+ concurrentes), leer **[SCALING.md](SCALING.md)**:
+> CDN, Postgres con pooler y fotos en Cloud Storage son requisitos para producción.
 
 **Proyecto standalone**, sin dependencias de otros sistemas.
 
@@ -89,7 +93,7 @@ olimpistas/
 | POST | `/api/membresia/unirse` | socio | Alta de plan → pago (o gratis) |
 | POST | `/api/pagos/confirmar-simulado` | socio | Confirma pago en modo demo |
 | POST | `/api/pagos/webhook` | PAGOPAR | Notificación de pago (a conectar) |
-| GET  | `/api/contenido` · `/contenido/:id` | público / socio | Olimpia Play (gateado) |
+| GET  | `/api/contenido` · `/contenido/:id` | público / socio | Olimpia Media+ (gateado) |
 | GET  | `/api/sorteos` · POST `/:id/participar` | socio | Sorteos |
 | GET  | `/api/preventas` · POST `/:id/reservar` | socio | Preventa de entradas |
 | GET  | `/api/carnet` | socio | Carnet digital |

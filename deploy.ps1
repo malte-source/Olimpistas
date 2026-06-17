@@ -27,12 +27,19 @@ gcloud builds submit --tag $IMAGE .
 Write-Host "`n[5/5] Deploy a Cloud Run..." -ForegroundColor Cyan
 # NOTA: setear OLIMPISTAS_DATABASE_URL y los tokens de PAGOPAR como SECRETOS
 # (gcloud run deploy --set-secrets) cuando se conecte la base y los pagos.
+#
+# Flags pensadas para aguantar picos de tráfico (ver SCALING.md):
+#   --concurrency 250   : cada instancia atiende ~250 requests a la vez.
+#   --max-instances 100 : techo de autoescalado (250 * 100 = ~25k req simultáneas).
+#   --min-instances 2   : instancias "calientes" para no sufrir cold start en el pico.
+# Ajustar según pruebas de carga. Y SIEMPRE poner un CDN adelante (ver SCALING.md).
 gcloud run deploy $SERVICE `
   --image $IMAGE `
   --platform managed --region $REGION `
   --allow-unauthenticated `
   --memory 512Mi --cpu 1 `
-  --min-instances 0 --max-instances 3 `
+  --concurrency 250 `
+  --min-instances 2 --max-instances 100 `
   --port 8080
 
 Write-Host "`n✅ Deploy completado." -ForegroundColor Green

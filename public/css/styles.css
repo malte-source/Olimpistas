@@ -137,7 +137,7 @@ button { font-family: inherit; cursor: pointer; }
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: 13px; color: var(--gris); margin-bottom: 6px; }
 .field input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--linea);
-  background: #0d0d13; color: var(--blanco); font-size: 14px; }
+  background: #0d0d13; color: var(--blanco); font-size: 16px; } /* 16px: evita el auto-zoom de iOS */
 .field input:focus { outline: none; border-color: var(--oro); }
 .switch { text-align: center; margin-top: 14px; font-size: 13px; color: var(--gris); }
 .switch a { color: var(--oro); cursor: pointer; }
@@ -153,18 +153,9 @@ button { font-family: inherit; cursor: pointer; }
 .toast.show { opacity: 1; }
 .hidden { display: none !important; }
 
-/* ─── Responsive ──────────────────────────────────────────────────────────── */
-@media (max-width: 920px) {
-  .tiers { grid-template-columns: repeat(2, 1fr); }
-  .grid-3 { grid-template-columns: 1fr; }
-  .hero h1 { font-size: 38px; }
-  .nav { padding: 16px 20px; }
-}
-@media (max-width: 560px) {
-  .tiers { grid-template-columns: 1fr; }
-  .why { grid-template-columns: 1fr 1fr; }
-  .footer-inner { flex-direction: column; gap: 20px; }
-}
+/* ─── Safe-area (notch / barra de gestos en PWA standalone) ───────────────── */
+.nav { padding-top: max(22px, env(safe-area-inset-top)); }
+.footer { padding-bottom: max(40px, env(safe-area-inset-bottom)); }
 
 /* ─── Embudo: CTA hero, beneficios, footer ────────────────────────────────── */
 .btn-hero { font-size: 17px; padding: 16px 34px; border-radius: 12px; margin-top: 8px; }
@@ -204,7 +195,42 @@ button { font-family: inherit; cursor: pointer; }
 .foto-up label { display: inline-block; margin-top: 12px; font-size: 13px; color: var(--oro); cursor: pointer; }
 .foto-up input { display: none; }
 .perfil .field input, .perfil .field select { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--linea);
-  background: #0d0d13; color: var(--blanco); font-size: 14px; }
+  background: #0d0d13; color: var(--blanco); font-size: 16px; }
 .perfil .field input:focus, .perfil .field select:focus { outline: none; border-color: var(--oro); }
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 560px) { .perfil { grid-template-columns: 1fr; } .row-2 { grid-template-columns: 1fr; } }
+
+/* ─── Responsive (al final: deben ganar por orden a las reglas base) ──────── */
+@media (max-width: 920px) {
+  .tiers { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: 1fr; }
+  .why { grid-template-columns: repeat(2, 1fr); }
+  .hero h1 { font-size: 40px; }
+  .nav { padding-left: 18px; padding-right: 18px; }
+}
+
+@media (max-width: 640px) {
+  .wrap { padding: 0 16px; }
+  .hero { min-height: auto; padding: 100px 0 56px; }
+  .hero h1 { font-size: 32px; }
+  .hero p.sub { font-size: 16px; }
+  .btn-hero { width: 100%; max-width: 360px; }
+  .section { padding: 40px 0; }
+  .section h2 { font-size: 23px; }
+  .tiers { grid-template-columns: 1fr; max-width: 420px; }
+  .why { grid-template-columns: 1fr 1fr; }
+  .footer-inner { flex-direction: column; gap: 22px; }
+  .perfil { grid-template-columns: 1fr; }
+  .row-2 { grid-template-columns: 1fr; }
+  /* Tabs: scroll horizontal en vez de wrap (más prolijo en mobile). */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    margin: 18px -16px; padding: 0 16px 4px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; }
+  .topbar { gap: 10px; }
+  .topbar #hola { display: none; }
+  .modal { padding: 22px; }
+}
+
+@media (max-width: 400px) {
+  .why { grid-template-columns: 1fr; }
+}

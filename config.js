@@ -79,7 +79,7 @@ const TIERS = [
     color: "#c9a227",
     beneficios: [
       "Todo lo del Olimpista gratis",
-      "Contenido premium (Olimpia Play)",
+      "Contenido premium (Olimpia Media+)",
       "Preventa y acceso prioritario a entradas",
       "Descuentos en la tienda oficial de Olimpia",
       "Sorteos premium (experiencias VIP)",

@@ -35,10 +35,25 @@ app.get("/health", (_req, res) => res.json({ ok: true, service: "olimpistas", cl
 // API
 app.use("/api", buildRouter());
 
-// Estáticos + páginas
-app.use(express.static(PUBLIC));
-app.get("/", (_req, res) => res.sendFile(path.join(PUBLIC, "index.html")));
-app.get("/socio", (_req, res) => res.sendFile(path.join(PUBLIC, "socio.html")));
+// Estáticos con cache. Bajo tráfico fuerte, esto deja que un CDN (Cloud CDN /
+// Cloudflare) sirva los assets y descargue al origen — clave para picos de 50k+.
+app.use(express.static(PUBLIC, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith("sw.js")) {
+      res.setHeader("Cache-Control", "no-cache");                 // el SW debe actualizarse rápido
+    } else if (/[\\/](assets|css|js)[\\/]/.test(filePath)) {
+      res.setHeader("Cache-Control", "public, max-age=86400");    // 1 día (idealmente versionar + immutable)
+    }
+  },
+}));
+
+// HTML: cacheable corto en CDN (60s) para absorber picos sin servir contenido viejo.
+const sendPage = (file) => (_req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  res.sendFile(path.join(PUBLIC, file));
+};
+app.get("/", sendPage("index.html"));
+app.get("/socio", sendPage("socio.html"));
 
 // 404 JSON para /api, fallback a landing para el resto.
 app.use((req, res) => {

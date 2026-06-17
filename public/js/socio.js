@@ -178,13 +178,13 @@
     } catch (e) { toast(e.message); }
   }
 
-  // ─── Olimpia Play ──────────────────────────────────────────────────────────────
+  // ─── Olimpia Media+ ──────────────────────────────────────────────────────────────
   async function vContenido() {
     view().innerHTML = '<p class="muted">Cargando…</p>';
     const { items } = await api("/contenido");
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
-        <h2>Olimpia Play</h2><p class="lead">Contenido exclusivo para Olimpistas.</p>
+        <h2>Olimpia Media+</h2><p class="lead">Contenido exclusivo para Olimpistas.</p>
         <div class="grid-3">${items.map(cardContenido).join("")}</div>
       </div>`;
     view().querySelectorAll("[data-play]").forEach((el) => el.addEventListener("click", () => reproducir(el.dataset.play)));
