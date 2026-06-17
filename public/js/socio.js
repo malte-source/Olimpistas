@@ -132,10 +132,10 @@
     const el = document.getElementById("perfilGlobo");
     let n = 0;
     const t = setInterval(() => {
-      if (window.OLI_GLOBE && window.Globe) {
+      if (window.OLI_GLOBE && window.maplibregl) {
         clearInterval(t);
         perfilGlobo = window.OLI_GLOBE.create(el, {
-          autoRotate: false, rotateSpeed: 0, maxH: 280, flagBase: 18,
+          autoRotate: false, maxH: 300,
           onPick: (lat, lng) => { perfilPunto = { lat, lng }; pintarPunto(); marcarFijado(); },
         });
         pintarPunto();
@@ -145,8 +145,8 @@
   function pintarPunto() {
     if (!perfilGlobo) return;
     if (perfilPunto.lat == null) { perfilGlobo.setData([]); return; }
-    perfilGlobo.setData([{ lat: perfilPunto.lat, lng: perfilPunto.lng, nombre: "Vos", count: 1 }]);
-    perfilGlobo.pov({ lat: perfilPunto.lat, lng: perfilPunto.lng, altitude: 1.6 }, 600);
+    perfilGlobo.setData([{ lat: perfilPunto.lat, lng: perfilPunto.lng, ciudad: "Tu punto", pais: "", count: 1 }]);
+    perfilGlobo.pov({ lat: perfilPunto.lat, lng: perfilPunto.lng, zoom: 5 });
   }
   function marcarFijado() {
     const e = document.getElementById("ubicEstado");

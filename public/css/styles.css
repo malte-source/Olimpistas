@@ -217,8 +217,16 @@ button { font-family: inherit; cursor: pointer; }
 /* Resplandor dorado detrás del globo para que destaque sobre el negro. */
 .globo-stage::before { content: ""; position: absolute; inset: 6% 18%; z-index: 0;
   background: radial-gradient(circle, rgba(201,162,39,.18) 0%, rgba(201,162,39,0) 65%); pointer-events: none; }
-.globo { position: relative; z-index: 1; width: 100%; min-height: 420px; display: flex; align-items: center; justify-content: center; }
+.globo { position: relative; z-index: 1; width: 100%; height: 600px; border-radius: var(--radio); overflow: hidden; }
 .globo canvas { outline: none; }
+/* Marcador de bandera y popup de MapLibre (tema oscuro Olimpia) */
+.mapa-flag { cursor: pointer; line-height: 0; }
+.maplibregl-popup-content { background: rgba(11,11,15,.94); color: var(--blanco); border: 1px solid var(--oro);
+  border-radius: 12px; padding: 10px 16px; box-shadow: var(--sombra); text-align: center; }
+.maplibregl-popup-content strong { display: block; font-size: 15px; }
+.maplibregl-popup-content span { font-size: 13px; color: var(--oro-claro); }
+.maplibregl-popup-tip { display: none; }
+.maplibregl-ctrl-attrib { font-size: 10px; }
 
 /* Top países: tarjeta "glass" flotando a la derecha del globo. */
 .top-paises { position: absolute; top: 8px; right: 0; z-index: 3; width: 230px; text-align: left;
@@ -242,7 +250,7 @@ button { font-family: inherit; cursor: pointer; }
 .globo-note a { color: var(--oro); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
 .ubic { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
-.perfil-globo { width: 100%; max-width: 460px; margin: 0 auto; min-height: 300px; cursor: grab; }
+.perfil-globo { width: 100%; max-width: 520px; margin: 0 auto; height: 300px; border-radius: var(--radio); overflow: hidden; }
 
 /* ─── Responsive (al final: deben ganar por orden a las reglas base) ──────── */
 @media (max-width: 920px) {
@@ -276,7 +284,7 @@ button { font-family: inherit; cursor: pointer; }
   .modal { padding: 22px; }
   .mundo-h { font-size: 24px; }
   .contador-num { font-size: 50px; }
-  .globo { min-height: 320px; }
+  .globo { height: 360px; }
   .top-paises { position: static; width: auto; margin-top: 16px; backdrop-filter: none; }
   .globo-stage::before { inset: 10% 5%; }
 }
@@ -296,7 +304,7 @@ button { font-family: inherit; cursor: pointer; }
   .contador-num { font-size: 96px; }
   .contador-lbl { font-size: 21px; }
   .globo-stage { max-width: 1120px; }
-  .globo { min-height: 560px; }
+  .globo { height: 640px; }
   .top-paises { width: 270px; padding: 20px 22px; }
   .top-paises h4 { font-size: 13px; }
   .tp-row { font-size: 15px; padding: 8px 0; }

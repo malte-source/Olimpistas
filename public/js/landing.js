@@ -34,15 +34,12 @@
     renderTopPaises(stats.porPais);
     document.getElementById("globoCta").onclick = () => empezarGratis();
     esperarGlobe(() => {
-      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), {
-        onFlagClick: (d) => mostrarPopup(d),
-        maxH: 640, flagBase: 16,
-      });
+      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600 });
       if (!gl) return;
       const puntos = (stats.puntos && stats.puntos.length) ? stats.puntos : stats.porPais;
       gl.setData(puntos);
       const foco = puntos[0] || { lat: -23.4, lng: -58.4 };
-      gl.pov({ lat: foco.lat, lng: foco.lng, altitude: 1.85 }, 1400);
+      gl.pov({ lat: foco.lat, lng: foco.lng, zoom: 2.4 });
     });
   }
 
@@ -60,7 +57,7 @@
   function esperarGlobe(cb) {
     let n = 0;
     const t = setInterval(() => {
-      if (window.OLI_GLOBE && window.Globe) { clearInterval(t); cb(); }
+      if (window.OLI_GLOBE && window.maplibregl) { clearInterval(t); cb(); }
       else if (++n > 60) clearInterval(t); // ~6s máx; si no cargó, queda solo el contador
     }, 100);
   }
