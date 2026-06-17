@@ -1,102 +1,109 @@
 "use strict";
 
 /**
- * config.js — Configuración central de Olimpistas (plataforma de socios de Olimpia).
+ * config.js — Configuración central de Olimpistas.
  *
- * Todo lo "editable por negocio" vive acá: branding, tiers de membresía, precios.
- * Las claves de PAGOPAR y la DB se leen de variables de entorno.
+ * ESPÍRITU DEL PRODUCTO: esto NO es una tienda ni la web principal de Olimpia
+ * (esas ya existen). Es un EMBUDO de captación global: "Hacete Olimpista gratis".
+ * Un gran registro de hinchas que después se nutre para venderles membresías,
+ * entradas, experiencias e intangibles. El registro gratis es la acción central;
+ * los niveles pagos (Kids y Premium) son upsells.
+ *
+ * Todo lo "editable por negocio" vive acá: branding, tiers, precios, beneficios y
+ * los campos del perfil que alimentan la barra de progreso.
+ *
+ * ⚠️ PRECIOS Y BENEFICIOS: son una PROPUESTA inicial, a confirmar con Olimpia.
  */
 
 const BRAND = {
   nombre:     "Olimpistas",
   club:       "Club Olimpia",
-  lema:       "Sé parte de Olimpia",
-  bajada:     "Hacete Olimpista y accedé a contenido exclusivo, preventas, descuentos y sorteos",
-  estadio:    "Estadio Manuel Ferreira",
+  lema:       "Hacete Olimpista",
+  bajada:     "Sumate gratis a la comunidad mundial de Olimpia. Contenido, sorteos, preventas y beneficios para los hinchas del Decano, estés donde estés.",
+  ctaPrincipal: "Hacete Olimpista gratis",
   moneda:     "₲",          // Guaraníes
   monedaCod:  "PYG",
-  // Olimpia: blanco y negro (franjeado), acentos dorados por el palmarés ("El Rey de Copas")
+  // Olimpia: blanco y negro (franjeado), acentos dorados ("El Rey de Copas")
   colores: {
     primario:   "#000000",
     secundario: "#ffffff",
-    acento:     "#c9a227",   // dorado copas
+    acento:     "#c9a227",
     fondo:      "#0b0b0f",
   },
 };
 
 /**
- * Tiers de membresía. Cada uno con precios en guaraníes (enteros, sin decimales).
- * `precioMes` / `precioAnio` en null = no aplica. `precio: 0` = gratis.
- * `slug` se usa como identificador estable en DB y URLs.
+ * Tres niveles. `nivel` define el acceso (0 = gratis, 1 = pago).
+ * `precioAnio: 0` = gratis. Precios en guaraníes (enteros). Cobro ANUAL único.
  */
 const TIERS = [
   {
-    slug: "oro",
-    nombre: "Olimpista Oro",
-    subtitulo: "Estadio Manuel Ferreira",
-    precioMes: 49000,
-    precioAnio: 490000,
-    destacado: true,
-    color: "#c9a227",
-    beneficios: [
-      "La camiseta de cada temporada",
-      "Pack de bienvenida Decano",
-      "Todos los beneficios de Olimpista Plata",
-      "Acceso prioritario a finales y clásicos",
-    ],
-    cta: "Unite como Oro",
-  },
-  {
-    slug: "plata",
-    nombre: "Olimpista Plata",
-    subtitulo: "Estadio Manuel Ferreira",
-    precioMes: null,
-    precioAnio: 250000,
-    destacado: false,
-    color: "#9aa0a6",
-    beneficios: [
-      "Acceso completo al contenido de Olimpia Play",
-      "15% de descuento en la tienda online",
-      "Compra anticipada de entradas",
-    ],
-    cta: "Unite como Plata",
-  },
-  {
     slug: "olimpista",
     nombre: "Olimpista",
-    subtitulo: "Estadio Manuel Ferreira",
-    precioMes: null,
+    subtitulo: "Gratis, para siempre",
+    nivel: 0,
     precioAnio: 0,
-    destacado: false,
+    destacado: true,          // es la acción principal del embudo
     color: "#1a1a2e",
     beneficios: [
-      "Acceso al contenido gratuito de Olimpia Play",
-      "5% de descuento en primera compra en tienda online",
+      "Carnet digital de Olimpista",
+      "Contenido y novedades exclusivas del Decano",
+      "Participás en sorteos para socios",
+      "Enterate primero de preventas y lanzamientos",
     ],
-    cta: "Unite ya",
+    cta: "Hacete Olimpista gratis",
   },
   {
-    slug: "junior",
-    nombre: "Olimpista Junior",
+    slug: "kids",
+    nombre: "Olimpista Kids",
     subtitulo: "Para los más chicos",
-    precioMes: null,
-    precioAnio: 120000,
+    nivel: 1,
+    precioAnio: 100000,        // ⚠️ A CONFIRMAR
     destacado: false,
     color: "#e94560",
     beneficios: [
-      "Pack de bienvenida y carnet físico",
-      "Compra anticipada de entradas",
-      "Un regalo sorpresa cada año",
+      "Todo lo del Olimpista gratis",
+      "Pack de bienvenida + carnet Kids",
+      "Sorteos exclusivos para chicos",
+      "Regalo sorpresa en su cumpleaños",
     ],
-    cta: "Regala Olimpista Junior",
+    cta: "Sumar a un Kids",
+  },
+  {
+    slug: "premium",
+    nombre: "Olimpista Premium",
+    subtitulo: "La experiencia completa",
+    nivel: 1,
+    precioAnio: 250000,        // ⚠️ A CONFIRMAR
+    destacado: false,
+    color: "#c9a227",
+    beneficios: [
+      "Todo lo del Olimpista gratis",
+      "Contenido premium (Olimpia Play)",
+      "Preventa y acceso prioritario a entradas",
+      "Descuentos en la tienda oficial de Olimpia",
+      "Sorteos premium (experiencias VIP)",
+    ],
+    cta: "Hacerme Premium",
   },
 ];
 
+/**
+ * Campos del perfil que alimentan la barra de progreso post-registro.
+ * El registro inicial pide lo mínimo (nombre, email, contraseña); el resto se
+ * completa después, gamificado, para enriquecer la base de datos.
+ */
+const PERFIL_CAMPOS = [
+  { key: "nombre",   label: "Tu nombre",      peso: 1 },
+  { key: "whatsapp", label: "Tu WhatsApp",    peso: 1 },
+  { key: "foto",     label: "Foto de perfil", peso: 1 },
+  { key: "pais",     label: "Tu país",        peso: 1 },
+  { key: "ciudad",   label: "Tu ciudad",      peso: 1 },
+];
+
 const PAGOPAR = {
-  // Integración real la conecta el programador. Estos valores vienen de variables de entorno.
   publicToken:  process.env.PAGOPAR_PUBLIC_TOKEN  || "",
   privateToken: process.env.PAGOPAR_PRIVATE_TOKEN || "",
-  // Sandbox por defecto; cambiar a producción con PAGOPAR_ENV=prod
   baseUrl: (process.env.PAGOPAR_ENV === "prod")
     ? "https://www.pagopar.com/api"
     : "https://sandbox.pagopar.com/api",
@@ -106,6 +113,7 @@ const PAGOPAR = {
 module.exports = {
   BRAND,
   TIERS,
+  PERFIL_CAMPOS,
   PAGOPAR,
   PORT: process.env.PORT || 3002,
   SESSION_TTL_MS: 30 * 24 * 60 * 60 * 1000, // 30 días

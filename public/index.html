@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Olimpistas — Sé parte de Olimpia</title>
+  <title>Olimpistas — Hacete Olimpista gratis</title>
+  <meta name="description" content="Sumate gratis a la comunidad mundial de Olimpia: contenido, sorteos, preventas y beneficios para los hinchas del Decano." />
   <link rel="icon" href="/assets/logo.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -13,8 +14,7 @@
   <header class="nav">
     <a class="brand" href="/"><img src="/assets/logo.svg" alt="" /> Olimpistas</a>
     <div class="nav-right">
-      <button class="lang" id="langBtn">ES ▾</button>
-      <button class="btn btn-ghost" id="accederBtn">Acceder</button>
+      <button class="btn btn-ghost" id="accederBtn">Ingresar</button>
     </div>
   </header>
 
@@ -22,21 +22,59 @@
     <div class="hero-bg"><img src="/assets/hero.svg" alt="" /></div>
     <div class="hero-inner wrap">
       <span class="pill">El Rey de Copas · El Decano</span>
-      <h1 id="heroTitle">Sé parte de Olimpia</h1>
+      <h1 id="heroTitle">Hacete Olimpista</h1>
       <p class="sub" id="heroSub">Cargando…</p>
-
-      <div class="tiers" id="tiers"><!-- tiers van acá --></div>
-
-      <a class="ver-todas" href="#ventajas">Ver todas las ventajas</a>
+      <button class="btn btn-hero" id="heroCta">Hacete Olimpista gratis</button>
+      <p class="hero-note">Gratis y en 30 segundos. Sin tarjeta.</p>
+      <a class="ver-todas" href="#planes">Ver niveles y beneficios ↓</a>
     </div>
   </section>
+
+  <!-- Por qué sumarte -->
+  <section class="section" id="beneficios">
+    <div class="wrap">
+      <h2>Una comunidad mundial de Olimpistas</h2>
+      <p class="lead">Estés donde estés, sé parte del Decano. Esto es lo que te llevás:</p>
+      <div class="why">
+        <div class="why-item"><span>🎟️</span><h4>Preventas</h4><p>Enterate y comprá entradas antes que nadie.</p></div>
+        <div class="why-item"><span>🎁</span><h4>Sorteos</h4><p>Camisetas, experiencias y premios para socios.</p></div>
+        <div class="why-item"><span>▶️</span><h4>Contenido exclusivo</h4><p>Detrás de escena, entrevistas y más en Olimpia Play.</p></div>
+        <div class="why-item"><span>🪪</span><h4>Carnet digital</h4><p>Tu identidad de Olimpista, siempre con vos.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Niveles -->
+  <section class="section" id="planes">
+    <div class="wrap">
+      <h2>Elegí tu nivel</h2>
+      <p class="lead">Empezá gratis. Cuando quieras, subí a Kids o Premium.</p>
+      <div class="tiers" id="tiers"><!-- tiers van acá --></div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <div>
+        <div class="brand"><img src="/assets/logo.svg" alt="" /> Olimpistas</div>
+        <p class="muted">Una iniciativa de Club Olimpia para su comunidad mundial de hinchas.</p>
+      </div>
+      <nav class="footer-links">
+        <a href="#" data-stub>Tienda oficial</a>
+        <a href="#" data-stub>Web de Olimpia</a>
+        <a href="#" data-stub>Términos y condiciones</a>
+        <a href="#" data-stub>Política de privacidad</a>
+        <a href="#" data-stub>Bases de sorteos</a>
+      </nav>
+    </div>
+  </footer>
 
   <!-- Modal auth -->
   <div class="modal-bg" id="modalBg">
     <div class="modal">
-      <h3 id="modalTitle">Acceder</h3>
-      <p class="muted" id="modalSub">Ingresá para gestionar tu membresía.</p>
-      <div class="field" id="nombreField" style="display:none">
+      <h3 id="modalTitle">Hacete Olimpista</h3>
+      <p class="muted" id="modalSub">Creá tu cuenta gratis.</p>
+      <div class="field" id="nombreField">
         <label>Nombre</label>
         <input id="nombre" type="text" placeholder="Tu nombre" autocomplete="name" />
       </div>
@@ -49,8 +87,8 @@
         <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
       </div>
       <p class="error" id="modalError"></p>
-      <button class="btn btn-block" id="submitBtn">Ingresar</button>
-      <p class="switch" id="switchMode">¿No tenés cuenta? <a id="switchLink">Registrate</a></p>
+      <button class="btn btn-block" id="submitBtn">Crear cuenta gratis</button>
+      <p class="switch" id="switchMode">¿Ya sos Olimpista? <a id="switchLink">Ingresá</a></p>
     </div>
   </div>
 

@@ -4,10 +4,10 @@
  * routes.js — API de Olimpistas. Se monta bajo /api.
  *
  * Público:   /config, /auth/registro, /auth/login
- * Socio:     /auth/yo, /auth/logout, /membresia, /pagos/*, /contenido, /sorteos,
- *            /preventas, /carnet
+ * Socio:     /auth/yo, /auth/logout, /perfil*, /membresia, /pagos/*, /contenido,
+ *            /sorteos, /preventas, /carnet
  *
- * El gateo por tier se hace en el servidor (no confiar en el front).
+ * El gateo por nivel se hace en el servidor (no confiar en el front).
  */
 
 const express = require("express");
@@ -15,7 +15,7 @@ const { getStore } = require("./data/store");
 const auth = require("./lib/auth");
 const access = require("./lib/access");
 const pagopar = require("./lib/pagopar");
-const { BRAND, TIERS, tierBySlug } = require("./config");
+const { BRAND, TIERS, PERFIL_CAMPOS, tierBySlug } = require("./config");
 
 const wrap = (fn) => (req, res) =>
   Promise.resolve(fn(req, res)).catch((e) => {
@@ -31,6 +31,21 @@ function setSessionCookie(res, token) {
   });
 }
 
+/** Progreso de completitud del perfil (alimenta la barra). */
+function perfilProgreso(socio) {
+  const total = PERFIL_CAMPOS.reduce((a, c) => a + c.peso, 0);
+  let hechos = 0;
+  const faltantes = [];
+  for (const c of PERFIL_CAMPOS) {
+    const lleno = socio && String(socio[c.key] || "").trim() !== "";
+    if (lleno) hechos += c.peso;
+    else faltantes.push({ key: c.key, label: c.label });
+  }
+  return { pct: Math.round((hechos / total) * 100), completos: hechos, total, faltantes };
+}
+
+const httpError = (status, message) => { const e = new Error(message); e.status = status; return e; };
+
 function buildRouter() {
   const r = express.Router();
   const store = getStore();
@@ -40,9 +55,11 @@ function buildRouter() {
 
   // ─── Auth ───────────────────────────────────────────────────────────────────
   r.post("/auth/registro", wrap(async (req, res) => {
-    const { email, password, nombre, telefono } = req.body || {};
-    const { socio, token } = await auth.registrar({ email, password, nombre, telefono });
+    const { email, password, nombre } = req.body || {};
+    const { socio, token } = await auth.registrar({ email, password, nombre });
     setSessionCookie(res, token);
+    // El registro = alta automática como Olimpista gratis (el embudo).
+    await store.setMembresia(socio.id, { tierSlug: "olimpista", ciclo: "anio" });
     res.status(201).json({ socio, token });
   }));
 
@@ -61,7 +78,31 @@ function buildRouter() {
 
   r.get("/auth/yo", auth.requireSocio, wrap(async (req, res) => {
     const membresia = await store.getMembresia(req.socio.id);
-    res.json({ socio: req.socio, membresia });
+    res.json({ socio: req.socio, membresia, progreso: perfilProgreso(req.socio) });
+  }));
+
+  // ─── Perfil (enriquecimiento + barra de progreso) ────────────────────────────
+  r.get("/perfil", auth.requireSocio, wrap(async (req, res) => {
+    res.json({ socio: req.socio, progreso: perfilProgreso(req.socio) });
+  }));
+
+  r.patch("/perfil", auth.requireSocio, wrap(async (req, res) => {
+    const patch = {};
+    for (const key of ["nombre", "whatsapp", "pais", "ciudad"]) {
+      if (typeof req.body?.[key] === "string") patch[key] = req.body[key].trim().slice(0, 120);
+    }
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const socio = auth.sanitize(await store.updateSocio(req.socio.id, patch));
+    res.json({ socio, progreso: perfilProgreso(socio) });
+  }));
+
+  r.post("/perfil/foto", auth.requireSocio, wrap(async (req, res) => {
+    const { foto } = req.body || {};
+    if (typeof foto !== "string" || !/^data:image\/(png|jpe?g|webp);base64,/.test(foto))
+      throw httpError(400, "Imagen inválida (se espera un data URL de imagen)");
+    if (foto.length > 800_000) throw httpError(413, "La imagen es muy grande (máx ~600KB)");
+    const socio = auth.sanitize(await store.updateSocio(req.socio.id, { foto }));
+    res.json({ ok: true, foto: socio.foto, progreso: perfilProgreso(socio) });
   }));
 
   // ─── Membresía ──────────────────────────────────────────────────────────────
@@ -70,54 +111,48 @@ function buildRouter() {
     res.json({ membresia, tier: membresia ? tierBySlug(membresia.tier_slug) : null });
   }));
 
-  // Iniciar alta/cambio de tier → crea pedido de pago y devuelve cómo pagar.
+  // Subir de nivel (Kids / Premium) → crea pedido de pago. Cobro anual único.
   r.post("/membresia/unirse", auth.requireSocio, wrap(async (req, res) => {
-    const { tier: tierSlug, ciclo } = req.body || {};
-    const tier = tierBySlug(tierSlug);
-    if (!tier) throw httpError(400, "Tier inválido");
+    const tier = tierBySlug(req.body?.tier);
+    if (!tier) throw httpError(400, "Nivel inválido");
+    const monto = tier.precioAnio;
 
-    const cicloFinal = (ciclo === "mes" && tier.precioMes != null) ? "mes" : "anio";
-    const monto = cicloFinal === "mes" ? tier.precioMes : tier.precioAnio;
-
-    // Tier gratis → membresía activa inmediata, sin pago.
+    // Nivel gratis → membresía activa inmediata, sin pago.
     if (!monto || monto <= 0) {
-      const membresia = await store.setMembresia(req.socio.id, { tierSlug: tier.slug, ciclo: cicloFinal });
+      const membresia = await store.setMembresia(req.socio.id, { tierSlug: tier.slug, ciclo: "anio" });
       return res.json({ gratis: true, membresia });
     }
 
     const pedido = await store.createPedidoPago({
-      socioId: req.socio.id, concepto: `Membresía ${tier.nombre} (${cicloFinal})`,
-      monto, moneda: BRAND.monedaCod,
+      socioId: req.socio.id, concepto: `Membresía ${tier.nombre}`,
+      monto, moneda: BRAND.monedaCod, tierSlug: tier.slug, ciclo: "anio",
     });
     const pago = await pagopar.crearPedido({
       pedidoId: pedido.id, monto, concepto: pedido.concepto,
       comprador: { email: req.socio.email, nombre: req.socio.nombre },
     });
     await store.updatePedidoPago(pedido.id, { ref_externa: pago.hash });
-    res.json({ gratis: false, pedido, pago, tier: tier.slug, ciclo: cicloFinal });
+    res.json({ gratis: false, pedido, pago, tier: tier.slug });
   }));
 
   // Confirmación de pago en modo SIMULADO (sin PAGOPAR). Activa la membresía.
   r.post("/pagos/confirmar-simulado", auth.requireSocio, wrap(async (req, res) => {
     if (pagopar.habilitado) throw httpError(400, "PAGOPAR está activo: usá el flujo real");
-    const { pedidoId } = req.body || {};
-    const pedido = await store.getPedidoPago(pedidoId);
+    const pedido = await store.getPedidoPago(req.body?.pedidoId);
     if (!pedido || pedido.socio_id !== req.socio.id) throw httpError(404, "Pedido no encontrado");
 
     await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-    // El concepto codifica el tier; lo recuperamos del catálogo por nombre.
-    const tier = TIERS.find(t => pedido.concepto.includes(t.nombre));
-    const ciclo = pedido.concepto.includes("(mes)") ? "mes" : "anio";
+    const tier = tierBySlug(pedido.tier_slug);
     const membresia = tier
-      ? await store.setMembresia(req.socio.id, { tierSlug: tier.slug, ciclo, pagoRef: pedido.id })
+      ? await store.setMembresia(req.socio.id, { tierSlug: tier.slug, ciclo: pedido.ciclo, pagoRef: pedido.id })
       : null;
     res.json({ ok: true, membresia });
   }));
 
   // Webhook / verificación de PAGOPAR (real). El programador conecta esto.
   r.post("/pagos/webhook", wrap(async (req, res) => {
-    // PAGOPAR notifica acá. Validar firma, marcar pedido pagado, activar membresía.
-    // Stub: registrar y responder 200 para que PAGOPAR no reintente en demo.
+    // PAGOPAR notifica acá. Validar firma, marcar pedido pagado, activar membresía
+    // usando pedido.tier_slug / pedido.ciclo. Stub: registrar y responder 200.
     console.log("[olimpistas] webhook PAGOPAR recibido:", JSON.stringify(req.body || {}));
     res.json({ ok: true });
   }));
@@ -129,7 +164,7 @@ function buildRouter() {
       ...c,
       desbloqueado: access.puedeAcceder(membresia, c.tier_min),
     }));
-    res.json({ items, miRank: access.rankDeMembresia(membresia) });
+    res.json({ items, miNivel: access.nivelDeMembresia(membresia) });
   }));
 
   r.get("/contenido/:id", auth.requireSocio, wrap(async (req, res) => {
@@ -137,8 +172,7 @@ function buildRouter() {
     if (!item) throw httpError(404, "Contenido no encontrado");
     const membresia = await store.getMembresia(req.socio.id);
     if (!access.puedeAcceder(membresia, item.tier_min))
-      throw httpError(403, `Necesitás un nivel ${item.tier_min} o superior`);
-    // Acá iría la URL firmada del video. Demo: devolvemos el item completo.
+      throw httpError(403, "Este contenido es para Olimpistas Premium");
     res.json({ item, streamUrl: `/assets/demo-stream.mp4` });
   }));
 
@@ -160,7 +194,7 @@ function buildRouter() {
     if (!sorteo) throw httpError(404, "Sorteo no encontrado");
     const membresia = await store.getMembresia(req.socio.id);
     if (!access.puedeAcceder(membresia, sorteo.tier_min))
-      throw httpError(403, `Este sorteo es para nivel ${sorteo.tier_min} o superior`);
+      throw httpError(403, "Este sorteo es para Olimpistas Premium");
     const participacion = await store.participarSorteo(sorteo.id, req.socio.id);
     res.json({ ok: true, participacion });
   }));
@@ -180,7 +214,7 @@ function buildRouter() {
     if (!preventa) throw httpError(404, "Preventa no encontrada");
     const membresia = await store.getMembresia(req.socio.id);
     if (!access.puedeAcceder(membresia, preventa.tier_min))
-      throw httpError(403, `La preventa es para nivel ${preventa.tier_min} o superior`);
+      throw httpError(403, "La preventa es para Olimpistas Premium");
     const cantidad = Math.max(1, Math.min(4, parseInt(req.body?.cantidad || "1", 10)));
     const reserva = await store.reservarPreventa(preventa.id, req.socio.id, cantidad);
     if (reserva?.error === "sin_stock") throw httpError(409, "No hay stock suficiente");
@@ -190,17 +224,17 @@ function buildRouter() {
   // ─── Carnet digital ─────────────────────────────────────────────────────────
   r.get("/carnet", auth.requireSocio, wrap(async (req, res) => {
     const membresia = await store.getMembresia(req.socio.id);
-    if (!membresia) throw httpError(404, "Todavía no sos socio. Unite a un plan para tener carnet.");
+    if (!membresia) throw httpError(404, "Todavía no sos Olimpista. Registrate para tener carnet.");
     const tier = tierBySlug(membresia.tier_slug);
     res.json({
       carnet: {
         socioId: req.socio.id,
         nombre: req.socio.nombre || req.socio.email,
+        foto: req.socio.foto || "",
         tier: tier?.nombre || membresia.tier_slug,
         tierSlug: membresia.tier_slug,
         color: tier?.color || "#000",
         desde: membresia.inicio,
-        // Número de socio legible derivado del id
         numero: "OLI-" + req.socio.id.replace(/\D/g, "").slice(0, 8).padStart(8, "0"),
       },
     });
@@ -208,7 +242,5 @@ function buildRouter() {
 
   return r;
 }
-
-function httpError(status, message) { const e = new Error(message); e.status = status; return e; }
 
 module.exports = { buildRouter };

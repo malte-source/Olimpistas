@@ -13,6 +13,11 @@ CREATE TABLE IF NOT EXISTS socios (
   password_hash TEXT NOT NULL,
   nombre        TEXT DEFAULT '',
   telefono      TEXT DEFAULT '',
+  -- Campos de enriquecimiento (barra de progreso de perfil):
+  whatsapp      TEXT DEFAULT '',
+  foto          TEXT DEFAULT '',          -- data URL (o, en prod, URL a Cloud Storage)
+  pais          TEXT DEFAULT '',
+  ciudad        TEXT DEFAULT '',
   creado        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -26,7 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_sesiones_socio ON sesiones(socio_id);
 CREATE TABLE IF NOT EXISTS membresias (
   id        TEXT PRIMARY KEY,
   socio_id  TEXT NOT NULL REFERENCES socios(id) ON DELETE CASCADE,
-  tier_slug TEXT NOT NULL,                          -- oro | plata | olimpista | junior
+  tier_slug TEXT NOT NULL,                          -- olimpista | kids | premium
   ciclo     TEXT NOT NULL DEFAULT 'anio',           -- mes | anio
   estado    TEXT NOT NULL DEFAULT 'activa',         -- activa | reemplazada | cancelada
   inicio    TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -89,6 +94,8 @@ CREATE TABLE IF NOT EXISTS pedidos_pago (
   concepto    TEXT NOT NULL,
   monto       INTEGER NOT NULL,
   moneda      TEXT NOT NULL DEFAULT 'PYG',
+  tier_slug   TEXT,                                 -- tier que se está comprando
+  ciclo       TEXT NOT NULL DEFAULT 'anio',
   estado      TEXT NOT NULL DEFAULT 'pendiente',    -- pendiente | pagado | rechazado | cancelado
   ref_externa TEXT,                                 -- hash/identificador de PAGOPAR
   creado      TIMESTAMPTZ NOT NULL DEFAULT now()

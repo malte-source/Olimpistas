@@ -1,9 +1,19 @@
-# Olimpistas — plataforma de socios de Olimpia
+# Olimpistas — embudo de captación de Club Olimpia
 
-Réplica funcional de [madridistas.com](https://madridistas.com) adaptada a **Club Olimpia**:
-membresías por niveles, contenido exclusivo ("Olimpia Play"), preventa de entradas,
-descuentos, sorteos y carnet digital. **Proyecto standalone**, sin dependencias de
-otros sistemas.
+Inspirado en [madridistas.com](https://madridistas.com), pero con un objetivo claro:
+ser un **gran embudo de captación de datos mundial**. La acción principal es
+**"Hacete Olimpista gratis"**; el registro arma una base de hinchas que después se
+nutre para venderles desde membresías hasta intangibles.
+
+- **3 niveles:** Olimpista (gratis) · Olimpista Kids · Olimpista Premium (los 2 pagos).
+- **Registro mínimo** (nombre, email, contraseña) → alta automática como Olimpista gratis.
+- **Barra de progreso de perfil:** post-registro se incentiva completar WhatsApp, foto,
+  país y ciudad para enriquecer la base.
+- **Beneficios** detrás del registro: Olimpia Play, sorteos, preventas y carnet digital.
+- No es la tienda ni la web principal de Olimpia (esas ya existen); está pensado para
+  **vincularse a la web de Olimpia como un apartado**.
+
+**Proyecto standalone**, sin dependencias de otros sistemas.
 
 ## Correr en local
 
@@ -74,7 +84,8 @@ olimpistas/
 |---|---|---|---|
 | GET  | `/api/config` | público | Branding + tiers |
 | POST | `/api/auth/registro` · `/login` · `/logout` | público | Cuenta + sesión |
-| GET  | `/api/auth/yo` | socio | Datos + membresía |
+| GET  | `/api/auth/yo` | socio | Datos + membresía + progreso de perfil |
+| GET  | `/api/perfil` · PATCH `/perfil` · POST `/perfil/foto` | socio | Enriquecimiento (WhatsApp, país, ciudad, foto) |
 | POST | `/api/membresia/unirse` | socio | Alta de plan → pago (o gratis) |
 | POST | `/api/pagos/confirmar-simulado` | socio | Confirma pago en modo demo |
 | POST | `/api/pagos/webhook` | PAGOPAR | Notificación de pago (a conectar) |
@@ -82,6 +93,22 @@ olimpistas/
 | GET  | `/api/sorteos` · POST `/:id/participar` | socio | Sorteos |
 | GET  | `/api/preventas` · POST `/:id/reservar` | socio | Preventa de entradas |
 | GET  | `/api/carnet` | socio | Carnet digital |
+
+## Vincular a la web de Olimpia (como apartado)
+
+Al ser standalone, se puede enganchar de tres formas, de menor a mayor integración:
+1. **Link** desde la web/redes de Olimpia a este dominio (lo más simple).
+2. **Subdominio** (ej. `olimpistas.olimpia.com.py`) apuntando a este servicio.
+3. **Embed** en una sección de la web de Olimpia vía `<iframe>` (revisar branding y
+   cabeceras `X-Frame-Options`/CSP para permitirlo desde el dominio de Olimpia).
+
+## Pendiente para producción
+
+- **PAGOPAR real** (hoy modo simulado) — `lib/pagopar.js` + webhook `/api/pagos/webhook`.
+- **Panel admin** para ver/exportar la base y gestionar contenido/sorteos/preventas.
+- **Emails** (bienvenida, recuperar contraseña, confirmaciones) — sin proveedor aún.
+- **Foto de perfil en Cloud Storage** (hoy se guarda como data URL en la base; sirve
+  para el MVP, conviene migrar a GCS en producción).
 
 ## Deploy
 

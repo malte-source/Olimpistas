@@ -1,155 +1,256 @@
-/* socio.js — área de socio: membresía, contenido, sorteos, preventas, carnet. */
+/* socio.js — área de socio: perfil + progreso, membresía, contenido, sorteos,
+   preventas, carnet. El foco del embudo es completar el perfil. */
 (function () {
   const { api, gs, artSvg, toast, yo } = window.OLI;
-  let SESSION = null;
+  let SESSION = null; // { socio, membresia, progreso }
   const view = () => document.getElementById("view");
+
+  const PAISES = ["Paraguay", "Argentina", "Brasil", "Uruguay", "Bolivia", "Chile", "Perú",
+    "Colombia", "Ecuador", "Venezuela", "México", "Estados Unidos", "España", "Italia",
+    "Alemania", "Francia", "Portugal", "Japón", "Australia", "Otro"];
 
   async function init() {
     SESSION = await yo();
     if (!SESSION) { location.href = "/"; return; }
     document.getElementById("hola").textContent = SESSION.socio.nombre || SESSION.socio.email;
     document.getElementById("logoutBtn").onclick = logout;
-    document.querySelectorAll(".tab").forEach((t) =>
-      t.addEventListener("click", () => activar(t.dataset.tab))
-    );
-    // ¿Volvió de un pago simulado a /socio?
+    document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => activar(t.dataset.tab)));
+
     const pago = new URLSearchParams(location.search).get("pago_simulado");
     if (pago) {
       try { await api("/pagos/confirmar-simulado", { method: "POST", body: { pedidoId: pago } }); toast("¡Pago confirmado!"); }
       catch (e) { toast(e.message); }
       history.replaceState({}, "", "/socio");
+      SESSION = await yo();
     }
-    activar("membresia");
+    renderProgreso();
+    activar("perfil");
   }
 
   function activar(tab) {
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
-    ({ membresia: vMembresia, contenido: vContenido, sorteos: vSorteos, preventas: vPreventas, carnet: vCarnet }[tab])();
+    ({ perfil: vPerfil, membresia: vMembresia, contenido: vContenido, sorteos: vSorteos, preventas: vPreventas, carnet: vCarnet }[tab])();
   }
 
   async function logout() { try { await api("/auth/logout", { method: "POST" }); } finally { location.href = "/"; } }
 
-  // ─── Membresía ─────────────────────────────────────────────────────────────
+  async function refrescar() { SESSION = await yo(); renderProgreso(); }
+
+  // ─── Barra de progreso (persistente) ─────────────────────────────────────────
+  function renderProgreso() {
+    const p = SESSION.progreso;
+    const cont = document.getElementById("progreso");
+    if (!p || p.pct >= 100) {
+      cont.innerHTML = p && p.pct >= 100
+        ? `<div class="progreso"><div class="top"><strong>¡Perfil completo! 🎉</strong><span class="pct">100%</span></div>
+           <div class="bar"><i style="width:100%"></i></div></div>` : "";
+      return;
+    }
+    const chips = p.faltantes.map((f) => `<button data-falta="${f.key}">+ ${f.label}</button>`).join("");
+    cont.innerHTML = `
+      <div class="progreso">
+        <div class="top"><strong>Completá tu perfil de Olimpista</strong><span class="pct">${p.pct}%</span></div>
+        <div class="bar"><i style="width:${p.pct}%"></i></div>
+        <div class="faltantes">${chips}</div>
+      </div>`;
+    cont.querySelectorAll("[data-falta]").forEach((b) =>
+      b.addEventListener("click", () => { activar("perfil"); setTimeout(() => focusCampo(b.dataset.falta), 60); })
+    );
+  }
+  function focusCampo(key) {
+    const el = document.getElementById("f_" + key) || (key === "foto" && document.getElementById("fotoInput"));
+    if (el) { el.focus?.(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+  }
+
+  // ─── Mi perfil ───────────────────────────────────────────────────────────────
+  function vPerfil() {
+    const s = SESSION.socio;
+    const avatar = s.foto
+      ? `<img class="avatar" id="avatar" src="${s.foto}" alt="" />`
+      : `<div class="avatar" id="avatar">📷</div>`;
+    view().innerHTML = `
+      <div class="section" style="border:none;padding-top:8px">
+        <h2>Mi perfil</h2>
+        <p class="lead">Cuanto más completo, mejores beneficios y sorteos te llegan.</p>
+        <div class="perfil">
+          <div class="foto-up">
+            ${avatar}
+            <label for="fotoInput">Cambiar foto</label>
+            <input type="file" id="fotoInput" accept="image/*" />
+          </div>
+          <div>
+            <div class="field"><label>Nombre</label><input id="f_nombre" value="${attr(s.nombre)}" placeholder="Tu nombre" /></div>
+            <div class="field"><label>WhatsApp</label><input id="f_whatsapp" value="${attr(s.whatsapp)}" placeholder="+595 9xx xxx xxx" /></div>
+            <div class="row-2">
+              <div class="field"><label>País</label>
+                <input id="f_pais" list="paises" value="${attr(s.pais)}" placeholder="Tu país" />
+                <datalist id="paises">${PAISES.map((p) => `<option value="${p}">`).join("")}</datalist>
+              </div>
+              <div class="field"><label>Ciudad</label><input id="f_ciudad" value="${attr(s.ciudad)}" placeholder="Tu ciudad" /></div>
+            </div>
+            <div class="field"><label>Email</label><input value="${attr(s.email)}" disabled /></div>
+            <button class="btn" id="guardarPerfil">Guardar cambios</button>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById("guardarPerfil").onclick = guardarPerfil;
+    document.getElementById("fotoInput").onchange = subirFoto;
+  }
+
+  async function guardarPerfil() {
+    const body = {
+      nombre: val("f_nombre"), whatsapp: val("f_whatsapp"),
+      pais: val("f_pais"), ciudad: val("f_ciudad"),
+    };
+    try {
+      const r = await api("/perfil", { method: "PATCH", body });
+      SESSION.socio = r.socio; SESSION.progreso = r.progreso;
+      document.getElementById("hola").textContent = r.socio.nombre || r.socio.email;
+      renderProgreso(); toast("Perfil actualizado ✓");
+    } catch (e) { toast(e.message); }
+  }
+
+  async function subirFoto(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await redimensionar(file, 256);
+      const r = await api("/perfil/foto", { method: "POST", body: { foto: dataUrl } });
+      SESSION.socio.foto = r.foto; SESSION.progreso = r.progreso;
+      document.getElementById("avatar").outerHTML = `<img class="avatar" id="avatar" src="${r.foto}" alt="" />`;
+      renderProgreso(); toast("Foto actualizada ✓");
+    } catch (err) { toast(err.message); }
+  }
+
+  // Redimensiona/recorta a un cuadrado y devuelve un data URL JPEG liviano.
+  function redimensionar(file, size) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = c.height = size;
+        const ctx = c.getContext("2d");
+        const min = Math.min(img.width, img.height);
+        const sx = (img.width - min) / 2, sy = (img.height - min) / 2;
+        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+        resolve(c.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => reject(new Error("No se pudo leer la imagen"));
+      const fr = new FileReader();
+      fr.onload = () => (img.src = fr.result);
+      fr.onerror = () => reject(new Error("No se pudo leer el archivo"));
+      fr.readAsDataURL(file);
+    });
+  }
+
+  // ─── Mi membresía ────────────────────────────────────────────────────────────
   async function vMembresia() {
     view().innerHTML = '<p class="muted">Cargando…</p>';
     const { membresia, tier } = await api("/membresia");
-    if (!membresia) {
-      view().innerHTML = `
-        <div class="section" style="border:none;padding-top:8px">
-          <h2>Todavía no tenés un plan activo</h2>
-          <p class="lead">Elegí tu nivel de Olimpista para desbloquear contenido, preventas y sorteos.</p>
-          <a class="btn" href="/">Ver planes</a>
-        </div>`;
-      return;
-    }
+    const { tiers } = await api("/config");
+    const pagos = tiers.filter((t) => t.nivel > 0);
+    const esGratis = !membresia || tier?.nivel === 0;
+    const upsell = esGratis ? `
+      <h3 style="margin-top:28px">Subí de nivel</h3>
+      <div class="grid-3">${pagos.map(cardUpsell).join("")}</div>` : "";
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
-        <h2>Sos ${tier.nombre} <span style="color:var(--oro)">●</span></h2>
-        <p class="lead">Membresía activa desde ${new Date(membresia.inicio).toLocaleDateString("es-PY")} · ciclo ${membresia.ciclo}.</p>
-        <ul class="benefits" style="max-width:520px">${tier.beneficios.map((b) => `<li>${b}</li>`).join("")}</ul>
-        <div style="margin-top:24px"><a class="btn btn-ghost" href="/">Cambiar de plan</a></div>
+        <h2>Sos ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h2>
+        <p class="lead">Miembro desde ${membresia ? new Date(membresia.inicio).toLocaleDateString("es-PY") : "hoy"}.</p>
+        <ul class="benefits" style="max-width:520px">${(tier?.beneficios || []).map((b) => `<li>${b}</li>`).join("")}</ul>
+        ${upsell}
       </div>`;
+    view().querySelectorAll("[data-upsell]").forEach((b) => b.addEventListener("click", () => upgrade(b.dataset.upsell)));
+  }
+  function cardUpsell(t) {
+    const precio = t.precioAnio > 0 ? `${gs(t.precioAnio)} / año` : "Gratis";
+    return `
+      <div class="card"><div class="thumb">${artSvg(t.slug, t.nombre, t.slug === "premium" ? "♛" : "🎈")}</div>
+        <div class="body"><span class="chip on">${precio}</span><h4>${t.nombre}</h4>
+        <p>${t.beneficios.slice(1, 3).join(" · ")}</p>
+        <button class="btn" data-upsell="${t.slug}">${t.cta}</button></div></div>`;
+  }
+  async function upgrade(slug) {
+    try {
+      const r = await api("/membresia/unirse", { method: "POST", body: { tier: slug } });
+      if (r.gratis) { await refrescar(); return vMembresia(); }
+      location.href = r.pago.urlPago;
+    } catch (e) { toast(e.message); }
   }
 
-  // ─── Contenido (Olimpia Play) ────────────────────────────────────────────────
+  // ─── Olimpia Play ──────────────────────────────────────────────────────────────
   async function vContenido() {
     view().innerHTML = '<p class="muted">Cargando…</p>';
     const { items } = await api("/contenido");
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
-        <h2>Olimpia Play</h2>
-        <p class="lead">Contenido exclusivo para Olimpistas.</p>
+        <h2>Olimpia Play</h2><p class="lead">Contenido exclusivo para Olimpistas.</p>
         <div class="grid-3">${items.map(cardContenido).join("")}</div>
       </div>`;
-    view().querySelectorAll("[data-play]").forEach((el) =>
-      el.addEventListener("click", () => reproducir(el.dataset.play))
-    );
+    view().querySelectorAll("[data-play]").forEach((el) => el.addEventListener("click", () => reproducir(el.dataset.play)));
   }
   function cardContenido(c) {
-    const lock = c.desbloqueado ? "" :
-      `<div class="lock"><span>🔒 Nivel ${c.tier_min}+</span></div>`;
+    const lock = c.desbloqueado ? "" : `<div class="lock"><span>🔒 Premium</span></div>`;
     return `
-      <div class="card">
-        <div class="thumb">${artSvg(c.id, c.titulo, "▶")}${lock}</div>
-        <div class="body">
-          <span class="chip ${c.desbloqueado ? "on" : ""}">${c.tipo} · ${c.duracion || ""}</span>
-          <h4>${c.titulo}</h4>
-          <p>${c.descripcion}</p>
-          <button class="btn ${c.desbloqueado ? "" : "btn-ghost"}" ${c.desbloqueado ? `data-play="${c.id}"` : "disabled"}>
-            ${c.desbloqueado ? "Reproducir" : "Requiere nivel superior"}
-          </button>
-        </div>
-      </div>`;
+      <div class="card"><div class="thumb">${artSvg(c.id, c.titulo, "▶")}${lock}</div>
+        <div class="body"><span class="chip ${c.desbloqueado ? "on" : ""}">${c.tipo} · ${c.duracion || ""}</span>
+        <h4>${c.titulo}</h4><p>${c.descripcion}</p>
+        <button class="btn ${c.desbloqueado ? "" : "btn-ghost"}" ${c.desbloqueado ? `data-play="${c.id}"` : "disabled"}>
+          ${c.desbloqueado ? "Reproducir" : "Solo Premium"}</button></div></div>`;
   }
   async function reproducir(id) {
     try { const r = await api("/contenido/" + id); toast("▶ " + r.item.titulo + " (demo)"); }
     catch (e) { toast(e.message); }
   }
 
-  // ─── Sorteos ───────────────────────────────────────────────────────────────
+  // ─── Sorteos ───────────────────────────────────────────────────────────────────
   async function vSorteos() {
     view().innerHTML = '<p class="muted">Cargando…</p>';
     const { items } = await api("/sorteos");
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
-        <h2>Sorteos</h2>
-        <p class="lead">Participá por premios exclusivos del Decano.</p>
+        <h2>Sorteos</h2><p class="lead">Participá por premios exclusivos del Decano.</p>
         <div class="grid-3">${items.map(cardSorteo).join("")}</div>
       </div>`;
-    view().querySelectorAll("[data-sorteo]").forEach((el) =>
-      el.addEventListener("click", () => participar(el.dataset.sorteo))
-    );
+    view().querySelectorAll("[data-sorteo]").forEach((el) => el.addEventListener("click", () => participar(el.dataset.sorteo)));
   }
   function cardSorteo(s) {
     let btn;
     if (s.participando) btn = `<button class="btn btn-ghost" disabled>✓ Ya participás</button>`;
-    else if (!s.elegible) btn = `<button class="btn btn-ghost" disabled>Requiere nivel ${s.tier_min}+</button>`;
+    else if (!s.elegible) btn = `<button class="btn btn-ghost" disabled>Solo Premium</button>`;
     else btn = `<button class="btn" data-sorteo="${s.id}">Participar</button>`;
     return `
-      <div class="card">
-        <div class="thumb">${artSvg(s.id, s.titulo, "🎁")}</div>
-        <div class="body">
-          <span class="chip ${s.elegible ? "on" : ""}">Cierra ${s.cierra}</span>
-          <h4>${s.titulo}</h4><p>${s.descripcion}</p>${btn}
-        </div>
-      </div>`;
+      <div class="card"><div class="thumb">${artSvg(s.id, s.titulo, "🎁")}</div>
+        <div class="body"><span class="chip ${s.elegible ? "on" : ""}">Cierra ${s.cierra}</span>
+        <h4>${s.titulo}</h4><p>${s.descripcion}</p>${btn}</div></div>`;
   }
   async function participar(id) {
     try { await api("/sorteos/" + id + "/participar", { method: "POST" }); toast("¡Estás participando! 🍀"); vSorteos(); }
     catch (e) { toast(e.message); }
   }
 
-  // ─── Preventas ───────────────────────────────────────────────────────────────
+  // ─── Preventas ─────────────────────────────────────────────────────────────────
   async function vPreventas() {
     view().innerHTML = '<p class="muted">Cargando…</p>';
     const { items } = await api("/preventas");
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
-        <h2>Preventa de entradas</h2>
-        <p class="lead">Comprá antes que nadie. Acceso prioritario según tu nivel.</p>
+        <h2>Preventa de entradas</h2><p class="lead">Comprá antes que nadie.</p>
         <div class="grid-3">${items.map(cardPreventa).join("")}</div>
       </div>`;
-    view().querySelectorAll("[data-preventa]").forEach((el) =>
-      el.addEventListener("click", () => reservar(el.dataset.preventa))
-    );
+    view().querySelectorAll("[data-preventa]").forEach((el) => el.addEventListener("click", () => reservar(el.dataset.preventa)));
   }
   function cardPreventa(p) {
     const btn = p.habilitada
       ? `<button class="btn" data-preventa="${p.id}">Reservar (${gs(p.precio_desde)})</button>`
-      : `<button class="btn btn-ghost" disabled>Requiere nivel ${p.tier_min}+</button>`;
+      : `<button class="btn btn-ghost" disabled>Solo Premium</button>`;
     return `
-      <div class="card">
-        <div class="thumb">${artSvg(p.id, p.evento, "🎟")}</div>
-        <div class="body">
-          <span class="chip ${p.habilitada ? "on" : ""}">${p.fecha} · ${p.sede}</span>
-          <h4>${p.evento}</h4>
-          <p>Desde ${gs(p.precio_desde)} · ${p.stock} entradas en preventa</p>${btn}
-        </div>
-      </div>`;
+      <div class="card"><div class="thumb">${artSvg(p.id, p.evento, "🎟")}</div>
+        <div class="body"><span class="chip ${p.habilitada ? "on" : ""}">${p.fecha} · ${p.sede}</span>
+        <h4>${p.evento}</h4><p>Desde ${gs(p.precio_desde)} · ${p.stock} en preventa</p>${btn}</div></div>`;
   }
   async function reservar(id) {
-    try { const r = await api("/preventas/" + id + "/reservar", { method: "POST", body: { cantidad: 1 } });
-      toast("Reserva confirmada ✓"); vPreventas(); }
+    try { await api("/preventas/" + id + "/reservar", { method: "POST", body: { cantidad: 1 } }); toast("Reserva confirmada ✓"); vPreventas(); }
     catch (e) { toast(e.message); }
   }
 
@@ -158,26 +259,25 @@
     view().innerHTML = '<p class="muted">Cargando…</p>';
     try {
       const { carnet } = await api("/carnet");
+      const foto = carnet.foto
+        ? `<img src="${carnet.foto}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;border:2px solid ${carnet.color}" alt="" />`
+        : `<img src="/assets/logo.svg" width="42" alt="" />`;
       view().innerHTML = `
         <div class="section" style="border:none;padding-top:8px">
-          <h2>Mi carnet digital</h2>
-          <p class="lead">Mostralo en el estadio y en la tienda oficial.</p>
+          <h2>Mi carnet digital</h2><p class="lead">Tu identidad de Olimpista, siempre con vos.</p>
           <div class="carnet" style="border-color:${carnet.color}">
-            <div class="top">
-              <img src="/assets/logo.svg" width="42" alt="" />
-              <span class="tier-name" style="color:${carnet.color}">${carnet.tier}</span>
-            </div>
-            <div>
-              <div class="nom">${carnet.nombre}</div>
-              <div class="num">${carnet.numero}</div>
-            </div>
-            <div class="foot">Socio desde ${new Date(carnet.desde).toLocaleDateString("es-PY")} · Olimpistas</div>
+            <div class="top">${foto}<span class="tier-name" style="color:${carnet.color}">${carnet.tier}</span></div>
+            <div><div class="nom">${carnet.nombre}</div><div class="num">${carnet.numero}</div></div>
+            <div class="foot">Olimpista desde ${new Date(carnet.desde).toLocaleDateString("es-PY")} · Olimpistas</div>
           </div>
         </div>`;
     } catch (e) {
-      view().innerHTML = `<div class="section" style="border:none"><h2>Carnet no disponible</h2><p class="lead">${e.message}</p><a class="btn" href="/">Ver planes</a></div>`;
+      view().innerHTML = `<div class="section" style="border:none"><h2>Carnet no disponible</h2><p class="lead">${e.message}</p></div>`;
     }
   }
+
+  const val = (id) => (document.getElementById(id)?.value || "").trim();
+  const attr = (s) => String(s || "").replace(/"/g, "&quot;");
 
   init().catch((e) => { view().innerHTML = '<p class="error">' + e.message + "</p>"; });
 })();

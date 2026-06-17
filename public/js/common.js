@@ -19,13 +19,10 @@ window.OLI = (function () {
     return "₲ " + Number(n).toLocaleString("es-PY");
   }
 
-  // Precio mostrado por tier (replica el layout de Madridistas).
+  // Precio mostrado por tier. Cobro anual único; gratis = 0.
   function precioTier(t) {
-    if (!t.precioAnio && !t.precioMes) return { big: "Gratis", small: "" };
-    if (t.precioMes != null) {
-      return { big: `Desde ${gs(t.precioMes)}/mes`, small: t.precioAnio ? `O desde ${gs(t.precioAnio)}/año` : "" };
-    }
-    return { big: `${gs(t.precioAnio)}/año`, small: "" };
+    if (!t.precioAnio || t.precioAnio <= 0) return { big: "Gratis", small: "para siempre" };
+    return { big: gs(t.precioAnio), small: "por año" };
   }
 
   // Art determinista para tarjetas/thumbs según una semilla (id/slug).

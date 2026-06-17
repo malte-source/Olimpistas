@@ -42,23 +42,23 @@ function seed() {
       },
       {
         id: "c2", titulo: "Entrenamiento a puertas cerradas — semana de Libertadores",
-        tipo: "video", tier_min: "plata", duracion: "15:04",
+        tipo: "video", tier_min: "premium", duracion: "15:04",
         thumb: "/assets/content-2.svg",
         descripcion: "Acceso exclusivo al trabajo del plantel antes del partido clave.",
         publicado: "2026-06-12",
       },
       {
         id: "c3", titulo: "Mano a mano con el capitán",
-        tipo: "video", tier_min: "plata", duracion: "22:48",
+        tipo: "video", tier_min: "premium", duracion: "22:48",
         thumb: "/assets/content-3.svg",
         descripcion: "Entrevista íntima sobre la temporada y el sueño de la cuarta.",
         publicado: "2026-06-14",
       },
       {
         id: "c4", titulo: "Documental: El Rey de Copas",
-        tipo: "documental", tier_min: "oro", duracion: "48:10",
+        tipo: "documental", tier_min: "premium", duracion: "48:10",
         thumb: "/assets/content-4.svg",
-        descripcion: "La historia de las tres Libertadores, sólo para Olimpistas Oro.",
+        descripcion: "La historia de las tres Libertadores, sólo para Olimpistas Premium.",
         publicado: "2026-06-01",
       },
     ],
@@ -71,19 +71,19 @@ function seed() {
       {
         id: "s2", titulo: "2 entradas Palco para el próximo clásico",
         descripcion: "Viví el superclásico desde el palco con todo incluido.",
-        tier_min: "plata", cierra: "2026-07-01", imagen: "/assets/sorteo-2.svg",
+        tier_min: "premium", cierra: "2026-07-01", imagen: "/assets/sorteo-2.svg",
       },
       {
         id: "s3", titulo: "Experiencia VIP: día con el equipo",
         descripcion: "Conocé el vestuario, sacate fotos y mirá un entrenamiento en vivo.",
-        tier_min: "oro", cierra: "2026-08-01", imagen: "/assets/sorteo-3.svg",
+        tier_min: "premium", cierra: "2026-08-01", imagen: "/assets/sorteo-3.svg",
       },
     ],
     preventas: [
       {
         id: "p1", evento: "Olimpia vs Cerro Porteño — Superclásico",
         fecha: "2026-07-20", sede: "Estadio Manuel Ferreira",
-        abre: "2026-06-25", tier_min: "plata",
+        abre: "2026-06-25", tier_min: "premium",
         precio_desde: 80000, imagen: "/assets/preventa-1.svg", stock: 1200,
       },
       {
@@ -121,7 +121,10 @@ function createMemoryStore({ filePath = null } = {}) {
     async createSocio({ email, passwordHash, nombre, telefono }) {
       const socio = {
         id: uid("soc"), email: email.toLowerCase(), password_hash: passwordHash,
-        nombre: nombre || "", telefono: telefono || "", creado: nowIso(),
+        nombre: nombre || "", telefono: telefono || "",
+        // Campos de enriquecimiento (barra de progreso, se completan después):
+        whatsapp: "", foto: "", pais: "", ciudad: "",
+        creado: nowIso(),
       };
       db.socios.push(socio); persist();
       return socio;
@@ -205,9 +208,10 @@ function createMemoryStore({ filePath = null } = {}) {
     },
 
     // ── Pedidos de pago (PAGOPAR) ──
-    async createPedidoPago({ socioId, concepto, monto, moneda, refExterna }) {
+    async createPedidoPago({ socioId, concepto, monto, moneda, refExterna, tierSlug, ciclo }) {
       const ped = {
         id: uid("ped"), socio_id: socioId, concepto, monto, moneda: moneda || "PYG",
+        tier_slug: tierSlug || null, ciclo: ciclo || "anio",
         estado: "pendiente", ref_externa: refExterna || null, creado: nowIso(),
       };
       db.pedidos.push(ped); persist();

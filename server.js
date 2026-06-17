@@ -9,7 +9,7 @@ const { PORT, BRAND } = require("./config");
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: "1mb" })); // 1mb: alcanza para fotos de perfil (data URL)
 
 // Parser de cookies mínimo (evita dependencia extra).
 app.use((req, _res, next) => {

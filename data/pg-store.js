@@ -128,11 +128,12 @@ function createPgStore({ databaseUrl }) {
     },
 
     // ── Pedidos de pago ──
-    async createPedidoPago({ socioId, concepto, monto, moneda, refExterna }) {
+    async createPedidoPago({ socioId, concepto, monto, moneda, refExterna, tierSlug, ciclo }) {
       const id = uid("ped");
       const [p] = await sql`
-        INSERT INTO pedidos_pago (id, socio_id, concepto, monto, moneda, ref_externa)
-        VALUES (${id}, ${socioId}, ${concepto}, ${monto}, ${moneda || "PYG"}, ${refExterna || null})
+        INSERT INTO pedidos_pago (id, socio_id, concepto, monto, moneda, ref_externa, tier_slug, ciclo)
+        VALUES (${id}, ${socioId}, ${concepto}, ${monto}, ${moneda || "PYG"}, ${refExterna || null},
+                ${tierSlug || null}, ${ciclo || "anio"})
         RETURNING *`;
       return p;
     },
