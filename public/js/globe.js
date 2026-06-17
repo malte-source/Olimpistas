@@ -5,7 +5,9 @@ window.OLI_GLOBE = (function () {
     const wrap = document.createElement("div");
     const size = base + Math.min(30, Math.log2((d.count || 1) + 1) * 6);
     const lugar = d.ciudad ? `${d.ciudad}, ${d.pais || ""}` : (d.pais || d.nombre || "");
-    wrap.innerHTML = `<img src="/assets/flag-olimpia.svg" alt="" style="width:${size}px;height:auto;filter:drop-shadow(0 2px 4px rgba(0,0,0,.7))" />`;
+    // Doble sombra (oscura + halo claro) para que el franjeado blanco/negro se lea
+    // sobre cualquier fondo (mar azul, tierra o espacio oscuro).
+    wrap.innerHTML = `<img src="/assets/flag-olimpia.svg?v=3" alt="" style="width:${size}px;height:auto;filter:drop-shadow(0 1px 2px rgba(0,0,0,.75)) drop-shadow(0 0 2px rgba(255,255,255,.45))" />`;
     wrap.style.cursor = "pointer";
     wrap.style.transform = "translate(-10%, -90%)";
     wrap.title = lugar ? `${lugar} · ${Number(d.count || 0).toLocaleString("es-PY")}` : "";

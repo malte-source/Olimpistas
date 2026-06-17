@@ -1,10 +1,14 @@
-<svg viewBox="0 0 48 56" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Olimpia">
-  <!-- mástil -->
-  <rect x="5" y="2" width="3" height="52" rx="1.5" fill="#c9a227"/>
-  <!-- banderín franjeado blanco/negro con O -->
-  <path d="M8 4 H44 L37 14 L44 24 H8 Z" fill="#0b0b0f" stroke="#c9a227" stroke-width="1.2"/>
-  <rect x="8" y="4" width="36" height="3.3" fill="#ffffff"/>
-  <rect x="8" y="20.7" width="36" height="3.3" fill="#ffffff"/>
-  <circle cx="24" cy="14" r="5.4" fill="none" stroke="#ffffff" stroke-width="2"/>
-  <circle cx="42" cy="54" r="3" fill="#c9a227"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Capa_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 128 128">
+  <!-- Generator: Adobe Illustrator 30.4.0, SVG Export Plug-In . SVG Version: 2.1.4 Build 226)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #fff;
+      }
+    </style>
+  </defs>
+  <path class="st0" d="M120.5,45.3c-39.1-16.5-73.9,16.4-112.9,0V8c39,16.4,73.9-16.5,112.9,0v37.3Z"/>
+  <path d="M120.5,82.7c-39.1-16.5-73.9,16.4-112.9,0v-37.3c39,16.4,73.9-16.5,112.9,0v37.3Z"/>
+  <path class="st0" d="M120.5,120c-39.1-16.5-73.9,16.4-112.9,0v-37.3c39,16.4,73.9-16.5,112.9,0v37.3Z"/>
 </svg>

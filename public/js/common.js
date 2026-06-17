@@ -53,9 +53,14 @@ window.OLI = (function () {
     try { return await api("/auth/yo"); } catch { return null; }
   }
 
-  // Registrar el Service Worker (PWA). No bloquea ni rompe si falla.
-  if ("serviceWorker" in navigator) {
+  // Registrar el Service Worker (PWA) — solo en producción. En localhost se evita
+  // para que el cache-first del SW no sirva JS/CSS viejos durante el desarrollo.
+  const esLocal = ["localhost", "127.0.0.1", ""].includes(location.hostname);
+  if ("serviceWorker" in navigator && !esLocal) {
     window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  } else if ("serviceWorker" in navigator) {
+    // Limpieza en dev: si quedó un SW registrado de antes, lo sacamos.
+    navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
   }
 
   return { api, gs, precioTier, artGradient, artSvg, toast, yo };
