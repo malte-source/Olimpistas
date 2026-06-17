@@ -3,15 +3,16 @@
 (function () {
   const { api, gs, artSvg, toast, yo } = window.OLI;
   let SESSION = null; // { socio, membresia, progreso }
+  let CONFIG = null;  // { paises: [{iso,nombre}], ... }
+  let perfilPunto = { lat: null, lng: null }; // ubicación exacta elegida
+  let perfilGlobo = null;
   const view = () => document.getElementById("view");
-
-  const PAISES = ["Paraguay", "Argentina", "Brasil", "Uruguay", "Bolivia", "Chile", "Perú",
-    "Colombia", "Ecuador", "Venezuela", "México", "Estados Unidos", "España", "Italia",
-    "Alemania", "Francia", "Portugal", "Japón", "Australia", "Otro"];
 
   async function init() {
     SESSION = await yo();
     if (!SESSION) { location.href = "/"; return; }
+    CONFIG = await api("/config").catch(() => ({ paises: [] }));
+    perfilPunto = { lat: SESSION.socio.lat ?? null, lng: SESSION.socio.lng ?? null };
     document.getElementById("hola").textContent = SESSION.socio.nombre || SESSION.socio.email;
     document.getElementById("logoutBtn").onclick = logout;
     document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => activar(t.dataset.tab)));
@@ -68,10 +69,14 @@
     const avatar = s.foto
       ? `<img class="avatar" id="avatar" src="${s.foto}" alt="" />`
       : `<div class="avatar" id="avatar">📷</div>`;
+    const paises = CONFIG.paises || [];
+    const opts = '<option value="">Elegí tu país</option>' +
+      paises.map((p) => `<option value="${p.iso}" ${p.iso === s.pais_iso ? "selected" : ""}>${p.nombre}</option>`).join("");
+    const tienePunto = perfilPunto.lat != null;
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
         <h2>Mi perfil</h2>
-        <p class="lead">Cuanto más completo, mejores beneficios y sorteos te llegan.</p>
+        <p class="lead">Completá tu perfil y aparecé en el mapa mundial de Olimpistas.</p>
         <div class="perfil">
           <div class="foto-up">
             ${avatar}
@@ -82,26 +87,89 @@
             <div class="field"><label>Nombre</label><input id="f_nombre" value="${attr(s.nombre)}" placeholder="Tu nombre" /></div>
             <div class="field"><label>WhatsApp</label><input id="f_whatsapp" value="${attr(s.whatsapp)}" placeholder="+595 9xx xxx xxx" /></div>
             <div class="row-2">
-              <div class="field"><label>País</label>
-                <input id="f_pais" list="paises" value="${attr(s.pais)}" placeholder="Tu país" />
-                <datalist id="paises">${PAISES.map((p) => `<option value="${p}">`).join("")}</datalist>
-              </div>
+              <div class="field"><label>País</label><select id="f_pais">${opts}</select></div>
               <div class="field"><label>Ciudad</label><input id="f_ciudad" value="${attr(s.ciudad)}" placeholder="Tu ciudad" /></div>
             </div>
             <div class="field"><label>Email</label><input value="${attr(s.email)}" disabled /></div>
             <button class="btn" id="guardarPerfil">Guardar cambios</button>
           </div>
         </div>
+
+        <div style="margin-top:30px">
+          <h3 style="margin:0 0 4px">Tu punto en el mapa</h3>
+          <p class="lead" style="margin-bottom:12px">Fijá tu ubicación exacta y tu bandera aparece en el globo mundial.</p>
+          <div class="ubic">
+            <button class="btn btn-ghost" id="btnGeo" type="button">📍 Usar mi ubicación actual</button>
+            <span id="ubicEstado" class="muted">${tienePunto ? "Punto fijado ✓" : "Sin fijar"}</span>
+          </div>
+          <div id="perfilGlobo" class="perfil-globo"></div>
+          <p class="muted" style="font-size:12px;text-align:center">Tocá el globo para fijar tu punto, o usá tu ubicación actual.</p>
+        </div>
       </div>`;
     document.getElementById("guardarPerfil").onclick = guardarPerfil;
     document.getElementById("fotoInput").onchange = subirFoto;
+    document.getElementById("btnGeo").onclick = usarUbicacion;
+    // Prefill de país por IP si todavía no tiene uno.
+    if (!s.pais_iso) prefillPaisPorIP();
+    initPerfilGlobo();
+  }
+
+  async function prefillPaisPorIP() {
+    try {
+      const { pais } = await api("/geo");
+      if (pais && pais.iso) {
+        const sel = document.getElementById("f_pais");
+        if (sel && !sel.value) sel.value = pais.iso;
+        if (perfilPunto.lat == null && pais.lat != null) {
+          perfilPunto = { lat: pais.lat, lng: pais.lng };
+          pintarPunto();
+        }
+      }
+    } catch { /* sin geo */ }
+  }
+
+  function initPerfilGlobo() {
+    const el = document.getElementById("perfilGlobo");
+    let n = 0;
+    const t = setInterval(() => {
+      if (window.OLI_GLOBE && window.Globe) {
+        clearInterval(t);
+        perfilGlobo = window.OLI_GLOBE.create(el, {
+          autoRotate: false, rotateSpeed: 0, maxH: 280, flagBase: 18,
+          onPick: (lat, lng) => { perfilPunto = { lat, lng }; pintarPunto(); marcarFijado(); },
+        });
+        pintarPunto();
+      } else if (++n > 60) clearInterval(t);
+    }, 100);
+  }
+  function pintarPunto() {
+    if (!perfilGlobo) return;
+    if (perfilPunto.lat == null) { perfilGlobo.setData([]); return; }
+    perfilGlobo.setData([{ lat: perfilPunto.lat, lng: perfilPunto.lng, nombre: "Vos", count: 1 }]);
+    perfilGlobo.pov({ lat: perfilPunto.lat, lng: perfilPunto.lng, altitude: 1.6 }, 600);
+  }
+  function marcarFijado() {
+    const e = document.getElementById("ubicEstado");
+    if (e) e.textContent = "Punto fijado ✓";
+  }
+
+  function usarUbicacion() {
+    if (!navigator.geolocation) return toast("Tu navegador no permite geolocalización");
+    const e = document.getElementById("ubicEstado");
+    if (e) e.textContent = "Buscando tu ubicación…";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { perfilPunto = { lat: pos.coords.latitude, lng: pos.coords.longitude }; pintarPunto(); marcarFijado(); },
+      () => { if (e) e.textContent = "No se pudo obtener (permiso denegado)"; },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
   }
 
   async function guardarPerfil() {
     const body = {
       nombre: val("f_nombre"), whatsapp: val("f_whatsapp"),
-      pais: val("f_pais"), ciudad: val("f_ciudad"),
+      pais: document.getElementById("f_pais").value, ciudad: val("f_ciudad"),
     };
+    if (perfilPunto.lat != null) { body.lat = perfilPunto.lat; body.lng = perfilPunto.lng; }
     try {
       const r = await api("/perfil", { method: "PATCH", body });
       SESSION.socio = r.socio; SESSION.progreso = r.progreso;

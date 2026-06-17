@@ -4,20 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Mi cuenta — Olimpistas</title>
-  <link rel="icon" href="/assets/logo.svg" />
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#0b0b0f" />
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Olimpistas" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="stylesheet" href="/css/styles.css?v=2" />
   <style> body { background: var(--negro); } .wrap { padding-top: 0; } </style>
 </head>
 <body>
   <div class="wrap">
     <div class="topbar">
-      <a class="brand" href="/"><img src="/assets/logo.svg" alt="" /> Olimpistas</a>
+      <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg" alt="Olimpistas" /></a>
       <div class="nav-right">
         <span id="hola" class="muted"></span>
         <button class="btn btn-ghost" id="logoutBtn">Salir</button>
@@ -40,7 +41,9 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="/js/common.js"></script>
-  <script src="/js/socio.js"></script>
+  <script src="/js/common.js?v=2"></script>
+  <script src="/assets/vendor/globe.gl.min.js" defer></script>
+  <script src="/js/globe.js?v=2" defer></script>
+  <script src="/js/socio.js?v=2"></script>
 </body>
 </html>

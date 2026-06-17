@@ -36,6 +36,18 @@ function createPgStore({ databaseUrl }) {
       const [s] = await sql`SELECT * FROM socios WHERE id = ${id} LIMIT 1`;
       return s || null;
     },
+
+    // ── Estadísticas (contador + globo) ──
+    async contarTotal() {
+      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios`;
+      return r.n;
+    },
+    async contarPorPais() {
+      return sql`
+        SELECT pais_iso, COUNT(*)::int AS count FROM socios
+        WHERE pais_iso IS NOT NULL AND pais_iso <> ''
+        GROUP BY pais_iso`;
+    },
     async updateSocio(id, patch) {
       const [s] = await sql`UPDATE socios SET ${sql(patch)} WHERE id = ${id} RETURNING *`;
       return s || null;

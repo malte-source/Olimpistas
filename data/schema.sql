@@ -16,10 +16,15 @@ CREATE TABLE IF NOT EXISTS socios (
   -- Campos de enriquecimiento (barra de progreso de perfil):
   whatsapp      TEXT DEFAULT '',
   foto          TEXT DEFAULT '',          -- data URL (o, en prod, URL a Cloud Storage)
-  pais          TEXT DEFAULT '',
+  pais          TEXT DEFAULT '',          -- nombre legible del país
+  pais_iso      TEXT DEFAULT '',          -- ISO-3166 alpha-2 (PY, AR…), para el globo/contador
   ciudad        TEXT DEFAULT '',
+  lat           DOUBLE PRECISION,         -- ubicación exacta (opcional)
+  lng           DOUBLE PRECISION,
   creado        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Acelera el agregado del contador/globo (GROUP BY pais_iso) a escala.
+CREATE INDEX IF NOT EXISTS idx_socios_pais ON socios(pais_iso);
 
 CREATE TABLE IF NOT EXISTS sesiones (
   token     TEXT PRIMARY KEY,

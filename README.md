@@ -11,6 +11,11 @@ nutre para venderles desde membresías hasta intangibles.
   país y ciudad para enriquecer la base.
 - **Beneficios** detrás del registro: Olimpia Media+, sorteos, preventas y carnet digital.
 - **PWA instalable** y **mobile-first** (manifest, service worker, íconos, safe-area).
+- **Olimpistas en el mundo:** contador global en vivo + **globo 3D** (globe.gl) con
+  banderas por país. País por **prefill de IP** (cabecera del CDN en prod, geo-IP en
+  dev) y ubicación exacta opcional (geolocalización o tocando el globo). El globo se
+  alimenta de un agregado cacheado (`/api/stats`) — no manda puntos individuales, así
+  escala. La bandera del marcador (`/assets/flag-olimpia.svg`) es un placeholder.
 - No es la tienda ni la web principal de Olimpia (esas ya existen); está pensado para
   **vincularse a la web de Olimpia como un apartado**.
 

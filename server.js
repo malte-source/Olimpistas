@@ -37,12 +37,14 @@ app.use("/api", buildRouter());
 
 // Estáticos con cache. Bajo tráfico fuerte, esto deja que un CDN (Cloud CDN /
 // Cloudflare) sirva los assets y descargue al origen — clave para picos de 50k+.
+const PROD = process.env.NODE_ENV === "production";
 app.use(express.static(PUBLIC, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith("sw.js")) {
       res.setHeader("Cache-Control", "no-cache");                 // el SW debe actualizarse rápido
     } else if (/[\\/](assets|css|js)[\\/]/.test(filePath)) {
-      res.setHeader("Cache-Control", "public, max-age=86400");    // 1 día (idealmente versionar + immutable)
+      // En prod: cache largo (los assets van versionados con ?v=). En dev: sin cache.
+      res.setHeader("Cache-Control", PROD ? "public, max-age=86400" : "no-cache");
     }
   },
 }));

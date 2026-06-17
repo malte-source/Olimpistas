@@ -15,6 +15,8 @@ const { getStore } = require("./data/store");
 const auth = require("./lib/auth");
 const access = require("./lib/access");
 const pagopar = require("./lib/pagopar");
+const geo = require("./lib/geo");
+const { listaPaises, paisNombre, paisCentroide, PAISES } = require("./data/paises");
 const { BRAND, TIERS, PERFIL_CAMPOS, tierBySlug } = require("./config");
 
 const wrap = (fn) => (req, res) =>
@@ -50,8 +52,32 @@ function buildRouter() {
   const r = express.Router();
   const store = getStore();
 
-  // ─── Config pública (branding + tiers) ──────────────────────────────────────
-  r.get("/config", (_req, res) => res.json({ brand: BRAND, tiers: TIERS }));
+  // ─── Config pública (branding + tiers + países) ─────────────────────────────
+  r.get("/config", (_req, res) => res.json({ brand: BRAND, tiers: TIERS, paises: listaPaises() }));
+
+  // País del visitante (prefill por IP / cabecera de CDN).
+  r.get("/geo", wrap(async (req, res) => res.json({ pais: await geo.detectarPais(req) })));
+
+  // ─── Stats: contador global + datos del globo (agregado, cacheado) ───────────
+  let _stats = null, _statsTs = 0;
+  async function getStats() {
+    if (_stats && Date.now() - _statsTs < 30000) return _stats;  // cache 30s
+    const [total, porPaisRaw] = await Promise.all([store.contarTotal(), store.contarPorPais()]);
+    const porPais = porPaisRaw
+      .map((r) => {
+        const c = paisCentroide(r.pais_iso);
+        return c ? { iso: r.pais_iso, nombre: paisNombre(r.pais_iso), count: r.count, lat: c.lat, lng: c.lng } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.count - a.count);
+    _stats = { total, paises: porPais.length, porPais, actualizado: new Date().toISOString() };
+    _statsTs = Date.now();
+    return _stats;
+  }
+  r.get("/stats", wrap(async (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=30");   // el CDN absorbe el pico
+    res.json(await getStats());
+  }));
 
   // ─── Auth ───────────────────────────────────────────────────────────────────
   r.post("/auth/registro", wrap(async (req, res) => {
@@ -87,9 +113,24 @@ function buildRouter() {
   }));
 
   r.patch("/perfil", auth.requireSocio, wrap(async (req, res) => {
+    const b = req.body || {};
     const patch = {};
-    for (const key of ["nombre", "whatsapp", "pais", "ciudad"]) {
-      if (typeof req.body?.[key] === "string") patch[key] = req.body[key].trim().slice(0, 120);
+    for (const key of ["nombre", "whatsapp", "ciudad"]) {
+      if (typeof b[key] === "string") patch[key] = b[key].trim().slice(0, 120);
+    }
+    // País: se recibe el código ISO; guardamos iso + nombre legible.
+    if (typeof b.pais === "string") {
+      const iso = b.pais.trim().toUpperCase();
+      if (iso && !PAISES[iso]) throw httpError(400, "País inválido");
+      patch.pais_iso = iso;
+      patch.pais = iso ? paisNombre(iso) : "";
+    }
+    // Ubicación exacta (opcional): lat/lng numéricos y dentro de rango.
+    if (b.lat != null && b.lng != null) {
+      const lat = Number(b.lat), lng = Number(b.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180)
+        throw httpError(400, "Coordenadas inválidas");
+      patch.lat = lat; patch.lng = lng;
     }
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const socio = auth.sanitize(await store.updateSocio(req.socio.id, patch));

@@ -97,7 +97,7 @@ const PERFIL_CAMPOS = [
   { key: "nombre",   label: "Tu nombre",      peso: 1 },
   { key: "whatsapp", label: "Tu WhatsApp",    peso: 1 },
   { key: "foto",     label: "Foto de perfil", peso: 1 },
-  { key: "pais",     label: "Tu país",        peso: 1 },
+  { key: "pais_iso", label: "Tu país",        peso: 1 },
   { key: "ciudad",   label: "Tu ciudad",      peso: 1 },
 ];
 

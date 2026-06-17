@@ -8,7 +8,7 @@
  * El cache-first de estáticos también ayuda a aguantar picos de tráfico: tras la
  * primera carga, los assets salen del dispositivo y no pegan al servidor.
  */
-const VERSION = "oli-v2";
+const VERSION = "oli-v3";
 const SHELL = [
   "/", "/socio",
   "/css/styles.css", "/js/common.js", "/js/landing.js", "/js/socio.js",

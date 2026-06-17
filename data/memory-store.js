@@ -123,7 +123,8 @@ function createMemoryStore({ filePath = null } = {}) {
         id: uid("soc"), email: email.toLowerCase(), password_hash: passwordHash,
         nombre: nombre || "", telefono: telefono || "",
         // Campos de enriquecimiento (barra de progreso, se completan después):
-        whatsapp: "", foto: "", pais: "", ciudad: "",
+        whatsapp: "", foto: "", pais: "", pais_iso: "", ciudad: "",
+        lat: null, lng: null,   // ubicación exacta (opcional) para el globo
         creado: nowIso(),
       };
       db.socios.push(socio); persist();
@@ -133,6 +134,14 @@ function createMemoryStore({ filePath = null } = {}) {
       return db.socios.find(s => s.email === String(email).toLowerCase()) || null;
     },
     async getSocioById(id) { return db.socios.find(s => s.id === id) || null; },
+
+    // ── Estadísticas (contador + globo) ──
+    async contarTotal() { return db.socios.length; },
+    async contarPorPais() {
+      const m = {};
+      for (const s of db.socios) if (s.pais_iso) m[s.pais_iso] = (m[s.pais_iso] || 0) + 1;
+      return Object.entries(m).map(([pais_iso, count]) => ({ pais_iso, count }));
+    },
     async updateSocio(id, patch) {
       const s = db.socios.find(x => x.id === id);
       if (!s) return null;

@@ -22,6 +22,58 @@
     );
     const pago = new URLSearchParams(location.search).get("pago_simulado");
     if (pago) confirmarSimulado(pago);
+    initMundo();
+  }
+
+  // ─── Olimpistas en el mundo: contador + globo ───────────────────────────────
+  async function initMundo() {
+    let stats;
+    try { stats = await api("/stats"); } catch { return; }
+    animarContador(stats.total);
+    document.getElementById("contadorPaises").textContent = stats.paises;
+    renderTopPaises(stats.porPais);
+    document.getElementById("globoCta").onclick = () => empezarGratis();
+    esperarGlobe(() => {
+      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), {
+        onFlagClick: (d) => toast(`${d.nombre}: ${Number(d.count).toLocaleString("es-PY")} Olimpistas`),
+      });
+      if (!gl) return;
+      gl.setData(stats.porPais);
+      const foco = stats.porPais[0] || { lat: -23.4, lng: -58.4 };
+      gl.pov({ lat: foco.lat, lng: foco.lng, altitude: 2.2 }, 1400);
+    });
+  }
+
+  function esperarGlobe(cb) {
+    let n = 0;
+    const t = setInterval(() => {
+      if (window.OLI_GLOBE && window.Globe) { clearInterval(t); cb(); }
+      else if (++n > 60) clearInterval(t); // ~6s máx; si no cargó, queda solo el contador
+    }, 100);
+  }
+
+  function animarContador(target) {
+    const el = document.getElementById("contadorNum");
+    if (!el) return;
+    // Basado en timers (no rAF) para que funcione incluso sin pintado/foco.
+    const dur = 1400, t0 = Date.now();
+    el.textContent = "0";
+    const iv = setInterval(() => {
+      const p = Math.min(1, (Date.now() - t0) / dur);
+      el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))).toLocaleString("es-PY");
+      if (p >= 1) clearInterval(iv);
+    }, 35);
+    // Garantía del valor final por si el timer se ralentiza en segundo plano.
+    setTimeout(() => { el.textContent = Number(target).toLocaleString("es-PY"); }, dur + 250);
+  }
+
+  function renderTopPaises(list) {
+    const el = document.getElementById("topPaises");
+    if (!list || !list.length) { el.innerHTML = '<p class="muted">Sé el primero en aparecer en el mapa.</p>'; return; }
+    const top = list.slice(0, 8);
+    el.innerHTML = "<h4>Top países</h4>" + top.map((p, i) =>
+      `<div class="tp-row"><span>${i + 1}. ${p.nombre}</span><strong>${Number(p.count).toLocaleString("es-PY")}</strong></div>`
+    ).join("");
   }
 
   function renderNav() {
