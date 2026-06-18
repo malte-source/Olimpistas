@@ -66,20 +66,23 @@ function snippetAnalytics() {
 }
 const ANALYTICS = snippetAnalytics();
 
-// HTML: cacheable corto en CDN (60s) para absorber picos sin servir contenido viejo.
-// Inyecta la analítica antes de </head> (cacheado en memoria por archivo).
+// HTML: cacheable corto (60s). Inyecta analítica + hreflang y el idioma (es/en) según la ruta.
+const HREFLANG = '<link rel="alternate" hreflang="es" href="/" /><link rel="alternate" hreflang="en" href="/en" /><link rel="alternate" hreflang="x-default" href="/" />';
 const _pageCache = {};
-const sendPage = (file) => (_req, res) => {
+const sendPage = (file, lang) => (_req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
-  if (!_pageCache[file]) {
+  const key = file + "|" + (lang || "es");
+  if (!_pageCache[key]) {
     let html = fs.readFileSync(path.join(PUBLIC, file), "utf8");
-    if (ANALYTICS) html = html.replace("</head>", ANALYTICS + "\n</head>");
-    _pageCache[file] = html;
+    if (lang === "en") html = html.replace('<html lang="es">', '<html lang="en">');
+    html = html.replace("</head>", HREFLANG + (ANALYTICS || "") + "\n</head>");
+    _pageCache[key] = html;
   }
-  res.type("html").send(_pageCache[file]);
+  res.type("html").send(_pageCache[key]);
 };
-app.get("/", sendPage("index.html"));
-app.get("/miembro", sendPage("socio.html"));
+app.get("/", sendPage("index.html", "es"));
+app.get("/en", sendPage("index.html", "en"));        // landing en inglés (SEO: /en + hreflang)
+app.get("/miembro", sendPage("socio.html"));         // app: idioma desde localStorage
 app.get("/legal", sendPage("legal.html"));
 app.get("/socio", (_req, res) => res.redirect(301, "/miembro")); // compat: links viejos
 

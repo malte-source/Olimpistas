@@ -19,10 +19,21 @@ window.OLI = (function () {
     return "₲ " + Number(n).toLocaleString("es-PY");
   }
 
-  // Precio mostrado por tier. Cobro anual único; gratis = 0.
-  function precioTier(t) {
-    if (!t.precioAnio || t.precioAnio <= 0) return { big: "Gratis", small: "para siempre" };
-    return { big: gs(t.precioAnio), small: "por año" };
+  // ── Moneda (Gs / USD). Auto por país, con toggle. PAGOPAR cobra en Gs; USD es display. ──
+  let _cur = "";
+  try { _cur = localStorage.getItem("oli_cur") || ""; } catch (e) {}
+  function currency() { return _cur || "PYG"; }
+  function setCurrency(c) { _cur = c; try { localStorage.setItem("oli_cur", c); } catch (e) {} }
+  function fmtMoney(gsAmount, rate) {
+    if (currency() === "USD") return "US$ " + Math.round(gsAmount / (rate || 7300)).toLocaleString("en-US");
+    return "₲ " + Number(gsAmount).toLocaleString("es-PY");
+  }
+  const tt = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
+
+  // Precio mostrado por tier (en el idioma y moneda actuales). Cobro anual único.
+  function precioTier(t, rate) {
+    if (!t.precioAnio || t.precioAnio <= 0) return { big: tt("price_gratis"), small: tt("price_forever") };
+    return { big: fmtMoney(t.precioAnio, rate), small: tt("price_year") };
   }
 
   // Art determinista para tarjetas/thumbs según una semilla (id/slug).
@@ -103,16 +114,18 @@ window.OLI = (function () {
   // Banner de cookies (una sola vez). Solo usamos cookie esencial de sesión.
   function bannerCookies() {
     try { if (localStorage.getItem("oli_cookies_ok")) return; } catch (e) { return; }
+    const T = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
     const b = document.createElement("div");
     b.className = "cookie-bar";
-    b.innerHTML = '<span>Usamos una cookie esencial para tu sesión. Más info en <a href="/legal#cookies">Cookies</a>.</span>' +
-      '<button class="btn" id="cookieOk">Entendido</button>';
+    b.innerHTML = `<span>${T("cookie_txt")} <a href="/legal#cookies">${T("cookie_link")}</a>.</span>` +
+      `<button class="btn" id="cookieOk">${T("cookie_ok")}</button>`;
     document.body.appendChild(b);
     b.querySelector("#cookieOk").onclick = () => { try { localStorage.setItem("oli_cookies_ok", "1"); } catch (e) {} b.remove(); };
   }
 
-  // Pase de estética: nav "glass" al scrollear + aparición de secciones al entrar en viewport.
+  // Pase de estética + i18n: aplica traducciones, nav "glass" al scroll, aparición de secciones.
   window.addEventListener("DOMContentLoaded", () => {
+    if (window.OLI_I18N) window.OLI_I18N.apply();
     bannerCookies();
     const nav = document.querySelector(".nav");
     if (nav) {
@@ -130,5 +143,5 @@ window.OLI = (function () {
     }
   });
 
-  return { api, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet };
+  return { api, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, currency, setCurrency, fmtMoney };
 })();

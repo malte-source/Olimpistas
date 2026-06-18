@@ -25,66 +25,68 @@
   <meta name="twitter:image" content="/assets/og.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css?v=13" />
+  <link rel="stylesheet" href="/css/styles.css?v=14" />
 </head>
 <body>
   <header class="nav">
     <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg" alt="Olimpistas" /></a>
     <div class="nav-right">
-      <button class="btn btn-ghost" id="accederBtn">Ingresar</button>
-      <button class="btn" id="navCta">Hacete Olimpista</button>
+      <button class="nav-sw" id="curSw" title="Moneda / Currency">US$</button>
+      <a class="nav-sw" id="langSw" href="/en">EN</a>
+      <button class="btn btn-ghost" id="accederBtn" data-i18n="nav_login">Ingresar</button>
+      <button class="btn" id="navCta" data-i18n="nav_join">Hacete Olimpista</button>
     </div>
   </header>
 
   <section class="hero">
     <div class="hero-bg">
       <picture>
-        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=13" />
-        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=13" />
-        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=13" />
-        <img src="/assets/hero-desktop.jpg?v=13" alt="" fetchpriority="high" />
+        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=12" />
+        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=12" />
+        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=12" />
+        <img src="/assets/hero-desktop.jpg?v=12" alt="" fetchpriority="high" />
       </picture>
     </div>
     <div class="hero-inner wrap">
-      <span class="pill">El Rey de Copas · El Decano</span>
+      <span class="pill" data-i18n="hero_pill">El Rey de Copas · El Decano</span>
       <h1 id="heroTitle">Hacete Olimpista</h1>
       <p class="sub" id="heroSub">Cargando…</p>
       <button class="btn btn-hero" id="heroCta">Hacete Olimpista gratis</button>
-      <p class="hero-note">Gratis y en 30 segundos. Sin tarjeta.</p>
+      <p class="hero-note" data-i18n="hero_note">Gratis y en 30 segundos. Sin tarjeta.</p>
       <p class="hero-social" id="heroSocial" hidden></p>
-      <a class="ver-todas" href="#planes">Ver niveles y beneficios ↓</a>
+      <a class="ver-todas" href="#planes" data-i18n="hero_vermas">Ver niveles y beneficios ↓</a>
     </div>
   </section>
 
-  <!-- Olimpistas en el mundo: contador + globo (el gancho) -->
+  <!-- Olimpistas en el mundo -->
   <section class="section mundo" id="mundo">
     <div class="wrap">
-      <span class="eyebrow">El mundo del Decano</span>
-      <h2 class="mundo-h">Olimpistas en el mundo</h2>
+      <span class="eyebrow" data-i18n="mundo_eyebrow">El mundo del Decano</span>
+      <h2 class="mundo-h" data-i18n="mundo_h2">Olimpistas en el mundo</h2>
       <div class="contador">
         <span class="contador-num" id="contadorNum">—</span>
-        <span class="contador-lbl">Olimpistas en <strong id="contadorPaises">—</strong> países</span>
+        <span class="contador-lbl"><span data-i18n="contador_in">Olimpistas en</span> <strong id="contadorPaises">—</strong> <span data-i18n="contador_paises">países</span></span>
       </div>
       <div class="globo-stage">
         <div id="globo" class="globo"></div>
         <aside class="top-paises" id="topPaises"></aside>
         <div class="globo-popup" id="globoPopup" hidden></div>
       </div>
-      <p class="globo-note" id="globoNote">Girá el globo y tocá una bandera. ¿No estás en el mapa? <a id="globoCta">Sumate y aparecé.</a></p>
+      <p class="globo-note" id="globoNote"><span data-i18n="globo_note_1">Girá el globo y tocá una bandera. ¿No estás en el mapa?</span> <a id="globoCta" data-i18n="globo_note_cta">Sumate y aparecé.</a></p>
     </div>
   </section>
 
   <!-- Por qué sumarte -->
   <section class="section" id="beneficios">
     <div class="wrap">
-      <span class="eyebrow">Por qué sumarte</span>
-      <h2>Una comunidad mundial de Olimpistas</h2>
-      <p class="lead">Estés donde estés, sé parte del Decano. Esto es lo que te llevás:</p>
+      <span class="eyebrow" data-i18n="benef_eyebrow">Por qué sumarte</span>
+      <h2 data-i18n="benef_h2">Una comunidad mundial de Olimpistas</h2>
+      <p class="lead" data-i18n="benef_lead">Estés donde estés, sé parte del Decano. Esto es lo que te llevás:</p>
       <div class="why">
-        <div class="why-item"><span>🎟️</span><h4>Preventas</h4><p>Enterate y comprá entradas antes que nadie.</p></div>
-        <div class="why-item"><span>🎁</span><h4>Sorteos</h4><p>Camisetas, experiencias y premios para miembros.</p></div>
-        <div class="why-item"><span>▶️</span><h4>Contenido exclusivo</h4><p>Detrás de escena, entrevistas y más en Olimpia Media+.</p></div>
-        <div class="why-item"><span>🪪</span><h4>Carnet digital</h4><p>Tu identidad de Olimpista, siempre con vos.</p></div>
+        <div class="why-item"><span>🎟️</span><h4 data-i18n="why_preventas">Preventas</h4><p data-i18n="why_preventas_d">Enterate y comprá entradas antes que nadie.</p></div>
+        <div class="why-item"><span>🎁</span><h4 data-i18n="why_sorteos">Sorteos</h4><p data-i18n="why_sorteos_d">Camisetas, experiencias y premios para miembros.</p></div>
+        <div class="why-item"><span>▶️</span><h4 data-i18n="why_contenido">Contenido exclusivo</h4><p data-i18n="why_contenido_d">Detrás de escena, entrevistas y más en Olimpia Media+.</p></div>
+        <div class="why-item"><span>🪪</span><h4 data-i18n="why_carnet">Carnet digital</h4><p data-i18n="why_carnet_d">Tu identidad de Olimpista, siempre con vos.</p></div>
       </div>
     </div>
   </section>
@@ -92,9 +94,9 @@
   <!-- Niveles -->
   <section class="section" id="planes">
     <div class="wrap">
-      <span class="eyebrow">Niveles</span>
-      <h2>Elegí tu nivel</h2>
-      <p class="lead">Empezá gratis. Cuando quieras, subí a Kids o Premium.</p>
+      <span class="eyebrow" data-i18n="planes_eyebrow">Niveles</span>
+      <h2 data-i18n="planes_h2">Elegí tu nivel</h2>
+      <p class="lead" data-i18n="planes_lead">Empezá gratis. Cuando quieras, subí a Kids o Premium.</p>
       <div class="tiers" id="tiers"><!-- tiers van acá --></div>
     </div>
   </section>
@@ -103,14 +105,14 @@
     <div class="wrap footer-inner">
       <div>
         <div class="brand"><img class="brand-h" src="/assets/logo-horizontal.svg" alt="Olimpistas" /></div>
-        <p class="muted">Una iniciativa de Club Olimpia para su comunidad mundial de hinchas.</p>
+        <p class="muted" data-i18n="footer_tagline">Una iniciativa de Club Olimpia para su comunidad mundial de hinchas.</p>
       </div>
       <nav class="footer-links">
-        <a href="#" data-stub>Tienda oficial</a>
-        <a href="#" data-stub>Web de Olimpia</a>
-        <a href="/legal#terminos">Términos y condiciones</a>
-        <a href="/legal#privacidad">Política de privacidad</a>
-        <a href="/legal#sorteos">Bases de sorteos</a>
+        <a href="#" data-stub data-i18n="footer_tienda">Tienda oficial</a>
+        <a href="#" data-stub data-i18n="footer_web">Web de Olimpia</a>
+        <a href="/legal#terminos" data-i18n="footer_terminos">Términos y condiciones</a>
+        <a href="/legal#privacidad" data-i18n="footer_privacidad">Política de privacidad</a>
+        <a href="/legal#sorteos" data-i18n="footer_sorteos">Bases de sorteos</a>
       </nav>
     </div>
   </footer>
@@ -121,32 +123,33 @@
       <h3 id="modalTitle">Hacete Olimpista</h3>
       <p class="muted" id="modalSub">Creá tu cuenta gratis.</p>
       <div class="field" id="nombreField">
-        <label>Nombre</label>
-        <input id="nombre" type="text" placeholder="Tu nombre" autocomplete="name" />
+        <label data-i18n="m_nombre">Nombre</label>
+        <input id="nombre" type="text" placeholder="Tu nombre" autocomplete="name" data-i18n-ph="m_nombre" />
       </div>
       <div class="field">
-        <label>Email</label>
+        <label data-i18n="m_email">Email</label>
         <input id="email" type="email" placeholder="tu@email.com" autocomplete="email" />
       </div>
       <div class="field">
-        <label>Contraseña</label>
+        <label data-i18n="m_pass">Contraseña</label>
         <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
       </div>
       <label class="consent" id="consentRow">
         <input type="checkbox" id="consent" />
-        <span>Acepto los <a href="/legal#terminos" target="_blank">Términos</a> y la <a href="/legal#privacidad" target="_blank">Política de Privacidad</a>.</span>
+        <span><span data-i18n="consent_1">Acepto los</span> <a href="/legal#terminos" target="_blank" data-i18n="consent_terms">Términos</a> <span data-i18n="consent_and">y la</span> <a href="/legal#privacidad" target="_blank" data-i18n="consent_privacy">Política de Privacidad.</a></span>
       </label>
       <p class="error" id="modalError"></p>
       <button class="btn btn-block" id="submitBtn">Crear cuenta gratis</button>
-      <p class="switch" id="switchMode">¿Ya sos Olimpista? <a id="switchLink">Ingresá</a></p>
+      <p class="switch" id="switchMode"></p>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
-  <script src="/js/common.js?v=13"></script>
+  <script src="/js/i18n.js?v=14"></script>
+  <script src="/js/common.js?v=14"></script>
   <script src="/assets/vendor/qrcode.js"></script>
-  <!-- MapLibre + globe.js se cargan en diferido (lazy) al llegar a la sección del mundo (landing.js) -->
-  <script src="/js/landing.js?v=13"></script>
+  <!-- MapLibre + globe.js se cargan en diferido (lazy) al llegar a la sección del mundo -->
+  <script src="/js/landing.js?v=14"></script>
 </body>
 </html>

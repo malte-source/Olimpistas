@@ -19,10 +19,14 @@ const BRAND = {
   nombre:     "Olimpistas",
   club:       "Club Olimpia",
   lema:       "Hacete Olimpista",
+  lema_en:    "Become an Olimpista",
   bajada:     "Sumate gratis a la comunidad mundial de Olimpia. Contenido, sorteos, preventas y beneficios para los hinchas del Decano, estés donde estés.",
+  bajada_en:  "Join Olimpia's worldwide community for free. Exclusive content, giveaways, presales and perks for Decano fans, wherever you are.",
   ctaPrincipal: "Hacete Olimpista gratis",
+  ctaPrincipal_en: "Become an Olimpista — free",
   moneda:     "₲",          // Guaraníes
   monedaCod:  "PYG",
+  usdRate:    process.env.USD_RATE ? Number(process.env.USD_RATE) : 7300, // Gs por USD (editable)
   // Olimpia: blanco y negro (franjeado), acentos dorados ("El Rey de Copas")
   colores: {
     primario:   "#000000",
@@ -41,6 +45,7 @@ const TIERS = [
     slug: "olimpista",
     nombre: "Olimpista",
     subtitulo: "Gratis, para siempre",
+    subtitulo_en: "Free, forever",
     nivel: 0,
     precioAnio: 0,
     destacado: true,          // es la acción principal del embudo
@@ -51,12 +56,20 @@ const TIERS = [
       "Participás en sorteos para miembros",
       "Enterate primero de preventas y lanzamientos",
     ],
+    beneficios_en: [
+      "Digital Olimpista membership card",
+      "Exclusive Decano content and news",
+      "Entry to members-only giveaways",
+      "Be first to know about presales and launches",
+    ],
     cta: "Hacete Olimpista gratis",
+    cta_en: "Become an Olimpista — free",
   },
   {
     slug: "kids",
     nombre: "Olimpista Kids",
     subtitulo: "Para los más chicos",
+    subtitulo_en: "For the little ones",
     nivel: 1,
     precioAnio: 100000,        // ⚠️ A CONFIRMAR
     destacado: false,
@@ -67,12 +80,20 @@ const TIERS = [
       "Sorteos exclusivos para chicos",
       "Regalo sorpresa en su cumpleaños",
     ],
+    beneficios_en: [
+      "Everything in the free Olimpista",
+      "Welcome pack + Kids card",
+      "Kids-only giveaways",
+      "Surprise birthday gift",
+    ],
     cta: "Sumar a un Kids",
+    cta_en: "Add a Kid",
   },
   {
     slug: "premium",
     nombre: "Olimpista Premium",
     subtitulo: "La experiencia completa",
+    subtitulo_en: "The full experience",
     nivel: 1,
     precioAnio: 250000,        // ⚠️ A CONFIRMAR
     destacado: false,
@@ -84,7 +105,15 @@ const TIERS = [
       "Descuentos en la tienda oficial de Olimpia",
       "Sorteos premium (experiencias VIP)",
     ],
+    beneficios_en: [
+      "Everything in the free Olimpista",
+      "Premium content (Olimpia Media+)",
+      "Presale and priority access to tickets",
+      "Discounts at Olimpia's official store",
+      "Premium giveaways (VIP experiences)",
+    ],
     cta: "Hacerme Premium",
+    cta_en: "Go Premium",
   },
 ];
 

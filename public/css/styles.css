@@ -52,7 +52,12 @@ button { font-family: inherit; cursor: pointer; }
 .brand img { width: 38px; height: 38px; }
 /* Logo horizontal (escudo + wordmark "OLIMPISTAS"): alto fijo, ancho proporcional. */
 .brand img.brand-h { width: auto; height: 30px; }
-.nav-right { display: flex; align-items: center; gap: 16px; }
+.nav-right { display: flex; align-items: center; gap: 14px; }
+/* Toggles de idioma y moneda */
+.nav-sw { background: transparent; border: 1px solid var(--linea); color: var(--blanco); font-size: 12px; font-weight: 700;
+  padding: 6px 10px; border-radius: 8px; cursor: pointer; letter-spacing: .3px; text-decoration: none; line-height: 1; }
+.nav-sw:hover { border-color: var(--oro); color: var(--oro-claro); }
+@media (max-width: 640px) { .nav-sw { padding: 6px 8px; font-size: 11px; } }
 .lang { background: transparent; border: none; color: var(--blanco); font-size: 14px; opacity: 0.9; display: flex; align-items: center; gap: 6px; }
 .btn {
   border: none; border-radius: 11px; padding: 12px 24px; font-weight: 700; font-size: 14px;

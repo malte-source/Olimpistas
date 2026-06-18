@@ -1,6 +1,10 @@
 /* landing.js — embudo de captación: registro gratis + upsell a Kids/Premium. */
 (function () {
-  const { api, precioTier, toast, yo, carnet, makeQR } = window.OLI;
+  const { api, precioTier, toast, yo, carnet, makeQR, currency, setCurrency } = window.OLI;
+  const I18N = window.OLI_I18N;
+  const T = (k) => (I18N ? I18N.t(k) : k);
+  const LANG = I18N ? I18N.lang() : "es";
+  const fld = (obj, base) => (LANG === "en" && obj[base + "_en"] != null ? obj[base + "_en"] : obj[base]); // pick es/en
   let CONFIG = null;
   let SESSION = null;
   let intentTier = null; // nivel que se quiso comprar antes de registrarse
@@ -10,9 +14,10 @@
   async function init() {
     CONFIG = await api("/config");
     SESSION = await yo();
-    document.getElementById("heroTitle").textContent = CONFIG.brand.lema;
-    document.getElementById("heroSub").textContent = CONFIG.brand.bajada;
-    document.getElementById("heroCta").textContent = CONFIG.brand.ctaPrincipal;
+    await initIdiomaMoneda();
+    document.getElementById("heroTitle").textContent = fld(CONFIG.brand, "lema");
+    document.getElementById("heroSub").textContent = fld(CONFIG.brand, "bajada");
+    document.getElementById("heroCta").textContent = fld(CONFIG.brand, "ctaPrincipal");
     renderTiers();
     renderNav();
     wireModal();
@@ -42,6 +47,26 @@
     await cargarJs("/js/globe.js?v=13");
   }
 
+  async function initIdiomaMoneda() {
+    const langSw = document.getElementById("langSw");
+    if (langSw) {
+      if (LANG === "en") { langSw.textContent = "ES"; langSw.href = "/"; }
+      else { langSw.textContent = "EN"; langSw.href = "/en"; }
+      langSw.addEventListener("click", () => { try { localStorage.setItem("oli_lang", LANG === "en" ? "es" : "en"); } catch (e) {} });
+    }
+    let stored = ""; try { stored = localStorage.getItem("oli_cur") || ""; } catch (e) {}
+    if (!stored) {
+      try { const { pais } = await api("/geo"); setCurrency(pais && pais.iso === "PY" ? "PYG" : "USD"); }
+      catch { setCurrency("PYG"); }
+    }
+    const curSw = document.getElementById("curSw");
+    if (curSw) {
+      const sync = () => { curSw.textContent = currency() === "USD" ? "₲ Gs" : "US$"; };
+      sync();
+      curSw.addEventListener("click", () => { setCurrency(currency() === "USD" ? "PYG" : "USD"); sync(); renderTiers(); });
+    }
+  }
+
   // ─── Olimpistas en el mundo: contador (inmediato) + globo (lazy) ─────────────
   async function initMundo() {
     let stats;
@@ -52,7 +77,8 @@
     // Prueba social en el hero
     if (stats.total > 0) {
       const hs = document.getElementById("heroSocial");
-      if (hs) { hs.textContent = `🌎 Ya somos ${stats.total.toLocaleString("es-PY")} Olimpistas en ${stats.paises} ${stats.paises === 1 ? "país" : "países"}`; hs.hidden = false; }
+      const loc = LANG === "en" ? "en-US" : "es-PY";
+      if (hs) { hs.textContent = `${T("social_pre")} ${stats.total.toLocaleString(loc)} ${T("social_in")} ${stats.paises} ${stats.paises === 1 ? T("pais") : T("paises")}`; hs.hidden = false; }
     }
     document.getElementById("globoCta").onclick = () => empezarGratis();
 
@@ -114,10 +140,11 @@
 
   function renderTopPaises(list) {
     const el = document.getElementById("topPaises");
-    if (!list || !list.length) { el.innerHTML = '<p class="muted">Sé el primero en aparecer en el mapa.</p>'; return; }
+    if (!list || !list.length) { el.innerHTML = `<p class="muted">${T("top_empty")}</p>`; return; }
+    const loc = LANG === "en" ? "en-US" : "es-PY";
     const top = list.slice(0, 8);
-    el.innerHTML = "<h4>Top países</h4>" + top.map((p, i) =>
-      `<div class="tp-row"><span>${i + 1}. ${p.nombre}</span><strong>${Number(p.count).toLocaleString("es-PY")}</strong></div>`
+    el.innerHTML = `<h4>${T("top_title")}</h4>` + top.map((p, i) =>
+      `<div class="tp-row"><span>${i + 1}. ${p.nombre}</span><strong>${Number(p.count).toLocaleString(loc)}</strong></div>`
     ).join("");
   }
 
@@ -138,16 +165,16 @@
     const cont = document.getElementById("tiers");
     const previewQR = makeQR("https://olimpistas.olimpia.com"); // QR genérico para la vista previa
     cont.innerHTML = CONFIG.tiers.map((t) => {
-      const p = precioTier(t);
-      const bullets = t.beneficios.map((b) => `<li>${b}</li>`).join("");
+      const p = precioTier(t, CONFIG.brand.usdRate);
+      const bullets = fld(t, "beneficios").map((b) => `<li>${b}</li>`).join("");
       const carnetHtml = carnet({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre",
         numero: "OLI-••••••••", icono: ICONOS[t.slug], qr: previewQR });
       return `
       <div class="tier ${t.destacado ? "tier-destacado" : ""}">
-        ${t.destacado ? '<span class="tier-ribbon">Empezá acá</span>' : ""}
+        ${t.destacado ? `<span class="tier-ribbon">${T("ribbon")}</span>` : ""}
         ${carnetHtml}
         <div class="price"><div class="big">${p.big}</div><div class="small">${p.small}</div></div>
-        <button class="btn cta ${t.nivel === 0 ? "" : "btn-ghost"}" data-tier="${t.slug}">${t.cta}</button>
+        <button class="btn cta ${t.nivel === 0 ? "" : "btn-ghost"}" data-tier="${t.slug}">${fld(t, "cta")}</button>
         <ul class="benefits">${bullets}</ul>
       </div>`;
     }).join("");
@@ -179,14 +206,14 @@
 
   function syncModal() {
     const reg = mode === "registro";
-    document.getElementById("modalTitle").textContent = reg ? "Hacete Olimpista" : "Ingresar";
-    document.getElementById("modalSub").textContent = reg ? "Creá tu cuenta gratis." : "Ingresá a tu cuenta de Olimpista.";
+    document.getElementById("modalTitle").textContent = reg ? T("m_title_reg") : T("m_title_login");
+    document.getElementById("modalSub").textContent = reg ? T("m_sub_reg") : T("m_sub_login");
     document.getElementById("nombreField").style.display = reg ? "block" : "none";
     document.getElementById("consentRow").style.display = reg ? "flex" : "none";
-    document.getElementById("submitBtn").textContent = reg ? "Crear cuenta gratis" : "Ingresar";
+    document.getElementById("submitBtn").textContent = reg ? T("m_submit_reg") : T("m_submit_login");
     document.getElementById("switchMode").innerHTML = reg
-      ? '¿Ya sos Olimpista? <a id="switchLink">Ingresá</a>'
-      : '¿No tenés cuenta? <a id="switchLink">Hacete Olimpista</a>';
+      ? `${T("m_switch_reg")} <a id="switchLink">${T("m_switch_reg_a")}</a>`
+      : `${T("m_switch_login")} <a id="switchLink">${T("m_switch_login_a")}</a>`;
     document.getElementById("switchLink").onclick = () => { mode = reg ? "login" : "registro"; syncModal(); };
   }
 
@@ -203,7 +230,7 @@
     const errEl = document.getElementById("modalError");
     errEl.textContent = "";
     if (mode === "registro" && !document.getElementById("consent").checked) {
-      errEl.textContent = "Tenés que aceptar los Términos y la Política de Privacidad.";
+      errEl.textContent = T("consent_err");
       return;
     }
     try {
