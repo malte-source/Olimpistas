@@ -46,8 +46,10 @@ window.OLI_GLOBE = (function () {
     });
     map.addControl(new ML.NavigationControl({ showCompass: false }), "top-right");
 
-    // Rotación automática del globo (se frena al interactuar) — patrón estándar.
+    // Rotación automática: se pausa al interactuar y se REANUDA tras unos segundos
+    // de inactividad (como Google Earth). Solo gira con zoom bajo (vista de globo).
     let girando = opts.autoRotate !== false;
+    let idle = null;
     const SEG_POR_VUELTA = 140;
     function girar() {
       if (!girando) return;
@@ -58,7 +60,14 @@ window.OLI_GLOBE = (function () {
       }
     }
     map.on("moveend", girar);
-    ["mousedown", "touchstart", "wheel"].forEach((ev) => map.on(ev, () => { girando = false; }));
+    if (opts.autoRotate !== false) {
+      const pausar = () => {
+        girando = false;
+        clearTimeout(idle);
+        idle = setTimeout(() => { girando = true; girar(); }, opts.reanudarMs || 4000);
+      };
+      ["mousedown", "touchstart", "wheel", "drag"].forEach((ev) => map.on(ev, pausar));
+    }
     map.once("load", () => { try { map.setSky({ "sky-color": "#0b0b0f", "horizon-color": "#1a1a22", "fog-color": "#0b0b0f", "fog-ground-blend": 0.4 }); } catch (e) {} girar(); });
 
     if (opts.onPick) map.on("click", (e) => opts.onPick(e.lngLat.lat, e.lngLat.lng));

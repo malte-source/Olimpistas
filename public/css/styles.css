@@ -252,9 +252,10 @@ button { font-family: inherit; cursor: pointer; }
   50% { transform: rotate(-4deg) skewY(6deg) scaleX(1); }
   75% { transform: rotate(3deg) skewY(-4deg) scaleX(.97); }
 }
+/* Entrada SOLO con opacidad: si tocara transform, "congelaría" el ondeo (flagWave). */
 @keyframes flagIn {
-  0% { opacity: 0; transform: translateY(-12px) scale(.5); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes flagPulse {
   0%, 100% { opacity: .5; transform: translateX(-50%) scale(.85); }
