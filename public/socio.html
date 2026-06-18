@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-title" content="Olimpistas" />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/vendor/maplibre-gl.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=32" />
+  <link rel="stylesheet" href="/css/styles.css?v=33" />
   <style> body { background: var(--negro); } .wrap { padding-top: 0; } </style>
 </head>
 <body>
@@ -29,24 +29,24 @@
     <!-- Barra de progreso de perfil (persistente) -->
     <div id="progreso"></div>
 
-    <div class="tabs" id="tabs">
-      <button class="tab active" data-tab="perfil" data-i18n="tab_perfil">Mi perfil</button>
-      <button class="tab" data-tab="membresia" data-i18n="tab_membresia">Mi membresía</button>
-      <button class="tab" data-tab="contenido" data-i18n="tab_media">Olimpia Media+</button>
-      <button class="tab" data-tab="sorteos" data-i18n="tab_sorteos">Sorteos</button>
-      <button class="tab" data-tab="preventas" data-i18n="tab_preventas">Preventas</button>
-      <button class="tab" data-tab="carnet" data-i18n="tab_carnet">Mi carnet</button>
-    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="perfil"><svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c0-3.6 3-5.6 6.5-5.6s6.5 2 6.5 5.6"/></svg><span data-i18n="tab_perfil">Mi perfil</span></button>
+      <button class="tab" data-tab="membresia"><svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l2.5 5.1 5.6.8-4.05 3.95.95 5.55L12 16.9l-5.05 2.7.95-5.55L3.85 9.1l5.6-.8z"/></svg><span data-i18n="tab_membresia">Mi membresía</span></button>
+      <button class="tab" data-tab="contenido"><svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.3l5.4 3.7-5.4 3.7z" fill="currentColor" stroke="none"/></svg><span data-i18n="tab_media">Olimpia Media+</span></button>
+      <button class="tab" data-tab="sorteos"><svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="9" width="17" height="11" rx="1.5"/><path d="M3.5 13h17M12 9v11M8.4 9C6 9 6 5.6 8.4 5.6S12 9 12 9zM15.6 9C18 9 18 5.6 15.6 5.6S12 9 12 9z"/></svg><span data-i18n="tab_sorteos">Sorteos</span></button>
+      <button class="tab" data-tab="preventas"><svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8.5A1.5 1.5 0 015.5 7h13A1.5 1.5 0 0120 8.5v2a1.8 1.8 0 000 3.6v2a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 16.1v-2a1.8 1.8 0 000-3.6z"/><path d="M14 7.5v11" stroke-dasharray="1.5 2.2"/></svg><span data-i18n="tab_preventas">Preventas</span></button>
+      <button class="tab" data-tab="carnet"><svg class="tab-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M13 9.5h5M13 13h4M5 16.2c.4-1.5 1.7-2.1 3-2.1s2.6.6 3 2.1"/></svg><span data-i18n="tab_carnet">Mi carnet</span></button>
+    </nav>
 
     <div id="view"><p class="muted">Cargando…</p></div>
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="/js/i18n.js?v=32"></script>
-  <script src="/js/common.js?v=32"></script>
+  <script src="/js/i18n.js?v=33"></script>
+  <script src="/js/common.js?v=33"></script>
   <script src="/assets/vendor/maplibre-gl.js" defer></script>
   <script src="/assets/vendor/qrcode.js" defer></script>
-  <script src="/js/globe.js?v=32" defer></script>
-  <script src="/js/socio.js?v=32"></script>
+  <script src="/js/globe.js?v=33" defer></script>
+  <script src="/js/socio.js?v=33"></script>
 </body>
 </html>

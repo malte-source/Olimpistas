@@ -269,8 +269,12 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ─── Header socio ────────────────────────────────────────────────────────── */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--linea); }
-.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0; }
-.tab { padding: 9px 18px; border-radius: 999px; border: 1px solid var(--linea); background: transparent; color: var(--gris); font-size: 14px; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 28px 0; }
+.tab { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px;
+  border: 1px solid var(--linea); background: transparent; color: var(--gris); font-size: 14px;
+  transition: color .15s, border-color .15s, background .15s; }
+.tab .tab-ic { width: 18px; height: 18px; flex: 0 0 auto; }
+.tab:hover { color: #fff; border-color: var(--oro); }
 .tab.active { background: var(--blanco); color: #000; border-color: var(--blanco); font-weight: 600; }
 .toast { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; z-index: 200;
   transform: translate(-50%, 18px); opacity: 0; pointer-events: none; max-width: calc(100vw - 32px);
@@ -572,11 +576,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .foto-up { display: flex; flex-direction: row; align-items: center; gap: 14px; text-align: left; margin-bottom: 6px; }
   .avatar { width: 84px; height: 84px; flex: 0 0 auto; }
   .foto-btn { margin: 0; font-size: 14px; }
-  /* Tabs: scroll horizontal en vez de wrap (más prolijo en mobile). */
-  .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
-    margin: 18px -16px; padding: 0 16px 4px; scrollbar-width: none; }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tab { flex: 0 0 auto; }
+  /* Navegación tipo app: barra inferior fija con íconos (solo mobile). */
+  .tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; margin: 0; gap: 0;
+    display: flex; justify-content: space-around; flex-wrap: nowrap;
+    padding: 8px 4px max(8px, env(safe-area-inset-bottom));
+    background: rgba(11,11,15,.94); backdrop-filter: blur(14px); border-top: 1px solid var(--linea); }
+  .tab { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 0; padding: 6px 2px; border: none;
+    border-radius: 10px; background: transparent; color: var(--gris-2); }
+  .tab span { display: none; }
+  .tab .tab-ic { width: 25px; height: 25px; }
+  .tab:hover { color: var(--gris-2); border-color: transparent; }
+  .tab.active { background: transparent; color: var(--oro-claro); font-weight: 400; }
+  .wrap { padding-bottom: 78px; } /* deja lugar para la barra inferior */
   .topbar { gap: 10px; }
   .topbar #hola { display: none; }
   .modal { padding: 22px; }
