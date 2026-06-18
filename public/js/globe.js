@@ -125,21 +125,21 @@ window.OLI_GLOBE = (function () {
     });
     map.addControl(new ML.NavigationControl({ showCompass: false }), "top-right");
 
-    // Rotación automática: pausa al interactuar, reanuda tras inactividad (zoom bajo).
-    let girando = opts.autoRotate !== false, idle = null;
+    // Rotación automática (estilo Google Earth): gira al cargar y se DETIENE del
+    // todo al primer gesto del usuario. No reanuda → nunca pelea con el toque.
+    // Basada en timer (no en el chain de moveend) para evitar trabarse.
+    let girando = opts.autoRotate !== false, rotT = null;
     function girar() {
+      clearTimeout(rotT);
       if (!girando) return;
-      if (map.getZoom() < 4) {
-        const c = map.getCenter();
-        c.lng -= 360 / 140 * 1.2;
-        map.easeTo({ center: c, duration: 1200, easing: (t) => t });
+      if (map.getZoom() < 3.5 && !map.isMoving()) {
+        const c = map.getCenter(); c.lng -= 2.6;
+        map.easeTo({ center: c, duration: 1000, easing: (t) => t });
       }
+      rotT = setTimeout(girar, 1050);
     }
-    map.on("moveend", girar);
-    if (opts.autoRotate !== false) {
-      const pausar = () => { girando = false; clearTimeout(idle); idle = setTimeout(() => { girando = true; girar(); }, opts.reanudarMs || 4000); };
-      ["mousedown", "touchstart", "wheel", "drag"].forEach((ev) => map.on(ev, pausar));
-    }
+    function detenerGiro() { girando = false; clearTimeout(rotT); }
+    ["mousedown", "touchstart", "wheel", "dragstart", "rotatestart", "pitchstart"].forEach((ev) => map.on(ev, detenerGiro));
 
     let popup = null, ready = false, pendCiudades = null, pendPaises = null, _casasT = null, _vos = null;
     const UMBRAL_CASAS = 12; // las casas (punto exacto) aparecen recién a nivel calle
@@ -314,7 +314,7 @@ window.OLI_GLOBE = (function () {
       // "Tu bandera aterrizó": vuela a la ubicación y deja caer un marcador destacado.
       destacar(p) {
         if (!p || p.lat == null) return this;
-        girando = false;
+        detenerGiro();
         map.flyTo({ center: [p.lng, p.lat], zoom: p.zoom != null ? p.zoom : 8.5, duration: 2400, essential: true });
         const node = document.createElement("div");
         node.className = "mapa-vos";
@@ -326,7 +326,7 @@ window.OLI_GLOBE = (function () {
         setTimeout(poner, 2600);
         return this;
       },
-      stopRotation() { girando = false; return this; },
+      stopRotation() { detenerGiro(); return this; },
       raw: map,
     };
   }
