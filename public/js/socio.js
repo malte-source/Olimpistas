@@ -21,13 +21,14 @@
       <div class="sk sk-h"></div><div class="sk sk-line"></div>
       ${c ? `<div class="grid-3">${'<div class="sk sk-card"></div>'.repeat(c)}</div>` : ""}</div>`;
   }
+  const vacio = (txt) => `<div class="empty"><div class="empty-ic">🗓️</div><p>${txt}</p></div>`;
 
   async function init() {
     SESSION = await yo();
     if (!SESSION) { location.href = "/"; return; }
     CONFIG = await api("/config").catch(() => ({ paises: [] }));
     perfilPunto = { lat: SESSION.socio.lat ?? null, lng: SESSION.socio.lng ?? null };
-    document.getElementById("hola").textContent = SESSION.socio.nombre || SESSION.socio.email;
+    renderHeader();
     document.getElementById("logoutBtn").onclick = logout;
     document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => activar(t.dataset.tab)));
 
@@ -48,7 +49,21 @@
   }
 
   async function logout() { try { await api("/auth/logout", { method: "POST" }); } finally { location.href = "/"; } }
-  async function refrescar() { SESSION = await yo(); renderProgreso(); }
+  async function refrescar() { SESSION = await yo(); renderProgreso(); renderHeader(); }
+
+  // Header premium: avatar + saludo + chip de nivel.
+  const TIER_LBL = { olimpista: "Olimpista", kids: "Kids", premium: "Premium" };
+  function renderHeader() {
+    const s = SESSION.socio;
+    const slug = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
+    const inicial = (s.nombre || s.email || "?").trim().charAt(0).toUpperCase();
+    const av = s.foto ? `<img src="${s.foto}" alt="" />` : `<span>${inicial}</span>`;
+    const me = document.getElementById("me");
+    if (me) me.innerHTML = `
+      <div class="me-av">${av}</div>
+      <div class="me-txt"><span class="me-hi">${T("m_hola")}</span><strong id="hola">${s.nombre || s.email}</strong></div>
+      <span class="tier-chip tier-chip--${slug}">${TIER_LBL[slug] || "Olimpista"}</span>`;
+  }
 
   // ─── Anillo de progreso (persistente, animado) ───────────────────────────────
   function renderProgreso() {
@@ -186,8 +201,7 @@
     try {
       const r = await api("/perfil", { method: "PATCH", body });
       SESSION.socio = r.socio; SESSION.progreso = r.progreso;
-      document.getElementById("hola").textContent = r.socio.nombre || r.socio.email;
-      renderProgreso();
+      renderHeader(); renderProgreso();
       toast(body.mostrar_exacto && perfilPunto.lat != null ? T("m_casa_ok") : T("m_perfil_ok"));
     } catch (e) { toast(e.message); }
   }
@@ -198,7 +212,7 @@
       const r = await api("/perfil/foto", { method: "POST", body: { foto: dataUrl } });
       SESSION.socio.foto = r.foto; SESSION.progreso = r.progreso;
       document.getElementById("avatar").outerHTML = `<img class="avatar" id="avatar" src="${r.foto}" alt="" />`;
-      renderProgreso(); toast(T("m_foto_ok"));
+      renderHeader(); renderProgreso(); toast(T("m_foto_ok"));
     } catch (err) { toast(err.message); }
   }
 
@@ -212,12 +226,15 @@
     const social = await socialPais();
     const upsell = esGratis ? `<h3 style="margin-top:28px">${T("m_subi")}</h3><div class="grid-3">${pagos.map(cardUpsell).join("")}</div>` : "";
     const s = SESSION.socio;
+    const cd = (await api("/carnet").catch(() => null))?.carnet;
+    const heroCn = cd ? carnetHTML({ tierSlug: cd.tierSlug, tierNombre: cd.tier, nombre: cd.nombre, numero: cd.numero, foto: cd.foto, qr: makeQR(location.origin + "/c/" + encodeURIComponent(cd.numero)), iso: cd.iso }) : "";
     const ubic = [s.ciudad, s.pais].filter(Boolean).join(", ");
     const ubicHtml = ubic
       ? `<p class="ubic-line">📍 ${ubic} · <a class="ed-ubic">${T("m_editar_ubic")}</a></p>`
       : `<p class="ubic-line ubic-falta">📍 <a class="ed-ubic">${T("m_set_ubic")}</a></p>`;
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
+        ${heroCn ? `<div class="cn-hero">${heroCn}</div>` : ""}
         <h2>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h2>
         <p class="lead">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : "—"}.</p>
         ${ubicHtml}
@@ -261,7 +278,7 @@
     const { items } = await api("/contenido");
     view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
       <h2>${T("m_media_h")}</h2><p class="lead">${T("m_media_p")}</p>
-      <div class="grid-3">${items.map(cardContenido).join("")}</div></div>`;
+      ${items.length ? `<div class="grid-3">${items.map(cardContenido).join("")}</div>` : vacio(T("m_vacio_media"))}</div>`;
     view().querySelectorAll("[data-play]").forEach((el) => el.addEventListener("click", () => reproducir(el.dataset.play)));
   }
   function cardContenido(c) {
@@ -283,7 +300,7 @@
     const { items } = await api("/sorteos");
     view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
       <h2>${T("m_sorteos_h")}</h2><p class="lead">${T("m_sorteos_p")}</p>
-      <div class="grid-3">${items.map(cardSorteo).join("")}</div></div>`;
+      ${items.length ? `<div class="grid-3">${items.map(cardSorteo).join("")}</div>` : vacio(T("m_vacio_sorteos"))}</div>`;
     view().querySelectorAll("[data-sorteo]").forEach((el) => el.addEventListener("click", () => participar(el.dataset.sorteo)));
   }
   function cardSorteo(s) {
@@ -306,7 +323,7 @@
     const { items } = await api("/preventas");
     view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
       <h2>${T("m_preventas_h")}</h2><p class="lead">${T("m_preventas_p")}</p>
-      <div class="grid-3">${items.map(cardPreventa).join("")}</div></div>`;
+      ${items.length ? `<div class="grid-3">${items.map(cardPreventa).join("")}</div>` : vacio(T("m_vacio_preventas"))}</div>`;
     view().querySelectorAll("[data-preventa]").forEach((el) => el.addEventListener("click", () => reservar(el.dataset.preventa)));
   }
   function cardPreventa(p) {
@@ -335,8 +352,16 @@
           <div class="cn-wrap">
             ${carnetHTML({ tierSlug: carnet.tierSlug, tierNombre: carnet.tier, nombre: carnet.nombre, numero: carnet.numero, foto: carnet.foto, qr, iso: carnet.iso })}
           </div>
+          <div class="carnet-acts"><button class="btn" id="compartir">📲 ${T("m_compartir")}</button></div>
           <p class="muted" style="text-align:center;margin-top:14px">${T("m_miembro_desde")} ${fecha(carnet.desde)}</p>
         </div>`;
+      view().querySelector("#compartir").onclick = async () => {
+        const url = "https://www.olimpistas.com", txt = T("m_compartir_txt");
+        try {
+          if (navigator.share) await navigator.share({ title: "Olimpistas", text: txt, url });
+          else { await navigator.clipboard.writeText(txt + " " + url); toast(T("m_link_copiado")); }
+        } catch (e) { /* cancelado */ }
+      };
     } catch (e) {
       view().innerHTML = `<div class="section" style="border:none"><h2>${T("m_carnet_no")}</h2><p class="lead">${e.message}</p></div>`;
     }
