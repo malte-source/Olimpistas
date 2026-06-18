@@ -243,6 +243,15 @@ button { font-family: inherit; cursor: pointer; }
   padding: 10px 14px; display: inline-block; font-size: 14px; margin: 0 0 16px; }
 .social-pais strong { color: var(--oro-claro); }
 
+/* Cards de "Subí de nivel" con el carnet real + ubicación clara */
+.card-tier { text-align: center; padding-top: 18px; }
+.card-tier .cn-mini { padding: 0 12px; }
+.card-tier .cn-mini .cn { max-width: 230px; margin: 0 auto; }
+.card-tier .body { padding-top: 4px; }
+.ubic-line { font-size: 14px; color: var(--gris); margin: 6px 0 14px; }
+.ubic-line .ed-ubic { color: var(--oro); cursor: pointer; text-decoration: underline; }
+.ubic-line.ubic-falta { color: var(--oro-claro); }
+
 /* ─── Header socio ────────────────────────────────────────────────────────── */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--linea); }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0; }

@@ -12,6 +12,7 @@
   let perfilGlobo = null;
   const view = () => document.getElementById("view");
   const fecha = (d) => new Date(d).toLocaleDateString(LOC, { year: "numeric", month: "long", day: "numeric" });
+  const _previewQR = (() => { try { return makeQR("https://www.olimpistas.com"); } catch (e) { return ""; } })();
 
   // Skeleton de carga (en vez de "Cargando…").
   function skeleton(cards) {
@@ -231,15 +232,22 @@
     const esGratis = !membresia || tier?.nivel === 0;
     const social = await socialPais();
     const upsell = esGratis ? `<h3 style="margin-top:28px">${T("m_subi")}</h3><div class="grid-3">${pagos.map(cardUpsell).join("")}</div>` : "";
+    const s = SESSION.socio;
+    const ubic = [s.ciudad, s.pais].filter(Boolean).join(", ");
+    const ubicHtml = ubic
+      ? `<p class="ubic-line">📍 ${ubic} · <a class="ed-ubic">${T("m_editar_ubic")}</a></p>`
+      : `<p class="ubic-line ubic-falta">📍 <a class="ed-ubic">${T("m_set_ubic")}</a></p>`;
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
         <h2>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h2>
         <p class="lead">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : "—"}.</p>
+        ${ubicHtml}
         ${social}
         <ul class="benefits" style="max-width:520px">${(tier?.beneficios || []).map((b) => `<li>${b}</li>`).join("")}</ul>
         ${upsell}
       </div>`;
     view().querySelectorAll("[data-upsell]").forEach((b) => b.addEventListener("click", () => upgrade(b.dataset.upsell)));
+    view().querySelector(".ed-ubic")?.addEventListener("click", () => { activar("perfil"); setTimeout(() => focusCampo("pais"), 60); });
   }
   // "Sos uno de X Olimpistas en [tu país]" — prueba social personalizada.
   async function socialPais() {
@@ -250,9 +258,12 @@
       return `<p class="social-pais">🌎 ${T("m_social_pre")} <strong>${Number(p.count).toLocaleString(LOC)}</strong> ${T("m_social_in")} ${p.nombre}</p>`;
     } catch { return ""; }
   }
+  const ICONOS = { olimpista: "★", kids: "🎈", premium: "♛" };
   function cardUpsell(t) {
     const precio = t.precioAnio > 0 ? `${gs(t.precioAnio)} / ${T("m_anio")}` : T("price_gratis");
-    return `<div class="card"><div class="thumb">${artSvg(t.slug, t.nombre, t.slug === "premium" ? "♛" : "🎈")}</div>
+    const cn = carnetHTML({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre", numero: "OLI-••••••••", icono: ICONOS[t.slug], qr: _previewQR });
+    return `<div class="card card-tier">
+      <div class="cn-mini">${cn}</div>
       <div class="body"><span class="chip on">${precio}</span><h4>${t.nombre}</h4>
       <p>${t.beneficios.slice(1, 3).join(" · ")}</p>
       <button class="btn" data-upsell="${t.slug}">${t.cta}</button></div></div>`;
