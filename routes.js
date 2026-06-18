@@ -55,7 +55,10 @@ function buildRouter() {
   const store = getStore();
 
   // ─── Config pública (branding + tiers + países) ─────────────────────────────
-  r.get("/config", (_req, res) => res.json({ brand: BRAND, tiers: TIERS, paises: listaPaises() }));
+  r.get("/config", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=300"); // estático (solo cambia en deploy) → cacheable en CDN/navegador
+    res.json({ brand: BRAND, tiers: TIERS, paises: listaPaises() });
+  });
 
   // País del visitante (prefill por IP / cabecera de CDN).
   r.get("/geo", wrap(async (req, res) => res.json({ pais: await geo.detectarPais(req) })));

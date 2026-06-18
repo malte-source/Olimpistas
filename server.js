@@ -2,6 +2,7 @@
 require("dotenv").config();
 
 const express = require("express");
+const compression = require("compression");
 const path = require("path");
 const fs = require("fs");
 const { buildRouter } = require("./routes");
@@ -9,6 +10,11 @@ const auth = require("./lib/auth");
 const { PORT, BRAND } = require("./config");
 
 const app = express();
+
+// Compresión gzip/brotli para todo lo comprimible (HTML, JS, CSS, JSON, SVG).
+// Reduce ~70% el egress —clave en picos de tráfico— y deja el origen liviano
+// para cuando entre el CDN. No toca imágenes (webp/png ya comprimidos).
+app.use(compression());
 
 app.use(express.json({ limit: "1mb" })); // 1mb: alcanza para fotos de perfil (data URL)
 
