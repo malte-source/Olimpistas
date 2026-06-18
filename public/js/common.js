@@ -222,26 +222,33 @@ window.OLI = (function () {
     const cerrar = () => { if (stream) stream.getTracks().forEach((t) => t.stop()); ov.remove(); };
     $(".foto-x").onclick = cerrar;
     ov.addEventListener("click", (e) => { if (e.target === ov) cerrar(); });
+    const esMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (window.matchMedia && matchMedia("(pointer: coarse)").matches);
     $("#fgalb").onclick = () => $("#fgal").click();
     $("#fgal").onchange = (e) => { const f = e.target.files[0]; if (f) procesar(f); };
-    $("#fcam").onclick = abrirCam;
+    // En mobile: cámara nativa del teléfono (sincrónico → siempre abre, sin fricción de permisos).
+    // En desktop: cámara en vivo dentro de la página.
+    $("#fcam").onclick = () => {
+      if (esMobile || !navigator.mediaDevices?.getUserMedia) return camaraNativa();
+      camaraEnVivo();
+    };
     function cuadrar(src, w, h) {
       const c = document.createElement("canvas"), s = 256; c.width = c.height = s;
       const m = Math.min(w, h), x = c.getContext("2d");
       x.drawImage(src, (w - m) / 2, (h - m) / 2, m, m, 0, 0, s, s);
       return c.toDataURL("image/jpeg", 0.85);
     }
-    function abrirCam() {
-      if (!navigator.mediaDevices?.getUserMedia) return fallbackNativo();
+    function camaraNativa() {
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.capture = "user";
+      inp.onchange = (ev) => { const f = ev.target.files && ev.target.files[0]; if (f) procesar(f); };
+      inp.click(); // dentro del gesto del usuario → abre la cámara del teléfono
+    }
+    function camaraEnVivo() {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false }).then((s) => {
         stream = s; const v = $("#fvid"); v.srcObject = s; v.hidden = false; $("#fph").hidden = true;
         $("#facts").innerHTML = `<button class="btn" id="fshoot" type="button">Capturar</button><button class="btn btn-ghost" id="fcancel" type="button">✕</button>`;
         $("#fshoot").onclick = capturar; $("#fcancel").onclick = cerrar;
-      }).catch(fallbackNativo);
-    }
-    function fallbackNativo() {
-      const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.capture = "user";
-      inp.onchange = (ev) => { const f = ev.target.files[0]; if (f) procesar(f); }; inp.click();
+      }).catch(() => camaraNativa());
     }
     function capturar() {
       const v = $("#fvid"), c = document.createElement("canvas"), s = 256; c.width = c.height = s;

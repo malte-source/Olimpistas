@@ -566,8 +566,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .tiers { grid-template-columns: 1fr; max-width: 420px; }
   .why { grid-template-columns: 1fr 1fr; }
   .footer-inner { flex-direction: column; gap: 22px; }
-  .perfil { grid-template-columns: 1fr; }
+  .perfil { grid-template-columns: 1fr; gap: 14px; }
   .row-2 { grid-template-columns: 1fr; }
+  /* Foto compacta arriba: avatar chico + botón al lado (no domina la pantalla). */
+  .foto-up { display: flex; flex-direction: row; align-items: center; gap: 14px; text-align: left; margin-bottom: 6px; }
+  .avatar { width: 84px; height: 84px; flex: 0 0 auto; }
+  .foto-btn { margin: 0; font-size: 14px; }
   /* Tabs: scroll horizontal en vez de wrap (más prolijo en mobile). */
   .tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
     margin: 18px -16px; padding: 0 16px 4px; scrollbar-width: none; }
