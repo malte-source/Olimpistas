@@ -138,7 +138,9 @@ function createMemoryStore({ filePath = null } = {}) {
     async getSocioByVerifToken(token) { return db.socios.find(s => s.verif_token === token) || null; },
 
     // ── Estadísticas (contador + globo) ──
+    // (en memoria no hay seeds @demo, así que cuenta a todos; demoAgregado vacío)
     async contarTotal() { return db.socios.length; },
+    async demoAgregado() { return []; },
     async contarPorPais() {
       const m = {};
       for (const s of db.socios) if (s.pais_iso) m[s.pais_iso] = (m[s.pais_iso] || 0) + 1;

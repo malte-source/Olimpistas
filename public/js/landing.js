@@ -44,7 +44,7 @@
     if (_mapaCargado) return; _mapaCargado = true;
     await cargarCss("/assets/vendor/maplibre-gl.css");
     await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=18");
+    await cargarJs("/js/globe.js?v=19");
   }
 
   async function initIdiomaMoneda() {
@@ -89,10 +89,9 @@
       if (!window.OLI_GLOBE) return;
       const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600, flagsUrl: "/api/flags" });
       if (!gl) return;
-      const puntos = (stats.puntos && stats.puntos.length) ? stats.puntos : stats.porPais;
-      gl.setData(puntos);
-      const foco = puntos[0] || { lat: -23.4, lng: -58.4 };
-      gl.pov({ lat: foco.lat, lng: foco.lng, zoom: 2.4 });
+      gl.setCountries(stats.porPais || []);                    // nivel mundo: 1 badge por país
+      gl.setData(stats.puntos || stats.porPais || []);         // nivel ciudad: badges/banderas
+      gl.pov({ lat: -23.4, lng: -58.4, zoom: 2.4 });           // arranca mostrando Sudamérica (PY destacado)
     };
     if ("IntersectionObserver" in window && stage) {
       const io = new IntersectionObserver((ents) => {

@@ -10,6 +10,8 @@
 const crypto = require("crypto");
 const postgres = require("postgres");
 
+const SEED_DOMAIN = "demo.olimpistas.test"; // filas de demo (no cuentan como miembros reales)
+
 function uid(prefix) { return `${prefix}_${crypto.randomBytes(8).toString("hex")}`; }
 
 function createPgStore({ databaseUrl }) {
@@ -44,23 +46,30 @@ function createPgStore({ databaseUrl }) {
     },
 
     // ── Estadísticas (contador + globo) ──
+    // Conteos de miembros REALES (excluye las filas de demo @demo.olimpistas.test).
     async contarTotal() {
-      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios`;
+      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios WHERE email NOT LIKE ${"%@" + SEED_DOMAIN}`;
       return r.n;
     },
     async contarPorPais() {
       return sql`
         SELECT pais_iso, COUNT(*)::int AS count FROM socios
-        WHERE pais_iso IS NOT NULL AND pais_iso <> ''
+        WHERE pais_iso IS NOT NULL AND pais_iso <> '' AND email NOT LIKE ${"%@" + SEED_DOMAIN}
         GROUP BY pais_iso`;
     },
     async contarPorCiudad() {
       return sql`
         SELECT pais_iso, COALESCE(ciudad, '') AS ciudad, COUNT(*)::int AS count,
                AVG(lat) AS lat, AVG(lng) AS lng
-        FROM socios WHERE pais_iso IS NOT NULL AND pais_iso <> ''
+        FROM socios WHERE pais_iso IS NOT NULL AND pais_iso <> '' AND email NOT LIKE ${"%@" + SEED_DOMAIN}
         GROUP BY pais_iso, COALESCE(ciudad, '')
         ORDER BY count DESC LIMIT 600`;
+    },
+    // Agregado de demo (distribución mundial): ~100 ciudades. Tabla opcional.
+    async demoAgregado() {
+      try {
+        return await sql`SELECT pais_iso, ciudad, lat, lng, count FROM demo_agregado`;
+      } catch (e) { return []; } // si la tabla no existe aún
     },
     // Banderas individuales ("casa") dentro del recuadro visible: solo miembros que
     // optaron por mostrar su punto exacto. Para el zoom alto del globo público.

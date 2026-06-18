@@ -67,27 +67,50 @@ function buildRouter() {
   let _stats = null, _statsTs = 0;
   async function getStats() {
     if (_stats && Date.now() - _statsTs < 30000) return _stats;  // cache 30s
-    const [total, porPaisRaw, porCiudadRaw] = await Promise.all([
-      store.contarTotal(), store.contarPorPais(), store.contarPorCiudad(),
+    const [totalReal, porPaisRaw, porCiudadRaw, demo] = await Promise.all([
+      store.contarTotal(), store.contarPorPais(), store.contarPorCiudad(), store.demoAgregado(),
     ]);
-    const porPais = porPaisRaw
-      .map((r) => {
-        const c = paisCentroide(r.pais_iso);
-        return c ? { iso: r.pais_iso, nombre: paisNombre(r.pais_iso), count: r.count, lat: c.lat, lng: c.lng } : null;
+
+    // ── Merge miembros REALES + agregado de demo, por país y por ciudad ──
+    const paisMap = new Map();   // iso → count
+    const add = (map, key, n) => map.set(key, (map.get(key) || 0) + Number(n || 0));
+    for (const r of porPaisRaw) add(paisMap, r.pais_iso, r.count);
+
+    const ciudadMap = new Map(); // "iso|ciudad" → { iso, ciudad, count, lat, lng }
+    const upCiudad = (iso, ciudad, count, lat, lng) => {
+      const k = iso + "|" + (ciudad || "");
+      const e = ciudadMap.get(k) || { iso, ciudad: ciudad || "", count: 0, lat: null, lng: null };
+      e.count += Number(count || 0);
+      if (lat != null && lng != null) { e.lat = Number(lat); e.lng = Number(lng); } // demo trae coords exactas
+      ciudadMap.set(k, e);
+    };
+    for (const r of porCiudadRaw) upCiudad(r.pais_iso, r.ciudad, r.count, r.lat, r.lng);
+    for (const r of demo) { add(paisMap, r.pais_iso, r.count); upCiudad(r.pais_iso, r.ciudad, r.count, r.lat, r.lng); }
+
+    const demoTotal = demo.reduce((s, r) => s + Number(r.count || 0), 0);
+    const total = totalReal + demoTotal;
+
+    const porPais = [...paisMap.entries()]
+      .map(([iso, count]) => {
+        const c = paisCentroide(iso);
+        return c ? { iso, nombre: paisNombre(iso), count, lat: c.lat, lng: c.lng } : null;
       })
       .filter(Boolean)
       .sort((a, b) => b.count - a.count);
-    // Puntos del globo (banderas): por ciudad, con coords exactas o centroide del país.
-    const puntos = porCiudadRaw
+
+    // Puntos del globo (banderas por ciudad): coords exactas o centroide del país.
+    const puntos = [...ciudadMap.values()]
       .map((r) => {
-        const c = paisCentroide(r.pais_iso);
-        const lat = r.lat != null ? Number(r.lat) : (c ? c.lat : null);
-        const lng = r.lng != null ? Number(r.lng) : (c ? c.lng : null);
+        const c = paisCentroide(r.iso);
+        const lat = r.lat != null ? r.lat : (c ? c.lat : null);
+        const lng = r.lng != null ? r.lng : (c ? c.lng : null);
         if (lat == null) return null;
-        return { iso: r.pais_iso, pais: paisNombre(r.pais_iso), ciudad: r.ciudad || "", count: r.count, lat, lng };
+        return { iso: r.iso, pais: paisNombre(r.iso), ciudad: r.ciudad, count: r.count, lat, lng };
       })
       .filter(Boolean)
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 600);
+
     _stats = { total, paises: porPais.length, porPais, puntos, actualizado: new Date().toISOString() };
     _statsTs = Date.now();
     return _stats;
