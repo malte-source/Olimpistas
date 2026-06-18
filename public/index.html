@@ -14,14 +14,18 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Olimpistas" />
-  <meta property="og:title" content="Hacete Olimpista" />
-  <meta property="og:description" content="Sumate gratis a la comunidad mundial de Olimpia." />
+  <meta property="og:title" content="Hacete Olimpista — gratis" />
+  <meta property="og:description" content="Sumate gratis a la comunidad mundial de Olimpia. Contenido, sorteos, preventas y beneficios del Decano." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="/assets/icon-512.png" />
+  <meta property="og:image" content="/assets/og.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Hacete Olimpista — gratis" />
+  <meta name="twitter:image" content="/assets/og.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/vendor/maplibre-gl.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=12" />
+  <link rel="stylesheet" href="/css/styles.css?v=13" />
 </head>
 <body>
   <header class="nav">
@@ -35,10 +39,10 @@
   <section class="hero">
     <div class="hero-bg">
       <picture>
-        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=3" />
-        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=3" />
-        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=3" />
-        <img src="/assets/hero-desktop.jpg?v=3" alt="" fetchpriority="high" />
+        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=13" />
+        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=13" />
+        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=13" />
+        <img src="/assets/hero-desktop.jpg?v=13" alt="" fetchpriority="high" />
       </picture>
     </div>
     <div class="hero-inner wrap">
@@ -47,6 +51,7 @@
       <p class="sub" id="heroSub">Cargando…</p>
       <button class="btn btn-hero" id="heroCta">Hacete Olimpista gratis</button>
       <p class="hero-note">Gratis y en 30 segundos. Sin tarjeta.</p>
+      <p class="hero-social" id="heroSocial" hidden></p>
       <a class="ver-todas" href="#planes">Ver niveles y beneficios ↓</a>
     </div>
   </section>
@@ -103,9 +108,9 @@
       <nav class="footer-links">
         <a href="#" data-stub>Tienda oficial</a>
         <a href="#" data-stub>Web de Olimpia</a>
-        <a href="#" data-stub>Términos y condiciones</a>
-        <a href="#" data-stub>Política de privacidad</a>
-        <a href="#" data-stub>Bases de sorteos</a>
+        <a href="/legal#terminos">Términos y condiciones</a>
+        <a href="/legal#privacidad">Política de privacidad</a>
+        <a href="/legal#sorteos">Bases de sorteos</a>
       </nav>
     </div>
   </footer>
@@ -127,6 +132,10 @@
         <label>Contraseña</label>
         <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
       </div>
+      <label class="consent" id="consentRow">
+        <input type="checkbox" id="consent" />
+        <span>Acepto los <a href="/legal#terminos" target="_blank">Términos</a> y la <a href="/legal#privacidad" target="_blank">Política de Privacidad</a>.</span>
+      </label>
       <p class="error" id="modalError"></p>
       <button class="btn btn-block" id="submitBtn">Crear cuenta gratis</button>
       <p class="switch" id="switchMode">¿Ya sos Olimpista? <a id="switchLink">Ingresá</a></p>
@@ -135,10 +144,9 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="/js/common.js?v=12"></script>
+  <script src="/js/common.js?v=13"></script>
   <script src="/assets/vendor/qrcode.js"></script>
-  <script src="/assets/vendor/maplibre-gl.js" defer></script>
-  <script src="/js/globe.js?v=12" defer></script>
-  <script src="/js/landing.js?v=12"></script>
+  <!-- MapLibre + globe.js se cargan en diferido (lazy) al llegar a la sección del mundo (landing.js) -->
+  <script src="/js/landing.js?v=13"></script>
 </body>
 </html>

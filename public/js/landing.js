@@ -27,22 +27,55 @@
     initMundo();
   }
 
-  // ─── Olimpistas en el mundo: contador + globo ───────────────────────────────
+  // Carga diferida de assets (devuelve Promise). Para el mapa pesado (MapLibre).
+  function cargarCss(href) {
+    return new Promise((res) => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.onload = res; l.onerror = res; document.head.appendChild(l); });
+  }
+  function cargarJs(src) {
+    return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  }
+  let _mapaCargado = false;
+  async function cargarMapa() {
+    if (_mapaCargado) return; _mapaCargado = true;
+    await cargarCss("/assets/vendor/maplibre-gl.css");
+    await cargarJs("/assets/vendor/maplibre-gl.js");
+    await cargarJs("/js/globe.js?v=13");
+  }
+
+  // ─── Olimpistas en el mundo: contador (inmediato) + globo (lazy) ─────────────
   async function initMundo() {
     let stats;
     try { stats = await api("/stats"); } catch { return; }
     animarContador(stats.total);
     document.getElementById("contadorPaises").textContent = stats.paises;
     renderTopPaises(stats.porPais);
+    // Prueba social en el hero
+    if (stats.total > 0) {
+      const hs = document.getElementById("heroSocial");
+      if (hs) { hs.textContent = `🌎 Ya somos ${stats.total.toLocaleString("es-PY")} Olimpistas en ${stats.paises} ${stats.paises === 1 ? "país" : "países"}`; hs.hidden = false; }
+    }
     document.getElementById("globoCta").onclick = () => empezarGratis();
-    esperarGlobe(() => {
+
+    // El globo (MapLibre, ~1MB) se carga recién cuando la sección entra en viewport.
+    const stage = document.getElementById("mundo");
+    const construir = async () => {
+      await cargarMapa();
+      if (!window.OLI_GLOBE) return;
       const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600 });
       if (!gl) return;
       const puntos = (stats.puntos && stats.puntos.length) ? stats.puntos : stats.porPais;
       gl.setData(puntos);
       const foco = puntos[0] || { lat: -23.4, lng: -58.4 };
       gl.pov({ lat: foco.lat, lng: foco.lng, zoom: 2.4 });
-    });
+    };
+    if ("IntersectionObserver" in window && stage) {
+      const io = new IntersectionObserver((ents) => {
+        if (ents.some((e) => e.isIntersecting)) { io.disconnect(); construir(); }
+      }, { rootMargin: "200px" });
+      io.observe(stage);
+    } else {
+      construir();
+    }
   }
 
   let _popT = null;
@@ -149,6 +182,7 @@
     document.getElementById("modalTitle").textContent = reg ? "Hacete Olimpista" : "Ingresar";
     document.getElementById("modalSub").textContent = reg ? "Creá tu cuenta gratis." : "Ingresá a tu cuenta de Olimpista.";
     document.getElementById("nombreField").style.display = reg ? "block" : "none";
+    document.getElementById("consentRow").style.display = reg ? "flex" : "none";
     document.getElementById("submitBtn").textContent = reg ? "Crear cuenta gratis" : "Ingresar";
     document.getElementById("switchMode").innerHTML = reg
       ? '¿Ya sos Olimpista? <a id="switchLink">Ingresá</a>'
@@ -168,6 +202,10 @@
     const nombre = document.getElementById("nombre").value.trim();
     const errEl = document.getElementById("modalError");
     errEl.textContent = "";
+    if (mode === "registro" && !document.getElementById("consent").checked) {
+      errEl.textContent = "Tenés que aceptar los Términos y la Política de Privacidad.";
+      return;
+    }
     try {
       const path = mode === "registro" ? "/auth/registro" : "/auth/login";
       const body = mode === "registro" ? { email, password, nombre } : { email, password };

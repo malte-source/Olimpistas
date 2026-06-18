@@ -300,6 +300,9 @@ button { font-family: inherit; cursor: pointer; }
 .btn-hero { box-shadow: var(--glow); }
 .btn-hero:hover { box-shadow: 0 14px 40px rgba(201,162,39,.5); }
 .hero-note { letter-spacing: .2px; }
+.hero-social { display: inline-block; margin: 14px auto 0; font-size: 14px; font-weight: 600; color: var(--oro-claro);
+  background: rgba(201,162,39,.14); border: 1px solid rgba(201,162,39,.35); padding: 7px 16px; border-radius: 999px; }
+.hero-social[hidden] { display: none; }
 
 /* Eyebrow: etiqueta dorada arriba de los títulos de sección */
 .eyebrow { display: inline-block; font-family: var(--display); font-size: 12px; font-weight: 700;
@@ -386,6 +389,20 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 800; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 5px 14px;
   border-radius: 999px; box-shadow: var(--glow); }
 .tier-destacado .cn { box-shadow: 0 0 0 2px var(--oro), 0 26px 60px rgba(0,0,0,.55); }
+
+/* Consentimiento en el registro */
+.consent { display: flex; align-items: flex-start; gap: 9px; margin: 4px 0 12px; font-size: 13px; color: var(--gris); cursor: pointer; }
+.consent input { margin-top: 2px; accent-color: var(--oro); width: 16px; height: 16px; flex: 0 0 auto; }
+.consent a { color: var(--oro); }
+
+/* Banner de cookies */
+.cookie-bar { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 300; max-width: 720px; margin: 0 auto;
+  background: rgba(20,20,27,.92); backdrop-filter: blur(10px); border: 1px solid var(--linea); border-radius: 14px;
+  padding: 12px 16px; display: flex; align-items: center; gap: 14px; box-shadow: var(--sombra); }
+.cookie-bar span { font-size: 13px; color: #cfcfd6; flex: 1; }
+.cookie-bar a { color: var(--oro); }
+.cookie-bar .btn { padding: 8px 16px; font-size: 13px; flex: 0 0 auto; }
+@media (max-width: 560px) { .cookie-bar { flex-direction: column; align-items: stretch; text-align: center; } }
 
 /* ─── Responsive (al final: deben ganar por orden a las reglas base) ──────── */
 @media (max-width: 920px) {

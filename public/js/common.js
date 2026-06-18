@@ -100,8 +100,20 @@ window.OLI = (function () {
     navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {});
   }
 
+  // Banner de cookies (una sola vez). Solo usamos cookie esencial de sesión.
+  function bannerCookies() {
+    try { if (localStorage.getItem("oli_cookies_ok")) return; } catch (e) { return; }
+    const b = document.createElement("div");
+    b.className = "cookie-bar";
+    b.innerHTML = '<span>Usamos una cookie esencial para tu sesión. Más info en <a href="/legal#cookies">Cookies</a>.</span>' +
+      '<button class="btn" id="cookieOk">Entendido</button>';
+    document.body.appendChild(b);
+    b.querySelector("#cookieOk").onclick = () => { try { localStorage.setItem("oli_cookies_ok", "1"); } catch (e) {} b.remove(); };
+  }
+
   // Pase de estética: nav "glass" al scrollear + aparición de secciones al entrar en viewport.
   window.addEventListener("DOMContentLoaded", () => {
+    bannerCookies();
     const nav = document.querySelector(".nav");
     if (nav) {
       const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 30);

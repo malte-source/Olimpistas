@@ -3,6 +3,7 @@ require("dotenv").config();
 
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const { buildRouter } = require("./routes");
 const auth = require("./lib/auth");
 const { PORT, BRAND } = require("./config");
@@ -49,13 +50,36 @@ app.use(express.static(PUBLIC, {
   },
 }));
 
+// Analítica opcional, configurable por env (sin tocar nada si no está seteada).
+// PLAUSIBLE_DOMAIN → Plausible (cookieless, sin banner de consentimiento). GA_ID → Google Analytics 4.
+function snippetAnalytics() {
+  if (process.env.PLAUSIBLE_DOMAIN) {
+    return `<script defer data-domain="${process.env.PLAUSIBLE_DOMAIN}" src="https://plausible.io/js/script.js"></script>`;
+  }
+  if (process.env.GA_ID) {
+    const id = process.env.GA_ID;
+    return `<script async src="https://www.googletagmanager.com/gtag/js?id=${id}"></script>` +
+      `<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','${id}')</script>`;
+  }
+  return "";
+}
+const ANALYTICS = snippetAnalytics();
+
 // HTML: cacheable corto en CDN (60s) para absorber picos sin servir contenido viejo.
+// Inyecta la analítica antes de </head> (cacheado en memoria por archivo).
+const _pageCache = {};
 const sendPage = (file) => (_req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
-  res.sendFile(path.join(PUBLIC, file));
+  if (!_pageCache[file]) {
+    let html = fs.readFileSync(path.join(PUBLIC, file), "utf8");
+    if (ANALYTICS) html = html.replace("</head>", ANALYTICS + "\n</head>");
+    _pageCache[file] = html;
+  }
+  res.type("html").send(_pageCache[file]);
 };
 app.get("/", sendPage("index.html"));
 app.get("/miembro", sendPage("socio.html"));
+app.get("/legal", sendPage("legal.html"));
 app.get("/socio", (_req, res) => res.redirect(301, "/miembro")); // compat: links viejos
 
 // 404 JSON para /api, fallback a landing para el resto.
