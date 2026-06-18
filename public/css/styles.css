@@ -319,9 +319,10 @@ button { font-family: inherit; cursor: pointer; }
   .mapa-flag img, .mapa-flag::after { animation: none; }
 }
 .maplibregl-popup-content { background: rgba(11,11,15,.94); color: var(--blanco); border: 1px solid var(--oro);
-  border-radius: 12px; padding: 10px 16px; box-shadow: var(--sombra); text-align: center; }
-.maplibregl-popup-content strong { display: block; font-size: 15px; }
-.maplibregl-popup-content span { font-size: 13px; color: var(--oro-claro); }
+  border-radius: 12px; padding: 8px 14px; box-shadow: var(--sombra); text-align: center; }
+.maplibregl-popup-content strong { display: block; font-size: 14px; line-height: 1.25; }
+.maplibregl-popup-content span { font-size: 12.5px; color: var(--oro-claro); }
+.maplibregl-popup-content .pop-fl { width: 14px; height: auto; vertical-align: -2px; margin-right: 4px; }
 .maplibregl-popup-tip { display: none; }
 .maplibregl-ctrl-attrib { font-size: 10px; }
 
