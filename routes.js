@@ -376,6 +376,7 @@ function buildRouter() {
       carnet: {
         socioId: req.socio.id,
         nombre: [req.socio.nombre, req.socio.apellido].filter(Boolean).join(" ") || req.socio.email,
+        iso: req.socio.pais_iso || "",
         foto: req.socio.foto || "",
         tier: tier?.nombre || membresia.tier_slug,
         tierSlug: membresia.tier_slug,

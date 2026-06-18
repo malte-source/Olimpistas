@@ -261,7 +261,7 @@
   const ICONOS = { olimpista: "★", kids: "🎈", premium: "♛" };
   function cardUpsell(t) {
     const precio = t.precioAnio > 0 ? `${gs(t.precioAnio)} / ${T("m_anio")}` : T("price_gratis");
-    const cn = carnetHTML({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre", numero: "OLI-••••••••", icono: ICONOS[t.slug], qr: _previewQR });
+    const cn = carnetHTML({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre", numero: "OLI-••••••••", icono: ICONOS[t.slug], qr: _previewQR, iso: SESSION.socio.pais_iso });
     return `<div class="card card-tier">
       <div class="cn-mini">${cn}</div>
       <div class="body"><span class="chip on">${precio}</span><h4>${t.nombre}</h4>
@@ -354,7 +354,7 @@
           <h2>${T("m_carnet_h")}</h2>
           <p class="lead">${T("m_carnet_p")}</p>
           <div class="cn-wrap">
-            ${carnetHTML({ tierSlug: carnet.tierSlug, tierNombre: carnet.tier, nombre: carnet.nombre, numero: carnet.numero, foto: carnet.foto, qr })}
+            ${carnetHTML({ tierSlug: carnet.tierSlug, tierNombre: carnet.tier, nombre: carnet.nombre, numero: carnet.numero, foto: carnet.foto, qr, iso: carnet.iso })}
           </div>
           <p class="muted" style="text-align:center;margin-top:14px">${T("m_miembro_desde")} ${fecha(carnet.desde)}</p>
         </div>`;

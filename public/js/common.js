@@ -83,11 +83,14 @@ window.OLI = (function () {
     const qr = o.qr
       ? `<div class="cn-qr"><img src="${o.qr}" alt="QR de miembro" /></div>`
       : `<div class="cn-qr cn-qr-empty">Tu QR</div>`;
+    const iso = (o.iso || "").toLowerCase().trim();
+    const flag = /^[a-z]{2}$/.test(iso)
+      ? `<img class="cn-flag" src="https://flagcdn.com/${iso}.svg" alt="" loading="lazy" />` : "";
     return `<div class="cn cn--${slug}">
       <div class="cn-head">
         <img class="cn-logo" src="/assets/logo-horizontal.svg" alt="Olimpistas" />
       </div>
-      ${avatar}
+      <div class="cn-avatar-wrap">${avatar}${flag}</div>
       <div class="cn-name">${nombre}</div>
       <div class="cn-level">${nivel}</div>
       ${qr}
