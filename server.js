@@ -40,6 +40,7 @@ app.use("/api", buildRouter());
 // Cloudflare) sirva los assets y descargue al origen — clave para picos de 50k+.
 const PROD = process.env.NODE_ENV === "production";
 app.use(express.static(PUBLIC, {
+  index: false, // NO servir index.html en "/" automáticamente → deja que lo haga sendPage (inyecta analytics)
   setHeaders: (res, filePath) => {
     if (filePath.endsWith("sw.js")) {
       res.setHeader("Cache-Control", "no-cache");                 // el SW debe actualizarse rápido
