@@ -90,13 +90,10 @@ window.OLI = (function () {
   // para que el cache-first del SW no sirva JS/CSS viejos durante el desarrollo.
   const esLocal = ["localhost", "127.0.0.1", ""].includes(location.hostname);
   if ("serviceWorker" in navigator && !esLocal) {
+    // Network-first SW (ver sw.js): cada navegación trae lo último. Sin reload forzado
+    // (causaba loops que interrumpían la carga del globo).
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("/sw.js").then((reg) => { try { reg.update(); } catch (e) {} }).catch(() => {});
-      // Cuando un SW nuevo toma control, recargar UNA vez → el usuario ve siempre lo último.
-      let recargado = false;
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (recargado) return; recargado = true; location.reload();
-      });
     });
   } else if ("serviceWorker" in navigator) {
     // Limpieza en dev: si quedó un SW registrado de antes, lo sacamos.
