@@ -240,17 +240,17 @@ button { font-family: inherit; cursor: pointer; }
 /* Marcador de bandera y popup de MapLibre (tema oscuro Olimpia) */
 .mapa-flag { cursor: pointer; line-height: 0; position: relative; }
 /* Ondeo al viento (sobre la img, para no chocar con el transform de posición de MapLibre) */
-.mapa-flag img { transform-origin: 16% 60%; animation: flagWave 2.4s ease-in-out infinite, flagIn .5s ease both; }
+.mapa-flag img { transform-origin: 14% 55%; animation: flagWave 1.9s ease-in-out infinite, flagIn .5s ease both; }
 .mapa-flag:hover img { animation-duration: 1s, .5s; }
 /* Halo dorado pulsante en la base */
 .mapa-flag::after { content: ""; position: absolute; bottom: -3px; left: 18%; width: 12px; height: 4px;
   transform: translateX(-50%); border-radius: 50%; background: rgba(201,162,39,.9);
   box-shadow: 0 0 10px 3px rgba(201,162,39,.6); animation: flagPulse 2.4s ease-in-out infinite; }
 @keyframes flagWave {
-  0%, 100% { transform: rotate(0deg) skewY(0deg); }
-  20% { transform: rotate(2deg) skewY(-3deg); }
-  45% { transform: rotate(-1.5deg) skewY(2deg); }
-  70% { transform: rotate(1deg) skewY(-1.2deg); }
+  0%, 100% { transform: rotate(-3deg) skewY(0deg) scaleX(1); }
+  25% { transform: rotate(5deg) skewY(-7deg) scaleX(.94); }
+  50% { transform: rotate(-4deg) skewY(6deg) scaleX(1); }
+  75% { transform: rotate(3deg) skewY(-4deg) scaleX(.97); }
 }
 @keyframes flagIn {
   0% { opacity: 0; transform: translateY(-12px) scale(.5); }
