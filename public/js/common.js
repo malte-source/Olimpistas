@@ -93,8 +93,29 @@ window.OLI = (function () {
       ${qr}
       <div class="cn-num">${numero}</div>
       <div class="cn-foot">MIEMBRO · OLIMPISTAS</div>
+      <div class="cn-shine" aria-hidden="true"></div>
     </div>`;
   }
+
+  // Tilt 3D + brillo en los carnets (.cn), en TODOS lados (landing, onboarding, miembro).
+  // Delegado en document → funciona también con carnets renderizados dinámicamente.
+  (function tilt3D() {
+    const fino = window.matchMedia && matchMedia("(hover: hover) and (pointer: fine)").matches;
+    const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!fino || reduce) return;
+    let cur = null;
+    const reset = (el) => { if (el) el.style.transform = ""; };
+    document.addEventListener("pointermove", (e) => {
+      const cn = e.target.closest && e.target.closest(".cn");
+      if (cn !== cur) { reset(cur); cur = cn; }
+      if (!cn) return;
+      const r = cn.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      cn.style.transform = `perspective(900px) rotateY(${px * 11}deg) rotateX(${-py * 11}deg) translateY(-5px)`;
+    }, { passive: true });
+    document.addEventListener("pointerleave", () => { reset(cur); cur = null; }, true);
+  })();
 
   // Registrar el Service Worker (PWA) — solo en producción. En localhost se evita
   // para que el cache-first del SW no sirva JS/CSS viejos durante el desarrollo.

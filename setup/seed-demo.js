@@ -232,20 +232,29 @@ function imprimirPlan(agg) {
   console.log(`\n🚩 Casas opt-in (zoom): ${casas.reduce((s,b)=>s+b.n,0).toLocaleString("es-PY")} en ${casas.length} barrios.`);
 }
 
+// Variable normal (Box-Muller) → nube circular suave alrededor del centro (sin cuadrados).
+function gauss() {
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  let g = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  return Math.max(-2.6, Math.min(2.6, g)); // recorta outliers extremos
+}
 function* generarCasas(planCasas) {
   const HASH = "$2b$10$seedSEEDseedSEEDseedSEuJ8c9Qm0wTq3aXk1pYqZr5sT2vW6yC";
   let i = 0;
   for (const b of planCasas) {
+    // sigma variable por barrio → unos más extendidos que otros (más natural)
+    const sigma = 0.013 + (i % 5) * 0.0018; // ~1.4–2.4 km
     for (let k = 0; k < b.n; k++) {
       const nombre = `${NOMBRES[(i * 11 + k) % NOMBRES.length]} ${APELLIDOS[(i * 5 + k * 7) % APELLIDOS.length]}`;
-      const jl = ((i * 2654435761 + k * 97) % 1000) / 1000 - 0.5;
-      const jg = ((i * 40503 + k * 31) % 1000) / 1000 - 0.5;
       yield {
         id: "seed_" + crypto.randomBytes(7).toString("hex"),
         email: `casa.${i}@${SEED_DOMAIN}`,
         password_hash: HASH, nombre,
         pais: PAIS_NOMBRE(b.iso), pais_iso: b.iso, ciudad: b.ciudad,
-        lat: +(b.lat + jl * 0.008).toFixed(6), lng: +(b.lng + jg * 0.008).toFixed(6),
+        lat: +(b.lat + gauss() * sigma).toFixed(6),
+        lng: +(b.lng + gauss() * sigma * 1.08).toFixed(6), // lng un poco más ancho (cos lat)
         mostrar_exacto: true,
       };
       i++;
