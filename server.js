@@ -75,7 +75,7 @@ const ANALYTICS = snippetAnalytics();
 // HTML: cacheable corto (60s). Inyecta analítica + hreflang y el idioma (es/en) según la ruta.
 const HREFLANG = '<link rel="alternate" hreflang="es" href="/" /><link rel="alternate" hreflang="en" href="/en" /><link rel="alternate" hreflang="x-default" href="/" />';
 const _pageCache = {};
-const sendPage = (file, lang) => (_req, res) => {
+const sendPage = (file, lang) => (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   const key = file + "|" + (lang || "es");
   if (!_pageCache[key]) {
@@ -84,7 +84,14 @@ const sendPage = (file, lang) => (_req, res) => {
     html = html.replace("</head>", HREFLANG + (ANALYTICS || "") + "\n</head>");
     _pageCache[key] = html;
   }
-  res.type("html").send(_pageCache[key]);
+  // OG/Twitter: URL absoluta según el host (WhatsApp/Facebook exigen URL completa para
+  // mostrar la imagen). Funciona en cualquier dominio (run.app o www.olimpistas.com).
+  const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
+  const base = proto + "://" + (req.headers.host || "www.olimpistas.com");
+  const html = _pageCache[key]
+    .replace(/content="\/assets\/og\.jpg"/g, `content="${base}/assets/og.jpg"`)
+    .replace("</head>", `<meta property="og:url" content="${base}/" />\n</head>`);
+  res.type("html").send(html);
 };
 app.get("/", sendPage("index.html", "es"));
 app.get("/en", sendPage("index.html", "en"));        // landing en inglés (SEO: /en + hreflang)
