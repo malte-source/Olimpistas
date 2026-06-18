@@ -25,11 +25,18 @@ window.OLI_GLOBE = (function () {
         type: "raster", tileSize: 256, maxzoom: 16,
         tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
       },
+      // Calles + nombres de vías (overlay transparente para híbrido sobre satélite).
+      calles: {
+        type: "raster", tileSize: 256, maxzoom: 19,
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}"],
+      },
     },
     layers: [
       { id: "fondo", type: "background", paint: { "background-color": "#0b0b0f" } },
       { id: "sat", type: "raster", source: "sat" },
       { id: "lugares", type: "raster", source: "lugares", paint: { "raster-opacity": 0.85 } },
+      // Calles: aparecen al acercar (zoom ≥ 10) para no ensuciar la vista de globo.
+      { id: "calles", type: "raster", source: "calles", minzoom: 10, paint: { "raster-opacity": 0.9 } },
     ],
   };
 
