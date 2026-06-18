@@ -44,7 +44,7 @@
     if (_mapaCargado) return; _mapaCargado = true;
     await cargarCss("/assets/vendor/maplibre-gl.css");
     await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=24");
+    await cargarJs("/js/globe.js?v=25");
   }
 
   async function initIdiomaMoneda() {

@@ -1,12 +1,25 @@
 /* socio.js — área de socio: perfil + progreso, membresía, contenido, sorteos,
-   preventas, carnet. El foco del embudo es completar el perfil. */
+   preventas, carnet. Bilingüe (OLI_I18N) + UX premium (skeletons, transiciones,
+   anillo de progreso). El foco del embudo es completar el perfil. */
 (function () {
   const { api, gs, artSvg, toast, yo, carnet: carnetHTML, makeQR } = window.OLI;
+  const T = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
+  const LANG = window.OLI_I18N ? window.OLI_I18N.lang() : "es";
+  const LOC = LANG === "en" ? "en-US" : "es-PY";
   let SESSION = null; // { socio, membresia, progreso }
   let CONFIG = null;  // { paises: [{iso,nombre}], ... }
   let perfilPunto = { lat: null, lng: null }; // ubicación exacta elegida
   let perfilGlobo = null;
   const view = () => document.getElementById("view");
+  const fecha = (d) => new Date(d).toLocaleDateString(LOC, { year: "numeric", month: "long", day: "numeric" });
+
+  // Skeleton de carga (en vez de "Cargando…").
+  function skeleton(cards) {
+    const c = cards == null ? 3 : cards;
+    return `<div class="section" style="border:none;padding-top:8px">
+      <div class="sk sk-h"></div><div class="sk sk-line"></div>
+      ${c ? `<div class="grid-3">${'<div class="sk sk-card"></div>'.repeat(c)}</div>` : ""}</div>`;
+  }
 
   async function init() {
     SESSION = await yo();
@@ -19,7 +32,7 @@
 
     const pago = new URLSearchParams(location.search).get("pago_simulado");
     if (pago) {
-      try { await api("/pagos/confirmar-simulado", { method: "POST", body: { pedidoId: pago } }); toast("¡Pago confirmado!"); }
+      try { await api("/pagos/confirmar-simulado", { method: "POST", body: { pedidoId: pago } }); toast(T("m_pago_ok")); }
       catch (e) { toast(e.message); }
       history.replaceState({}, "", "/miembro");
       SESSION = await yo();
@@ -34,26 +47,29 @@
   }
 
   async function logout() { try { await api("/auth/logout", { method: "POST" }); } finally { location.href = "/"; } }
-
   async function refrescar() { SESSION = await yo(); renderProgreso(); }
 
-  // ─── Barra de progreso (persistente) ─────────────────────────────────────────
+  // ─── Anillo de progreso (persistente, animado) ───────────────────────────────
   function renderProgreso() {
     const p = SESSION.progreso;
     const cont = document.getElementById("progreso");
-    if (!p || p.pct >= 100) {
-      cont.innerHTML = p && p.pct >= 100
-        ? `<div class="progreso"><div class="top"><strong>¡Perfil completo! 🎉</strong><span class="pct">100%</span></div>
-           <div class="bar"><i style="width:100%"></i></div></div>` : "";
-      return;
-    }
-    const chips = p.faltantes.map((f) => `<button data-falta="${f.key}">+ ${f.label}</button>`).join("");
+    if (!p) { cont.innerHTML = ""; return; }
+    const completo = p.pct >= 100;
+    const chips = completo ? "" : (p.faltantes || []).map((f) => `<button data-falta="${f.key}">+ ${f.label}</button>`).join("");
+    const C = 175.9; // 2π·28
     cont.innerHTML = `
       <div class="progreso">
-        <div class="top"><strong>Completá tu perfil de Olimpista</strong><span class="pct">${p.pct}%</span></div>
-        <div class="bar"><i style="width:${p.pct}%"></i></div>
-        <div class="faltantes">${chips}</div>
+        <div class="prog-ring">
+          <svg viewBox="0 0 64 64"><circle class="rb" cx="32" cy="32" r="28"/><circle class="rf" cx="32" cy="32" r="28" style="stroke-dasharray:${C};stroke-dashoffset:${C}"/></svg>
+          <span class="prog-pct">${p.pct}%</span>
+        </div>
+        <div class="prog-info">
+          <strong>${completo ? T("m_prog_done") : T("m_prog_h")}</strong>
+          ${chips ? `<div class="faltantes">${chips}</div>` : ""}
+        </div>
       </div>`;
+    const rf = cont.querySelector(".rf");
+    if (rf) requestAnimationFrame(() => { rf.style.strokeDashoffset = String(C * (1 - p.pct / 100)); });
     cont.querySelectorAll("[data-falta]").forEach((b) =>
       b.addEventListener("click", () => { activar("perfil"); setTimeout(() => focusCampo(b.dataset.falta), 60); })
     );
@@ -66,55 +82,51 @@
   // ─── Mi perfil ───────────────────────────────────────────────────────────────
   function vPerfil() {
     const s = SESSION.socio;
-    const avatar = s.foto
-      ? `<img class="avatar" id="avatar" src="${s.foto}" alt="" />`
-      : `<div class="avatar" id="avatar">📷</div>`;
+    const avatar = s.foto ? `<img class="avatar" id="avatar" src="${s.foto}" alt="" />` : `<div class="avatar" id="avatar">📷</div>`;
     const paises = CONFIG.paises || [];
-    const opts = '<option value="">Elegí tu país</option>' +
+    const opts = `<option value="">${T("m_elegi_pais")}</option>` +
       paises.map((p) => `<option value="${p.iso}" ${p.iso === s.pais_iso ? "selected" : ""}>${p.nombre}</option>`).join("");
     const tienePunto = perfilPunto.lat != null;
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
-        <h2>Mi perfil</h2>
-        <p class="lead">Completá tu perfil y aparecé en el mapa mundial de Olimpistas.</p>
+        <h2>${T("m_perfil_h")}</h2>
+        <p class="lead">${T("m_perfil_p")}</p>
         <div class="perfil">
           <div class="foto-up">
             ${avatar}
-            <label for="fotoInput">Cambiar foto</label>
+            <label for="fotoInput">${T("m_foto_cambiar")}</label>
             <input type="file" id="fotoInput" accept="image/*" />
           </div>
           <div>
-            <div class="field"><label>Nombre</label><input id="f_nombre" value="${attr(s.nombre)}" placeholder="Tu nombre" /></div>
-            <div class="field"><label>WhatsApp</label><input id="f_whatsapp" value="${attr(s.whatsapp)}" placeholder="+595 9xx xxx xxx" /></div>
+            <div class="field"><label>${T("m_nombre")}</label><input id="f_nombre" value="${attr(s.nombre)}" /></div>
+            <div class="field"><label>${T("m_whatsapp")}</label><input id="f_whatsapp" value="${attr(s.whatsapp)}" placeholder="+595 9xx xxx xxx" /></div>
             <div class="row-2">
-              <div class="field"><label>País</label><select id="f_pais">${opts}</select></div>
-              <div class="field"><label>Ciudad</label><input id="f_ciudad" value="${attr(s.ciudad)}" placeholder="Tu ciudad" /></div>
+              <div class="field"><label>${T("m_pais")}</label><select id="f_pais">${opts}</select></div>
+              <div class="field"><label>${T("m_ciudad")}</label><input id="f_ciudad" value="${attr(s.ciudad)}" /></div>
             </div>
-            <div class="field"><label>Email</label><input value="${attr(s.email)}" disabled /></div>
-            <button class="btn" id="guardarPerfil">Guardar cambios</button>
+            <div class="field"><label>${T("m_email")}</label><input value="${attr(s.email)}" disabled /></div>
+            <button class="btn" id="guardarPerfil">${T("m_guardar")}</button>
           </div>
         </div>
 
         <div style="margin-top:30px">
-          <h3 style="margin:0 0 4px">🚩 Poné tu bandera en tu casa</h3>
-          <p class="lead" style="margin-bottom:12px">Fijá tu ubicación y sumá tu bandera de Olimpia al globo mundial. ¡Que todos vean que tu casa es olimpista!</p>
+          <h3 style="margin:0 0 4px">${T("m_casa_h")}</h3>
+          <p class="lead" style="margin-bottom:12px">${T("m_casa_p")}</p>
           <div class="ubic">
-            <button class="btn btn-ghost" id="btnGeo" type="button">📍 Usar mi ubicación actual</button>
-            <span id="ubicEstado" class="muted">${tienePunto ? "Punto fijado ✓" : "Sin fijar"}</span>
+            <button class="btn btn-ghost" id="btnGeo" type="button">${T("m_geo")}</button>
+            <span id="ubicEstado" class="muted">${tienePunto ? T("m_fijado") : T("m_sin_fijar")}</span>
           </div>
           <div id="perfilGlobo" class="perfil-globo"></div>
-          <p class="muted" style="font-size:12px;text-align:center">Tocá el globo para fijar tu punto, o usá tu ubicación actual.</p>
+          <p class="muted" style="font-size:12px;text-align:center">${T("m_casa_toca")}</p>
           <label class="casa-toggle" for="f_exacto">
             <input type="checkbox" id="f_exacto" ${s.mostrar_exacto ? "checked" : ""} />
-            <span><strong>Mostrar mi bandera en mi casa exacta</strong><br>
-              <small class="muted">Si lo dejás sin marcar, aparecés solo a nivel ciudad. Podés cambiarlo cuando quieras.</small></span>
+            <span><strong>${T("m_exacto_h")}</strong><br><small class="muted">${T("m_exacto_p")}</small></span>
           </label>
         </div>
       </div>`;
     document.getElementById("guardarPerfil").onclick = guardarPerfil;
     document.getElementById("fotoInput").onchange = subirFoto;
     document.getElementById("btnGeo").onclick = usarUbicacion;
-    // Prefill de país por IP si todavía no tiene uno.
     if (!s.pais_iso) prefillPaisPorIP();
     initPerfilGlobo();
   }
@@ -125,10 +137,7 @@
       if (pais && pais.iso) {
         const sel = document.getElementById("f_pais");
         if (sel && !sel.value) sel.value = pais.iso;
-        if (perfilPunto.lat == null && pais.lat != null) {
-          perfilPunto = { lat: pais.lat, lng: pais.lng };
-          pintarPunto();
-        }
+        if (perfilPunto.lat == null && pais.lat != null) { perfilPunto = { lat: pais.lat, lng: pais.lng }; pintarPunto(); }
       }
     } catch { /* sin geo */ }
   }
@@ -153,27 +162,21 @@
     perfilGlobo.setData([{ lat: perfilPunto.lat, lng: perfilPunto.lng, ciudad: "Tu punto", pais: "", count: 1 }]);
     perfilGlobo.pov({ lat: perfilPunto.lat, lng: perfilPunto.lng, zoom: 5 });
   }
-  function marcarFijado() {
-    const e = document.getElementById("ubicEstado");
-    if (e) e.textContent = "Punto fijado ✓";
-  }
+  function marcarFijado() { const e = document.getElementById("ubicEstado"); if (e) e.textContent = T("m_fijado"); }
 
   function usarUbicacion() {
-    if (!navigator.geolocation) return toast("Tu navegador no permite geolocalización");
+    if (!navigator.geolocation) return toast(T("m_geo_no"));
     const e = document.getElementById("ubicEstado");
-    if (e) e.textContent = "Buscando tu ubicación…";
+    if (e) e.textContent = T("m_buscando");
     navigator.geolocation.getCurrentPosition(
       (pos) => { perfilPunto = { lat: pos.coords.latitude, lng: pos.coords.longitude }; pintarPunto(); marcarFijado(); },
-      () => { if (e) e.textContent = "No se pudo obtener (permiso denegado)"; },
+      () => { if (e) e.textContent = T("m_geo_err"); },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   }
 
   async function guardarPerfil() {
-    const body = {
-      nombre: val("f_nombre"), whatsapp: val("f_whatsapp"),
-      pais: document.getElementById("f_pais").value, ciudad: val("f_ciudad"),
-    };
+    const body = { nombre: val("f_nombre"), whatsapp: val("f_whatsapp"), pais: document.getElementById("f_pais").value, ciudad: val("f_ciudad") };
     if (perfilPunto.lat != null) { body.lat = perfilPunto.lat; body.lng = perfilPunto.lng; }
     const exacto = document.getElementById("f_exacto");
     if (exacto) body.mostrar_exacto = exacto.checked;
@@ -182,7 +185,7 @@
       SESSION.socio = r.socio; SESSION.progreso = r.progreso;
       document.getElementById("hola").textContent = r.socio.nombre || r.socio.email;
       renderProgreso();
-      toast(body.mostrar_exacto && perfilPunto.lat != null ? "¡Tu bandera ya está en tu casa! 🚩" : "Perfil actualizado ✓");
+      toast(body.mostrar_exacto && perfilPunto.lat != null ? T("m_casa_ok") : T("m_perfil_ok"));
     } catch (e) { toast(e.message); }
   }
 
@@ -194,20 +197,17 @@
       const r = await api("/perfil/foto", { method: "POST", body: { foto: dataUrl } });
       SESSION.socio.foto = r.foto; SESSION.progreso = r.progreso;
       document.getElementById("avatar").outerHTML = `<img class="avatar" id="avatar" src="${r.foto}" alt="" />`;
-      renderProgreso(); toast("Foto actualizada ✓");
+      renderProgreso(); toast(T("m_foto_ok"));
     } catch (err) { toast(err.message); }
   }
 
-  // Redimensiona/recorta a un cuadrado y devuelve un data URL JPEG liviano.
   function redimensionar(file, size) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        const c = document.createElement("canvas");
-        c.width = c.height = size;
+        const c = document.createElement("canvas"); c.width = c.height = size;
         const ctx = c.getContext("2d");
-        const min = Math.min(img.width, img.height);
-        const sx = (img.width - min) / 2, sy = (img.height - min) / 2;
+        const min = Math.min(img.width, img.height), sx = (img.width - min) / 2, sy = (img.height - min) / 2;
         ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
         resolve(c.toDataURL("image/jpeg", 0.85));
       };
@@ -221,30 +221,38 @@
 
   // ─── Mi membresía ────────────────────────────────────────────────────────────
   async function vMembresia() {
-    view().innerHTML = '<p class="muted">Cargando…</p>';
+    view().innerHTML = skeleton(3);
     const { membresia, tier } = await api("/membresia");
     const { tiers } = await api("/config");
     const pagos = tiers.filter((t) => t.nivel > 0);
     const esGratis = !membresia || tier?.nivel === 0;
-    const upsell = esGratis ? `
-      <h3 style="margin-top:28px">Subí de nivel</h3>
-      <div class="grid-3">${pagos.map(cardUpsell).join("")}</div>` : "";
+    const social = await socialPais();
+    const upsell = esGratis ? `<h3 style="margin-top:28px">${T("m_subi")}</h3><div class="grid-3">${pagos.map(cardUpsell).join("")}</div>` : "";
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
-        <h2>Sos ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h2>
-        <p class="lead">Miembro desde ${membresia ? new Date(membresia.inicio).toLocaleDateString("es-PY") : "hoy"}.</p>
+        <h2>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h2>
+        <p class="lead">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : "—"}.</p>
+        ${social}
         <ul class="benefits" style="max-width:520px">${(tier?.beneficios || []).map((b) => `<li>${b}</li>`).join("")}</ul>
         ${upsell}
       </div>`;
     view().querySelectorAll("[data-upsell]").forEach((b) => b.addEventListener("click", () => upgrade(b.dataset.upsell)));
   }
+  // "Sos uno de X Olimpistas en [tu país]" — prueba social personalizada.
+  async function socialPais() {
+    try {
+      const iso = SESSION.socio.pais_iso; if (!iso) return "";
+      const { porPais } = await api("/stats");
+      const p = (porPais || []).find((x) => x.iso === iso); if (!p) return "";
+      return `<p class="social-pais">🌎 ${T("m_social_pre")} <strong>${Number(p.count).toLocaleString(LOC)}</strong> ${T("m_social_in")} ${p.nombre}</p>`;
+    } catch { return ""; }
+  }
   function cardUpsell(t) {
-    const precio = t.precioAnio > 0 ? `${gs(t.precioAnio)} / año` : "Gratis";
-    return `
-      <div class="card"><div class="thumb">${artSvg(t.slug, t.nombre, t.slug === "premium" ? "♛" : "🎈")}</div>
-        <div class="body"><span class="chip on">${precio}</span><h4>${t.nombre}</h4>
-        <p>${t.beneficios.slice(1, 3).join(" · ")}</p>
-        <button class="btn" data-upsell="${t.slug}">${t.cta}</button></div></div>`;
+    const precio = t.precioAnio > 0 ? `${gs(t.precioAnio)} / ${T("m_anio")}` : T("price_gratis");
+    return `<div class="card"><div class="thumb">${artSvg(t.slug, t.nombre, t.slug === "premium" ? "♛" : "🎈")}</div>
+      <div class="body"><span class="chip on">${precio}</span><h4>${t.nombre}</h4>
+      <p>${t.beneficios.slice(1, 3).join(" · ")}</p>
+      <button class="btn" data-upsell="${t.slug}">${t.cta}</button></div></div>`;
   }
   async function upgrade(slug) {
     try {
@@ -254,100 +262,90 @@
     } catch (e) { toast(e.message); }
   }
 
-  // ─── Olimpia Media+ ──────────────────────────────────────────────────────────────
+  // ─── Olimpia Media+ ──────────────────────────────────────────────────────────
   async function vContenido() {
-    view().innerHTML = '<p class="muted">Cargando…</p>';
+    view().innerHTML = skeleton(3);
     const { items } = await api("/contenido");
-    view().innerHTML = `
-      <div class="section" style="border:none;padding-top:8px">
-        <h2>Olimpia Media+</h2><p class="lead">Contenido exclusivo para Olimpistas.</p>
-        <div class="grid-3">${items.map(cardContenido).join("")}</div>
-      </div>`;
+    view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <h2>${T("m_media_h")}</h2><p class="lead">${T("m_media_p")}</p>
+      <div class="grid-3">${items.map(cardContenido).join("")}</div></div>`;
     view().querySelectorAll("[data-play]").forEach((el) => el.addEventListener("click", () => reproducir(el.dataset.play)));
   }
   function cardContenido(c) {
     const lock = c.desbloqueado ? "" : `<div class="lock"><span>🔒 Premium</span></div>`;
-    return `
-      <div class="card"><div class="thumb">${artSvg(c.id, c.titulo, "▶")}${lock}</div>
-        <div class="body"><span class="chip ${c.desbloqueado ? "on" : ""}">${c.tipo} · ${c.duracion || ""}</span>
-        <h4>${c.titulo}</h4><p>${c.descripcion}</p>
-        <button class="btn ${c.desbloqueado ? "" : "btn-ghost"}" ${c.desbloqueado ? `data-play="${c.id}"` : "disabled"}>
-          ${c.desbloqueado ? "Reproducir" : "Solo Premium"}</button></div></div>`;
+    return `<div class="card"><div class="thumb">${artSvg(c.id, c.titulo, "▶")}${lock}</div>
+      <div class="body"><span class="chip ${c.desbloqueado ? "on" : ""}">${c.tipo} · ${c.duracion || ""}</span>
+      <h4>${c.titulo}</h4><p>${c.descripcion}</p>
+      <button class="btn ${c.desbloqueado ? "" : "btn-ghost"}" ${c.desbloqueado ? `data-play="${c.id}"` : "disabled"}>
+        ${c.desbloqueado ? T("m_reproducir") : T("m_solo_premium")}</button></div></div>`;
   }
   async function reproducir(id) {
-    try { const r = await api("/contenido/" + id); toast("▶ " + r.item.titulo + " (demo)"); }
+    try { const r = await api("/contenido/" + id); toast("▶ " + r.item.titulo + " " + T("m_demo")); }
     catch (e) { toast(e.message); }
   }
 
   // ─── Sorteos ───────────────────────────────────────────────────────────────────
   async function vSorteos() {
-    view().innerHTML = '<p class="muted">Cargando…</p>';
+    view().innerHTML = skeleton(3);
     const { items } = await api("/sorteos");
-    view().innerHTML = `
-      <div class="section" style="border:none;padding-top:8px">
-        <h2>Sorteos</h2><p class="lead">Participá por premios exclusivos del Decano.</p>
-        <div class="grid-3">${items.map(cardSorteo).join("")}</div>
-      </div>`;
+    view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <h2>${T("m_sorteos_h")}</h2><p class="lead">${T("m_sorteos_p")}</p>
+      <div class="grid-3">${items.map(cardSorteo).join("")}</div></div>`;
     view().querySelectorAll("[data-sorteo]").forEach((el) => el.addEventListener("click", () => participar(el.dataset.sorteo)));
   }
   function cardSorteo(s) {
     let btn;
-    if (s.participando) btn = `<button class="btn btn-ghost" disabled>✓ Ya participás</button>`;
-    else if (!s.elegible) btn = `<button class="btn btn-ghost" disabled>Solo Premium</button>`;
-    else btn = `<button class="btn" data-sorteo="${s.id}">Participar</button>`;
-    return `
-      <div class="card"><div class="thumb">${artSvg(s.id, s.titulo, "🎁")}</div>
-        <div class="body"><span class="chip ${s.elegible ? "on" : ""}">Cierra ${s.cierra}</span>
-        <h4>${s.titulo}</h4><p>${s.descripcion}</p>${btn}</div></div>`;
+    if (s.participando) btn = `<button class="btn btn-ghost" disabled>${T("m_ya_participas")}</button>`;
+    else if (!s.elegible) btn = `<button class="btn btn-ghost" disabled>${T("m_solo_premium")}</button>`;
+    else btn = `<button class="btn" data-sorteo="${s.id}">${T("m_participar")}</button>`;
+    return `<div class="card"><div class="thumb">${artSvg(s.id, s.titulo, "🎁")}</div>
+      <div class="body"><span class="chip ${s.elegible ? "on" : ""}">${T("m_cierra")} ${s.cierra}</span>
+      <h4>${s.titulo}</h4><p>${s.descripcion}</p>${btn}</div></div>`;
   }
   async function participar(id) {
-    try { await api("/sorteos/" + id + "/participar", { method: "POST" }); toast("¡Estás participando! 🍀"); vSorteos(); }
+    try { await api("/sorteos/" + id + "/participar", { method: "POST" }); toast(T("m_participando")); vSorteos(); }
     catch (e) { toast(e.message); }
   }
 
   // ─── Preventas ─────────────────────────────────────────────────────────────────
   async function vPreventas() {
-    view().innerHTML = '<p class="muted">Cargando…</p>';
+    view().innerHTML = skeleton(3);
     const { items } = await api("/preventas");
-    view().innerHTML = `
-      <div class="section" style="border:none;padding-top:8px">
-        <h2>Preventa de entradas</h2><p class="lead">Comprá antes que nadie.</p>
-        <div class="grid-3">${items.map(cardPreventa).join("")}</div>
-      </div>`;
+    view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <h2>${T("m_preventas_h")}</h2><p class="lead">${T("m_preventas_p")}</p>
+      <div class="grid-3">${items.map(cardPreventa).join("")}</div></div>`;
     view().querySelectorAll("[data-preventa]").forEach((el) => el.addEventListener("click", () => reservar(el.dataset.preventa)));
   }
   function cardPreventa(p) {
     const btn = p.habilitada
-      ? `<button class="btn" data-preventa="${p.id}">Reservar (${gs(p.precio_desde)})</button>`
-      : `<button class="btn btn-ghost" disabled>Solo Premium</button>`;
-    return `
-      <div class="card"><div class="thumb">${artSvg(p.id, p.evento, "🎟")}</div>
-        <div class="body"><span class="chip ${p.habilitada ? "on" : ""}">${p.fecha} · ${p.sede}</span>
-        <h4>${p.evento}</h4><p>Desde ${gs(p.precio_desde)} · ${p.stock} en preventa</p>${btn}</div></div>`;
+      ? `<button class="btn" data-preventa="${p.id}">${T("m_reservar")} (${gs(p.precio_desde)})</button>`
+      : `<button class="btn btn-ghost" disabled>${T("m_solo_premium")}</button>`;
+    return `<div class="card"><div class="thumb">${artSvg(p.id, p.evento, "🎟")}</div>
+      <div class="body"><span class="chip ${p.habilitada ? "on" : ""}">${p.fecha} · ${p.sede}</span>
+      <h4>${p.evento}</h4><p>${T("m_desde")} ${gs(p.precio_desde)} · ${p.stock} ${T("m_en_preventa")}</p>${btn}</div></div>`;
   }
   async function reservar(id) {
-    try { await api("/preventas/" + id + "/reservar", { method: "POST", body: { cantidad: 1 } }); toast("Reserva confirmada ✓"); vPreventas(); }
+    try { await api("/preventas/" + id + "/reservar", { method: "POST", body: { cantidad: 1 } }); toast(T("m_reserva_ok")); vPreventas(); }
     catch (e) { toast(e.message); }
   }
 
   // ─── Carnet digital (mismo componente que la landing, color por nivel) ───────
   async function vCarnet() {
-    view().innerHTML = '<p class="muted">Cargando…</p>';
+    view().innerHTML = skeleton(0);
     try {
       const { carnet } = await api("/carnet");
       const qr = makeQR(location.origin + "/c/" + encodeURIComponent(carnet.numero));
-      const desde = new Date(carnet.desde).toLocaleDateString("es-PY");
       view().innerHTML = `
         <div class="section" style="border:none;padding-top:8px">
-          <h2>Mi carnet digital</h2>
-          <p class="lead">Mostralo en el estadio y en la tienda oficial.</p>
+          <h2>${T("m_carnet_h")}</h2>
+          <p class="lead">${T("m_carnet_p")}</p>
           <div class="cn-wrap">
             ${carnetHTML({ tierSlug: carnet.tierSlug, tierNombre: carnet.tier, nombre: carnet.nombre, numero: carnet.numero, foto: carnet.foto, qr })}
           </div>
-          <p class="muted" style="text-align:center;margin-top:14px">Miembro desde ${desde}</p>
+          <p class="muted" style="text-align:center;margin-top:14px">${T("m_miembro_desde")} ${fecha(carnet.desde)}</p>
         </div>`;
     } catch (e) {
-      view().innerHTML = `<div class="section" style="border:none"><h2>Carnet no disponible</h2><p class="lead">${e.message}</p></div>`;
+      view().innerHTML = `<div class="section" style="border:none"><h2>${T("m_carnet_no")}</h2><p class="lead">${e.message}</p></div>`;
     }
   }
 

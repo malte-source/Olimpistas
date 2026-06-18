@@ -220,6 +220,29 @@ button { font-family: inherit; cursor: pointer; }
 .casa-toggle input { margin-top: 3px; width: 20px; height: 20px; accent-color: var(--oro); flex: 0 0 auto; cursor: pointer; }
 .casa-toggle small { font-size: 12px; line-height: 1.4; }
 
+/* ─── Área de miembro: transición de tab, skeletons, anillo de progreso ────── */
+#view > .section { animation: viewIn .34s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes viewIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #view > .section { animation: none; } }
+.sk { background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.10) 37%, rgba(255,255,255,.04) 63%);
+  background-size: 400% 100%; animation: skSh 1.3s ease infinite; border-radius: 10px; }
+@keyframes skSh { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.sk-h { height: 28px; width: 200px; margin: 6px 0 14px; }
+.sk-line { height: 14px; width: 320px; max-width: 80%; margin-bottom: 22px; }
+.sk-card { height: 220px; }
+.progreso { display: flex; align-items: center; gap: 16px; background: var(--negro-2); border: 1px solid var(--linea);
+  border-radius: var(--radio); padding: 14px 18px; margin: 18px 0 4px; }
+.prog-ring { position: relative; width: 64px; height: 64px; flex: 0 0 auto; }
+.prog-ring svg { width: 64px; height: 64px; transform: rotate(-90deg); }
+.prog-ring .rb { fill: none; stroke: rgba(255,255,255,.12); stroke-width: 6; }
+.prog-ring .rf { fill: none; stroke: var(--oro); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1); }
+.prog-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; }
+.prog-info { flex: 1; }
+.prog-info strong { display: block; margin-bottom: 8px; }
+.social-pais { background: rgba(201,162,39,.1); border: 1px solid rgba(201,162,39,.35); border-radius: 12px;
+  padding: 10px 14px; display: inline-block; font-size: 14px; margin: 0 0 16px; }
+.social-pais strong { color: var(--oro-claro); }
+
 /* ─── Header socio ────────────────────────────────────────────────────────── */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--linea); }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0; }
