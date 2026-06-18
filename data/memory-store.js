@@ -160,6 +160,16 @@ function createMemoryStore({ filePath = null } = {}) {
         lat: r.n ? r.latSum / r.n : null, lng: r.n ? r.lngSum / r.n : null,
       }));
     },
+    async flagsEnBBox({ minLng, minLat, maxLng, maxLat, limit = 600 }) {
+      const out = [];
+      for (const s of db.socios) {
+        if (!s.mostrar_exacto || s.lat == null || s.lng == null) continue;
+        if (s.lng < minLng || s.lng > maxLng || s.lat < minLat || s.lat > maxLat) continue;
+        out.push({ id: s.id, nombre: s.nombre, ciudad: s.ciudad, lat: s.lat, lng: s.lng });
+        if (out.length >= Math.min(Number(limit) || 600, 1500)) break;
+      }
+      return out;
+    },
     async updateSocio(id, patch) {
       const s = db.socios.find(x => x.id === id);
       if (!s) return null;

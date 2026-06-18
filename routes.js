@@ -94,6 +94,18 @@ function buildRouter() {
     res.json(await getStats());
   }));
 
+  // Banderas individuales ("casa") del recuadro visible — zoom alto del globo público.
+  // bbox = minLng,minLat,maxLng,maxLat. Solo miembros que optaron por el punto exacto.
+  r.get("/flags", wrap(async (req, res) => {
+    const parts = String(req.query.bbox || "").split(",").map(Number);
+    if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n)))
+      throw httpError(400, "bbox inválido (se espera minLng,minLat,maxLng,maxLat)");
+    const [minLng, minLat, maxLng, maxLat] = parts;
+    const flags = await store.flagsEnBBox({ minLng, minLat, maxLng, maxLat, limit: req.query.limit });
+    res.setHeader("Cache-Control", "public, max-age=20");
+    res.json({ flags });
+  }));
+
   // ─── Auth ───────────────────────────────────────────────────────────────────
   r.post("/auth/registro", wrap(async (req, res) => {
     const { email, password, nombre } = req.body || {};
@@ -173,6 +185,8 @@ function buildRouter() {
         throw httpError(400, "Coordenadas inválidas");
       patch.lat = lat; patch.lng = lng;
     }
+    // Gamificación: "poné tu bandera en tu casa" (mostrar el punto exacto en público).
+    if (typeof b.mostrar_exacto === "boolean") patch.mostrar_exacto = b.mostrar_exacto;
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const socio = auth.sanitize(await store.updateSocio(req.socio.id, patch));
     res.json({ socio, progreso: perfilProgreso(socio) });

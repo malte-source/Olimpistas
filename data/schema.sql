@@ -23,13 +23,17 @@ CREATE TABLE IF NOT EXISTS socios (
   lng           DOUBLE PRECISION,
   email_verificado BOOLEAN NOT NULL DEFAULT false,
   verif_token   TEXT,                     -- token de verificación de email
+  mostrar_exacto BOOLEAN NOT NULL DEFAULT false, -- gamificación: "bandera en mi casa" (punto exacto público)
   creado        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- En una base YA creada, correr esta migración una vez:
 --   ALTER TABLE socios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT false,
---                      ADD COLUMN IF NOT EXISTS verif_token TEXT;
+--                      ADD COLUMN IF NOT EXISTS verif_token TEXT,
+--                      ADD COLUMN IF NOT EXISTS mostrar_exacto BOOLEAN NOT NULL DEFAULT false;
 -- Acelera el agregado del contador/globo (GROUP BY pais_iso) a escala.
 CREATE INDEX IF NOT EXISTS idx_socios_pais ON socios(pais_iso);
+-- Acelera la consulta de banderas "en tu casa" por recuadro (bbox) a zoom alto.
+CREATE INDEX IF NOT EXISTS idx_socios_exacto ON socios(mostrar_exacto) WHERE mostrar_exacto = true;
 
 CREATE TABLE IF NOT EXISTS sesiones (
   token     TEXT PRIMARY KEY,

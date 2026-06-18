@@ -44,7 +44,7 @@
     if (_mapaCargado) return; _mapaCargado = true;
     await cargarCss("/assets/vendor/maplibre-gl.css");
     await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=17");
+    await cargarJs("/js/globe.js?v=18");
   }
 
   async function initIdiomaMoneda() {
@@ -87,7 +87,7 @@
     const construir = async () => {
       await cargarMapa();
       if (!window.OLI_GLOBE) return;
-      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600 });
+      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600, flagsUrl: "/api/flags" });
       if (!gl) return;
       const puntos = (stats.puntos && stats.puntos.length) ? stats.puntos : stats.porPais;
       gl.setData(puntos);

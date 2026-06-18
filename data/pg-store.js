@@ -62,6 +62,16 @@ function createPgStore({ databaseUrl }) {
         GROUP BY pais_iso, COALESCE(ciudad, '')
         ORDER BY count DESC LIMIT 600`;
     },
+    // Banderas individuales ("casa") dentro del recuadro visible: solo miembros que
+    // optaron por mostrar su punto exacto. Para el zoom alto del globo público.
+    async flagsEnBBox({ minLng, minLat, maxLng, maxLat, limit = 600 }) {
+      return sql`
+        SELECT id, nombre, ciudad, lat, lng FROM socios
+        WHERE mostrar_exacto = true AND lat IS NOT NULL AND lng IS NOT NULL
+          AND lng BETWEEN ${minLng} AND ${maxLng}
+          AND lat BETWEEN ${minLat} AND ${maxLat}
+        LIMIT ${Math.min(Number(limit) || 600, 1500)}`;
+    },
     async updateSocio(id, patch) {
       const [s] = await sql`UPDATE socios SET ${sql(patch)} WHERE id = ${id} RETURNING *`;
       return s || null;

@@ -98,6 +98,26 @@ window.OLI_GLOBE = (function () {
       });
     }
 
+    // Trae las banderas "en tu casa" del recuadro visible (solo a zoom alto).
+    let _casasT = null;
+    const UMBRAL_CASAS = 9;
+    function refrescarCasas() {
+      if (!opts.flagsUrl || !map.getSource("casas")) return;
+      if (map.getZoom() < UMBRAL_CASAS) {
+        map.getSource("casas").setData({ type: "FeatureCollection", features: [] });
+        return;
+      }
+      clearTimeout(_casasT);
+      _casasT = setTimeout(() => {
+        const b = map.getBounds();
+        const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((n) => n.toFixed(4)).join(",");
+        fetch(opts.flagsUrl + "?bbox=" + bbox + "&limit=800", { credentials: "same-origin" })
+          .then((r) => r.json())
+          .then((j) => { if (map.getSource("casas")) map.getSource("casas").setData(buildFC(j.flags || [])); })
+          .catch(() => {});
+      }, 250);
+    }
+
     function addLayers() {
       if (map.getSource(SRC)) return;
       map.addSource(SRC, {
@@ -144,6 +164,38 @@ window.OLI_GLOBE = (function () {
           "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.13, 4, 0.22, 6, 0.34, 9, 0.52, 12, 0.7],
         },
       });
+
+      // Banderas "en tu casa" (puntos exactos de miembros que optaron), a zoom alto.
+      // Fuente aparte (sin clustering), poblada por recuadro visible vía /api/flags.
+      if (opts.flagsUrl) {
+        map.addSource("casas", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        map.addLayer({
+          id: "casas", type: "symbol", source: "casas",
+          layout: {
+            "icon-image": "bandera",
+            "icon-allow-overlap": true,
+            "icon-anchor": "bottom",
+            "icon-size": ["interpolate", ["linear"], ["zoom"], 9, 0.32, 13, 0.55, 17, 0.8],
+            "text-field": ["get", "nombre"],
+            "text-font": ["Open Sans Bold"],
+            "text-size": 11, "text-offset": [0, 0.7], "text-anchor": "top",
+            "text-optional": true, "text-allow-overlap": false,
+          },
+          paint: { "text-color": "#ffffff", "text-halo-color": "#000000", "text-halo-width": 1.3 },
+        });
+        map.on("click", "casas", (e) => {
+          const f = e.features[0]; const p = f.properties; const coords = f.geometry.coordinates.slice();
+          if (popup) popup.remove();
+          popup = new ML.Popup({ offset: 16, closeButton: false })
+            .setLngLat(coords)
+            .setHTML(`<strong>🚩 ${p.nombre || "Un Olimpista"}</strong><span>${p.ciudad || ""}</span>`)
+            .addTo(map);
+        });
+        map.on("mouseenter", "casas", () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", "casas", () => { map.getCanvas().style.cursor = ""; });
+        map.on("moveend", refrescarCasas);
+        refrescarCasas();
+      }
 
       // Click en racimo → acercar (lo expande).
       map.on("click", "clusters", (e) => {

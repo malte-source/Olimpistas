@@ -96,14 +96,19 @@
         </div>
 
         <div style="margin-top:30px">
-          <h3 style="margin:0 0 4px">Tu punto en el mapa</h3>
-          <p class="lead" style="margin-bottom:12px">Fijá tu ubicación exacta y tu bandera aparece en el globo mundial.</p>
+          <h3 style="margin:0 0 4px">🚩 Poné tu bandera en tu casa</h3>
+          <p class="lead" style="margin-bottom:12px">Fijá tu ubicación y sumá tu bandera de Olimpia al globo mundial. ¡Que todos vean que tu casa es olimpista!</p>
           <div class="ubic">
             <button class="btn btn-ghost" id="btnGeo" type="button">📍 Usar mi ubicación actual</button>
             <span id="ubicEstado" class="muted">${tienePunto ? "Punto fijado ✓" : "Sin fijar"}</span>
           </div>
           <div id="perfilGlobo" class="perfil-globo"></div>
           <p class="muted" style="font-size:12px;text-align:center">Tocá el globo para fijar tu punto, o usá tu ubicación actual.</p>
+          <label class="casa-toggle" for="f_exacto">
+            <input type="checkbox" id="f_exacto" ${s.mostrar_exacto ? "checked" : ""} />
+            <span><strong>Mostrar mi bandera en mi casa exacta</strong><br>
+              <small class="muted">Si lo dejás sin marcar, aparecés solo a nivel ciudad. Podés cambiarlo cuando quieras.</small></span>
+          </label>
         </div>
       </div>`;
     document.getElementById("guardarPerfil").onclick = guardarPerfil;
@@ -170,11 +175,14 @@
       pais: document.getElementById("f_pais").value, ciudad: val("f_ciudad"),
     };
     if (perfilPunto.lat != null) { body.lat = perfilPunto.lat; body.lng = perfilPunto.lng; }
+    const exacto = document.getElementById("f_exacto");
+    if (exacto) body.mostrar_exacto = exacto.checked;
     try {
       const r = await api("/perfil", { method: "PATCH", body });
       SESSION.socio = r.socio; SESSION.progreso = r.progreso;
       document.getElementById("hola").textContent = r.socio.nombre || r.socio.email;
-      renderProgreso(); toast("Perfil actualizado ✓");
+      renderProgreso();
+      toast(body.mostrar_exacto && perfilPunto.lat != null ? "¡Tu bandera ya está en tu casa! 🚩" : "Perfil actualizado ✓");
     } catch (e) { toast(e.message); }
   }
 

@@ -211,6 +211,13 @@ button { font-family: inherit; cursor: pointer; }
 .ob-listo { text-align: center; }
 .ob-listo .cn { margin: 0 auto 22px; }
 
+/* Toggle "bandera en tu casa" (gamificación, opt-in) */
+.casa-toggle { display: flex; align-items: flex-start; gap: 12px; margin: 16px auto 0; max-width: 520px;
+  padding: 14px 16px; border: 1px solid var(--linea); border-radius: var(--radio); background: var(--negro-2); cursor: pointer; }
+.casa-toggle:hover { border-color: var(--oro); }
+.casa-toggle input { margin-top: 3px; width: 20px; height: 20px; accent-color: var(--oro); flex: 0 0 auto; cursor: pointer; }
+.casa-toggle small { font-size: 12px; line-height: 1.4; }
+
 /* ─── Header socio ────────────────────────────────────────────────────────── */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--linea); }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0; }
