@@ -125,6 +125,7 @@ function createMemoryStore({ filePath = null } = {}) {
         // Campos de enriquecimiento (barra de progreso, se completan después):
         whatsapp: "", foto: "", pais: "", pais_iso: "", ciudad: "",
         lat: null, lng: null,   // ubicación exacta (opcional) para el globo
+        email_verificado: false, verif_token: null,
         creado: nowIso(),
       };
       db.socios.push(socio); persist();
@@ -134,6 +135,7 @@ function createMemoryStore({ filePath = null } = {}) {
       return db.socios.find(s => s.email === String(email).toLowerCase()) || null;
     },
     async getSocioById(id) { return db.socios.find(s => s.id === id) || null; },
+    async getSocioByVerifToken(token) { return db.socios.find(s => s.verif_token === token) || null; },
 
     // ── Estadísticas (contador + globo) ──
     async contarTotal() { return db.socios.length; },

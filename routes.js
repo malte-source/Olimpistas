@@ -11,8 +11,10 @@
  */
 
 const express = require("express");
+const crypto = require("crypto");
 const { getStore } = require("./data/store");
 const auth = require("./lib/auth");
+const mailer = require("./lib/email");
 const access = require("./lib/access");
 const pagopar = require("./lib/pagopar");
 const geo = require("./lib/geo");
@@ -99,6 +101,14 @@ function buildRouter() {
     setSessionCookie(res, token);
     // El registro = alta automática como Olimpista gratis (el embudo).
     await store.setMembresia(socio.id, { tierSlug: "olimpista", ciclo: "anio" });
+    // Verificación de email (best-effort: nunca rompe el registro si falta la columna/proveedor).
+    try {
+      const vtoken = crypto.randomBytes(24).toString("base64url");
+      await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false });
+      const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+      const link = `${proto}://${req.headers.host}/api/auth/verificar?token=${vtoken}`;
+      mailer.enviarVerificacion(socio, link).catch(() => {});
+    } catch (e) { console.error("[olimpistas] verificación de email no disponible:", e.message); }
     res.status(201).json({ socio, token });
   }));
 
@@ -118,6 +128,16 @@ function buildRouter() {
   r.get("/auth/yo", auth.requireSocio, wrap(async (req, res) => {
     const membresia = await store.getMembresia(req.socio.id);
     res.json({ socio: req.socio, membresia, progreso: perfilProgreso(req.socio) });
+  }));
+
+  // Verificación de email (link del correo). Tolerante: nunca tira error feo.
+  r.get("/auth/verificar", wrap(async (req, res) => {
+    let ok = false;
+    try {
+      const socio = req.query.token ? await store.getSocioByVerifToken(String(req.query.token)) : null;
+      if (socio) { await store.updateSocio(socio.id, { email_verificado: true, verif_token: null }); ok = true; }
+    } catch (e) { console.error("[olimpistas] verificar:", e.message); }
+    res.redirect("/miembro?verificado=" + (ok ? "1" : "0"));
   }));
 
   // ─── Perfil (enriquecimiento + barra de progreso) ────────────────────────────

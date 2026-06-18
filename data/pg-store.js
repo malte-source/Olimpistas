@@ -38,6 +38,10 @@ function createPgStore({ databaseUrl }) {
       const [s] = await sql`SELECT * FROM socios WHERE id = ${id} LIMIT 1`;
       return s || null;
     },
+    async getSocioByVerifToken(token) {
+      const [s] = await sql`SELECT * FROM socios WHERE verif_token = ${token} LIMIT 1`;
+      return s || null;
+    },
 
     // ── Estadísticas (contador + globo) ──
     async contarTotal() {

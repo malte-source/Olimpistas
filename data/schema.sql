@@ -21,8 +21,13 @@ CREATE TABLE IF NOT EXISTS socios (
   ciudad        TEXT DEFAULT '',
   lat           DOUBLE PRECISION,         -- ubicación exacta (opcional)
   lng           DOUBLE PRECISION,
+  email_verificado BOOLEAN NOT NULL DEFAULT false,
+  verif_token   TEXT,                     -- token de verificación de email
   creado        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- En una base YA creada, correr esta migración una vez:
+--   ALTER TABLE socios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT false,
+--                      ADD COLUMN IF NOT EXISTS verif_token TEXT;
 -- Acelera el agregado del contador/globo (GROUP BY pais_iso) a escala.
 CREATE INDEX IF NOT EXISTS idx_socios_pais ON socios(pais_iso);
 
