@@ -45,7 +45,7 @@ window.OLI_I18N = (function () {
       ob_ubic_h: "¿De dónde sos?", ob_ubic_p: "Aparecé en el mapa mundial de Olimpistas.",
       ob_pais: "País", ob_ciudad: "Ciudad",
       ob_listo_h: "¡Ya sos Olimpista! 🎉", ob_listo_p: "Este es tu carnet digital. Bienvenido al Decano.",
-      ob_ir: "Ir a mi cuenta",
+      ob_ir: "Ir a mi cuenta", ob_ver_mapa: "Ver mi bandera en el mapa 🚩",
     },
     en: {
       nav_login: "Log in", nav_join: "Become an Olimpista", nav_account: "My account", nav_back: "Back",
@@ -89,7 +89,7 @@ window.OLI_I18N = (function () {
       ob_ubic_h: "Where are you from?", ob_ubic_p: "Appear on the worldwide Olimpistas map.",
       ob_pais: "Country", ob_ciudad: "City",
       ob_listo_h: "You're an Olimpista! 🎉", ob_listo_p: "This is your digital card. Welcome to the Decano.",
-      ob_ir: "Go to my account",
+      ob_ir: "Go to my account", ob_ver_mapa: "See my flag on the map 🚩",
     },
   };
 

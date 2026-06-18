@@ -44,7 +44,7 @@
     if (_mapaCargado) return; _mapaCargado = true;
     await cargarCss("/assets/vendor/maplibre-gl.css");
     await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=20");
+    await cargarJs("/js/globe.js?v=22");
   }
 
   async function initIdiomaMoneda() {
@@ -92,7 +92,23 @@
       gl.setCountries(stats.porPais || []);                    // nivel mundo: 1 badge por país
       gl.setData(stats.puntos || stats.porPais || []);         // nivel ciudad: badges/banderas
       gl.pov({ lat: -23.4, lng: -58.4, zoom: 2.4 });           // arranca mostrando Sudamérica (PY destacado)
+      window.__oliGl = gl;
+      focarNuevo();                                            // si recién se inscribió, vuela a su ciudad
     };
+
+    // "Tu bandera aterrizó": tras inscribirse, vuela a su ciudad y la destaca.
+    function focarNuevo() {
+      const gl = window.__oliGl; if (!gl) return;
+      let info; try { info = JSON.parse(sessionStorage.getItem("oli_nuevo") || "null"); } catch (e) {}
+      if (!info) return;
+      try { sessionStorage.removeItem("oli_nuevo"); } catch (e) {}
+      let pt = (stats.puntos || []).find((p) => (p.ciudad || "").toLowerCase() === (info.ciudad || "").toLowerCase() && (!info.iso || p.iso === info.iso));
+      if (!pt) pt = (stats.porPais || []).find((p) => p.iso === info.iso);
+      if (!pt) return;
+      gl.destacar({ lat: pt.lat, lng: pt.lng, label: "¡Vos!" });
+    }
+    window.OLI_MUNDO_FOCAR = focarNuevo;
+
     if ("IntersectionObserver" in window && stage) {
       const io = new IntersectionObserver((ents) => {
         if (ents.some((e) => e.isIntersecting)) { io.disconnect(); construir(); }

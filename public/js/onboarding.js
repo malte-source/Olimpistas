@@ -5,7 +5,7 @@ window.OLI_ONB = (function () {
   const { api, carnet, makeQR } = window.OLI;
   const T = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
   const LANG = window.OLI_I18N ? window.OLI_I18N.lang() : "es";
-  let CONFIG = null, stream = null, fotoData = null, paso = 1, totalPasos = 4;
+  let CONFIG = null, stream = null, fotoData = null, paso = 1, totalPasos = 4, ubicSel = null;
 
   function paises() { return (CONFIG && CONFIG.paises) || []; }
 
@@ -167,6 +167,7 @@ window.OLI_ONB = (function () {
   }
   async function guardarUbic() {
     const pais = document.getElementById("obPais").value, ciudad = val("obCiudad");
+    ubicSel = { iso: pais, ciudad };
     try { if (pais || ciudad) await api("/perfil", { method: "PATCH", body: { pais, ciudad } }); } catch (e) {}
     irPaso(4);
   }
@@ -179,14 +180,26 @@ window.OLI_ONB = (function () {
     try { c = (await api("/carnet")).carnet; } catch (e) {}
     const qr = c ? makeQR(location.origin + "/c/" + encodeURIComponent(c.numero)) : "";
     const carnetHtml = c ? carnet({ tierSlug: c.tierSlug, tierNombre: c.tier, nombre: c.nombre, numero: c.numero, foto: c.foto, qr }) : "";
+    const hayMundo = !!document.getElementById("mundo");
     b.innerHTML = `
       <div class="ob-step ob-listo">
         <h2>${T("ob_listo_h")}</h2>
         <p class="ob-sub">${T("ob_listo_p")}</p>
         ${carnetHtml}
         <button class="btn btn-block ob-next" id="obIr">${T("ob_ir")}</button>
+        ${hayMundo ? `<button class="btn btn-ghost btn-block" id="obMapa" style="margin-top:10px">${T("ob_ver_mapa")}</button>` : ""}
       </div>`;
+    b.querySelector(".cn")?.classList.add("cn-reveal");
+    setTimeout(() => { try { window.OLI && OLI.confetti && OLI.confetti(); } catch (e) {} }, 250);
     b.querySelector("#obIr").onclick = () => { cerrar(); location.href = "/miembro"; };
+    const mapa = b.querySelector("#obMapa");
+    if (mapa) mapa.onclick = () => {
+      try { sessionStorage.setItem("oli_nuevo", JSON.stringify(ubicSel || {})); } catch (e) {}
+      cerrar();
+      const m = document.getElementById("mundo");
+      if (m) m.scrollIntoView({ behavior: "smooth" });
+      setTimeout(() => { if (window.OLI_MUNDO_FOCAR) window.OLI_MUNDO_FOCAR(); }, 1000);
+    };
   }
 
   const val = (id) => (document.getElementById(id)?.value || "").trim();

@@ -97,6 +97,42 @@ window.OLI = (function () {
     </div>`;
   }
 
+  // Confeti dorado/blanco/negro (canvas, sin librería). Para el momento "¡Ya sos Olimpista!".
+  function confetti(opts) {
+    opts = opts || {};
+    if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const colors = opts.colors || ["#c9a227", "#e7c64b", "#ffffff", "#1a1a1a"];
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cv = document.createElement("canvas"); cv.className = "oli-confetti";
+    document.body.appendChild(cv);
+    const ctx = cv.getContext("2d");
+    let W, H;
+    const resize = () => { W = cv.width = innerWidth * dpr; H = cv.height = innerHeight * dpr; cv.style.width = innerWidth + "px"; cv.style.height = innerHeight + "px"; };
+    resize();
+    const N = opts.count || 150, parts = [];
+    for (let i = 0; i < N; i++) parts.push({
+      x: W * (0.25 + 0.5 * Math.random()), y: H * (0.15 + 0.1 * Math.random()),
+      vx: (Math.random() - 0.5) * 15 * dpr, vy: (Math.random() * -13 - 5) * dpr, g: 0.36 * dpr,
+      w: (5 + Math.random() * 7) * dpr, h: (7 + Math.random() * 9) * dpr,
+      rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.45, c: colors[i % colors.length],
+    });
+    let t0 = null;
+    function frame(ts) {
+      if (!t0) t0 = ts; const dt = ts - t0;
+      ctx.clearRect(0, 0, W, H);
+      let alive = false;
+      for (const p of parts) {
+        p.vy += p.g; p.x += p.vx; p.y += p.vy; p.vx *= 0.992; p.rot += p.vr;
+        if (p.y < H + 40) alive = true;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, 1 - dt / 3000); ctx.fillStyle = p.c;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
+      }
+      if (alive && dt < 3400) requestAnimationFrame(frame); else cv.remove();
+    }
+    requestAnimationFrame(frame);
+  }
+
   // Tilt 3D + brillo en los carnets (.cn), en TODOS lados (landing, onboarding, miembro).
   // Delegado en document → funciona también con carnets renderizados dinámicamente.
   (function tilt3D() {
@@ -163,5 +199,5 @@ window.OLI = (function () {
     }
   });
 
-  return { api, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, currency, setCurrency, fmtMoney };
+  return { api, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, currency, setCurrency, fmtMoney, confetti };
 })();

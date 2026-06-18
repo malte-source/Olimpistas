@@ -134,7 +134,7 @@ window.OLI_GLOBE = (function () {
       ["mousedown", "touchstart", "wheel", "drag"].forEach((ev) => map.on(ev, pausar));
     }
 
-    let popup = null, ready = false, pendCiudades = null, pendPaises = null, _casasT = null;
+    let popup = null, ready = false, pendCiudades = null, pendPaises = null, _casasT = null, _vos = null;
     const UMBRAL_CASAS = 12; // las casas (punto exacto) aparecen recién a nivel calle
 
     // Genera y registra un medallón por país (mitad Olimpia / mitad país).
@@ -304,6 +304,21 @@ window.OLI_GLOBE = (function () {
         return this;
       },
       pov(p) { if (p) map.flyTo({ center: [p.lng, p.lat], zoom: p.zoom != null ? p.zoom : 2.4, duration: 1600 }); return this; },
+      // "Tu bandera aterrizó": vuela a la ubicación y deja caer un marcador destacado.
+      destacar(p) {
+        if (!p || p.lat == null) return this;
+        girando = false;
+        map.flyTo({ center: [p.lng, p.lat], zoom: p.zoom != null ? p.zoom : 8.5, duration: 2400, essential: true });
+        const node = document.createElement("div");
+        node.className = "mapa-vos";
+        node.innerHTML = `<img src="/assets/flag-olimpia.svg?v=4" alt="" /><span>${p.label || "¡Vos!"}</span>`;
+        if (_vos) { _vos.remove(); _vos = null; }
+        let puesto = false;
+        const poner = () => { if (puesto) return; puesto = true; _vos = new ML.Marker({ element: node, anchor: "bottom" }).setLngLat([p.lng, p.lat]).addTo(map); };
+        map.once("moveend", poner);
+        setTimeout(poner, 2600);
+        return this;
+      },
       stopRotation() { girando = false; return this; },
       raw: map,
     };
