@@ -46,6 +46,8 @@ window.OLI_I18N = (function () {
       ob_pais: "País", ob_ciudad: "Ciudad",
       ob_listo_h: "¡Ya sos Olimpista! 🎉", ob_listo_p: "Este es tu carnet digital. Bienvenido al Decano.",
       ob_ir: "Ir a mi cuenta", ob_ver_mapa: "Ver mi bandera en el mapa 🚩",
+      ob_cedula: "Cédula", ob_opcional: "(opcional)", ob_cedula_ph: "Si ya sos socio de Olimpia",
+      ob_socio_h: "¡Te reconocimos, sos del Decano! 🥇", ob_socio_p: "Como socio de Olimpia, tu carnet ya es Premium. ¡Bienvenido!",
     },
     en: {
       nav_login: "Log in", nav_join: "Become an Olimpista", nav_account: "My account", nav_back: "Back",
@@ -90,6 +92,8 @@ window.OLI_I18N = (function () {
       ob_pais: "Country", ob_ciudad: "City",
       ob_listo_h: "You're an Olimpista! 🎉", ob_listo_p: "This is your digital card. Welcome to the Decano.",
       ob_ir: "Go to my account", ob_ver_mapa: "See my flag on the map 🚩",
+      ob_cedula: "ID number", ob_opcional: "(optional)", ob_cedula_ph: "If you're already an Olimpia member",
+      ob_socio_h: "We recognized you — you're a Decano! 🥇", ob_socio_p: "As an Olimpia member, your card is already Premium. Welcome!",
     },
   };
 

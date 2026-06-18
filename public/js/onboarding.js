@@ -5,7 +5,7 @@ window.OLI_ONB = (function () {
   const { api, carnet, makeQR } = window.OLI;
   const T = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
   const LANG = window.OLI_I18N ? window.OLI_I18N.lang() : "es";
-  let CONFIG = null, stream = null, fotoData = null, paso = 1, totalPasos = 4, ubicSel = null;
+  let CONFIG = null, stream = null, fotoData = null, paso = 1, totalPasos = 4, ubicSel = null, reconocido = false;
 
   function paises() { return (CONFIG && CONFIG.paises) || []; }
 
@@ -51,6 +51,7 @@ window.OLI_ONB = (function () {
         <div class="ob-field"><label>${T("m_nombre")}</label><input id="obNombre" type="text" autocomplete="name" /></div>
         <div class="ob-field"><label>${T("m_email")}</label><input id="obEmail" type="email" autocomplete="email" /></div>
         <div class="ob-field"><label>${T("m_pass")}</label><input id="obPass" type="password" autocomplete="new-password" /></div>
+        <div class="ob-field"><label>${T("ob_cedula")} <span class="ob-opt">${T("ob_opcional")}</span></label><input id="obCedula" type="text" inputmode="numeric" autocomplete="off" placeholder="${T("ob_cedula_ph")}" /></div>
         <label class="consent"><input type="checkbox" id="obConsent" />
           <span>${T("consent_1")} <a href="/legal#terminos" target="_blank">${T("consent_terms")}</a> ${T("consent_and")} <a href="/legal#privacidad" target="_blank">${T("consent_privacy")}</a></span></label>
         <p class="ob-err" id="obErr"></p>
@@ -62,11 +63,15 @@ window.OLI_ONB = (function () {
   }
   async function crearCuenta() {
     const nombre = val("obNombre"), email = val("obEmail"), password = document.getElementById("obPass").value;
+    const cedula = val("obCedula");
     const err = document.getElementById("obErr"); err.textContent = "";
     if (!document.getElementById("obConsent").checked) { err.textContent = T("consent_err"); return; }
     const btn = document.getElementById("obCrear"); btn.disabled = true;
-    try { await api("/auth/registro", { method: "POST", body: { email, password, nombre } }); irPaso(2); }
-    catch (e) { err.textContent = e.message; btn.disabled = false; }
+    try {
+      const r = await api("/auth/registro", { method: "POST", body: { email, password, nombre, cedula } });
+      reconocido = !!(r && r.reconocido);
+      irPaso(2);
+    } catch (e) { err.textContent = e.message; btn.disabled = false; }
   }
 
   // ── Paso 2: foto (selfie en vivo o galería) ──
@@ -183,8 +188,8 @@ window.OLI_ONB = (function () {
     const hayMundo = !!document.getElementById("mundo");
     b.innerHTML = `
       <div class="ob-step ob-listo">
-        <h2>${T("ob_listo_h")}</h2>
-        <p class="ob-sub">${T("ob_listo_p")}</p>
+        <h2>${reconocido ? T("ob_socio_h") : T("ob_listo_h")}</h2>
+        <p class="ob-sub">${reconocido ? T("ob_socio_p") : T("ob_listo_p")}</p>
         ${carnetHtml}
         <button class="btn btn-block ob-next" id="obIr">${T("ob_ir")}</button>
         ${hayMundo ? `<button class="btn btn-ghost btn-block" id="obMapa" style="margin-top:10px">${T("ob_ver_mapa")}</button>` : ""}

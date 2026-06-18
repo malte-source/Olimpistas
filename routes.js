@@ -132,13 +132,29 @@ function buildRouter() {
     res.json({ flags });
   }));
 
+  // Reconoce a un socio del padrón oficial de Olimpia y lo sube a Premium.
+  // Devuelve true si lo reconoció (para que el front lo celebre).
+  async function reconocerSocio(socio, cedula) {
+    try {
+      if (!store.buscarPadron) return false;
+      const fila = await store.buscarPadron({ email: socio.email, cedula });
+      if (!fila) return false;
+      await store.setMembresia(socio.id, { tierSlug: "premium", ciclo: "anio" });
+      await store.updateSocio(socio.id, { es_socio_olimpia: true });
+      if (store.marcarPadronReclamado) await store.marcarPadronReclamado(fila.id, socio.id);
+      return true;
+    } catch (e) { console.error("[olimpistas] reconocerSocio:", e.message); return false; }
+  }
+
   // ─── Auth ───────────────────────────────────────────────────────────────────
   r.post("/auth/registro", wrap(async (req, res) => {
-    const { email, password, nombre } = req.body || {};
-    const { socio, token } = await auth.registrar({ email, password, nombre });
+    const { email, password, nombre, cedula } = req.body || {};
+    const { socio, token } = await auth.registrar({ email, password, nombre, cedula });
     setSessionCookie(res, token);
     // El registro = alta automática como Olimpista gratis (el embudo).
     await store.setMembresia(socio.id, { tierSlug: "olimpista", ciclo: "anio" });
+    // ¿Es socio del padrón oficial? → lo subimos a Premium automáticamente.
+    const reconocido = await reconocerSocio(socio, cedula);
     // Verificación de email (best-effort: nunca rompe el registro si falta la columna/proveedor).
     try {
       const vtoken = crypto.randomBytes(24).toString("base64url");
@@ -147,7 +163,15 @@ function buildRouter() {
       const link = `${proto}://${req.headers.host}/api/auth/verificar?token=${vtoken}`;
       mailer.enviarVerificacion(socio, link).catch(() => {});
     } catch (e) { console.error("[olimpistas] verificación de email no disponible:", e.message); }
-    res.status(201).json({ socio, token });
+    res.status(201).json({ socio, token, reconocido });
+  }));
+
+  // ¿Ya sos socio de Olimpia? Chequeo previo (sin crear cuenta) por email o cédula.
+  r.post("/auth/verificar-socio", wrap(async (req, res) => {
+    const { email, cedula } = req.body || {};
+    if (!store.buscarPadron) return res.json({ esSocio: false });
+    const fila = await store.buscarPadron({ email, cedula });
+    res.json({ esSocio: !!fila, nombre: fila ? (fila.nombre || "") : "", reclamado: fila ? !!fila.reclamado : false });
   }));
 
   r.post("/auth/login", wrap(async (req, res) => {

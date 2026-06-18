@@ -24,16 +24,38 @@ CREATE TABLE IF NOT EXISTS socios (
   email_verificado BOOLEAN NOT NULL DEFAULT false,
   verif_token   TEXT,                     -- token de verificación de email
   mostrar_exacto BOOLEAN NOT NULL DEFAULT false, -- gamificación: "bandera en mi casa" (punto exacto público)
+  cedula        TEXT DEFAULT '',          -- documento (opcional), para reconocer socios de Olimpia
+  es_socio_olimpia BOOLEAN NOT NULL DEFAULT false, -- reconocido contra el padrón oficial → Premium
   creado        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- En una base YA creada, correr esta migración una vez:
 --   ALTER TABLE socios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT false,
 --                      ADD COLUMN IF NOT EXISTS verif_token TEXT,
---                      ADD COLUMN IF NOT EXISTS mostrar_exacto BOOLEAN NOT NULL DEFAULT false;
+--                      ADD COLUMN IF NOT EXISTS mostrar_exacto BOOLEAN NOT NULL DEFAULT false,
+--                      ADD COLUMN IF NOT EXISTS cedula TEXT DEFAULT '',
+--                      ADD COLUMN IF NOT EXISTS es_socio_olimpia BOOLEAN NOT NULL DEFAULT false;
 -- Acelera el agregado del contador/globo (GROUP BY pais_iso) a escala.
 CREATE INDEX IF NOT EXISTS idx_socios_pais ON socios(pais_iso);
 -- Acelera la consulta de banderas "en tu casa" por recuadro (bbox) a zoom alto.
 CREATE INDEX IF NOT EXISTS idx_socios_exacto ON socios(mostrar_exacto) WHERE mostrar_exacto = true;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Padrón oficial de socios de Olimpia (base que aporta el club). Al registrarse,
+-- si el email o la cédula coinciden → se reconoce al socio y se sube a Premium.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS padron_olimpia (
+  id         TEXT PRIMARY KEY,
+  cedula     TEXT DEFAULT '',
+  email      TEXT DEFAULT '',
+  nombre     TEXT DEFAULT '',
+  telefono   TEXT DEFAULT '',
+  nro_socio  TEXT DEFAULT '',
+  reclamado  BOOLEAN NOT NULL DEFAULT false,  -- ya activó su cuenta en la app
+  socio_id   TEXT,                            -- a qué cuenta quedó vinculado
+  creado     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_padron_email  ON padron_olimpia(lower(email)) WHERE email <> '';
+CREATE INDEX IF NOT EXISTS idx_padron_cedula ON padron_olimpia(cedula) WHERE cedula <> '';
 
 CREATE TABLE IF NOT EXISTS sesiones (
   token     TEXT PRIMARY KEY,

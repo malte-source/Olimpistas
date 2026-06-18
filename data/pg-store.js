@@ -24,13 +24,28 @@ function createPgStore({ databaseUrl }) {
     _sql: sql,
 
     // ── Socios ──
-    async createSocio({ email, passwordHash, nombre, telefono }) {
+    async createSocio({ email, passwordHash, nombre, telefono, cedula }) {
       const id = uid("soc");
       const [s] = await sql`
-        INSERT INTO socios (id, email, password_hash, nombre, telefono)
-        VALUES (${id}, ${email.toLowerCase()}, ${passwordHash}, ${nombre || ""}, ${telefono || ""})
+        INSERT INTO socios (id, email, password_hash, nombre, telefono, cedula)
+        VALUES (${id}, ${email.toLowerCase()}, ${passwordHash}, ${nombre || ""}, ${telefono || ""}, ${cedula || ""})
         RETURNING *`;
       return s;
+    },
+    // ── Padrón oficial de Olimpia (reconocer socios → Premium) ──
+    async buscarPadron({ email, cedula }) {
+      const em = (email || "").toLowerCase().trim();
+      const ced = (cedula || "").replace(/\D/g, "");
+      if (!em && !ced) return null;
+      const [r] = await sql`
+        SELECT * FROM padron_olimpia
+        WHERE (${em} <> '' AND lower(email) = ${em})
+           OR (${ced} <> '' AND regexp_replace(cedula, '\D', '', 'g') = ${ced})
+        LIMIT 1`;
+      return r || null;
+    },
+    async marcarPadronReclamado(id, socioId) {
+      await sql`UPDATE padron_olimpia SET reclamado = true, socio_id = ${socioId} WHERE id = ${id}`;
     },
     async getSocioByEmail(email) {
       const [s] = await sql`SELECT * FROM socios WHERE email = ${String(email).toLowerCase()} LIMIT 1`;

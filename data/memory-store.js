@@ -118,7 +118,7 @@ function createMemoryStore({ filePath = null } = {}) {
     kind: "memory",
 
     // ── Socios ──
-    async createSocio({ email, passwordHash, nombre, telefono }) {
+    async createSocio({ email, passwordHash, nombre, telefono, cedula }) {
       const socio = {
         id: uid("soc"), email: email.toLowerCase(), password_hash: passwordHash,
         nombre: nombre || "", telefono: telefono || "",
@@ -126,10 +126,24 @@ function createMemoryStore({ filePath = null } = {}) {
         whatsapp: "", foto: "", pais: "", pais_iso: "", ciudad: "",
         lat: null, lng: null,   // ubicación exacta (opcional) para el globo
         email_verificado: false, verif_token: null,
+        cedula: cedula || "", es_socio_olimpia: false,
         creado: nowIso(),
       };
       db.socios.push(socio); persist();
       return socio;
+    },
+    // ── Padrón oficial (en memoria, para dev/test) ──
+    async buscarPadron({ email, cedula }) {
+      const em = (email || "").toLowerCase().trim();
+      const ced = (cedula || "").replace(/\D/g, "");
+      if (!em && !ced) return null;
+      return (db.padron || []).find((p) =>
+        (em && (p.email || "").toLowerCase() === em) ||
+        (ced && (p.cedula || "").replace(/\D/g, "") === ced)) || null;
+    },
+    async marcarPadronReclamado(id, socioId) {
+      const p = (db.padron || []).find((x) => x.id === id);
+      if (p) { p.reclamado = true; p.socio_id = socioId; persist(); }
     },
     async getSocioByEmail(email) {
       return db.socios.find(s => s.email === String(email).toLowerCase()) || null;
