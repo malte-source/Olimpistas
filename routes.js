@@ -63,6 +63,29 @@ function buildRouter() {
   // País del visitante (prefill por IP / cabecera de CDN).
   r.get("/geo", wrap(async (req, res) => res.json({ pais: await geo.detectarPais(req) })));
 
+  // ─── Rampa de lanzamiento ────────────────────────────────────────────────
+  // El agregado (demo) representa el UNIVERSO objetivo. Para que en el lanzamiento
+  // el número no arranque "frío", se muestra una fracción que sube con el tiempo
+  // hasta 100% del universo, manteniendo la proporción por país/ciudad.
+  // Se controla por env (cambiables en vivo, sin redeploy):
+  //   RAMP_INICIO  ISO date del arranque (sin esto → factor 1, muestra el universo full)
+  //   RAMP_HORAS   duración de la subida (default 60 ≈ 2,5 días)
+  //   RAMP_DESDE   fracción inicial 0..1 (default 0.25)
+  //   RAMP_CURVA   >1 arranca más rápido / front-loaded (default 1.6)
+  function rampaFactor() {
+    const ini = process.env.RAMP_INICIO;
+    if (!ini) return 1;
+    const t0 = Date.parse(ini);
+    if (isNaN(t0)) return 1;
+    const horas = Number(process.env.RAMP_HORAS || 60);
+    const desde = Math.min(1, Math.max(0, Number(process.env.RAMP_DESDE || 0.25)));
+    const curva = Number(process.env.RAMP_CURVA || 1.6);
+    const p = (Date.now() - t0) / (horas * 3600000);
+    if (p <= 0) return desde;
+    if (p >= 1) return 1;
+    return desde + (1 - desde) * Math.pow(p, 1 / curva);
+  }
+
   // ─── Stats: contador global + datos del globo (agregado, cacheado) ───────────
   let _stats = null, _statsTs = 0;
   async function getStats() {
@@ -70,6 +93,7 @@ function buildRouter() {
     const [totalReal, porPaisRaw, porCiudadRaw, demo] = await Promise.all([
       store.contarTotal(), store.contarPorPais(), store.contarPorCiudad(), store.demoAgregado(),
     ]);
+    const fRampa = rampaFactor(); // fracción del universo a mostrar ahora
 
     // ── Merge miembros REALES + agregado de demo, por país y por ciudad ──
     const paisMap = new Map();   // iso → count
@@ -85,9 +109,11 @@ function buildRouter() {
       ciudadMap.set(k, e);
     };
     for (const r of porCiudadRaw) upCiudad(r.pais_iso, r.ciudad, r.count, r.lat, r.lng);
-    for (const r of demo) { add(paisMap, r.pais_iso, r.count); upCiudad(r.pais_iso, r.ciudad, r.count, r.lat, r.lng); }
+    // Agregado escalado por la rampa de lanzamiento.
+    const escala = (n) => Math.round(Number(n || 0) * fRampa);
+    for (const r of demo) { const c = escala(r.count); add(paisMap, r.pais_iso, c); upCiudad(r.pais_iso, r.ciudad, c, r.lat, r.lng); }
 
-    const demoTotal = demo.reduce((s, r) => s + Number(r.count || 0), 0);
+    const demoTotal = demo.reduce((s, r) => s + escala(r.count), 0);
     const total = totalReal + demoTotal;
 
     const porPais = [...paisMap.entries()]
@@ -95,7 +121,7 @@ function buildRouter() {
         const c = paisCentroide(iso);
         return c ? { iso, nombre: paisNombre(iso), count, lat: c.lat, lng: c.lng } : null;
       })
-      .filter(Boolean)
+      .filter((p) => p && p.count > 0)
       .sort((a, b) => b.count - a.count);
 
     // Puntos del globo (banderas por ciudad): coords exactas o centroide del país.
@@ -104,7 +130,7 @@ function buildRouter() {
         const c = paisCentroide(r.iso);
         const lat = r.lat != null ? r.lat : (c ? c.lat : null);
         const lng = r.lng != null ? r.lng : (c ? c.lng : null);
-        if (lat == null) return null;
+        if (lat == null || r.count <= 0) return null;
         return { iso: r.iso, pais: paisNombre(r.iso), ciudad: r.ciudad, count: r.count, lat, lng };
       })
       .filter(Boolean)

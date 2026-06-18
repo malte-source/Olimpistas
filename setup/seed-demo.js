@@ -17,12 +17,26 @@
 const crypto = require("crypto");
 const SEED_DOMAIN = "demo.olimpistas.test";
 
-// ── Cantidades REALES por país (total = 1.044.828) ──────────────────────────
+// ── Proporciones por país (referencia real). Se escalan al TOTAL_OBJETIVO. ──
 const PAIS_TOTAL = {
   PY: 1024501, AR: 7809, BR: 5009, ES: 4055, US: 2509, JP: 234, MX: 210,
   CO: 128, IT: 84, CA: 74, PE: 44, AU: 43, SE: 28, DE: 22, NZ: 21, VE: 18,
   CL: 14, PT: 11, TR: 11, RU: 2, EC: 1,
 };
+// Total mundial objetivo (escala las proporciones de arriba). 1M era exagerado.
+const TOTAL_OBJETIVO = Number(process.env.SEED_TOTAL || 180000);
+// Escala PAIS_TOTAL al objetivo manteniendo proporciones (mín. 1 por país; ajuste a PY).
+function paisTotales() {
+  const sum = Object.values(PAIS_TOTAL).reduce((s, v) => s + v, 0);
+  const out = {}; let acc = 0, bigIso = "PY", bigVal = -1;
+  for (const [iso, v] of Object.entries(PAIS_TOTAL)) {
+    out[iso] = Math.max(1, Math.round((v / sum) * TOTAL_OBJETIVO));
+    acc += out[iso];
+    if (v > bigVal) { bigVal = v; bigIso = iso; }
+  }
+  out[bigIso] += TOTAL_OBJETIVO - acc; // clava el total exacto
+  return out;
+}
 
 // ── Ciudades por país con peso relativo (reparte el total del país) ─────────
 //    [iso, ciudad, lat, lng, peso]
@@ -189,7 +203,7 @@ function planificarAgregado() {
   const porPais = {};
   for (const c of CIUDADES) (porPais[c[0]] = porPais[c[0]] || []).push(c);
   const filas = [];
-  for (const [iso, total] of Object.entries(PAIS_TOTAL)) {
+  for (const [iso, total] of Object.entries(paisTotales())) {
     const ciudades = porPais[iso];
     if (!ciudades) { console.error("⚠ Sin ciudades para", iso); continue; }
     const pesoSum = ciudades.reduce((s, c) => s + c[4], 0);
