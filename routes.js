@@ -142,6 +142,7 @@ function buildRouter() {
       await store.setMembresia(socio.id, { tierSlug: "premium", ciclo: "anio" });
       await store.updateSocio(socio.id, { es_socio_olimpia: true });
       if (store.marcarPadronReclamado) await store.marcarPadronReclamado(fila.id, socio.id);
+      mailer.enviarReconocido(socio).catch(() => {}); // best-effort
       return true;
     } catch (e) { console.error("[olimpistas] reconocerSocio:", e.message); return false; }
   }
