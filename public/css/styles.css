@@ -248,9 +248,18 @@ button { font-family: inherit; cursor: pointer; }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0; }
 .tab { padding: 9px 18px; border-radius: 999px; border: 1px solid var(--linea); background: transparent; color: var(--gris); font-size: 14px; }
 .tab.active { background: var(--blanco); color: #000; border-color: var(--blanco); font-weight: 600; }
-.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--oro); color:#1a1500;
-  padding: 12px 22px; border-radius: 10px; font-weight: 600; z-index: 200; opacity: 0; transition: opacity .2s; pointer-events: none; }
-.toast.show { opacity: 1; }
+.toast { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; z-index: 200;
+  transform: translate(-50%, 18px); opacity: 0; pointer-events: none; max-width: calc(100vw - 32px);
+  background: rgba(20,20,27,.96); color: #fff; border: 1px solid var(--oro); backdrop-filter: blur(8px);
+  padding: 12px 20px 12px 15px; border-radius: 12px; font-weight: 600; font-size: 14px; box-shadow: var(--sombra);
+  display: flex; align-items: center; gap: 10px; transition: opacity .25s ease, transform .25s cubic-bezier(.2,.8,.2,1); }
+.toast::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--oro);
+  box-shadow: 0 0 8px var(--oro); flex: 0 0 auto; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+/* Foco accesible y prolijo en todo lo interactivo. */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, .tab:focus-visible, .nav-sw:focus-visible {
+  outline: 2px solid var(--oro-claro); outline-offset: 2px; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: opacity .2s; } }
 .hidden { display: none !important; }
 
 /* ─── Safe-area (notch / barra de gestos en PWA standalone) ───────────────── */
