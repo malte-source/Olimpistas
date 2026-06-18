@@ -158,6 +158,8 @@
 
   function empezarGratis() {
     if (SESSION) return (location.href = "/miembro");
+    // Inscripción guiada (mobile-first, con selfie). Fallback al modal si no cargó.
+    if (window.OLI_ONB) return OLI_ONB.start({ config: CONFIG, onLogin: () => openModal("login") });
     openModal("registro");
   }
 

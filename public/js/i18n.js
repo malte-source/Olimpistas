@@ -36,6 +36,16 @@ window.OLI_I18N = (function () {
       // Área de miembro (tabs + comunes)
       tab_perfil: "Mi perfil", tab_membresia: "Mi membresía", tab_media: "Olimpia Media+",
       tab_sorteos: "Sorteos", tab_preventas: "Preventas", tab_carnet: "Mi carnet", logout: "Salir",
+      // Onboarding (inscripción guiada)
+      ob_cuenta_h: "Hacete Olimpista", ob_cuenta_p: "Creá tu cuenta gratis en 30 segundos.",
+      ob_crear: "Crear mi cuenta",
+      ob_foto_h: "Sumale tu cara", ob_foto_p: "Sacate una selfie o subí una foto para tu carnet.",
+      ob_selfie: "Tomar selfie", ob_galeria: "Subir foto", ob_capturar: "Capturar", ob_retomar: "Cambiar foto",
+      ob_siguiente: "Siguiente", ob_omitir: "Omitir por ahora",
+      ob_ubic_h: "¿De dónde sos?", ob_ubic_p: "Aparecé en el mapa mundial de Olimpistas.",
+      ob_pais: "País", ob_ciudad: "Ciudad",
+      ob_listo_h: "¡Ya sos Olimpista! 🎉", ob_listo_p: "Este es tu carnet digital. Bienvenido al Decano.",
+      ob_ir: "Ir a mi cuenta",
     },
     en: {
       nav_login: "Log in", nav_join: "Become an Olimpista", nav_account: "My account", nav_back: "Back",
@@ -70,6 +80,16 @@ window.OLI_I18N = (function () {
       proximamente: "Coming soon",
       tab_perfil: "My profile", tab_membresia: "My membership", tab_media: "Olimpia Media+",
       tab_sorteos: "Giveaways", tab_preventas: "Presales", tab_carnet: "My card", logout: "Log out",
+      // Onboarding
+      ob_cuenta_h: "Become an Olimpista", ob_cuenta_p: "Create your free account in 30 seconds.",
+      ob_crear: "Create my account",
+      ob_foto_h: "Add your face", ob_foto_p: "Take a selfie or upload a photo for your card.",
+      ob_selfie: "Take selfie", ob_galeria: "Upload photo", ob_capturar: "Capture", ob_retomar: "Change photo",
+      ob_siguiente: "Next", ob_omitir: "Skip for now",
+      ob_ubic_h: "Where are you from?", ob_ubic_p: "Appear on the worldwide Olimpistas map.",
+      ob_pais: "Country", ob_ciudad: "City",
+      ob_listo_h: "You're an Olimpista! 🎉", ob_listo_p: "This is your digital card. Welcome to the Decano.",
+      ob_ir: "Go to my account",
     },
   };
 
