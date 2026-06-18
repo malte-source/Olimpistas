@@ -252,6 +252,21 @@ button { font-family: inherit; cursor: pointer; }
 .ubic-line .ed-ubic { color: var(--oro); cursor: pointer; text-decoration: underline; }
 .ubic-line.ubic-falta { color: var(--oro-claro); }
 
+/* Modal de foto (cámara en vivo / galería) — reutilizable en perfil y demás. */
+.foto-modal { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,.72); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; padding: 20px; animation: obIn .25s ease; }
+.foto-card { background: var(--negro-2); border: 1px solid var(--linea); border-radius: var(--radio);
+  padding: 26px 22px 22px; width: 340px; max-width: 100%; text-align: center; position: relative; box-shadow: var(--sombra); }
+.foto-x { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,.06); border: 1px solid var(--linea);
+  color: #fff; width: 34px; height: 34px; border-radius: 50%; font-size: 15px; }
+.foto-vis { width: 220px; height: 220px; margin: 0 auto 18px; border-radius: 50%; overflow: hidden;
+  border: 3px solid var(--oro); box-shadow: var(--glow); background: #0d0d13; }
+.foto-ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 60px; color: var(--gris-2); }
+.foto-vis video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.foto-acts { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.foto-acts .btn { padding: 12px 18px; }
+.foto-btn { background: none; border: none; color: var(--oro); font-weight: 600; font-size: 13px; cursor: pointer; padding: 6px 0; }
+
 /* ─── Header socio ────────────────────────────────────────────────────────── */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--linea); }
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 28px 0; }

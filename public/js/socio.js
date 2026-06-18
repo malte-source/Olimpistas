@@ -2,7 +2,7 @@
    preventas, carnet. Bilingüe (OLI_I18N) + UX premium (skeletons, transiciones,
    anillo de progreso). El foco del embudo es completar el perfil. */
 (function () {
-  const { api, gs, artSvg, toast, yo, carnet: carnetHTML, makeQR } = window.OLI;
+  const { api, gs, artSvg, toast, yo, carnet: carnetHTML, makeQR, fotoModal } = window.OLI;
   const T = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
   const LANG = window.OLI_I18N ? window.OLI_I18N.lang() : "es";
   const LOC = LANG === "en" ? "en-US" : "es-PY";
@@ -95,8 +95,7 @@
         <div class="perfil">
           <div class="foto-up">
             ${avatar}
-            <label for="fotoInput">${T("m_foto_cambiar")}</label>
-            <input type="file" id="fotoInput" accept="image/*" />
+            <button type="button" class="foto-btn" id="cambiarFoto">📷 ${T("m_foto_cambiar")}</button>
           </div>
           <div>
             <div class="row-2">
@@ -129,7 +128,7 @@
         </div>
       </div>`;
     document.getElementById("guardarPerfil").onclick = guardarPerfil;
-    document.getElementById("fotoInput").onchange = subirFoto;
+    document.getElementById("cambiarFoto").onclick = () => fotoModal(subirFoto);
     document.getElementById("btnGeo").onclick = usarUbicacion;
     if (!s.pais_iso) prefillPaisPorIP();
     initPerfilGlobo();
@@ -193,34 +192,14 @@
     } catch (e) { toast(e.message); }
   }
 
-  async function subirFoto(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function subirFoto(dataUrl) {
+    if (!dataUrl) return;
     try {
-      const dataUrl = await redimensionar(file, 256);
       const r = await api("/perfil/foto", { method: "POST", body: { foto: dataUrl } });
       SESSION.socio.foto = r.foto; SESSION.progreso = r.progreso;
       document.getElementById("avatar").outerHTML = `<img class="avatar" id="avatar" src="${r.foto}" alt="" />`;
       renderProgreso(); toast(T("m_foto_ok"));
     } catch (err) { toast(err.message); }
-  }
-
-  function redimensionar(file, size) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement("canvas"); c.width = c.height = size;
-        const ctx = c.getContext("2d");
-        const min = Math.min(img.width, img.height), sx = (img.width - min) / 2, sy = (img.height - min) / 2;
-        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
-        resolve(c.toDataURL("image/jpeg", 0.85));
-      };
-      img.onerror = () => reject(new Error("No se pudo leer la imagen"));
-      const fr = new FileReader();
-      fr.onload = () => (img.src = fr.result);
-      fr.onerror = () => reject(new Error("No se pudo leer el archivo"));
-      fr.readAsDataURL(file);
-    });
   }
 
   // ─── Mi membresía ────────────────────────────────────────────────────────────

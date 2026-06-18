@@ -202,5 +202,60 @@ window.OLI = (function () {
     }
   });
 
-  return { api, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, currency, setCurrency, fmtMoney, confetti };
+  // Selector de foto reutilizable: cámara en vivo (selfie) o galería. Devuelve dataURL 256px.
+  function fotoModal(onFoto) {
+    let stream = null;
+    const ov = document.createElement("div");
+    ov.className = "foto-modal";
+    ov.innerHTML = `
+      <div class="foto-card">
+        <button class="foto-x" type="button" aria-label="Cerrar">✕</button>
+        <div class="foto-vis"><div class="foto-ph" id="fph">📷</div><video id="fvid" playsinline autoplay muted hidden></video></div>
+        <div class="foto-acts" id="facts">
+          <button class="btn" id="fcam" type="button">📸 Tomar foto</button>
+          <button class="btn btn-ghost" id="fgalb" type="button">🖼️ Galería</button>
+          <input type="file" id="fgal" accept="image/*" hidden />
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const $ = (s) => ov.querySelector(s);
+    const cerrar = () => { if (stream) stream.getTracks().forEach((t) => t.stop()); ov.remove(); };
+    $(".foto-x").onclick = cerrar;
+    ov.addEventListener("click", (e) => { if (e.target === ov) cerrar(); });
+    $("#fgalb").onclick = () => $("#fgal").click();
+    $("#fgal").onchange = (e) => { const f = e.target.files[0]; if (f) procesar(f); };
+    $("#fcam").onclick = abrirCam;
+    function cuadrar(src, w, h) {
+      const c = document.createElement("canvas"), s = 256; c.width = c.height = s;
+      const m = Math.min(w, h), x = c.getContext("2d");
+      x.drawImage(src, (w - m) / 2, (h - m) / 2, m, m, 0, 0, s, s);
+      return c.toDataURL("image/jpeg", 0.85);
+    }
+    function abrirCam() {
+      if (!navigator.mediaDevices?.getUserMedia) return fallbackNativo();
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false }).then((s) => {
+        stream = s; const v = $("#fvid"); v.srcObject = s; v.hidden = false; $("#fph").hidden = true;
+        $("#facts").innerHTML = `<button class="btn" id="fshoot" type="button">Capturar</button><button class="btn btn-ghost" id="fcancel" type="button">✕</button>`;
+        $("#fshoot").onclick = capturar; $("#fcancel").onclick = cerrar;
+      }).catch(fallbackNativo);
+    }
+    function fallbackNativo() {
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.capture = "user";
+      inp.onchange = (ev) => { const f = ev.target.files[0]; if (f) procesar(f); }; inp.click();
+    }
+    function capturar() {
+      const v = $("#fvid"), c = document.createElement("canvas"), s = 256; c.width = c.height = s;
+      const vw = v.videoWidth, vh = v.videoHeight, m = Math.min(vw, vh), x = c.getContext("2d");
+      x.translate(s, 0); x.scale(-1, 1); x.drawImage(v, (vw - m) / 2, (vh - m) / 2, m, m, 0, 0, s, s);
+      finalizar(c.toDataURL("image/jpeg", 0.85));
+    }
+    function procesar(file) {
+      const img = new Image();
+      img.onload = () => finalizar(cuadrar(img, img.width, img.height));
+      const fr = new FileReader(); fr.onload = () => (img.src = fr.result); fr.readAsDataURL(file);
+    }
+    function finalizar(dataUrl) { cerrar(); if (onFoto) onFoto(dataUrl); }
+  }
+
+  return { api, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, currency, setCurrency, fmtMoney, confetti, fotoModal };
 })();
