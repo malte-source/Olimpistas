@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS socios (
   id            TEXT PRIMARY KEY,
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  nombre        TEXT DEFAULT '',
+  nombre        TEXT DEFAULT '',          -- nombre de pila
+  apellido      TEXT DEFAULT '',          -- apellido (separado, para orden de base)
   telefono      TEXT DEFAULT '',
   -- Campos de enriquecimiento (barra de progreso de perfil):
   whatsapp      TEXT DEFAULT '',
@@ -33,7 +34,8 @@ CREATE TABLE IF NOT EXISTS socios (
 --                      ADD COLUMN IF NOT EXISTS verif_token TEXT,
 --                      ADD COLUMN IF NOT EXISTS mostrar_exacto BOOLEAN NOT NULL DEFAULT false,
 --                      ADD COLUMN IF NOT EXISTS cedula TEXT DEFAULT '',
---                      ADD COLUMN IF NOT EXISTS es_socio_olimpia BOOLEAN NOT NULL DEFAULT false;
+--                      ADD COLUMN IF NOT EXISTS es_socio_olimpia BOOLEAN NOT NULL DEFAULT false,
+--                      ADD COLUMN IF NOT EXISTS apellido TEXT DEFAULT '';
 -- Acelera el agregado del contador/globo (GROUP BY pais_iso) a escala.
 CREATE INDEX IF NOT EXISTS idx_socios_pais ON socios(pais_iso);
 -- Acelera la consulta de banderas "en tu casa" por recuadro (bbox) a zoom alto.
@@ -48,6 +50,7 @@ CREATE TABLE IF NOT EXISTS padron_olimpia (
   cedula     TEXT DEFAULT '',
   email      TEXT DEFAULT '',
   nombre     TEXT DEFAULT '',
+  apellido   TEXT DEFAULT '',
   telefono   TEXT DEFAULT '',
   nro_socio  TEXT DEFAULT '',
   reclamado  BOOLEAN NOT NULL DEFAULT false,  -- ya activó su cuenta en la app

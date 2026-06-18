@@ -148,8 +148,8 @@ function buildRouter() {
 
   // ─── Auth ───────────────────────────────────────────────────────────────────
   r.post("/auth/registro", wrap(async (req, res) => {
-    const { email, password, nombre, cedula } = req.body || {};
-    const { socio, token } = await auth.registrar({ email, password, nombre, cedula });
+    const { email, password, nombre, apellido, cedula } = req.body || {};
+    const { socio, token } = await auth.registrar({ email, password, nombre, apellido, cedula });
     setSessionCookie(res, token);
     // El registro = alta automática como Olimpista gratis (el embudo).
     await store.setMembresia(socio.id, { tierSlug: "olimpista", ciclo: "anio" });
@@ -210,7 +210,7 @@ function buildRouter() {
   r.patch("/perfil", auth.requireSocio, wrap(async (req, res) => {
     const b = req.body || {};
     const patch = {};
-    for (const key of ["nombre", "whatsapp", "ciudad"]) {
+    for (const key of ["nombre", "apellido", "whatsapp", "ciudad"]) {
       if (typeof b[key] === "string") patch[key] = b[key].trim().slice(0, 120);
     }
     // País: acepta código ISO ("PY") o nombre ("Paraguay"); guardamos iso + nombre.
@@ -375,7 +375,7 @@ function buildRouter() {
     res.json({
       carnet: {
         socioId: req.socio.id,
-        nombre: req.socio.nombre || req.socio.email,
+        nombre: [req.socio.nombre, req.socio.apellido].filter(Boolean).join(" ") || req.socio.email,
         foto: req.socio.foto || "",
         tier: tier?.nombre || membresia.tier_slug,
         tierSlug: membresia.tier_slug,

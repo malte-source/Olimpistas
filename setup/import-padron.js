@@ -18,7 +18,8 @@ const crypto = require("crypto");
 const MAP = {
   email: ["email", "correo", "e-mail", "mail", "e mail"],
   cedula: ["cedula", "cédula", "ci", "documento", "doc", "dni", "nro documento"],
-  nombre: ["nombre completo", "nombre y apellido", "apellido y nombre", "nombre", "name", "socio"],
+  apellido: ["apellido", "apellidos", "last name", "surname"],
+  nombre: ["nombre completo", "nombre y apellido", "apellido y nombre", "nombres", "nombre", "first name", "name", "socio"],
   telefono: ["telefono", "teléfono", "celular", "whatsapp", "phone", "tel", "movil", "móvil"],
   nro_socio: ["nro_socio", "nro socio", "numero de socio", "n° socio", "nº socio", "carnet", "matricula", "matrícula", "socio nro"],
 };
@@ -45,7 +46,7 @@ function detectar(headers) {
     for (let i = 0; i < norm.length; i++) if (alts.some((a) => norm[i].includes(a))) return i;
     return -1;
   };
-  return { email: find(MAP.email), cedula: find(MAP.cedula), nombre: find(MAP.nombre), telefono: find(MAP.telefono), nro_socio: find(MAP.nro_socio) };
+  return { email: find(MAP.email), cedula: find(MAP.cedula), apellido: find(MAP.apellido), nombre: find(MAP.nombre), telefono: find(MAP.telefono), nro_socio: find(MAP.nro_socio) };
 }
 
 const limpiarCed = (s) => (s || "").replace(/\D/g, "");
@@ -62,9 +63,16 @@ function leer(file) {
     if (!email && !cedula) continue;
     const clave = email || ("ced:" + cedula);
     if (vistos.has(clave)) continue; vistos.add(clave);
+    let nombre = get(r, idx.nombre), apellido = get(r, idx.apellido);
+    // Si no hay columna de apellido pero el nombre viene completo, parto por el último espacio.
+    if (!apellido && idx.apellido < 0 && /\s/.test(nombre)) {
+      const parts = nombre.split(/\s+/);
+      apellido = parts.pop();
+      nombre = parts.join(" ");
+    }
     filas.push({
       id: "pad_" + crypto.randomBytes(7).toString("hex"),
-      cedula, email, nombre: get(r, idx.nombre), telefono: get(r, idx.telefono), nro_socio: get(r, idx.nro_socio),
+      cedula, email, nombre, apellido, telefono: get(r, idx.telefono), nro_socio: get(r, idx.nro_socio),
     });
   }
   return { headers, idx, filas };
@@ -87,6 +95,7 @@ async function main() {
   console.log(`  email    → ${idx.email >= 0 ? headers[idx.email] : "(no encontrada)"}`);
   console.log(`  cédula   → ${idx.cedula >= 0 ? headers[idx.cedula] : "(no encontrada)"}`);
   console.log(`  nombre   → ${idx.nombre >= 0 ? headers[idx.nombre] : "(no encontrada)"}`);
+  console.log(`  apellido → ${idx.apellido >= 0 ? headers[idx.apellido] : "(se parte del nombre completo)"}`);
   console.log(`  teléfono → ${idx.telefono >= 0 ? headers[idx.telefono] : "(no encontrada)"}`);
   console.log(`  nro socio→ ${idx.nro_socio >= 0 ? headers[idx.nro_socio] : "(no encontrada)"}`);
   const conEmail = filas.filter((f) => f.email).length, conCed = filas.filter((f) => f.cedula).length;
@@ -103,12 +112,13 @@ async function main() {
   try {
     await sql`CREATE TABLE IF NOT EXISTS padron_olimpia (
       id TEXT PRIMARY KEY, cedula TEXT DEFAULT '', email TEXT DEFAULT '', nombre TEXT DEFAULT '',
-      telefono TEXT DEFAULT '', nro_socio TEXT DEFAULT '', reclamado BOOLEAN NOT NULL DEFAULT false,
+      apellido TEXT DEFAULT '', telefono TEXT DEFAULT '', nro_socio TEXT DEFAULT '', reclamado BOOLEAN NOT NULL DEFAULT false,
       socio_id TEXT, creado TIMESTAMPTZ NOT NULL DEFAULT now())`;
+    await sql`ALTER TABLE padron_olimpia ADD COLUMN IF NOT EXISTS apellido TEXT DEFAULT ''`;
     await sql`CREATE INDEX IF NOT EXISTS idx_padron_email ON padron_olimpia(lower(email)) WHERE email <> ''`;
     await sql`CREATE INDEX IF NOT EXISTS idx_padron_cedula ON padron_olimpia(cedula) WHERE cedula <> ''`;
     if (args.includes("--reset")) { await sql`TRUNCATE padron_olimpia`; console.log("Padrón vaciado (--reset)."); }
-    const COLS = ["id", "cedula", "email", "nombre", "telefono", "nro_socio"];
+    const COLS = ["id", "cedula", "email", "nombre", "apellido", "telefono", "nro_socio"];
     for (let i = 0; i < filas.length; i += 1000) {
       await sql`INSERT INTO padron_olimpia ${sql(filas.slice(i, i + 1000), ...COLS)}`;
       console.log(`  importadas ${Math.min(i + 1000, filas.length)} / ${filas.length}`);

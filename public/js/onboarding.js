@@ -48,7 +48,8 @@ window.OLI_ONB = (function () {
       <div class="ob-step">
         <h2>${T("ob_cuenta_h")}</h2>
         <p class="ob-sub">${T("ob_cuenta_p")}</p>
-        <div class="ob-field"><label>${T("m_nombre")}</label><input id="obNombre" type="text" autocomplete="name" /></div>
+        <div class="ob-field"><label>${T("m_nombre")}</label><input id="obNombre" type="text" autocomplete="given-name" /></div>
+        <div class="ob-field"><label>${T("m_apellido")}</label><input id="obApellido" type="text" autocomplete="family-name" /></div>
         <div class="ob-field"><label>${T("m_email")}</label><input id="obEmail" type="email" autocomplete="email" /></div>
         <div class="ob-field"><label>${T("m_pass")}</label><input id="obPass" type="password" autocomplete="new-password" /></div>
         <div class="ob-field"><label>${T("ob_cedula")} <span class="ob-opt">${T("ob_opcional")}</span></label><input id="obCedula" type="text" inputmode="numeric" autocomplete="off" placeholder="${T("ob_cedula_ph")}" /></div>
@@ -62,13 +63,13 @@ window.OLI_ONB = (function () {
     b.querySelector("#obLogin").onclick = () => { cerrar(); if (onLogin) onLogin(); };
   }
   async function crearCuenta() {
-    const nombre = val("obNombre"), email = val("obEmail"), password = document.getElementById("obPass").value;
+    const nombre = val("obNombre"), apellido = val("obApellido"), email = val("obEmail"), password = document.getElementById("obPass").value;
     const cedula = val("obCedula");
     const err = document.getElementById("obErr"); err.textContent = "";
     if (!document.getElementById("obConsent").checked) { err.textContent = T("consent_err"); return; }
     const btn = document.getElementById("obCrear"); btn.disabled = true;
     try {
-      const r = await api("/auth/registro", { method: "POST", body: { email, password, nombre, cedula } });
+      const r = await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, cedula } });
       reconocido = !!(r && r.reconocido);
       irPaso(2);
     } catch (e) { err.textContent = e.message; btn.disabled = false; }

@@ -118,10 +118,10 @@ function createMemoryStore({ filePath = null } = {}) {
     kind: "memory",
 
     // ── Socios ──
-    async createSocio({ email, passwordHash, nombre, telefono, cedula }) {
+    async createSocio({ email, passwordHash, nombre, apellido, telefono, cedula }) {
       const socio = {
         id: uid("soc"), email: email.toLowerCase(), password_hash: passwordHash,
-        nombre: nombre || "", telefono: telefono || "",
+        nombre: nombre || "", apellido: apellido || "", telefono: telefono || "",
         // Campos de enriquecimiento (barra de progreso, se completan después):
         whatsapp: "", foto: "", pais: "", pais_iso: "", ciudad: "",
         lat: null, lng: null,   // ubicación exacta (opcional) para el globo
@@ -181,7 +181,7 @@ function createMemoryStore({ filePath = null } = {}) {
       for (const s of db.socios) {
         if (!s.mostrar_exacto || s.lat == null || s.lng == null) continue;
         if (s.lng < minLng || s.lng > maxLng || s.lat < minLat || s.lat > maxLat) continue;
-        out.push({ id: s.id, nombre: s.nombre, ciudad: s.ciudad, lat: s.lat, lng: s.lng });
+        out.push({ id: s.id, nombre: [s.nombre, s.apellido].filter(Boolean).join(" "), ciudad: s.ciudad, lat: s.lat, lng: s.lng });
         if (out.length >= Math.min(Number(limit) || 600, 1500)) break;
       }
       return out;

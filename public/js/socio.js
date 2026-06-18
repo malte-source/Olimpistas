@@ -98,7 +98,10 @@
             <input type="file" id="fotoInput" accept="image/*" />
           </div>
           <div>
-            <div class="field"><label>${T("m_nombre")}</label><input id="f_nombre" value="${attr(s.nombre)}" /></div>
+            <div class="row-2">
+              <div class="field"><label>${T("m_nombre")}</label><input id="f_nombre" value="${attr(s.nombre)}" /></div>
+              <div class="field"><label>${T("m_apellido")}</label><input id="f_apellido" value="${attr(s.apellido)}" /></div>
+            </div>
             <div class="field"><label>${T("m_whatsapp")}</label><input id="f_whatsapp" value="${attr(s.whatsapp)}" placeholder="+595 9xx xxx xxx" /></div>
             <div class="row-2">
               <div class="field"><label>${T("m_pais")}</label><select id="f_pais">${opts}</select></div>
@@ -176,7 +179,7 @@
   }
 
   async function guardarPerfil() {
-    const body = { nombre: val("f_nombre"), whatsapp: val("f_whatsapp"), pais: document.getElementById("f_pais").value, ciudad: val("f_ciudad") };
+    const body = { nombre: val("f_nombre"), apellido: val("f_apellido"), whatsapp: val("f_whatsapp"), pais: document.getElementById("f_pais").value, ciudad: val("f_ciudad") };
     if (perfilPunto.lat != null) { body.lat = perfilPunto.lat; body.lng = perfilPunto.lng; }
     const exacto = document.getElementById("f_exacto");
     if (exacto) body.mostrar_exacto = exacto.checked;

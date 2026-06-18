@@ -25,7 +25,7 @@
   <meta name="twitter:image" content="/assets/og.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css?v=25" />
+  <link rel="stylesheet" href="/css/styles.css?v=27" />
 </head>
 <body>
   <header class="nav">
@@ -41,10 +41,10 @@
   <section class="hero">
     <div class="hero-bg">
       <picture>
-        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=25" />
-        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=25" />
-        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=25" />
-        <img src="/assets/hero-desktop.jpg?v=25" alt="" fetchpriority="high" />
+        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=27" />
+        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=27" />
+        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=27" />
+        <img src="/assets/hero-desktop.jpg?v=27" alt="" fetchpriority="high" />
       </picture>
     </div>
     <div class="hero-inner wrap">
@@ -124,7 +124,11 @@
       <p class="muted" id="modalSub">Creá tu cuenta gratis.</p>
       <div class="field" id="nombreField">
         <label data-i18n="m_nombre">Nombre</label>
-        <input id="nombre" type="text" placeholder="Tu nombre" autocomplete="name" data-i18n-ph="m_nombre" />
+        <input id="nombre" type="text" placeholder="Tu nombre" autocomplete="given-name" />
+      </div>
+      <div class="field" id="apellidoField">
+        <label data-i18n="m_apellido">Apellido</label>
+        <input id="apellido" type="text" placeholder="Tu apellido" autocomplete="family-name" />
       </div>
       <div class="field">
         <label data-i18n="m_email">Email</label>
@@ -146,11 +150,11 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="/js/i18n.js?v=25"></script>
-  <script src="/js/common.js?v=25"></script>
+  <script src="/js/i18n.js?v=27"></script>
+  <script src="/js/common.js?v=27"></script>
   <script src="/assets/vendor/qrcode.js"></script>
-  <script src="/js/onboarding.js?v=25"></script>
+  <script src="/js/onboarding.js?v=27"></script>
   <!-- MapLibre + globe.js se cargan en diferido (lazy) al llegar a la sección del mundo -->
-  <script src="/js/landing.js?v=26"></script>
+  <script src="/js/landing.js?v=27"></script>
 </body>
 </html>

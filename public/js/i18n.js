@@ -51,7 +51,7 @@ window.OLI_I18N = (function () {
       // ── Área de miembro (contenido dinámico) ──
       m_cargando: "Cargando…",
       m_perfil_h: "Mi perfil", m_perfil_p: "Completá tu perfil y aparecé en el mapa mundial de Olimpistas.",
-      m_foto_cambiar: "Cambiar foto", m_whatsapp: "WhatsApp", m_pais: "País", m_ciudad: "Ciudad",
+      m_apellido: "Apellido", m_foto_cambiar: "Cambiar foto", m_whatsapp: "WhatsApp", m_pais: "País", m_ciudad: "Ciudad",
       m_elegi_pais: "Elegí tu país", m_guardar: "Guardar cambios",
       m_casa_h: "🚩 Poné tu bandera en tu casa",
       m_casa_p: "Fijá tu ubicación y sumá tu bandera de Olimpia al globo mundial. ¡Que todos vean que tu casa es olimpista!",
@@ -122,7 +122,7 @@ window.OLI_I18N = (function () {
       // ── Member area (dynamic content) ──
       m_cargando: "Loading…",
       m_perfil_h: "My profile", m_perfil_p: "Complete your profile and appear on the worldwide Olimpistas map.",
-      m_foto_cambiar: "Change photo", m_whatsapp: "WhatsApp", m_pais: "Country", m_ciudad: "City",
+      m_apellido: "Last name", m_foto_cambiar: "Change photo", m_whatsapp: "WhatsApp", m_pais: "Country", m_ciudad: "City",
       m_elegi_pais: "Choose your country", m_guardar: "Save changes",
       m_casa_h: "🚩 Put your flag on your house",
       m_casa_p: "Pin your location and add your Olimpia flag to the world globe. Let everyone see your house is olimpista!",

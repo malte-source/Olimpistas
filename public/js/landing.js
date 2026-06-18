@@ -44,7 +44,7 @@
     if (_mapaCargado) return; _mapaCargado = true;
     await cargarCss("/assets/vendor/maplibre-gl.css");
     await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=26");
+    await cargarJs("/js/globe.js?v=27");
   }
 
   async function initIdiomaMoneda() {
@@ -226,6 +226,7 @@
     document.getElementById("modalTitle").textContent = reg ? T("m_title_reg") : T("m_title_login");
     document.getElementById("modalSub").textContent = reg ? T("m_sub_reg") : T("m_sub_login");
     document.getElementById("nombreField").style.display = reg ? "block" : "none";
+    document.getElementById("apellidoField").style.display = reg ? "block" : "none";
     document.getElementById("consentRow").style.display = reg ? "flex" : "none";
     document.getElementById("submitBtn").textContent = reg ? T("m_submit_reg") : T("m_submit_login");
     document.getElementById("switchMode").innerHTML = reg
@@ -244,6 +245,7 @@
     const email = document.getElementById("email").value.trim();
     const password = document.getElementById("password").value;
     const nombre = document.getElementById("nombre").value.trim();
+    const apellido = document.getElementById("apellido").value.trim();
     const errEl = document.getElementById("modalError");
     errEl.textContent = "";
     if (mode === "registro" && !document.getElementById("consent").checked) {
@@ -252,7 +254,7 @@
     }
     try {
       const path = mode === "registro" ? "/auth/registro" : "/auth/login";
-      const body = mode === "registro" ? { email, password, nombre } : { email, password };
+      const body = mode === "registro" ? { email, password, nombre, apellido } : { email, password };
       SESSION = await api(path, { method: "POST", body });
       closeModal();
       const intent = intentTier; intentTier = null;
