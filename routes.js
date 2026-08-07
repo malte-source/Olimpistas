@@ -1125,7 +1125,25 @@ function buildRouter() {
   crudEntidad("comercios", { list: () => store.listComercios(), crear: (d) => store.crearComercio(d), update: (id, d) => store.updateComercio(id, d), del: (id) => store.deleteComercio(id), campos: { nombre: "text", rubro: "text", ciudad: "text", direccion: "text", contacto: "text", logo: "text", estado: "text" } });
   crudEntidad("beneficios", { list: () => store.listBeneficios(), crear: (d) => store.crearBeneficio(d), update: (id, d) => store.updateBeneficio(id, d), del: (id) => store.deleteBeneficio(id), campos: { comercio_id: "text", titulo: "text", descripcion: "text", tipo: "text", valor: "text", niveles: "text", pct: "int", ahorro_estimado: "int", vigencia_desde: "date", vigencia_hasta: "date", limite_dias: "int" } });
   // Subastas (admin). Se crean como BORRADOR; se publican con /publicar (setea termina = now + duracion_horas).
-  crudEntidad("subastas", { list: () => store.listSubastas(), crear: (d) => store.crearSubasta(d), update: (id, d) => store.updateSubasta(id, d), del: (id) => store.deleteSubasta(id), campos: { titulo: "text", descripcion: "text", emoji: "text", imagen: "imagen", nivel_min: "text", precio_inicial: "int", incremento: "int", duracion_horas: "int" } });
+  crudEntidad("subastas", {
+    list: () => store.listSubastas(), crear: (d) => store.crearSubasta(d), del: (id) => store.deleteSubasta(id),
+    update: async (id, d) => {
+      // Si ya está en vivo (activa o pausada), "duración" editada sin más queda guardada
+      // pero SIN NINGÚN EFECTO — el reloj real es `termina`, fijado una sola vez al
+      // publicar, y nunca se recalculaba acá (bug reportado: cambiar duración no movía
+      // nada en vivo). Recalculamos termina = inicia + nueva duración en ese caso.
+      if (d.duracion_horas != null) {
+        const actual = await store.getSubasta(id);
+        if (actual && actual.inicia && (actual.estado === "activa" || actual.estado === "pausada")) {
+          d.termina = new Date(new Date(actual.inicia).getTime() + Number(d.duracion_horas) * 3600000).toISOString();
+        }
+      }
+      const item = await store.updateSubasta(id, d);
+      _subCache.delete(id); _listaSub = null; // que se vea al toque, no hasta que expire el cache
+      return item;
+    },
+    campos: { titulo: "text", descripcion: "text", emoji: "text", imagen: "imagen", nivel_min: "text", precio_inicial: "int", incremento: "int", duracion_horas: "int" },
+  });
   // Encuestas (admin). `opciones` = texto separado por "|". `estado` = borrador|activa|cerrada (editable en el form o con las acciones de fila).
   crudEntidad("encuestas", { list: () => store.listEncuestas(), crear: (d) => store.crearEncuesta(d), update: (id, d) => store.updateEncuesta(id, d), del: (id) => store.deleteEncuesta(id), campos: { titulo: "text", pregunta: "text", opciones: "text", tipo: "text", nivel_min: "text", estado: "text" } });
   r.get("/admin/encuestas/:id/resultados", requireAdmin, wrap(async (req, res) => res.json((await store.resultadosEncuesta(req.params.id)) || {})));
