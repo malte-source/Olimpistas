@@ -1,4 +1,4 @@
-# ─── Deploy Olimpistas → Cloud Run ────────────────────────────────────────────
+﻿# ─── Deploy Olimpistas → Cloud Run ────────────────────────────────────────────
 # Ejecutar desde:  C:\Users\user\olimpistas\
 # Requisito: gcloud autenticado.   > gcloud auth login
 #
