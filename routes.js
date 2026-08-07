@@ -906,9 +906,10 @@ function buildRouter() {
 
   // Resumen: total de socios reales + pedidos pendientes de confirmar.
   r.get("/admin/resumen", requireAdmin, wrap(async (_req, res) => {
-    const [totalReal, pendientes] = await Promise.all([
+    const [totalReal, pendientes, subastas] = await Promise.all([
       store.contarTotal ? store.contarTotal() : 0,
       store.listPedidos ? store.listPedidos({ estado: "pendiente", limit: 200 }) : [],
+      store.listSubastas ? store.listSubastas() : [],
     ]);
     // Precio a mostrar según la moneda del pedido (Gs y USD son independientes).
     const enrich = pendientes.map((p) => {
@@ -918,7 +919,11 @@ function buildRouter() {
         : "₲ " + Number((t && t.precioAnio) || p.monto || 0).toLocaleString("es-PY");
       return { ...p, precioTxt };
     });
-    res.json({ totalReal, pendientes: enrich });
+    // Atención de subastas: ganadores que todavía no pagaron (con o sin pedido iniciado)
+    // + pausadas, que son fáciles de olvidar una vez que dejan de aparecer en el home.
+    const subastasSinPagar = (subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && s.pago_estado !== "pagado").length;
+    const subastasPausadas = (subastas || []).filter((s) => s.estado === "pausada").length;
+    res.json({ totalReal, pendientes: enrich, subastasSinPagar, subastasPausadas });
   }));
   // Reportes de negocio: embudo, membresías (pagas vs gratis), top países, altas/día.
   r.get("/admin/reportes", requireAdmin, wrap(async (_req, res) => {
@@ -1419,6 +1424,10 @@ function buildRouter() {
         desbloqueado: access.puedeAcceder(membresia, s.nivel_min),
         pujadores,
         gano: !abierta && !!(req.socio && s.ganador_id === req.socio.id),
+        // Nombre del ganador SOLO si ya cerró (mientras está activa, ganador_id es apenas
+        // el líder actual — mostrarlo sería el mismo leak de privacidad que ya arreglamos
+        // en el feed de pujas). Enmascarado igual que ahí.
+        ganador_nombre: (!abierta && s.ganador_id && s.ganador_nombre) ? enmascararNombre(s.ganador_nombre) : null,
       };
     });
     res.json({ items });

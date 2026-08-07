@@ -232,6 +232,8 @@
             <div class="stat"><div class="n" id="stTotal">—</div><div class="l">Socios reales</div></div>
             <div class="stat"><div class="n" id="stPend">—</div><div class="l">Pagos pendientes</div></div>
             <div class="stat"><div class="n" id="stRev">—</div><div class="l">Validaciones a revisar</div></div>
+            <div class="stat"><div class="n" id="stSubSinPagar">—</div><div class="l">🔨 Subastas ganadas sin pagar</div></div>
+            <div class="stat"><div class="n" id="stSubPausadas">—</div><div class="l">⏸ Subastas pausadas</div></div>
           </div>
           <h2>🩺 Salud del sistema</h2>
           <div class="cards" id="saludCards"><p class="loading">Cargando…</p></div>
@@ -524,6 +526,8 @@
         var r = await api("/admin/resumen");
         $("stTotal").textContent = Number(r.totalReal || 0).toLocaleString("es-PY");
         $("stPend").textContent = (r.pendientes || []).length;
+        $("stSubSinPagar").textContent = r.subastasSinPagar || 0;
+        $("stSubPausadas").textContent = r.subastasPausadas || 0;
         renderPend(r.pendientes || []);
         areaLoaded = {};   // al (re)entrar, cada área se recarga fresca la primera vez
         onHash();          // rutea al área actual y dispara su carga perezosa

@@ -728,7 +728,12 @@ function createPgStore({ databaseUrl }) {
     async beneficiosDeComercio(comercioId) { return sql`SELECT * FROM beneficios WHERE comercio_id = ${comercioId} AND activo = true ORDER BY creado DESC`; },
 
     // ── Subastas ── (sin cache: la puja actual tiene que estar fresca para el vivo)
-    async listSubastas() { return sql`SELECT * FROM subastas ORDER BY termina ASC`; },
+    // LEFT JOIN trae el nombre del ganador en la misma consulta (para el historial de
+    // subastas cerradas) — evita un N+1 de getSocioById por cada lote ya cerrado.
+    async listSubastas() {
+      return sql`SELECT sub.*, soc.nombre AS ganador_nombre FROM subastas sub
+        LEFT JOIN socios soc ON soc.id = sub.ganador_id ORDER BY sub.termina ASC`;
+    },
     // Acepta el id interno O el slug (link público) — así cualquier ruta que reciba
     // "lo que sea que vino en la URL" sigue funcionando sin tener que saber cuál es.
     async getSubasta(idOrSlug) { const [s] = await sql`SELECT * FROM subastas WHERE id = ${idOrSlug} OR slug = ${idOrSlug} LIMIT 1`; return s || null; },

@@ -17,9 +17,26 @@
 # (Mientras RAMP_INICIO esté en el futuro, el contador queda fijo en RAMP_DESDE_N.)
 # ------------------------------------------------------------------------------
 
+# SIEMPRE parado en el repo correcto — pasó más de una vez que el comando se corrió
+# desde otra carpeta y empaquetó código viejo pese a que gcloud reportaba "deployado".
+Set-Location $PSScriptRoot
+
 $PROJECT = "olimpistas"
 $REGION  = "southamerica-east1"
 $SERVICE = "olimpistas"
+
+Write-Host "`n[0/2] Verificando qué se va a subir..." -ForegroundColor Cyan
+Write-Host "Directorio: $PSScriptRoot"
+git log -1 --format="Último commit: %h · %ci · %s"
+$sinCommitear = git status --porcelain
+if ($sinCommitear) {
+  Write-Host "⚠️  Hay cambios SIN COMMITEAR — se van a subir igual (gcloud empaqueta el disco, no git):" -ForegroundColor Yellow
+  git status --short
+} else {
+  Write-Host "Árbol limpio — lo que se sube es exactamente el último commit." -ForegroundColor Green
+}
+$confirmacion = Read-Host "`n¿Continuar con el deploy? (s/n)"
+if ($confirmacion -ne "s") { Write-Host "Cancelado." -ForegroundColor Yellow; exit }
 
 Write-Host "`n[1/2] Configurando proyecto..." -ForegroundColor Cyan
 gcloud config set project $PROJECT
@@ -48,3 +65,18 @@ gcloud run deploy $SERVICE `
 Write-Host "`n✅ Deploy completado." -ForegroundColor Green
 gcloud run services describe $SERVICE --region $REGION --format="value(status.url)"
 Write-Host "Sitio público: https://www.olimpistas.com" -ForegroundColor Green
+
+# Verificación real (no solo confiar en el mensaje de gcloud): la revisión que gcloud
+# dice haber creado debe coincidir con la que /api/salud reporta como sirviendo tráfico.
+Start-Sleep -Seconds 3
+$revEsperada = gcloud run services describe $SERVICE --region $REGION --format="value(status.latestReadyRevisionName)"
+try {
+  $salud = Invoke-RestMethod -Uri "https://www.olimpistas.com/api/salud" -TimeoutSec 10
+  if ($salud.rev -eq $revEsperada) {
+    Write-Host "✅ Verificado: www.olimpistas.com está sirviendo $($salud.rev)" -ForegroundColor Green
+  } else {
+    Write-Host "⚠️  DESAJUSTE: gcloud creó $revEsperada pero el sitio reporta $($salud.rev) — puede ser propagación (esperá y reintentá /api/salud) o un problema real de tráfico." -ForegroundColor Red
+  }
+} catch {
+  Write-Host "⚠️  No pude verificar /api/salud ($($_.Exception.Message)) — chequealo a mano." -ForegroundColor Yellow
+}

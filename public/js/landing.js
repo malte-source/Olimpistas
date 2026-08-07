@@ -95,15 +95,28 @@
     }
     let stored = ""; try { stored = localStorage.getItem("oli_cur") || ""; } catch (e) {}
     if (!stored) {
-      try { const { pais } = await api("/geo"); setCurrency(pais && pais.iso === "PY" ? "PYG" : "USD"); }
-      catch { setCurrency("PYG"); }
+      try {
+        const { pais } = await api("/geo");
+        const detectada = pais && pais.iso === "PY" ? "PYG" : "USD";
+        setCurrency(detectada);
+        // Comunicar la auto-detección arriba (antes quedaba invisible, enterrada en el
+        // selector de la sección de planes): quien entra desde afuera de Paraguay ve
+        // enseguida que los precios ya están en su moneda, no en guaraníes por defecto.
+        if (detectada === "USD") {
+          const note = document.getElementById("heroCurNote");
+          if (note) { note.innerHTML = T("hero_cur_usd"); note.hidden = false; }
+        }
+      } catch { setCurrency("PYG"); }
     }
     const curSel = document.getElementById("curSel");
     if (curSel) {
       const opts = curSel.querySelectorAll(".cur-opt");
       const sync = () => opts.forEach((o) => o.classList.toggle("on", o.dataset.cur === currency()));
       sync();
-      opts.forEach((o) => o.addEventListener("click", () => { setCurrency(o.dataset.cur); sync(); renderTiers(); }));
+      opts.forEach((o) => o.addEventListener("click", () => {
+        setCurrency(o.dataset.cur); sync(); renderTiers();
+        const note = document.getElementById("heroCurNote"); if (note) note.hidden = true; // ya no hace falta el aviso
+      }));
     }
   }
 

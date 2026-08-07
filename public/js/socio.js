@@ -233,15 +233,28 @@
 
   // ── Upgrade de socio (validación de cédula) — disponible en todo el portal ──
   function esSocioValidado() { return !!(SESSION && SESSION.socio && SESSION.socio.es_socio_olimpia); }
-  function renderBannerSocio() {
+  async function renderBannerSocio() {
     let host = document.getElementById("socioBanner");
     if (!host) {
       host = document.createElement("div"); host.id = "socioBanner";
       const prog = document.getElementById("progreso");
       if (prog && prog.parentNode) prog.parentNode.insertBefore(host, prog);
     }
+    // Prioridad 1: ganaste una subasta y falta pagar. Es la única alerta con plata real
+    // de por medio — se ve en CUALQUIER pestaña, no solo si entrás a Subastas a mirar.
+    try {
+      const { items } = await api("/subastas");
+      const pendiente = (items || []).find((x) => x.gano && x.pago_estado !== "pagado");
+      if (pendiente) {
+        host.innerHTML = `<div class="socio-banner socio-banner-pago">
+          <span class="sb-txt">🏆 ${T("m_sub_banner_pago")} <b>${esc(pendiente.titulo)}</b></span>
+          <button class="btn btn-sm" id="pagoBannerBtn">${T("m_sub_pagar")}</button></div>`;
+        host.querySelector("#pagoBannerBtn").onclick = () => { descSeg = "subastas"; activar("descubrir"); };
+        return;
+      }
+    } catch (e) {}
     let off = false; try { off = sessionStorage.getItem("oli_socio_banner") === "1"; } catch (e) {}
-    if (!host || esSocioValidado() || off) { if (host) host.innerHTML = ""; return; }
+    if (esSocioValidado() || off) { host.innerHTML = ""; return; }
     host.innerHTML = `<div class="socio-banner">
       <span class="sb-txt">🥇 ${T("up_banner")}</span>
       <button class="btn btn-sm" id="upBannerBtn">${T("up_cta")}</button>
@@ -688,8 +701,14 @@
     cv().innerHTML = skeleton(2);
     let items;
     try { ({ items } = await api("/subastas")); } catch (e) { cv().innerHTML = vacio(T("m_error_generico")); return; }
+    // Separadas: "en vivo" arriba (lo accionable) y el historial de cerradas abajo,
+    // como prueba social (esto ya se subastó, esta persona lo ganó).
+    const activas = items.filter((x) => x.estado === "activa");
+    const cerradas = items.filter((x) => x.estado === "cerrada");
     cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      ${items.length ? `<div class="grid-3">${items.map(cardSubasta).join("")}</div>` : vacio(T("m_sub_vacio"))}</div>`;
+      ${activas.length ? `<div class="grid-3">${activas.map(cardSubasta).join("")}</div>` : (cerradas.length ? "" : vacio(T("m_sub_vacio")))}
+      ${cerradas.length ? `<h3 class="sub-historial-h">${T("m_sub_historial")}</h3><div class="grid-3">${cerradas.map(cardSubasta).join("")}</div>` : ""}
+      </div>`;
     cv().querySelectorAll("[data-sub]").forEach((el) => el.addEventListener("click", () => vSubastaDetalle(el.dataset.sub)));
   }
   // Miniatura/hero de una subasta: la foto real subida en el admin si hay, si no el
@@ -711,6 +730,7 @@
         <h4>${esc(s.titulo)}</h4>
         <p class="sub-actual">${T("m_sub_actual")}<br><strong>${gs(s.puja_actual)}</strong></p>
         <p class="muted" style="font-size:12px;margin:0">👥 ${s.pujadores} ${T("m_sub_pujando")}</p>
+        ${cerrada && s.ganador_nombre ? `<p class="muted" style="font-size:12px;margin:2px 0 0">🏆 ${s.gano ? T("m_sub_vos") : esc(s.ganador_nombre)}</p>` : ""}
         ${cta}</div></div>`;
   }
 

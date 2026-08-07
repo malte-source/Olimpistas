@@ -110,16 +110,14 @@ const TIERS = [
     beneficios: [
       "Todo lo del Olimpista gratis",
       "Sorteos Plus (experiencias VIP)",
+      "Acceso a subastas exclusivas de piezas únicas del Decano",
       "Acceso prioritario a preventas y drops (próximamente)",
-      "Contenido exclusivo · Olimpia Media+ (próximamente)",
-      "Descuentos en la Red de Beneficios (próximamente)",
     ],
     beneficios_en: [
       "Everything in the free Olimpista",
       "Plus giveaways (VIP experiences)",
+      "Access to exclusive auctions of one-of-a-kind Decano items",
       "Priority access to presales and drops (coming soon)",
-      "Exclusive content · Olimpia Media+ (coming soon)",
-      "Discounts across the Benefits Network (coming soon)",
     ],
     cta: "Hacerme Plus",
     cta_en: "Go Plus",

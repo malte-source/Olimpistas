@@ -356,7 +356,13 @@ function createMemoryStore({ filePath = null } = {}) {
     async beneficiosDeComercio(comercioId) { return (db.beneficios || []).filter((b) => b.comercio_id === comercioId && b.activo).sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
 
     // ── Subastas ──
-    async listSubastas() { return (db.subastas || []).slice().sort((a, b) => String(a.termina).localeCompare(String(b.termina))); },
+    async listSubastas() {
+      return (db.subastas || []).slice().sort((a, b) => String(a.termina).localeCompare(String(b.termina))).map((s) => {
+        if (!s.ganador_id) return s;
+        const g = (db.socios || []).find((x) => x.id === s.ganador_id);
+        return { ...s, ganador_nombre: g ? g.nombre : null };
+      });
+    },
     // Acepta el id interno O el slug (link público) — así cualquier ruta que reciba
     // "lo que sea que vino en la URL" sigue funcionando sin tener que saber cuál es.
     async getSubasta(idOrSlug) { return (db.subastas || []).find((x) => x.id === idOrSlug || x.slug === idOrSlug) || null; },
