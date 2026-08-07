@@ -61,14 +61,16 @@
     try { ({ items } = await api("/subastas")); } catch (e) { return; }
     const s = (items || []).find((x) => x.estado === "activa"); if (!s) return;
     host.innerHTML = '<a class="destacado" href="/subasta/' + encodeURIComponent(s.slug || s.id) + '">' +
-      '<div class="destacado-top"><span class="destacado-dot"></span>' +
-      '<span class="destacado-tag">' + T("m_sub_envivo") + ' · ' + T("tab_subastas") + '</span>' +
+      '<div class="destacado-media">' + destacadoMedia(s) +
+      '<span class="destacado-live"><span class="destacado-dot"></span>' + T("m_sub_envivo") + '</span>' +
       '<span class="destacado-clock">⏳ ' + cdCorto(s.termina) + '</span></div>' +
-      '<div class="destacado-ic">' + destacadoMedia(s) + '</div>' +
-      '<div class="destacado-txt">' +
-      '<strong>' + esc(s.titulo) + '</strong>' +
-      '<span class="destacado-meta">' + T("m_sub_actual") + ' <b>' + gs(s.puja_actual) + '</b> · 👥 ' + s.pujadores + '</span></div>' +
-      '<span class="destacado-cta">' + T("m_sub_pujar") + ' ahora →</span></a>';
+      '<div class="destacado-info">' +
+      '<span class="destacado-tag">' + T("tab_subastas") + '</span>' +
+      '<h3 class="destacado-titulo">' + esc(s.titulo) + '</h3>' +
+      '<div class="destacado-precio-row">' +
+      '<div class="destacado-precio"><span class="destacado-precio-lbl">' + T("m_sub_actual") + '</span><strong>' + gs(s.puja_actual) + '</strong></div>' +
+      '<span class="destacado-pujadores">👥 ' + s.pujadores + ' ' + T("m_sub_pujando") + '</span></div>' +
+      '<span class="destacado-cta">' + T("m_sub_pujar") + ' ahora →</span></div></a>';
   }
 
   // Carga diferida de assets (devuelve Promise). Para el mapa pesado (MapLibre).
