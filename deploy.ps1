@@ -10,11 +10,14 @@
 #    Por eso acá se setean TODAS las env vars y AMBOS secretos en cada deploy.
 #  - Build con `--source .` (Cloud Build / buildpacks). La SA de compute necesita rol builder.
 #
-# La rampa del contador se controla por env vars (RAMP_*). Para ARRANCAR la subida
-# el día del lanzamiento, mover RAMP_INICIO al momento exacto (sin redeploy):
-#   gcloud run services update olimpistas --region southamerica-east1 --project olimpistas `
-#     --update-env-vars RAMP_INICIO=2026-06-19T15:00:00Z
-# (Mientras RAMP_INICIO esté en el futuro, el contador queda fijo en RAMP_DESDE_N.)
+# ⚠️ RAMP_* (el contador público de inscriptos) — NUNCA hardcodear un valor acá.
+#    Pasó una vez: un RAMP_INICIO de placeholder pisó el real durante ~4hs y el
+#    contador volvió de 626k a 188k en vivo. Por eso este script LEE el valor
+#    actual de producción antes de deployar y lo reusa tal cual — un deploy de
+#    código nunca debe poder tocar la rampa. Para mover la rampa de verdad
+#    (día del lanzamiento, etc.), hacerlo por separado, nunca en este script:
+#    gcloud run services update olimpistas --region southamerica-east1 --project olimpistas `
+#      --update-env-vars RAMP_INICIO=2026-06-19T15:00:00Z
 # ------------------------------------------------------------------------------
 
 # SIEMPRE parado en el repo correcto — pasó más de una vez que el comando se corrió
@@ -25,7 +28,7 @@ $PROJECT = "olimpistas"
 $REGION  = "southamerica-east1"
 $SERVICE = "olimpistas"
 
-Write-Host "`n[0/2] Verificando qué se va a subir..." -ForegroundColor Cyan
+Write-Host "`n[1/3] Verificando qué se va a subir..." -ForegroundColor Cyan
 Write-Host "Directorio: $PSScriptRoot"
 git log -1 --format="Último commit: %h · %ci · %s"
 $sinCommitear = git status --porcelain
@@ -35,13 +38,28 @@ if ($sinCommitear) {
 } else {
   Write-Host "Árbol limpio — lo que se sube es exactamente el último commit." -ForegroundColor Green
 }
+
+gcloud config set project $PROJECT | Out-Null
+$servicioJson = gcloud run services describe $SERVICE --region $REGION --project $PROJECT --format="json" | ConvertFrom-Json
+$envActual = $servicioJson.spec.template.spec.containers[0].env
+function Get-EnvActual($nombre, $default) {
+  $v = ($envActual | Where-Object { $_.name -eq $nombre }).value
+  if ($null -eq $v -or $v -eq "") { return $default }
+  return $v
+}
+# Defaults SOLO para el primerísimo deploy del servicio (todavía no existe ninguna
+# revisión de la que leer) — "2099" = rampa sin arrancar, jamás un valor "en curso".
+$rampInicio = Get-EnvActual "RAMP_INICIO"  "2099-01-01T00:00:00Z"
+$rampDesde  = Get-EnvActual "RAMP_DESDE_N" "180000"
+$rampHasta  = Get-EnvActual "RAMP_HASTA_N" "1000000"
+$rampHoras  = Get-EnvActual "RAMP_HORAS"   "120"
+$rampCurva  = Get-EnvActual "RAMP_CURVA"   "1.25"
+Write-Host "RAMP_INICIO en producción (se va a preservar tal cual): $rampInicio" -ForegroundColor Cyan
+
 $confirmacion = Read-Host "`n¿Continuar con el deploy? (s/n)"
 if ($confirmacion -ne "s") { Write-Host "Cancelado." -ForegroundColor Yellow; exit }
 
-Write-Host "`n[1/2] Configurando proyecto..." -ForegroundColor Cyan
-gcloud config set project $PROJECT
-
-Write-Host "`n[2/2] Build (--source) y deploy a Cloud Run ($REGION)..." -ForegroundColor Cyan
+Write-Host "`n[2/3] Build (--source) y deploy a Cloud Run ($REGION)..." -ForegroundColor Cyan
 # Flags para aguantar picos (post-auditoría 2026-08):
 #  - CPU 2 + concurrency 60: el registro hashea con bcrypt (CPU-bound). Con 1 vCPU y
 #    concurrency 250, la ráfaga de altas congelaba el event loop. 2 vCPU + menos
@@ -67,7 +85,7 @@ $deployArgs = @(
   "--max-instances", "50",
   "--port", "8080",
   "--set-secrets", "OLIMPISTAS_DATABASE_URL=olimpistas-db:latest,RESEND_API_KEY=olimpistas-resend:latest",
-  "--set-env-vars", "NODE_ENV=production,PLAUSIBLE_DOMAIN=www.olimpistas.com,RAMP_INICIO=2099-01-01T00:00:00Z,RAMP_DESDE_N=180000,RAMP_HASTA_N=1000000,RAMP_HORAS=60"
+  "--set-env-vars", "NODE_ENV=production,PLAUSIBLE_DOMAIN=www.olimpistas.com,RAMP_INICIO=$rampInicio,RAMP_DESDE_N=$rampDesde,RAMP_HASTA_N=$rampHasta,RAMP_HORAS=$rampHoras,RAMP_CURVA=$rampCurva"
 )
 & gcloud @deployArgs
 
@@ -82,6 +100,7 @@ Write-Host "`n✅ Deploy completado." -ForegroundColor Green
 gcloud run services describe $SERVICE --region $REGION --format="value(status.url)"
 Write-Host "Sitio público: https://www.olimpistas.com" -ForegroundColor Green
 
+Write-Host "`n[3/3] Verificando..." -ForegroundColor Cyan
 # Verificación real (no solo confiar en el mensaje de gcloud): la revisión que gcloud
 # dice haber creado debe coincidir con la que /api/salud reporta como sirviendo tráfico.
 Start-Sleep -Seconds 3
@@ -95,4 +114,14 @@ try {
   }
 } catch {
   Write-Host "⚠️  No pude verificar /api/salud ($($_.Exception.Message)) — chequealo a mano." -ForegroundColor Yellow
+}
+
+# Chequeo extra específico de la rampa: confirma que RAMP_INICIO en la revisión nueva
+# sigue siendo el mismo que antes de deployar (nunca más otro susto como el de hoy).
+$servicioJsonPost = gcloud run services describe $SERVICE --region $REGION --project $PROJECT --format="json" | ConvertFrom-Json
+$rampNuevo = ($servicioJsonPost.spec.template.spec.containers[0].env | Where-Object { $_.name -eq "RAMP_INICIO" }).value
+if ($rampNuevo -eq $rampInicio) {
+  Write-Host "✅ RAMP_INICIO preservado: $rampNuevo" -ForegroundColor Green
+} else {
+  Write-Host "🚨 RAMP_INICIO CAMBIÓ: era $rampInicio, ahora es $rampNuevo — revisar YA, el contador público puede estar mal." -ForegroundColor Red
 }
