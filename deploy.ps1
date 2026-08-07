@@ -6,18 +6,24 @@
 #  - La región REAL es southamerica-east1 (co-locada con Supabase sa-east-1). NO us-central1.
 #  - El servicio vive detrás de un Load Balancer + Cloud CDN + cert gestionado para
 #    www.olimpistas.com. NO se usan domain mappings (no están permitidos en la región).
-#  - NUNCA usar --env-vars-file ni un --set-env-vars PARCIAL: pisa el resto de las vars.
-#    Por eso acá se setean TODAS las env vars y AMBOS secretos en cada deploy.
 #  - Build con `--source .` (Cloud Build / buildpacks). La SA de compute necesita rol builder.
 #
-# ⚠️ RAMP_* (el contador público de inscriptos) — NUNCA hardcodear un valor acá.
-#    Pasó una vez: un RAMP_INICIO de placeholder pisó el real durante ~4hs y el
-#    contador volvió de 626k a 188k en vivo. Por eso este script LEE el valor
-#    actual de producción antes de deployar y lo reusa tal cual — un deploy de
-#    código nunca debe poder tocar la rampa. Para mover la rampa de verdad
-#    (día del lanzamiento, etc.), hacerlo por separado, nunca en este script:
-#    gcloud run services update olimpistas --region southamerica-east1 --project olimpistas `
-#      --update-env-vars RAMP_INICIO=2026-06-19T15:00:00Z
+# ⚠️ ENV VARS Y SECRETOS — NUNCA una lista fija en este script. Pasó dos veces el
+#    mismo día: una lista hardcodeada de "las vars que importan" se desactualiza, y
+#    --set-env-vars / --set-secrets BORRAN TODO lo que no esté en la lista (es el
+#    comportamiento documentado: "All existing environment variables will be removed
+#    first"). Así se perdieron en un deploy de rutina: RAMP_INICIO (el contador
+#    público volvió de 626k a 188k en vivo), ADMIN_KEY, PAGOPAR_PUBLIC_TOKEN,
+#    PAGOPAR_PRIVATE_TOKEN, PAGOPAR_TEST_KEY, PAGOPAR_PREVENTAS_LIVE y GA_ID —
+#    Pagopar quedó inhabilitado sin que nadie lo pidiera.
+#
+#    Por eso este script LEE toda la configuración actual (env vars planas +
+#    secretos) del servicio ya desplegado y la reproduce EXACTAMENTE tal cual en
+#    el nuevo deploy. Un deploy de código nunca debe poder tocar ninguna variable.
+#    Para cambiar una variable de verdad (mover la rampa, rotar un token, etc.),
+#    hacerlo por separado, nunca en este script:
+#      gcloud run services update olimpistas --region southamerica-east1 --project olimpistas `
+#        --update-env-vars RAMP_INICIO=2026-06-19T15:00:00Z
 # ------------------------------------------------------------------------------
 
 # SIEMPRE parado en el repo correcto — pasó más de una vez que el comando se corrió
@@ -40,27 +46,38 @@ if ($sinCommitear) {
 }
 
 gcloud config set project $PROJECT | Out-Null
-$servicioJson = gcloud run services describe $SERVICE --region $REGION --project $PROJECT --format="json" | ConvertFrom-Json
-$envActual = $servicioJson.spec.template.spec.containers[0].env
-function Get-EnvActual($nombre, $default) {
-  $v = ($envActual | Where-Object { $_.name -eq $nombre }).value
-  if ($null -eq $v -or $v -eq "") { return $default }
-  return $v
+
+# Leer TODA la config actual (env vars planas + secretos) y reproducirla tal cual.
+$servicioExiste = $true
+$servicioJson = $null
+try {
+  $servicioJson = gcloud run services describe $SERVICE --region $REGION --project $PROJECT --format="json" 2>$null | ConvertFrom-Json
+  if (-not $servicioJson) { $servicioExiste = $false }
+} catch { $servicioExiste = $false }
+
+if ($servicioExiste) {
+  $envActual   = $servicioJson.spec.template.spec.containers[0].env
+  $envPlanos   = $envActual | Where-Object { -not $_.valueFrom }
+  $envSecretos = $envActual | Where-Object { $_.valueFrom }
+  $envVarsStr  = ($envPlanos   | ForEach-Object { "$($_.name)=$($_.value)" }) -join ","
+  $secretsStr  = ($envSecretos | ForEach-Object { "$($_.name)=$($_.valueFrom.secretKeyRef.name):latest" }) -join ","
+  $rampInicio  = ($envPlanos | Where-Object { $_.name -eq "RAMP_INICIO" }).value
+  Write-Host "Preservando $($envPlanos.Count) env vars planas y $($envSecretos.Count) secretos ya configurados:" -ForegroundColor Cyan
+  ($envPlanos | ForEach-Object { $_.name }) + ($envSecretos | ForEach-Object { $_.name + " (secreto)" }) | Sort-Object | ForEach-Object { Write-Host "  - $_" }
+  if ($rampInicio) { Write-Host "RAMP_INICIO en producción (se preserva tal cual): $rampInicio" -ForegroundColor Cyan }
+} else {
+  # SOLO para el primerísimo deploy del servicio (todavía no existe nada de qué leer).
+  Write-Host "Servicio nuevo — no hay nada previo que leer, uso configuración inicial." -ForegroundColor Yellow
+  $envVarsStr = "NODE_ENV=production,PLAUSIBLE_DOMAIN=www.olimpistas.com,RAMP_INICIO=2099-01-01T00:00:00Z,RAMP_DESDE_N=180000,RAMP_HASTA_N=1000000,RAMP_HORAS=120,RAMP_CURVA=1.25"
+  $secretsStr = "OLIMPISTAS_DATABASE_URL=olimpistas-db:latest,RESEND_API_KEY=olimpistas-resend:latest"
+  $rampInicio = "2099-01-01T00:00:00Z"
 }
-# Defaults SOLO para el primerísimo deploy del servicio (todavía no existe ninguna
-# revisión de la que leer) — "2099" = rampa sin arrancar, jamás un valor "en curso".
-$rampInicio = Get-EnvActual "RAMP_INICIO"  "2099-01-01T00:00:00Z"
-$rampDesde  = Get-EnvActual "RAMP_DESDE_N" "180000"
-$rampHasta  = Get-EnvActual "RAMP_HASTA_N" "1000000"
-$rampHoras  = Get-EnvActual "RAMP_HORAS"   "120"
-$rampCurva  = Get-EnvActual "RAMP_CURVA"   "1.25"
-Write-Host "RAMP_INICIO en producción (se va a preservar tal cual): $rampInicio" -ForegroundColor Cyan
 
 $confirmacion = Read-Host "`n¿Continuar con el deploy? (s/n)"
 if ($confirmacion -ne "s") { Write-Host "Cancelado." -ForegroundColor Yellow; exit }
 
 Write-Host "`n[2/3] Build (--source) y deploy a Cloud Run ($REGION)..." -ForegroundColor Cyan
-# Flags para aguantar picos (post-auditoría 2026-08):
+# Flags de capacidad (post-auditoría 2026-08):
 #  - CPU 2 + concurrency 60: el registro hashea con bcrypt (CPU-bound). Con 1 vCPU y
 #    concurrency 250, la ráfaga de altas congelaba el event loop. 2 vCPU + menos
 #    concurrency deja respirar el hashing sin ahogar el resto de los requests.
@@ -70,7 +87,7 @@ Write-Host "`n[2/3] Build (--source) y deploy a Cloud Run ($REGION)..." -Foregro
 #    data/pg-store.js, este archivo y SCALING.md.)
 #  - min-instances: SUBIR a 4-5 antes de mover RAMP_INICIO el día D (evita cold start en el pico).
 # Array de argumentos en vez de continuación con backticks: un espacio invisible
-# de más después de un backtick rompe la continuación sin avisar (nos pasó recién:
+# de más después de un backtick rompe la continuación sin avisar (ya pasó una vez:
 # el --set-secrets se armó mal y gcloud crasheó con "Invalid secret spec").
 $deployArgs = @(
   "run", "deploy", $SERVICE,
@@ -83,14 +100,14 @@ $deployArgs = @(
   "--concurrency", "60",
   "--min-instances", "1",
   "--max-instances", "50",
-  "--port", "8080",
-  "--set-secrets", "OLIMPISTAS_DATABASE_URL=olimpistas-db:latest,RESEND_API_KEY=olimpistas-resend:latest",
-  "--set-env-vars", "NODE_ENV=production,PLAUSIBLE_DOMAIN=www.olimpistas.com,RAMP_INICIO=$rampInicio,RAMP_DESDE_N=$rampDesde,RAMP_HASTA_N=$rampHasta,RAMP_HORAS=$rampHoras,RAMP_CURVA=$rampCurva"
+  "--port", "8080"
 )
+if ($secretsStr) { $deployArgs += @("--set-secrets", $secretsStr) }
+if ($envVarsStr) { $deployArgs += @("--set-env-vars", $envVarsStr) }
 & gcloud @deployArgs
 
 # CRÍTICO: si gcloud falla, el script tiene que frenar acá — si no, sigue de largo e
-# imprime "Deploy completado" aunque no se haya creado ninguna revisión nueva (pasó).
+# imprime "Deploy completado" aunque no se haya creado ninguna revisión nueva.
 if ($LASTEXITCODE -ne 0) {
   Write-Host "`n❌ El deploy FALLÓ (gcloud salió con código $LASTEXITCODE) — no se creó ninguna revisión nueva. Mirá el error de arriba." -ForegroundColor Red
   exit 1
@@ -116,12 +133,18 @@ try {
   Write-Host "⚠️  No pude verificar /api/salud ($($_.Exception.Message)) — chequealo a mano." -ForegroundColor Yellow
 }
 
-# Chequeo extra específico de la rampa: confirma que RAMP_INICIO en la revisión nueva
-# sigue siendo el mismo que antes de deployar (nunca más otro susto como el de hoy).
+# Chequeo extra: confirma que la CANTIDAD de env vars + secretos no bajó (nunca más
+# perder variables en silencio) y que RAMP_INICIO específicamente no cambió.
 $servicioJsonPost = gcloud run services describe $SERVICE --region $REGION --project $PROJECT --format="json" | ConvertFrom-Json
-$rampNuevo = ($servicioJsonPost.spec.template.spec.containers[0].env | Where-Object { $_.name -eq "RAMP_INICIO" }).value
+$envPost = $servicioJsonPost.spec.template.spec.containers[0].env
+$rampNuevo = ($envPost | Where-Object { $_.name -eq "RAMP_INICIO" }).value
 if ($rampNuevo -eq $rampInicio) {
   Write-Host "✅ RAMP_INICIO preservado: $rampNuevo" -ForegroundColor Green
 } else {
   Write-Host "🚨 RAMP_INICIO CAMBIÓ: era $rampInicio, ahora es $rampNuevo — revisar YA, el contador público puede estar mal." -ForegroundColor Red
+}
+if ($servicioExiste -and ($envPost.Count -lt $envActual.Count)) {
+  Write-Host "🚨 SE PERDIERON VARIABLES: antes había $($envActual.Count), ahora hay $($envPost.Count) — revisar YA." -ForegroundColor Red
+} elseif ($servicioExiste) {
+  Write-Host "✅ Cantidad de env vars + secretos preservada: $($envPost.Count)" -ForegroundColor Green
 }
