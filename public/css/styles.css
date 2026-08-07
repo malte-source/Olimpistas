@@ -838,14 +838,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .ini-hi { font-size: 26px; margin: 4px 0 4px; }
 .eyebrow-ini { text-transform: uppercase; letter-spacing: .14em; font-size: 11px; font-weight: 800; color: var(--gris-2); margin: 24px 0 12px; }
 .sub-historial-h { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: var(--gris-2); font-weight: 800; margin: 28px 0 14px; padding-top: 20px; border-top: 1px solid var(--linea); }
-.ini-live { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 16px; cursor: pointer; margin: 6px 0;
-  background: linear-gradient(120deg, rgba(231,198,75,.16), rgba(201,162,39,.05)), var(--negro-2); border: 1px solid var(--oro); box-shadow: var(--glow); transition: filter .15s, transform .15s; }
-.ini-live:hover { filter: brightness(1.05); transform: translateY(-2px); }
-.ini-live-ic { font-size: 38px; flex: 0 0 auto; line-height: 1; }
-.ini-live-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ini-live-tag { font-size: 11px; font-weight: 800; color: var(--oro-claro); text-transform: uppercase; letter-spacing: .05em; }
-.ini-live-tx strong { font-size: 16px; }
-.ini-live-cta { flex: 0 0 auto; background: linear-gradient(135deg, var(--oro-claro), var(--oro)); color: #1a1500; font-weight: 800; padding: 10px 16px; border-radius: 11px; white-space: nowrap; }
 .ini-qa { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .ini-qa button { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 15px 4px 12px; border-radius: 16px;
   background: var(--negro-2); border: 1px solid var(--linea); color: var(--blanco); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; transition: border-color .15s; }
@@ -859,7 +851,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .ini-nov-tag { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--gris); font-weight: 800; display: block; }
 .ini-nov-tx strong { font-size: 15px; }
 .ini-nov-go { color: var(--oro); font-size: 22px; font-weight: 300; }
-@media (max-width: 640px) { .ini-live { flex-wrap: wrap; } .ini-live-cta { width: 100%; text-align: center; } }
 .seg-nav { display: flex; gap: 8px; overflow-x: auto; margin: 8px 0 18px; scrollbar-width: none; }
 .seg-nav::-webkit-scrollbar { display: none; }
 .seg-b { flex: 0 0 auto; border: 1px solid var(--linea); background: transparent; color: var(--gris); font: inherit; font-weight: 700; font-size: 13.5px; padding: 9px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: .15s; }

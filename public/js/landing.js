@@ -70,7 +70,7 @@
       '<div class="destacado-precio-row">' +
       '<div class="destacado-precio"><span class="destacado-precio-lbl">' + T("m_sub_actual") + '</span><strong>' + gs(s.puja_actual) + '</strong></div>' +
       '<span class="destacado-pujadores">👥 ' + s.pujadores + ' ' + T("m_sub_pujando") + '</span></div>' +
-      '<span class="destacado-cta">' + T("m_sub_pujar") + ' ahora →</span></div></a>';
+      '<span class="destacado-cta">' + T("m_sub_pujar") + ' →</span></div></a>';
   }
 
   // Carga diferida de assets (devuelve Promise). Para el mapa pesado (MapLibre).

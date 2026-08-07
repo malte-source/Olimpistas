@@ -124,13 +124,23 @@
     const subaViva = (subsR.items || []).find((x) => x.estado === "activa");
     const enc = (encsR.items || []).find((x) => !x.respondida) || null;
     const sorteo = (sorteosR.items || [])[0], preventa = (preventasR.items || [])[0];
+    // Misma tarjeta de producto que el banner de la landing (mismas clases .destacado*):
+    // antes esta vivía como un componente aparte ("ini-live") con el diseño viejo, y
+    // nunca se actualizó cuando se rediseñó el banner público — quedaban distintos.
     const destacado = subaViva ? `
-      <div class="ini-live" data-goto="descubrir" data-seg="subastas">
-        <div class="ini-live-ic">${subaViva.emoji || "🔨"}</div>
-        <div class="ini-live-tx"><span class="ini-live-tag">🔴 ${T("m_sub_envivo")} · ${T("tab_subastas")}</span>
-          <strong>${esc(subaViva.titulo)}</strong>
-          <span class="muted">${T("m_sub_actual")} ${gs(subaViva.puja_actual)} · ⏳ ${cdTexto(subaViva.termina).txt}</span></div>
-        <span class="ini-live-cta">${T("m_sub_pujar")} →</span></div>` : "";
+      <div class="destacado" data-goto="descubrir" data-seg="subastas" style="cursor:pointer">
+        <div class="destacado-media">${subastaMedia(subaViva)}
+          <span class="destacado-live"><span class="destacado-dot"></span>${T("m_sub_envivo")}</span>
+          <span class="destacado-clock">⏳ ${cdTexto(subaViva.termina).txt}</span></div>
+        <div class="destacado-info">
+          <span class="destacado-tag">${T("tab_subastas")}</span>
+          <h3 class="destacado-titulo">${esc(subaViva.titulo)}</h3>
+          <div class="destacado-precio-row">
+            <div class="destacado-precio"><span class="destacado-precio-lbl">${T("m_sub_actual")}</span><strong>${gs(subaViva.puja_actual)}</strong></div>
+            <span class="destacado-pujadores">👥 ${subaViva.pujadores} ${T("m_sub_pujando")}</span></div>
+          <span class="destacado-cta">${T("m_sub_pujar")} →</span>
+        </div>
+      </div>` : "";
     const nov = [];
     if (sorteo) nov.push(iniNov("🎁", T("tab_sorteos"), sorteo.titulo, "sorteos"));
     if (preventa) nov.push(iniNov("🎟", T("tab_preventas"), preventa.evento, "preventas"));
