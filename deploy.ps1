@@ -51,16 +51,32 @@ Write-Host "`n[2/2] Build (--source) y deploy a Cloud Run ($REGION)..." -Foregro
 #    si no, bajar max-instances o el max del driver. (Los 3 valores deben coincidir:
 #    data/pg-store.js, este archivo y SCALING.md.)
 #  - min-instances: SUBIR a 4-5 antes de mover RAMP_INICIO el día D (evita cold start en el pico).
-gcloud run deploy $SERVICE `
-  --source . `
-  --project $PROJECT --region $REGION `
-  --allow-unauthenticated `
-  --memory 1Gi --cpu 2 `
-  --concurrency 60 `
-  --min-instances 1 --max-instances 50 `
-  --port 8080 `
-  --set-secrets OLIMPISTAS_DATABASE_URL=olimpistas-db:latest,RESEND_API_KEY=olimpistas-resend:latest `
-  --set-env-vars NODE_ENV=production,PLAUSIBLE_DOMAIN=www.olimpistas.com,RAMP_INICIO=2099-01-01T00:00:00Z,RAMP_DESDE_N=180000,RAMP_HASTA_N=1000000,RAMP_HORAS=60
+# Array de argumentos en vez de continuación con backticks: un espacio invisible
+# de más después de un backtick rompe la continuación sin avisar (nos pasó recién:
+# el --set-secrets se armó mal y gcloud crasheó con "Invalid secret spec").
+$deployArgs = @(
+  "run", "deploy", $SERVICE,
+  "--source", ".",
+  "--project", $PROJECT,
+  "--region", $REGION,
+  "--allow-unauthenticated",
+  "--memory", "1Gi",
+  "--cpu", "2",
+  "--concurrency", "60",
+  "--min-instances", "1",
+  "--max-instances", "50",
+  "--port", "8080",
+  "--set-secrets", "OLIMPISTAS_DATABASE_URL=olimpistas-db:latest,RESEND_API_KEY=olimpistas-resend:latest",
+  "--set-env-vars", "NODE_ENV=production,PLAUSIBLE_DOMAIN=www.olimpistas.com,RAMP_INICIO=2099-01-01T00:00:00Z,RAMP_DESDE_N=180000,RAMP_HASTA_N=1000000,RAMP_HORAS=60"
+)
+& gcloud @deployArgs
+
+# CRÍTICO: si gcloud falla, el script tiene que frenar acá — si no, sigue de largo e
+# imprime "Deploy completado" aunque no se haya creado ninguna revisión nueva (pasó).
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "`n❌ El deploy FALLÓ (gcloud salió con código $LASTEXITCODE) — no se creó ninguna revisión nueva. Mirá el error de arriba." -ForegroundColor Red
+  exit 1
+}
 
 Write-Host "`n✅ Deploy completado." -ForegroundColor Green
 gcloud run services describe $SERVICE --region $REGION --format="value(status.url)"
