@@ -7,6 +7,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const { buildRouter } = require("./routes");
 const auth = require("./lib/auth");
 const log = require("./lib/log");
@@ -95,8 +96,15 @@ app.use((req, _res, next) => {
 
 const PUBLIC = path.join(__dirname, "public");
 
+// Cache-busting AUTOMÁTICO de assets estáticos: Cloud Run inyecta K_REVISION (cambia
+// una vez por deploy, exacto) — lo usamos para pisar cualquier "?v=N" manual en el HTML
+// servido. Así un deploy nuevo siempre invalida el cache de 24h del CDN sin que nadie
+// tenga que acordarse de subir un número a mano (la causa de que varios fixes de esta
+// semana no se vieran reflejados en producción).
+const BUILD_ID = process.env.K_REVISION || String(Date.now());
+
 // Health
-app.get("/health", (_req, res) => res.json({ ok: true, service: "olimpistas", club: BRAND.club }));
+app.get("/health", (_req, res) => res.json({ ok: true, service: "olimpistas", club: BRAND.club, rev: BUILD_ID }));
 
 // API — attachSocio se monta SOLO acá (no global): los estáticos y las páginas no
 // necesitan sesión, así se evita una consulta a la DB por cada asset servido en un pico.
@@ -192,6 +200,7 @@ const sendPage = (file, lang) => (req, res) => {
     if (lang === "en") html = html.replace('<html lang="es">', '<html lang="en">');
     const extra = (ANALYTICS || "") + (file === "index.html" ? JSONLD : "");
     html = html.replace("</head>", extra + "\n</head>");
+    html = html.replace(/\?v=\d+/g, "?v=" + BUILD_ID); // cache-busting automático (ver BUILD_ID)
     _pageCache[key] = html;
   }
   // OG/Twitter: URL absoluta según el host (WhatsApp/Facebook exigen URL completa para
@@ -277,7 +286,7 @@ app.get("/subasta/:id", async (req, res) => {
 <meta property="og:url" content="${urlPublica}"><meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${titulo}"><meta name="twitter:image" content="${og}">
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg"><meta name="theme-color" content="#0b0b0f">
-<link rel="stylesheet" href="/assets/fonts/fonts.css"><link rel="stylesheet" href="/css/styles.css?v=69">
+<link rel="stylesheet" href="/assets/fonts/fonts.css"><link rel="stylesheet" href="/css/styles.css?v=${BUILD_ID}">
 <style>body{background:var(--negro);min-height:100vh}.sp{max-width:560px;margin:0 auto;padding:26px 20px 60px;text-align:center}
 .sp .wm{font-weight:900;letter-spacing:.3em;font-size:13px;color:var(--oro-claro);text-transform:uppercase}
 .sp .stripes{height:5px;width:100px;margin:10px auto 22px;border-radius:3px;background:repeating-linear-gradient(90deg,#fff 0 11px,#000 11px 22px);opacity:.85}
@@ -310,6 +319,70 @@ async function load(){try{var res=await fetch("/api/subastas/"+id);if(!res.ok)re
 load();setInterval(load,5000);
 $("cta").addEventListener("click",async function(){if(this.className.indexOf("off")>-1)return;var yo=null;try{var r=await fetch("/api/auth/yo");if(r.ok)yo=await r.json();}catch(e){}if(yo&&yo.socio)location.href="/miembro?sub="+id;else location.href="/?intent=pujar&sub="+encodeURIComponent(id);});
 })();</script></body></html>`);
+});
+
+// Certificado de Autenticidad del lote ganado — solo lo ve el ganador, y solo una
+// vez que el pago quedó confirmado (si no, no hay nada que certificar todavía).
+// Pensado para imprimir/guardar como PDF (window.print(), sin librería de PDF en
+// el server): cumple la promesa que ya hacen el mail de ganador y las bases legales.
+app.get("/subasta/:id/certificado", auth.attachSocio, async (req, res) => {
+  const id = String(req.params.id || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80);
+  let s = null;
+  try { s = await require("./data/store").getStore().getSubasta(id); } catch (e) {}
+  if (!s) return res.redirect(302, "/");
+  if (!req.socio || req.socio.id !== s.ganador_id || s.pago_estado !== "pagado") {
+    return res.status(403).type("html").send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>No disponible — Olimpistas</title>
+<meta name="robots" content="noindex"><link rel="stylesheet" href="/css/styles.css?v=${BUILD_ID}"></head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:24px">
+<div><p style="color:var(--gris)">Este certificado no está disponible (no ganaste este lote, o el pago todavía no se confirmó).</p>
+<a href="/miembro" style="color:var(--oro)">← Volver a mi cuenta</a></div></body></html>`);
+  }
+  const esc2 = (x) => String(x == null ? "" : x).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const codigo = crypto.createHash("sha256").update(s.id + "|" + s.ganador_id).digest("hex").slice(0, 10).toUpperCase();
+  const fecha = new Date(s.termina || Date.now()).toLocaleDateString("es-PY", { year: "numeric", month: "long", day: "numeric" });
+  const ganador = [req.socio.nombre, req.socio.apellido].filter(Boolean).join(" ") || req.socio.email;
+  res.setHeader("Cache-Control", "no-store");
+  res.type("html").send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Certificado de Autenticidad — ${esc2(s.titulo)}</title>
+<meta name="robots" content="noindex"><link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+<link rel="stylesheet" href="/assets/fonts/fonts.css"><link rel="stylesheet" href="/css/styles.css?v=${BUILD_ID}">
+<style>
+body{background:var(--negro)}
+.cert-wrap{max-width:640px;margin:0 auto;padding:40px 20px 60px}
+.cert{border:1.5px solid var(--oro);border-radius:20px;padding:44px 36px;background:linear-gradient(160deg,rgba(231,198,75,.08),transparent 60%),var(--negro-2);text-align:center}
+.cert .wm{font-weight:900;letter-spacing:.3em;font-size:13px;color:var(--oro-claro);text-transform:uppercase}
+.cert .stripes{height:5px;width:90px;margin:10px auto 26px;border-radius:3px;background:repeating-linear-gradient(90deg,#fff 0 11px,#000 11px 22px);opacity:.85}
+.cert h1{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--gris);margin:0 0 6px;font-weight:700}
+.cert .lote{font-size:24px;font-weight:700;margin:0 0 22px;color:var(--blanco)}
+.cert .hero{height:180px;border-radius:14px;overflow:hidden;margin-bottom:24px;display:flex;align-items:center;justify-content:center;font-size:72px;background:linear-gradient(140deg,#2a2418,#c9a227)}
+.cert .hero img{width:100%;height:100%;object-fit:cover}
+.cert .row{display:flex;justify-content:space-between;padding:12px 0;border-top:1px solid var(--linea);font-size:14px;text-align:left}
+.cert .row .l{color:var(--gris)}.cert .row .v{color:var(--blanco);font-weight:700}
+.cert .codigo{margin-top:22px;font-family:ui-monospace,monospace;font-size:13px;color:var(--oro-claro);letter-spacing:.08em}
+.cert .firma{margin-top:26px;font-size:12.5px;color:var(--gris)}
+.cert-actions{text-align:center;margin-top:22px}
+.cert-actions button{border:1.5px solid var(--linea);background:transparent;color:var(--blanco);font:inherit;font-weight:700;
+  padding:11px 22px;border-radius:11px;cursor:pointer}
+.cert-actions button:hover{border-color:var(--oro);color:var(--oro-claro)}
+@media print{ body{background:#fff} .cert-actions{display:none} .cert{border-color:#c9a227} }
+</style></head><body>
+<div class="cert-wrap">
+  <div class="cert">
+    <div class="wm">Olimpistas</div><div class="stripes"></div>
+    <h1>Certificado de Autenticidad</h1>
+    <p class="lote">${esc2(s.titulo)}</p>
+    <div class="hero">${s.imagen ? '<img src="' + esc2(s.imagen) + '" alt="">' : (esc2(s.emoji) || "🔨")}</div>
+    <div class="row"><span class="l">Adjudicado a</span><span class="v">${esc2(ganador)}</span></div>
+    <div class="row"><span class="l">Monto ganador</span><span class="v">₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")}</span></div>
+    <div class="row"><span class="l">Fecha</span><span class="v">${esc2(fecha)}</span></div>
+    <div class="row"><span class="l">Organiza</span><span class="v">Club Olimpia · Olimpistas</span></div>
+    <p class="codigo">Código de verificación: ${codigo}</p>
+    <p class="firma">Este certificado acredita la autenticidad y la adjudicación del lote descrito, subastado por Olimpistas en nombre de Club Olimpia.</p>
+  </div>
+  <div class="cert-actions"><button onclick="window.print()">🖨️ Guardar como PDF</button></div>
+</div>
+</body></html>`);
 });
 
 // 404 JSON para /api; 404 real (no 200+home) para rutas inexistentes — evita

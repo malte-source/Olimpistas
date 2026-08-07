@@ -671,10 +671,10 @@ function createMemoryStore({ filePath = null } = {}) {
     },
 
     // ── Pedidos de pago (PAGOPAR) ──
-    async createPedidoPago({ socioId, concepto, monto, moneda, refExterna, tierSlug, ciclo, reservaId }) {
+    async createPedidoPago({ socioId, concepto, monto, moneda, refExterna, tierSlug, ciclo, reservaId, subastaId }) {
       const ped = {
         id: uid("ped"), socio_id: socioId, concepto, monto, moneda: moneda || "PYG",
-        tier_slug: tierSlug || null, reserva_id: reservaId || null, ciclo: ciclo || "anio",
+        tier_slug: tierSlug || null, reserva_id: reservaId || null, subasta_id: subastaId || null, ciclo: ciclo || "anio",
         estado: "pendiente", ref_externa: refExterna || null, creado: nowIso(),
       };
       db.pedidos.push(ped); persist();
@@ -690,6 +690,14 @@ function createMemoryStore({ filePath = null } = {}) {
     async getPedidoByRefExterna(ref) {
       if (!ref) return null;
       return (db.pedidos || []).filter((p) => p.ref_externa === ref).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null;
+    },
+    async getPedidoPorSubasta(subastaId) {
+      return (db.pedidos || []).filter((p) => p.subasta_id === subastaId).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null;
+    },
+    async marcarSubastaPagada(id) {
+      const s = (db.subastas || []).find((x) => x.id === id);
+      if (s) { s.pago_estado = "pagado"; persist(); }
+      return true;
     },
 
     // ── Admin ──

@@ -212,7 +212,7 @@ window.OLI_GLOBE = (function () {
           res();
         };
         img.onerror = () => res();
-        img.src = "/assets/flag-olimpia.svg?v=4";
+        img.src = "/assets/flag-olimpia.svg?v=88";
       });
     }
 
@@ -367,7 +367,7 @@ window.OLI_GLOBE = (function () {
         map.flyTo({ center: [p.lng, p.lat], zoom: p.zoom != null ? p.zoom : 8.5, duration: 2400, essential: true });
         const node = document.createElement("div");
         node.className = "mapa-vos";
-        node.innerHTML = `<img src="/assets/flag-olimpia.svg?v=4" alt="" /><span>${p.label || "¡Vos!"}</span>`;
+        node.innerHTML = `<img src="/assets/flag-olimpia.svg?v=88" alt="" /><span>${p.label || "¡Vos!"}</span>`;
         if (_vos) { _vos.remove(); _vos = null; }
         let puesto = false;
         const poner = () => { if (puesto) return; puesto = true; _vos = new ML.Marker({ element: node, anchor: "bottom" }).setLngLat([p.lng, p.lat]).addTo(map); };

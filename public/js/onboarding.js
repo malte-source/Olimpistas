@@ -17,7 +17,7 @@ window.OLI_ONB = (function () {
     const ob = el(`
       <div class="ob" id="onboarding">
         <div class="ob-top">
-          <img class="ob-logo" src="/assets/logo-horizontal.svg?v=85" alt="Olimpistas" />
+          <img class="ob-logo" src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" />
           <button class="ob-close" id="obClose" aria-label="Cerrar">✕</button>
         </div>
         <div class="ob-dots" id="obDots"></div>

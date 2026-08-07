@@ -98,7 +98,7 @@ function buildRouter() {
     const t0 = Date.now();
     try {
       await store.contarTotal();
-      res.json({ ok: true, ms: Date.now() - t0 });
+      res.json({ ok: true, ms: Date.now() - t0, rev: process.env.K_REVISION || null });
     } catch (e) {
       log.error({ err: e.code || e.message }, "salud DB");
       alertar("db-caida", "La base de datos no responde", `/salud\n${e.code || ""} ${e.message || e}`);
@@ -296,6 +296,14 @@ function buildRouter() {
   }));
 
   const soloDigitos = (s) => String(s || "").replace(/\D/g, "");
+  // Enmascara el nombre de un pujador para el feed PÚBLICO de una subasta (no revelar
+  // identidad real ni capacidad de gasto de otros socios). "Eduardo" → "E*****o".
+  const enmascararNombre = (s) => {
+    const n = String(s || "").trim();
+    if (n.length <= 1) return "Pujador";
+    if (n.length === 2) return n[0] + "*";
+    return n[0] + "*".repeat(n.length - 2) + n[n.length - 1];
+  };
 
   // ─── Auth ───────────────────────────────────────────────────────────────────
   // Instancia 1 — alta de cuenta (mínima). La validación de socio (cédula) es la
@@ -599,6 +607,51 @@ function buildRouter() {
     res.json({ gratis: false, pedido, pago, tier: tier.slug });
   }));
 
+  // Qué hacer cuando un pedido se confirma pagado, según su tipo (membresía / entrada de
+  // preventa / subasta) — un solo lugar, usado tanto por el webhook real de PAGOPAR como
+  // por la confirmación simulada de dev, para que nunca se desalineen entre sí.
+  async function cumplirPedidoPagado(pedido) {
+    if (pedido.tier_slug) {
+      const tier = tierBySlug(pedido.tier_slug);
+      if (!tier) return null;
+      const membresia = await store.setMembresia(pedido.socio_id, { tierSlug: tier.slug, ciclo: pedido.ciclo || "anio", pagoRef: pedido.id });
+      const s = await store.getSocioById(pedido.socio_id).catch(() => null);
+      if (s && s.email && mailer.enviarBienvenidaCompra) mailer.enviarBienvenidaCompra(s, tier.slug).catch(() => {});
+      log.info({ tier: pedido.tier_slug, socioId: pedido.socio_id }, "pago confirmado → membresía");
+      return { membresia };
+    }
+    if (pedido.reserva_id && store.confirmarReserva) {
+      await store.confirmarReserva(pedido.reserva_id);
+      try {
+        const reserva = store.getReserva ? await store.getReserva(pedido.reserva_id) : null;
+        const preventa = reserva && store.getPreventa ? await store.getPreventa(reserva.preventa_id) : null;
+        const s = await store.getSocioById(pedido.socio_id).catch(() => null);
+        if (s && s.email && preventa && mailer.enviarEntradaConfirmada)
+          mailer.enviarEntradaConfirmada(s, { evento: preventa.evento, fecha: preventa.fecha, sede: preventa.sede, cantidad: reserva.cantidad }).catch(() => {});
+      } catch (e) { log.warn({ err: e.message }, "pagopar mail entrada"); }
+      log.info({ reservaId: pedido.reserva_id, socioId: pedido.socio_id }, "pago confirmado → entrada");
+      return null;
+    }
+    if (pedido.subasta_id) {
+      // El pago ONLINE confirma el lote; la entrega se coordina por privado (WhatsApp)
+      // recién ahora — antes de esto no hace falta que el equipo escriba a nadie.
+      if (store.marcarSubastaPagada) await store.marcarSubastaPagada(pedido.subasta_id);
+      const s = await store.getSubasta(pedido.subasta_id).catch(() => null);
+      const socio = await store.getSocioById(pedido.socio_id).catch(() => null);
+      if (socio && socio.email && s && mailer.enviarSubastaPagoConfirmado) {
+        const urlCertificado = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id) + "/certificado";
+        mailer.enviarSubastaPagoConfirmado(socio, { titulo: s.titulo, urlCertificado }).catch(() => {});
+      }
+      if (socio && s) {
+        const contacto = socio.whatsapp || socio.telefono || "sin teléfono";
+        alertar("subasta:pago:" + s.id, "Subasta pagada — coordinar entrega",
+          `"${s.titulo}" → ${socio.nombre || socio.email} · ₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")} · contacto: ${contacto} · email: ${socio.email}`);
+      }
+      log.info({ subastaId: pedido.subasta_id, socioId: pedido.socio_id }, "pago confirmado → subasta");
+    }
+    return null;
+  }
+
   // Confirmación de pago en modo SIMULADO (solo DEV). En producción está deshabilitado:
   // el cobro real es por los links de pago y la activación se hace desde el panel admin.
   r.post("/pagos/confirmar-simulado", auth.requireSocio, wrap(async (req, res) => {
@@ -608,11 +661,8 @@ function buildRouter() {
     if (!pedido || pedido.socio_id !== req.socio.id) throw httpError(404, "Pedido no encontrado");
 
     await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-    const tier = tierBySlug(pedido.tier_slug);
-    const membresia = tier
-      ? await store.setMembresia(req.socio.id, { tierSlug: tier.slug, ciclo: pedido.ciclo, pagoRef: pedido.id })
-      : null;
-    res.json({ ok: true, membresia });
+    const out = await cumplirPedidoPagado(pedido);
+    res.json({ ok: true, membresia: (out && out.membresia) || null });
   }));
 
   // ─── Webhook de PAGOPAR (Paso #3): notificación de pago/reversión ──────────────
@@ -636,28 +686,7 @@ function buildRouter() {
       // Pago confirmado → marcar pedido pagado + ENTREGAR según el tipo (idempotente).
       if (pedido.estado !== "pagado") {
         await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-        if (pedido.tier_slug) {
-          // Membresía (Plus/Junior).
-          const tier = tierBySlug(pedido.tier_slug);
-          if (tier) {
-            await store.setMembresia(pedido.socio_id, { tierSlug: tier.slug, ciclo: pedido.ciclo || "anio", pagoRef: pedido.id });
-            // Confirmación de compra (best-effort, no bloquea el webhook).
-            const s = await store.getSocioById(pedido.socio_id).catch(() => null);
-            if (s && s.email && mailer.enviarBienvenidaCompra) mailer.enviarBienvenidaCompra(s, tier.slug).catch(() => {});
-          }
-          log.info({ tier: pedido.tier_slug, socioId: pedido.socio_id }, "pagopar pago confirmado → membresía");
-        } else if (pedido.reserva_id && store.confirmarReserva) {
-          // Entradas de preventa → confirmar la reserva + mandar la confirmación (best-effort).
-          await store.confirmarReserva(pedido.reserva_id);
-          try {
-            const reserva = store.getReserva ? await store.getReserva(pedido.reserva_id) : null;
-            const preventa = reserva && store.getPreventa ? await store.getPreventa(reserva.preventa_id) : null;
-            const s = await store.getSocioById(pedido.socio_id).catch(() => null);
-            if (s && s.email && preventa && mailer.enviarEntradaConfirmada)
-              mailer.enviarEntradaConfirmada(s, { evento: preventa.evento, fecha: preventa.fecha, sede: preventa.sede, cantidad: reserva.cantidad }).catch(() => {});
-          } catch (e) { log.warn({ err: e.message }, "pagopar mail entrada"); }
-          log.info({ reservaId: pedido.reserva_id, socioId: pedido.socio_id }, "pagopar pago confirmado → entrada");
-        }
+        await cumplirPedidoPagado(pedido);
       }
     } else if (row.pagado === false && pedido.estado === "pagado") {
       // Reversión de un pago ya confirmado.
@@ -1323,16 +1352,17 @@ function buildRouter() {
       for (const s of pend) {
         try {
           const ganador = await store.getSocioById(s.ganador_id);
-          if (ganador && mailer.enviarSubastaGanador) await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual }).catch(() => {});
-          // Avisar AL EQUIPO (no solo al ganador): sin esto, nadie sabe que hay que
-          // escribirle por WhatsApp hasta que alguien revisa el panel a mano.
+          const urlSubasta = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id);
+          if (ganador && mailer.enviarSubastaGanador) await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta }).catch(() => {});
+          // Avisar AL EQUIPO (no solo al ganador): así saben que hay un ganador, aunque
+          // recién escriban por WhatsApp cuando el pago esté confirmado (ver
+          // cumplirPedidoPagado → alerta "subasta:pago:").
           if (ganador) {
-            const contacto = ganador.whatsapp || ganador.telefono || "sin teléfono";
             const monto = "₲ " + Number(s.puja_actual || 0).toLocaleString("es-PY");
             alertar(
               "subasta:cierre:" + s.id,
-              "Subasta cerrada — coordinar entrega",
-              `"${s.titulo}" → ganador: ${ganador.nombre || ganador.email} · ${monto} · contacto: ${contacto} · email: ${ganador.email}`
+              "Subasta cerrada — esperando pago del ganador",
+              `"${s.titulo}" → ganador: ${ganador.nombre || ganador.email} · ${monto} · email: ${ganador.email}`
             );
           }
         } catch (e) { /* seguir con las demás */ }
@@ -1385,6 +1415,7 @@ function buildRouter() {
         id: s.id, slug: s.slug, titulo: s.titulo, descripcion: s.descripcion, imagen: s.imagen, emoji: s.emoji,
         nivel_min: s.nivel_min, precio_inicial: s.precio_inicial, incremento: s.incremento,
         puja_actual: s.puja_actual, termina: s.termina, estado: abierta ? "activa" : "cerrada",
+        pago_estado: s.pago_estado || null,
         desbloqueado: access.puedeAcceder(membresia, s.nivel_min),
         pujadores,
         gano: !abierta && !!(req.socio && s.ganador_id === req.socio.id),
@@ -1416,14 +1447,16 @@ function buildRouter() {
     if (s.estado !== "activa" && s.estado !== "cerrada") throw httpError(404, "Subasta no encontrada"); // borrador → oculto
     const membresia = req.socio ? await store.getMembresia(req.socio.id) : null;
     const abierta = subastaAbierta(s);
-    const feed = base.feedRaw.map((p) => ({
-      nombre: p.nombre || "Olimpista", monto: p.monto, creado: p.creado, yo: !!(req.socio && p.socio_id === req.socio.id),
-    }));
+    const feed = base.feedRaw.map((p) => {
+      const yo = !!(req.socio && p.socio_id === req.socio.id);
+      return { nombre: yo ? (p.nombre || "Olimpista") : enmascararNombre(p.nombre), monto: p.monto, creado: p.creado, yo };
+    });
     res.json({
       subasta: {
         id: s.id, slug: s.slug, titulo: s.titulo, descripcion: s.descripcion, imagen: s.imagen, emoji: s.emoji,
         nivel_min: s.nivel_min, precio_inicial: s.precio_inicial, incremento: s.incremento,
         puja_actual: s.puja_actual, termina: s.termina, estado: abierta ? "activa" : "cerrada",
+        pago_estado: s.pago_estado || null,
       },
       desbloqueado: access.puedeAcceder(membresia, s.nivel_min),
       pujadores: base.pujadores,
@@ -1460,6 +1493,48 @@ function buildRouter() {
     res.json({ ok: true, puja_actual: out.subasta.puja_actual, termina: out.subasta.termina, extendida: out.extendida });
   }));
 
+  // El ganador paga ONLINE (Pagopar) para confirmar el lote — la entrega recién se
+  // coordina por privado (WhatsApp) después de acreditado el pago (ver cumplirPedidoPagado).
+  // Mismo manejo de cédula que /membresia/unirse: Pagopar la exige, se pide una sola vez.
+  r.post("/subastas/:id/pagar", auth.requireSocio, wrap(async (req, res) => {
+    const s = await store.getSubasta(req.params.id);
+    if (!s) throw httpError(404, "Subasta no encontrada");
+    if (s.estado !== "cerrada" || s.ganador_id !== req.socio.id) throw httpError(403, "No ganaste esta subasta");
+    if (s.pago_estado === "pagado") return res.json({ ya_pagado: true });
+
+    const sFull = await store.getSocioById(req.socio.id).catch(() => null);
+    let documento = soloDigitos((sFull && sFull.cedula) || "");
+    const cedulaBody = soloDigitos(req.body?.cedula || "");
+    if (!documento && cedulaBody) {
+      if (cedulaBody.length < 5 || cedulaBody.length > 12) throw httpError(400, "Número de cédula inválido");
+      if (store.getSocioByCedula) {
+        const otra = await store.getSocioByCedula(cedulaBody);
+        if (otra && otra.id !== req.socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
+      }
+      try { await store.updateSocio(req.socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
+      catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta"); }
+    }
+    if (!documento) return res.json({ falta_cedula: true });
+
+    // Reusar el pedido pendiente si el ganador ya había iniciado el pago antes (evita
+    // duplicar pedidos en PAGOPAR si reintenta o vuelve a entrar a la página).
+    const existente = store.getPedidoPorSubasta ? await store.getPedidoPorSubasta(s.id) : null;
+    const pedido = (existente && existente.estado === "pendiente")
+      ? existente
+      : await store.createPedidoPago({ socioId: req.socio.id, concepto: `Subasta: ${s.titulo}`, monto: s.puja_actual, moneda: BRAND.monedaCod, subastaId: s.id });
+
+    const pago = await pagopar.crearPedido({
+      pedidoId: pedido.id, monto: s.puja_actual, concepto: pedido.concepto,
+      comprador: {
+        email: req.socio.email,
+        nombre: [req.socio.nombre, sFull && sFull.apellido].filter(Boolean).join(" ") || req.socio.nombre,
+        documento, telefono: (sFull && (sFull.whatsapp || sFull.telefono)) || "",
+      },
+    });
+    await store.updatePedidoPago(pedido.id, { ref_externa: pago.hash });
+    res.json({ pago });
+  }));
+
   // ── Admin de subastas: poner en vivo / cerrar / ver pujas (además del CRUD) ──
   r.post("/admin/subastas/:id/publicar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
@@ -1469,7 +1544,7 @@ function buildRouter() {
     const inicia = new Date().toISOString();
     const termina = new Date(Date.now() + horas * 3600 * 1000).toISOString();
     const item = await store.updateSubasta(s.id, { estado: "activa", inicia, termina, ganador_id: null, puja_actual: s.precio_inicial, notificado: false });
-    _subCache.delete(s.id);
+    _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:publicar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
   }));
@@ -1478,8 +1553,31 @@ function buildRouter() {
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado === "cerrada") throw httpError(409, "La subasta ya cerró; no se puede volver a borrador");
     const item = await store.updateSubasta(s.id, { estado: "borrador", ganador_id: null, termina: null, notificado: false });
-    _subCache.delete(s.id);
+    _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:despublicar", targetId: s.id, por: req.adminUser });
+    res.json({ ok: true, item });
+  }));
+  // Pausar/reanudar: frena la puja y la esconde del home + hub SIN cerrarla (no se
+  // elige ganador ni se avisa a nadie) — válvula de seguridad durante una subasta en
+  // vivo. Al reanudar, el reloj se corre exactamente lo que estuvo en pausa.
+  r.post("/admin/subastas/:id/pausar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const s = await store.getSubasta(req.params.id);
+    if (!s) throw httpError(404, "Subasta no encontrada");
+    if (s.estado !== "activa") throw httpError(409, "Solo se puede pausar una subasta en vivo");
+    const item = await store.updateSubasta(s.id, { estado: "pausada", pausada_en: new Date().toISOString() });
+    _subCache.delete(s.id); _listaSub = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:pausar", targetId: s.id, por: req.adminUser });
+    res.json({ ok: true, item });
+  }));
+  r.post("/admin/subastas/:id/reanudar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const s = await store.getSubasta(req.params.id);
+    if (!s) throw httpError(404, "Subasta no encontrada");
+    if (s.estado !== "pausada") throw httpError(409, "La subasta no está pausada");
+    const pausadaMs = Date.now() - new Date(s.pausada_en).getTime();
+    const termina = s.termina ? new Date(new Date(s.termina).getTime() + Math.max(0, pausadaMs)).toISOString() : s.termina;
+    const item = await store.updateSubasta(s.id, { estado: "activa", termina, pausada_en: null });
+    _subCache.delete(s.id); _listaSub = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:reanudar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
   }));
   r.post("/admin/subastas/:id/programar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
@@ -1489,7 +1587,7 @@ function buildRouter() {
     const t = new Date((req.body && req.body.inicia) || "");
     if (isNaN(t.getTime()) || t.getTime() <= Date.now()) throw httpError(400, "La fecha de inicio debe ser válida y futura");
     const item = await store.updateSubasta(s.id, { estado: "programada", inicia: t.toISOString(), termina: null, ganador_id: null, notificado: false });
-    _subCache.delete(s.id);
+    _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:programar", targetId: s.id, detalle: t.toISOString(), por: req.adminUser });
     res.json({ ok: true, item });
   }));
@@ -1497,7 +1595,7 @@ function buildRouter() {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     const item = await store.updateSubasta(s.id, { estado: "cerrada", termina: new Date().toISOString() });
-    _subCache.delete(s.id);
+    _subCache.delete(s.id); _listaSub = null;
     await cerrarYnotificarSubastas(); // avisa al ganador al toque
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:cerrar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });

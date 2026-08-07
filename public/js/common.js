@@ -116,7 +116,7 @@ window.OLI = (function () {
       ? `<img class="cn-flag" src="https://flagcdn.com/${iso}.svg" alt="" loading="lazy" />` : "";
     return `<div class="cn cn--${slug}">
       <div class="cn-head">
-        <img class="cn-logo" src="/assets/logo-horizontal.svg?v=38" alt="Olimpistas" />
+        <img class="cn-logo" src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" />
       </div>
       <div class="cn-avatar-wrap">${avatar}${flag}</div>
       <div class="cn-name">${esc(nombre)}</div>
@@ -147,7 +147,7 @@ window.OLI = (function () {
       x.fillStyle = g; x.fillRect(0, 0, W, H);
       const gb = x.createLinearGradient(0, 0, W, 0); gb.addColorStop(0, tierCol); gb.addColorStop(1, "#0b0b0f");
       x.fillStyle = gb; x.fillRect(0, 0, W, 132); x.fillStyle = "#c9a227"; x.fillRect(0, 132, W, 3);
-      const logo = await _loadImg("/assets/logo-horizontal.svg?v=45");
+      const logo = await _loadImg("/assets/logo-horizontal.svg?v=88");
       if (logo) { const lw = 300, lh = lw * ((logo.height / logo.width) || 0.215); x.drawImage(logo, (W - lw) / 2, 46, lw, lh); }
       const cx = W / 2, cy = 322, r = 110;
       x.save(); x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.closePath(); x.clip();
@@ -186,7 +186,7 @@ window.OLI = (function () {
       const x = cv.getContext("2d");
       x.fillStyle = "#0b0b0f"; x.fillRect(0, 0, W, H);
       // Fondo: la hinchada del Decano (cover) + velo oscuro para legibilidad.
-      const bg = await _loadImg("/assets/hero-mobile.jpg?v=51") || await _loadImg("/assets/hero-desktop.jpg?v=51");
+      const bg = await _loadImg("/assets/hero-mobile.jpg?v=88") || await _loadImg("/assets/hero-desktop.jpg?v=88");
       if (bg && bg.width) {
         const sc = Math.max(W / bg.width, H / bg.height);
         const bw = bg.width * sc, bh = bg.height * sc;
@@ -199,7 +199,7 @@ window.OLI = (function () {
       x.fillStyle = "rgba(21,19,28,.86)"; x.fillRect(0, 0, W, 300);
       x.fillStyle = "#c9a227"; x.fillRect(0, 300, W, 4);
       // Logo OFICIAL (escudo + OLIMPISTAS.com).
-      const logo = await _loadImg("/assets/logo-horizontal.svg?v=49");
+      const logo = await _loadImg("/assets/logo-horizontal.svg?v=88");
       if (logo) { const lw = 520, lh = lw * ((logo.height / logo.width) || 0.215); x.drawImage(logo, (W - lw) / 2, 95, lw, lh); }
       // Selfie protagonista.
       const cy = 645, r = 215;

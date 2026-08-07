@@ -604,12 +604,12 @@ function createPgStore({ databaseUrl }) {
     },
 
     // ── Pedidos de pago ──
-    async createPedidoPago({ socioId, concepto, monto, moneda, refExterna, tierSlug, ciclo, reservaId }) {
+    async createPedidoPago({ socioId, concepto, monto, moneda, refExterna, tierSlug, ciclo, reservaId, subastaId }) {
       const id = uid("ped");
       const [p] = await sql`
-        INSERT INTO pedidos_pago (id, socio_id, concepto, monto, moneda, ref_externa, tier_slug, reserva_id, ciclo)
+        INSERT INTO pedidos_pago (id, socio_id, concepto, monto, moneda, ref_externa, tier_slug, reserva_id, subasta_id, ciclo)
         VALUES (${id}, ${socioId}, ${concepto}, ${monto}, ${moneda || "PYG"}, ${refExterna || null},
-                ${tierSlug || null}, ${reservaId || null}, ${ciclo || "anio"})
+                ${tierSlug || null}, ${reservaId || null}, ${subastaId || null}, ${ciclo || "anio"})
         RETURNING *`;
       return p;
     },
@@ -617,6 +617,11 @@ function createPgStore({ databaseUrl }) {
       const [p] = await sql`UPDATE pedidos_pago SET ${sql(patch)} WHERE id = ${id} RETURNING *`;
       return p || null;
     },
+    async getPedidoPorSubasta(subastaId) {
+      const [p] = await sql`SELECT * FROM pedidos_pago WHERE subasta_id = ${subastaId} ORDER BY creado DESC LIMIT 1`;
+      return p || null;
+    },
+    async marcarSubastaPagada(id) { await sql`UPDATE subastas SET pago_estado = 'pagado' WHERE id = ${id}`; return true; },
     // ── Admin ──
     async listPedidos({ estado, socioId, limit } = {}) {
       const lim = Math.min(Number(limit) || 100, 500);

@@ -1,6 +1,6 @@
 /* landing.js — embudo de captación: registro gratis + upsell a Kids/Premium. */
 (function () {
-  const { api, precioTier, toast, yo, carnet, makeQR, currency, setCurrency, esc, gs } = window.OLI;
+  const { api, precioTier, toast, yo, carnet, makeQR, currency, setCurrency, esc, gs, artSvg } = window.OLI;
   const I18N = window.OLI_I18N;
   const T = (k) => (I18N ? I18N.t(k) : k);
   const LANG = I18N ? I18N.lang() : "es";
@@ -52,17 +52,23 @@
     const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
     return d > 0 ? d + "d " + h + "h" : h > 0 ? h + "h " + m + "m" : m + "m";
   }
+  // Foto real del lote si el admin la subió; si no, el mismo placeholder de gradiente
+  // que usa el resto de la app (misma lógica que subastaMedia() en socio.js).
+  function destacadoMedia(s) { return s.imagen ? '<img src="' + esc(s.imagen) + '" alt="" />' : artSvg(s.id, s.titulo, s.emoji || "🔨"); }
   async function renderDestacado() {
     const host = document.getElementById("destacadoWrap"); if (!host) return;
     let items = [];
     try { ({ items } = await api("/subastas")); } catch (e) { return; }
     const s = (items || []).find((x) => x.estado === "activa"); if (!s) return;
-    host.innerHTML = '<a class="destacado" href="/subasta/' + encodeURIComponent(s.id) + '">' +
-      '<div class="destacado-ic">' + (s.emoji || "🔨") + '</div>' +
-      '<div class="destacado-txt"><span class="destacado-tag">🔴 ' + T("m_sub_envivo") + ' · ' + T("tab_subastas") + '</span>' +
+    host.innerHTML = '<a class="destacado" href="/subasta/' + encodeURIComponent(s.slug || s.id) + '">' +
+      '<div class="destacado-top"><span class="destacado-dot"></span>' +
+      '<span class="destacado-tag">' + T("m_sub_envivo") + ' · ' + T("tab_subastas") + '</span>' +
+      '<span class="destacado-clock">⏳ ' + cdCorto(s.termina) + '</span></div>' +
+      '<div class="destacado-ic">' + destacadoMedia(s) + '</div>' +
+      '<div class="destacado-txt">' +
       '<strong>' + esc(s.titulo) + '</strong>' +
-      '<span class="destacado-meta">' + T("m_sub_actual") + ' ' + gs(s.puja_actual) + ' · ⏳ ' + cdCorto(s.termina) + ' · 👥 ' + s.pujadores + '</span></div>' +
-      '<span class="destacado-cta">' + T("m_sub_pujar") + ' →</span></a>';
+      '<span class="destacado-meta">' + T("m_sub_actual") + ' <b>' + gs(s.puja_actual) + '</b> · 👥 ' + s.pujadores + '</span></div>' +
+      '<span class="destacado-cta">' + T("m_sub_pujar") + ' ahora →</span></a>';
   }
 
   // Carga diferida de assets (devuelve Promise). Para el mapa pesado (MapLibre).
@@ -77,7 +83,7 @@
     if (_mapaCargado) return; _mapaCargado = true;
     await cargarCss("/assets/vendor/maplibre-gl.css");
     await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=80");
+    await cargarJs("/js/globe.js?v=88");
   }
 
   async function initIdiomaMoneda() {

@@ -10,7 +10,7 @@ const { getStore } = require("../data/store");
   const termina = new Date(Date.now() + horas * 3600 * 1000).toISOString();
   const s = await store.crearSubasta({
     titulo: "Camiseta de Tim Payne — debut y gol",
-    descripcion: "La camiseta que Tim Payne usó en su primer partido con Olimpia, donde marcó su primer gol. Pieza única del debut. El ganador coordina el pago y la entrega por WhatsApp.",
+    descripcion: "La camiseta que Tim Payne usó en su primer partido con Olimpia, donde marcó su primer gol. Pieza única del debut. El ganador paga online para confirmarla; la entrega se coordina por privado.",
     emoji: "👕",
     nivel_min: "premium", // puja Plus y Socio
     precio_inicial: Number(process.env.PRECIO_INICIAL || 500000),

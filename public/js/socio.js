@@ -700,9 +700,11 @@
     const cta = !s.desbloqueado
       ? `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">🔓 ${T("m_sub_subi")}</button>`
       : cerrada
-      ? `<button class="btn btn-ghost" disabled>${s.gano ? "🏆 " + T("m_sub_ganaste") : T("m_sub_cerrada")}</button>`
+      ? (s.gano
+          ? `<button class="btn">🏆 ${s.pago_estado === "pagado" ? T("m_sub_ganaste") : T("m_sub_pagar")}</button>`
+          : `<button class="btn btn-ghost" disabled>${T("m_sub_cerrada")}</button>`)
       : `<button class="btn">${T("m_sub_pujar")} ›</button>`;
-    return `<div class="card card-sub${s.desbloqueado ? "" : " ben-lock"}"${s.desbloqueado && !cerrada ? ` data-sub="${s.id}" style="cursor:pointer"` : ""}>
+    return `<div class="card card-sub${s.desbloqueado ? "" : " ben-lock"}"${s.desbloqueado && (!cerrada || s.gano) ? ` data-sub="${s.id}" style="cursor:pointer"` : ""}>
       <div class="thumb sub-thumb">${subastaMedia(s)}
         <span class="sub-cd${cd.urg ? " urg" : ""}">${cerrada ? T("m_sub_cerrada") : "⏳ " + cd.txt}</span></div>
       <div class="body"><span class="chip ${cerrada ? "" : "on"}">${cerrada ? T("m_sub_finalizada") : "🔴 " + T("m_sub_envivo")}</span>
@@ -739,13 +741,22 @@
   function accionesHtml(r, cerrada) {
     const s = r.subasta;
     if (!r.desbloqueado) return `<button class="btn btn-block" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">🔓 ${T("m_sub_subi")}</button>`;
-    if (cerrada) return `<div class="sub-cerrada">${r.gano ? "🏆 " + T("m_sub_ganaste_txt") : T("m_sub_cerrada_txt")}</div>`;
+    if (cerrada && r.gano && s.pago_estado !== "pagado") return `<div class="sub-cerrada">🏆 ${T("m_sub_ganaste_txt")}</div>
+      <button class="btn btn-block" id="subPagarBtn" data-sub-pagar="${s.id}">${T("m_sub_pagar")} — ${gs(s.puja_actual)}</button>`;
+    if (cerrada && r.gano) return `<div class="sub-cerrada">✅ ${T("m_sub_pagado_txt")}</div>
+      <a class="btn btn-ghost btn-block" href="/subasta/${esc(s.slug || s.id)}/certificado" target="_blank" rel="noopener">🏅 ${T("m_sub_certificado")}</a>`;
+    if (cerrada) return `<div class="sub-cerrada">${T("m_sub_cerrada_txt")}</div>`;
     const next = s.puja_actual + s.incremento;
     return `<button class="btn btn-block sub-puja" data-monto="${next}">${T("m_sub_pujar")} ${gs(next)}</button>
       <div class="sub-quick">
         <button class="chip-btn sub-puja" data-monto="${s.puja_actual + s.incremento * 2}">+${gsK(s.incremento * 2)}</button>
         <button class="chip-btn sub-puja" data-monto="${s.puja_actual + s.incremento * 5}">+${gsK(s.incremento * 5)}</button>
         <button class="chip-btn sub-puja" data-monto="${s.puja_actual + s.incremento * 10}">+${gsK(s.incremento * 10)}</button>
+      </div>
+      <a class="sub-custom-toggle" id="subCustomToggle">${T("m_sub_monto_libre")}</a>
+      <div class="sub-custom-form" id="subCustomForm" hidden>
+        <input type="number" id="subCustomInput" inputmode="numeric" min="${next}" step="${s.incremento}" placeholder="${T("m_sub_monto_desde")} ${gs(next)}" />
+        <button class="btn btn-sm" id="subCustomBtn" data-monto-min="${next}">${T("m_sub_pujar")}</button>
       </div>`;
   }
   function renderDetalle(r) {
@@ -762,6 +773,7 @@
         <div class="sub-clock${cd.urg ? " urg" : ""}" id="subClock"><span>${T("m_sub_cierra")}</span> <b id="subCd">${cerrada ? T("m_sub_cerrada") : cd.txt}</b></div>
       </div>
       <p class="sub-meta">👥 <b id="subPuj">${r.pujadores}</b> ${T("m_sub_pujando")} · ${T("m_sub_tupuja")}: <b id="subMia">${r.miPuja ? gs(r.miPuja) : "—"}</b></p>
+      <p class="sub-antisnipe" id="subAntisnipe"${cerrada ? ' style="display:none"' : ""}>${T("m_sub_antisnipe")}</p>
       <div id="subAcciones">${accionesHtml(r, cerrada)}</div>
       <h3 style="margin-top:24px">🔴 ${T("m_sub_feed")}</h3>
       <div class="sub-feed" id="subFeed">${feedHtml(r.feed)}</div>
@@ -771,6 +783,38 @@
   }
   function bindPujas(id) {
     cv().querySelectorAll(".sub-puja").forEach((b) => b.addEventListener("click", () => pujar(id, Number(b.dataset.monto))));
+    const pagarBtn = cv().querySelector("[data-sub-pagar]");
+    if (pagarBtn) pagarBtn.addEventListener("click", () => pagarSubasta(pagarBtn.dataset.subPagar));
+    // Puja de monto libre (además de los incrementos rápidos): oculta por defecto,
+    // la abre quien quiera pujar una cifra puntual en vez del siguiente mínimo.
+    const toggle = document.getElementById("subCustomToggle");
+    const form = document.getElementById("subCustomForm");
+    if (toggle && form) {
+      toggle.addEventListener("click", () => { form.hidden = false; toggle.hidden = true; document.getElementById("subCustomInput").focus(); });
+    }
+    const customBtn = document.getElementById("subCustomBtn");
+    if (customBtn) {
+      customBtn.addEventListener("click", () => {
+        const input = document.getElementById("subCustomInput");
+        const monto = Math.round(Number(input.value) || 0);
+        const min = Number(customBtn.dataset.montoMin) || 0;
+        if (monto < min) { toast(T("m_sub_monto_bajo") + " " + gs(min)); return; }
+        pujar(id, monto);
+      });
+    }
+  }
+  // Pago online del ganador (Pagopar) — misma pedirCedula() que la compra de membresía.
+  async function pagarSubasta(id, cedula) {
+    try {
+      const r = await api("/subastas/" + id + "/pagar", { method: "POST", body: { cedula } });
+      if (r.ya_pagado) return vSubastaDetalle(id);
+      if (r.falta_cedula) {
+        const c = await OLI.pedirCedula(T("m_cedula_pago"));
+        if (!c) return;
+        return pagarSubasta(id, c);
+      }
+      location.href = r.pago.urlPago;
+    } catch (e) { toast(e.message); }
   }
   function actualizarDetalle(r) {
     if (!document.getElementById("subAmt")) return; // ya no estamos en el detalle
@@ -784,6 +828,7 @@
     document.getElementById("subAcciones").innerHTML = accionesHtml(r, cerrada);
     bindPujas(s.id);
     const clock = document.getElementById("subClock"); if (clock) clock.classList.toggle("urg", cd.urg);
+    const antisnipe = document.getElementById("subAntisnipe"); if (antisnipe) antisnipe.style.display = cerrada ? "none" : "";
     if (cerrada) {
       stopSub();
       document.getElementById("subCd").textContent = T("m_sub_cerrada");

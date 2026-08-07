@@ -185,7 +185,7 @@
 <body>
   <!-- Login -->
   <div class="login" id="login">
-    <img src="/assets/logo-horizontal.svg?v=78" alt="Olimpistas" />
+    <img src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" />
     <h1>Panel de administración</h1>
     <div id="loginUser">
       <input id="usuario" type="text" placeholder="Usuario" autocomplete="username" />
@@ -204,7 +204,7 @@
   <!-- Dashboard -->
   <div id="dash" hidden>
     <aside class="sidebar">
-      <div class="sb-brand"><img src="/assets/logo-horizontal.svg?v=78" alt="Olimpistas" /></div>
+      <div class="sb-brand"><img src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" /></div>
       <div class="sb-label">General</div>
       <a class="nav-link" data-area="dashboard" href="#/dashboard"><span class="ic">📊</span> Dashboard</a>
       <div class="sb-label">Gestión</div>
@@ -747,7 +747,7 @@
       contenido: { t: "Contenido", lbl: function (x) { return x.titulo; }, info: function (x) { return (x.tipo || "") + " · " + (TIER[x.tier_min] || x.tier_min); }, campos: [["titulo", "Título", "text"], ["tipo", "Tipo (video/nota…)", "text"], ["tier_min", "Nivel mínimo", "tier"], ["duracion", "Duración", "text"], ["descripcion", "Descripción", "text"], ["thumb", "Thumb URL", "text"], ["publicado", "Publicado", "date"]] },
       subastas: { t: "Subastas",
         lbl: function (x) { return x.titulo; },
-        estado: function (x) { return { borrador: { l: "📝 Borrador", c: "" }, programada: { l: "⏳ Programada", c: "pill-warn" }, activa: { l: "🔴 En vivo", c: "pill-ok" }, cerrada: { l: "🏁 Cerrada", c: "" } }[x.estado] || { l: x.estado, c: "" }; },
+        estado: function (x) { return { borrador: { l: "📝 Borrador", c: "" }, programada: { l: "⏳ Programada", c: "pill-warn" }, activa: { l: "🔴 En vivo", c: "pill-ok" }, pausada: { l: "⏸ Pausada", c: "pill-warn" }, cerrada: { l: "🏁 Cerrada", c: "" } }[x.estado] || { l: x.estado, c: "" }; },
         info: function (x) { var extra = (x.estado === "programada" && x.inicia) ? "arranca " + new Date(x.inicia).toLocaleString("es-PY") + " · " : ""; return extra + (TIER[x.nivel_min] || x.nivel_min) + " · desde ₲" + Number(x.precio_inicial || 0).toLocaleString("es-PY") + (Number(x.puja_actual) > Number(x.precio_inicial) ? " · actual ₲" + Number(x.puja_actual).toLocaleString("es-PY") : ""); },
         campos: [["titulo", "Título", "text"], ["descripcion", "Descripción", "text"], ["emoji", "Emoji", "text"], ["imagen", "Imagen", "imagen"], ["nivel_min", "Quién puja (nivel mínimo)", "tier"], ["precio_inicial", "Precio inicial (₲)", "number"], ["incremento", "Incremento (₲)", "number"], ["duracion_horas", "Duración (horas)", "number"]], subasta: true },
       encuestas: { t: "Encuestas",
@@ -776,8 +776,11 @@
               sub += '<button class="btn btn-sm" data-vivo="' + esc(x.id) + '">▶ En vivo ya</button>';
               sub += '<button class="btn btn-sm btn-ghost" data-despub="' + esc(x.id) + '">↩ Borrador</button>';
             } else if (x.estado === "activa") {
+              sub += '<button class="btn btn-sm btn-ghost" data-pausar="' + esc(x.id) + '">⏸ Pausar</button>';
               sub += '<button class="btn btn-sm btn-no" data-cerrar="' + esc(x.id) + '">⏹ Cerrar</button>';
-              sub += '<button class="btn btn-sm btn-ghost" data-despub="' + esc(x.id) + '">↩ Borrador</button>';
+            } else if (x.estado === "pausada") {
+              sub += '<button class="btn btn-sm btn-ok" data-reanudar="' + esc(x.id) + '">▶ Reanudar</button>';
+              sub += '<button class="btn btn-sm btn-no" data-cerrar="' + esc(x.id) + '">⏹ Cerrar</button>';
             }
             sub += '<button class="btn btn-sm btn-ghost" data-pujas="' + esc(x.id) + '">👁 Pujas</button>';
             // Disponible en CUALQUIER estado (incluso Borrador): sirve para preparar la
@@ -932,6 +935,13 @@
       if (!(await confirmar("¿Volver a borrador? Deja de estar visible para los socios; podés reconfigurarla y volver a publicarla.", { titulo: "Volver a borrador", ok: "Volver a borrador" })).ok) return;
       try { await api("/admin/subastas/" + encodeURIComponent(id) + "/despublicar", { method: "POST" }); toast("↩ En borrador"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
     }
+    async function pausarSubasta(id) {
+      if (!(await confirmar("¿Pausar la subasta? Se esconde del home y del listado y nadie puede pujar mientras esté pausada — no se cierra ni se elige ganador. Podés reanudarla cuando quieras y el reloj sigue exactamente donde quedó.", { titulo: "Pausar subasta", ok: "Pausar" })).ok) return;
+      try { await api("/admin/subastas/" + encodeURIComponent(id) + "/pausar", { method: "POST" }); toast("⏸ Pausada y escondida"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function reanudarSubasta(id) {
+      try { await api("/admin/subastas/" + encodeURIComponent(id) + "/reanudar", { method: "POST" }); toast("▶ Subasta reanudada"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
     async function programarSubasta(id) {
       var d = new Date(Date.now() + 3600000), p = function (n) { return (n < 10 ? "0" : "") + n; };
       var def = d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
@@ -976,6 +986,8 @@
       var url = location.origin + "/subasta/" + encodeURIComponent(it.slug || id); // slug legible si existe
       var aviso = (it.estado === "borrador" || it.estado === "programada")
         ? '<p style="color:var(--rojo);font-size:13px;margin:0 0 12px">⚠️ Todavía NO está en vivo (' + (it.estado === "borrador" ? "Borrador" : "Programada") + '). El link no va a funcionar hasta que la publiques con "Poner en vivo" — pero ya podés usarlo para preparar la comunicación.</p>'
+        : it.estado === "pausada"
+        ? '<p style="color:var(--rojo);font-size:13px;margin:0 0 12px">⏸ Está pausada — el link no muestra la subasta hasta que la reanudes.</p>'
         : '<p style="color:var(--verde);font-size:13px;margin:0 0 12px">✓ Ya está en vivo — el link funciona ahora mismo.</p>';
       infoModal("🔗 Link — " + esc(it.titulo || ""), aviso +
         '<div class="fgrid" style="grid-template-columns:1fr"><div><label>Link para compartir</label><input id="linkUrlBox" value="' + esc(url) + '" readonly onclick="this.select()" /></div></div>' +
@@ -1346,6 +1358,8 @@
       else if (b.dataset.vivo) publicarSubasta(b.dataset.vivo);
       else if (b.dataset.prog) programarSubasta(b.dataset.prog);
       else if (b.dataset.despub) despublicarSubasta(b.dataset.despub);
+      else if (b.dataset.pausar) pausarSubasta(b.dataset.pausar);
+      else if (b.dataset.reanudar) reanudarSubasta(b.dataset.reanudar);
       else if (b.dataset.cerrar) cerrarSubasta(b.dataset.cerrar);
       else if (b.dataset.pujas) verPujasSubasta(b.dataset.pujas);
       else if (b.dataset.link) verLinkSubasta(b.dataset.link);
