@@ -80,6 +80,49 @@ window.OLI_GLOBE = (function () {
   const FLAG = {
     PY:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#D52B1E');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#0038A8');},
     AR:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#74ACDF');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#74ACDF');},
+    UY:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');for(let i=0;i<4;i++)_r(x,a,b+(i*2+1)*h/9,w,h/9,'#0038A8');_r(x,a,b,w*0.5,h*0.5,'#fff');x.fillStyle='#F6D515';x.beginPath();x.arc(a+w*0.25,b+h*0.25,h*0.12,0,7);x.fill();},
+    BO:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#D52B1E');_r(x,a,b+h/3,w,h/3,'#F9E300');_r(x,a,b+2*h/3,w,h/3,'#007934');},
+    GT:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#4997D0');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#4997D0');},
+    DO:(x,a,b,w,h)=>{_r(x,a,b,w/2,h/2,'#002D62');_r(x,a+w/2,b,w/2,h/2,'#CE1126');_r(x,a,b+h/2,w/2,h/2,'#CE1126');_r(x,a+w/2,b+h/2,w/2,h/2,'#002D62');_r(x,a+w*0.42,b,w*0.16,h,'#fff');_r(x,a,b+h*0.42,w,h*0.16,'#fff');},
+    CR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a,b,w,h*0.2,'#002B7F');_r(x,a,b+h*0.8,w,h*0.2,'#002B7F');_r(x,a,b+h*0.35,w,h*0.3,'#CE1126');},
+    PA:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a+w/2,b,w/2,h/2,'#D21034');_r(x,a,b+h/2,w/2,h/2,'#005293');x.fillStyle='#005293';_star(x,a+w*0.25,b+h*0.25,h*0.1);x.fillStyle='#D21034';_star(x,a+w*0.75,b+h*0.75,h*0.1);},
+    NI:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#0067C6');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#0067C6');},
+    HN:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#0073CF');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#0073CF');},
+    SV:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#0F47AF');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#0F47AF');},
+    CU:(x,a,b,w,h)=>{for(let i=0;i<5;i++)_r(x,a,b+i*h/5,w,h/5,i%2?'#fff':'#002A8F');x.fillStyle='#CB1515';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.45,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();x.fillStyle='#fff';_star(x,a+w*0.14,b+h/2,h*0.1);},
+    PR:(x,a,b,w,h)=>{for(let i=0;i<5;i++)_r(x,a,b+i*h/5,w,h/5,i%2?'#fff':'#ED0000');x.fillStyle='#0050A4';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.5,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();x.fillStyle='#fff';_star(x,a+w*0.16,b+h/2,h*0.1);},
+    FR:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#0055A4');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#EF4135');},
+    NL:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#AE1C28');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#21468B');},
+    BE:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#000');_r(x,a+w/3,b,w/3,h,'#FAE042');_r(x,a+2*w/3,b,w/3,h,'#ED2939');},
+    AT:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#ED2939');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#ED2939');},
+    IE:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#169B62');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#FF883E');},
+    PL:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#fff');_r(x,a,b+h/2,w,h/2,'#DC143C');},
+    UA:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#0057B7');_r(x,a,b+h/2,w,h/2,'#FFD700');},
+    RO:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#002B7F');_r(x,a+w/3,b,w/3,h,'#FCD116');_r(x,a+2*w/3,b,w/3,h,'#CE1126');},
+    GR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');for(let i=0;i<5;i++)_r(x,a,b+i*2*h/9,w,h/9,'#0D5EAF');_r(x,a,b,w*0.5,h*0.55,'#0D5EAF');x.fillStyle='#fff';_r(x,a+w*0.18,b,w*0.14,h*0.55,'#fff');_r(x,a,b+h*0.20,w*0.5,h*0.14,'#fff');},
+    CZ:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#fff');_r(x,a,b+h/2,w,h/2,'#D7141A');x.fillStyle='#11457E';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.5,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();},
+    CH:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#D52B1E');_r(x,a+w*0.42,b+h*0.30,w*0.16,h*0.40,'#fff');_r(x,a+w*0.30,b+h*0.42,w*0.40,h*0.16,'#fff');},
+    DK:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#C8102E');_r(x,a+w*0.30,b,w*0.16,h,'#fff');_r(x,a,b+h*0.42,w,h*0.16,'#fff');},
+    FI:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a+w*0.30,b,w*0.16,h,'#003580');_r(x,a,b+h*0.42,w,h*0.16,'#003580');},
+    NO:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#BA0C2F');_r(x,a+w*0.28,b,w*0.20,h,'#fff');_r(x,a,b+h*0.40,w,h*0.20,'#fff');_r(x,a+w*0.33,b,w*0.10,h,'#00205B');_r(x,a,b+h*0.45,w,h*0.10,'#00205B');},
+    GB:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#012169');_r(x,a+w*0.40,b,w*0.20,h,'#fff');_r(x,a,b+h*0.40,w,h*0.20,'#fff');_r(x,a+w*0.44,b,w*0.12,h,'#C8102E');_r(x,a,b+h*0.44,w,h*0.12,'#C8102E');},
+    PT:(x,a,b,w,h)=>{_r(x,a,b,w*0.4,h,'#006600');_r(x,a+w*0.4,b,w*0.6,h,'#FF0000');x.fillStyle='#FFD700';x.beginPath();x.arc(a+w*0.4,b+h/2,h*0.12,0,7);x.fill();},
+    AE:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#009639');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#000');_r(x,a,b,w*0.28,h,'#CE1126');},
+    SA:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#006C35');_r(x,a+w*0.15,b+h*0.60,w*0.6,h*0.06,'#fff');},
+    EG:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#CE1126');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#000');},
+    MA:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#C1272D');x.fillStyle='#006233';_star(x,a+w/2,b+h/2,h*0.18);},
+    NG:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#008751');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#008751');},
+    ZA:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#E03C31');_r(x,a,b+h/2,w,h/2,'#001489');_r(x,a,b+h*0.4,w,h*0.2,'#007749');x.fillStyle='#000';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.4,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();},
+    AO:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#CC092F');_r(x,a,b+h/2,w,h/2,'#000');x.fillStyle='#FFCB00';x.beginPath();x.arc(a+w/2,b+h/2,h*0.1,0,7);x.fill();},
+    CN:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#DE2910');x.fillStyle='#FFDE00';_star(x,a+w*0.35,b+h*0.34,h*0.16);},
+    KR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');const cx=a+w/2,cy=b+h/2,r=h*0.16;x.fillStyle='#0047A0';x.beginPath();x.arc(cx,cy,r,0,7);x.fill();x.fillStyle='#CD2E3A';x.beginPath();x.arc(cx,cy,r,Math.PI,2*Math.PI);x.fill();},
+    IN:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#FF9933');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#138808');x.strokeStyle='#000080';x.lineWidth=2;x.beginPath();x.arc(a+w/2,b+h/2,h*0.08,0,7);x.stroke();},
+    ID:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#CE1126');_r(x,a,b+h/2,w,h/2,'#fff');},
+    TH:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#A51931');_r(x,a,b+h*0.166,w,h*0.166,'#fff');_r(x,a,b+h*0.666,w,h*0.166,'#fff');_r(x,a,b+h*0.333,w,h*0.333,'#2D2A4A');},
+    TW:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#FE0000');_r(x,a,b,w*0.5,h*0.5,'#000095');x.fillStyle='#fff';x.beginPath();x.arc(a+w*0.25,b+h*0.25,h*0.12,0,7);x.fill();},
+    VN:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#DA251D');x.fillStyle='#FFFF00';_star(x,a+w/2,b+h/2,h*0.2);},
+    PH:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#0038A8');_r(x,a,b+h/2,w,h/2,'#CE1126');x.fillStyle='#fff';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.5,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();x.fillStyle='#FCD116';x.beginPath();x.arc(a+w*0.14,b+h/2,h*0.06,0,7);x.fill();},
+    IL:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a,b+h*0.16,w,h*0.12,'#0038B8');_r(x,a,b+h*0.72,w,h*0.12,'#0038B8');x.strokeStyle='#0038B8';x.lineWidth=h*0.04;x.beginPath();x.arc(a+w/2,b+h/2,h*0.12,0,7);x.stroke();},
     RU:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#fff');_r(x,a,b+h/3,w,h/3,'#0039A6');_r(x,a,b+2*h/3,w,h/3,'#D52B1E');},
     DE:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#111');_r(x,a,b+h/3,w,h/3,'#DD0000');_r(x,a,b+2*h/3,w,h/3,'#FFCE00');},
     VE:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#FFCC00');_r(x,a,b+h/3,w,h/3,'#00247D');_r(x,a,b+2*h/3,w,h/3,'#CF142B');},
@@ -117,18 +160,24 @@ window.OLI_GLOBE = (function () {
     const ML = window.maplibregl;
     if (!ML || !el) return null;
 
+    // Escape anti-XSS para los popups (datos de socio: nombre, ciudad).
+    const esc = (window.OLI && window.OLI.esc) || ((s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])));
+
     const map = new ML.Map({
       container: el, style: ESTILO,
       center: opts.center || [-58.4, -23.4],
       zoom: opts.zoom != null ? opts.zoom : 1.6,
       attributionControl: { compact: true }, dragRotate: true,
+      cooperativeGestures: true, // mobile: 1 dedo scrollea la página, 2 dedos mueven el mapa
     });
     map.addControl(new ML.NavigationControl({ showCompass: false }), "top-right");
 
     // Rotación automática (estilo Google Earth): gira al cargar y se DETIENE del
     // todo al primer gesto del usuario. No reanuda → nunca pelea con el toque.
     // Basada en timer (no en el chain de moveend) para evitar trabarse.
-    let girando = opts.autoRotate !== false, rotT = null;
+    // Respeta prefers-reduced-motion: si el usuario pidió menos movimiento, NO auto-rota.
+    const _reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let girando = opts.autoRotate !== false && !_reduce, rotT = null;
     function girar() {
       clearTimeout(rotT);
       if (!girando) return;
@@ -171,7 +220,7 @@ window.OLI_GLOBE = (function () {
       if (popup) popup.remove();
       popup = new ML.Popup({ offset: 14, closeButton: false, maxWidth: "210px" }).setLngLat(coords).setHTML(html).addTo(map);
     }
-    const popCiudad = (p) => `<strong>${lugarDe(p)}</strong><span>${Number(p.count || 1).toLocaleString("es-PY")} Olimpista${(p.count || 1) === 1 ? "" : "s"}</span>`;
+    const popCiudad = (p) => `<strong>${esc(lugarDe(p))}</strong><span>${Number(p.count || 1).toLocaleString("es-PY")} Olimpista${(p.count || 1) === 1 ? "" : "s"}</span>`;
 
     function refrescarCasas() {
       if (!opts.flagsUrl || !map.getSource("casas")) return;
@@ -254,7 +303,7 @@ window.OLI_GLOBE = (function () {
           paint: { "icon-opacity": opa(11.5, 0, 12.5, 1), "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.3, "text-opacity": opa(12.5, 0, 13.2, 1) } });
         map.on("click", "casas", (e) => {
           const f = e.features[0], p = f.properties;
-          popupEn(f.geometry.coordinates.slice(), `<strong><img class="pop-fl" src="/assets/flag-olimpia.svg" alt="" /> ${p.nombre || "Un Olimpista"}</strong><span>${p.ciudad || ""}</span>`);
+          popupEn(f.geometry.coordinates.slice(), `<strong><img class="pop-fl" src="/assets/flag-olimpia.svg" alt="" /> ${esc(p.nombre || "Un Olimpista")}</strong><span>${esc(p.ciudad || "")}</span>`);
         });
         map.on("moveend", refrescarCasas);
         refrescarCasas();

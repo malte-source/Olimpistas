@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /miembro
+Disallow: /c/
+
+Sitemap: https://www.olimpistas.com/sitemap.xml

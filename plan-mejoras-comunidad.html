@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Plan de mejoras UX & crecimiento</title>
+<style>
+  :root{
+    --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33;
+    --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78;
+    --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 20px 80px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(28px,5vw,44px);line-height:1.15;margin:10px 0 14px;font-weight:900}
+  h1 .gold{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:17px;max-width:760px}
+  h2{font-size:23px;margin:54px 0 6px;font-weight:800;display:flex;align-items:center;gap:10px}
+  h2 .em{font-size:24px}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .north{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:18px;padding:24px 26px;margin:26px 0 8px}
+  .north b{color:var(--oro2)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:6px}
+  .card{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:20px 20px 18px;position:relative}
+  .card h3{margin:0 0 8px;font-size:16px;font-weight:800}
+  .card p{margin:0 0 12px;color:var(--gris);font-size:14px}
+  .chips{display:flex;gap:7px;flex-wrap:wrap}
+  .chip{font-size:11px;font-weight:800;letter-spacing:.4px;padding:4px 10px;border-radius:999px;text-transform:uppercase}
+  .imp-alto{background:rgba(46,194,126,.16);color:#7be0b0}
+  .imp-medio{background:rgba(91,155,213,.16);color:#9cc4ec}
+  .esf-bajo{background:rgba(201,162,39,.16);color:var(--oro2)}
+  .esf-medio{background:rgba(240,216,115,.10);color:#d7c277}
+  .esf-alto{background:rgba(224,85,107,.14);color:#f0a0ad}
+  .num{position:absolute;top:16px;right:18px;font-size:13px;font-weight:900;color:var(--gris2)}
+  .top{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin:18px 0 6px}
+  .topcard{background:var(--panel2);border:1px solid var(--linea);border-left:4px solid var(--oro);border-radius:12px;padding:16px 18px}
+  .topcard .r{color:var(--oro2);font-weight:900;font-size:13px}
+  .topcard h4{margin:6px 0 6px;font-size:15px}
+  .topcard p{margin:0;color:var(--gris);font-size:13px}
+  .obs{background:var(--panel);border:1px dashed var(--linea);border-radius:14px;padding:16px 20px;margin:16px 0;font-size:14px;color:var(--gris)}
+  .obs b{color:var(--blanco)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 0;font-size:12px;color:var(--gris2)}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+  a{color:var(--oro2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Olimpistas.com</span>
+  <h1>Auditoría de plataforma:<br><span class="gold">flujo, UX y motores de crecimiento</span></h1>
+  <p class="lead">Plan de mejoras enfocado en hacer crecer la comunidad mundial de Olimpistas y convertir mejor — sin perder la magia. <b style="color:#fff">Es un mapa de ideas priorizadas, no un compromiso de implementación.</b> Cada tarjeta lleva impacto estimado y esfuerzo.</p>
+
+  <div class="north">
+    🎯 <b>Norte:</b> que cada hincha que entra <b>se quede, vuelva y traiga a otro</b> — y que el que puede pagar, pague con gusto. Todo lo de abajo se mide contra eso: ¿activa, retiene o viraliza?
+  </div>
+
+  <div class="legend">
+    <span>Impacto: <span class="chip imp-alto">alto</span> <span class="chip imp-medio">medio</span></span>
+    <span>Esfuerzo: <span class="chip esf-bajo">bajo</span> <span class="chip esf-medio">medio</span> <span class="chip esf-alto">alto</span></span>
+  </div>
+
+  <!-- TOP -->
+  <h2><span class="em">⭐</span> Las 5 apuestas de mayor palanca</h2>
+  <p class="sub">Si hubiera que elegir, por dónde empezar.</p>
+  <div class="top">
+    <div class="topcard"><div class="r">#1 · VIRALIDAD</div><h4>Programa de referidos</h4><p>Link personal: "sumá a un hincha". Ambos ganan (chances de sorteo / insignia / descuento Plus). Es el loop de crecimiento más barato y potente.</p></div>
+    <div class="topcard"><div class="r">#2 · INGRESOS</div><h4>Recuperar pagos abandonados</h4><p>Hoy hay <b>147 personas</b> que empezaron Plus/Junior y no terminaron. Email + WhatsApp + banner "te falta 1 paso" = ingreso casi inmediato.</p></div>
+    <div class="topcard"><div class="r">#3 · RETENCIÓN</div><h4>Quiniela de partidos</h4><p>Predecí el resultado de Olimpia → puntos y ranking. Da una razón para volver <b>cada fecha</b>. El feature que más engancha a un hincha.</p></div>
+    <div class="topcard"><div class="r">#4 · PRESENCIA</div><h4>Carnet en la billetera + push</h4><p>Carnet a Apple/Google Wallet y notificaciones (PWA): partido, sorteo, preventa. Marca presente en el teléfono todo el tiempo.</p></div>
+    <div class="topcard"><div class="r">#5 · CLARIDAD</div><h4>Definir el modelo Plus</h4><p>Hoy el 98% de los Plus son <b>regalados</b> por validar socio. Decidir: ¿beneficio de socio (y venderlo así) o reservar Plus al que paga?</p></div>
+  </div>
+
+  <!-- FLUJO -->
+  <h2><span class="em">🔀</span> Flujo &amp; conversión</h2>
+  <p class="sub">Que entrar, validarse y pagar cueste lo mínimo.</p>
+  <div class="obs">📊 <b>Observado en datos reales:</b> 147 checkouts abandonados · el match de pago depende de que el pagador tipee la misma cédula que tiene en su cuenta (frágil) · email de verificación de bajo valor que quema cuota.</div>
+  <div class="grid">
+    <div class="card"><span class="num">F1</span><h3>Pago sin fricción + métodos locales</h3><p>Pasar la identidad del socio al checkout de Metrepay (match exacto, adiós reconciliación a mano). Sumar billeteras PY: Tigo Money, Billetera Personal, giros — donde está la plata.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">F2</span><h3>Onboarding progresivo</h3><p>Entrar en 2 campos (email + clave). Selfie, ciudad y cédula quedan como "completá tu perfil" con recompensa. Menos fricción arriba = más altas.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">F3</span><h3>Recuperación de carrito</h3><p>Quien empieza el pago y no termina: email (ya armado), WhatsApp y banner in-app "estás a un paso". Secuencia de 2-3 toques en 72h.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">F4</span><h3>Login sin contraseña</h3><p>Magic-link por email (ya tenemos tokens). Menos "olvidé mi clave", menos abandono al volver.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">F5</span><h3>Flujo "regalar Junior"</h3><p>El pendiente: comprar Junior para un menor (el carnet es del chico, no del que paga). Abre la puerta a familias enteras.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+  </div>
+
+  <!-- USABILIDAD -->
+  <h2><span class="em">🪶</span> Usabilidad</h2>
+  <p class="sub">Que se sienta rápido, claro y propio en el celular.</p>
+  <div class="grid">
+    <div class="card"><span class="num">U1</span><h3>Barra "completá tu perfil"</h3><p>Progreso visible (foto ✓ · ciudad ✓ · cédula ✓) con micro-recompensa al 100%. Empuja a completar datos que sirven para el mapa y la validación.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">U2</span><h3>Portugués (y guiño en guaraní)</h3><p>Ya hay ES/EN. Sumar PT abre Brasil; un toque de guaraní ("Rojápe", "Ñande") refuerza identidad y cercanía.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">U3</span><h3>Estados vacíos / carga / error con cara</h3><p>Skeletons, mensajes con voz de hincha, reintentos suaves. Que nada parezca "roto" en una mala conexión.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">U4</span><h3>Accesibilidad</h3><p>Contraste, foco de teclado, etiquetas en el mapa y formularios. Más usuarios alcanzados y mejor SEO.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+  </div>
+
+  <!-- GADGETS -->
+  <h2><span class="em">🎮</span> Gadgets &amp; features</h2>
+  <p class="sub">Razones nuevas para abrir la app.</p>
+  <div class="grid">
+    <div class="card"><span class="num">G1</span><h3>Quiniela / predicciones</h3><p>Antes de cada partido: predecí resultado y goleador. Puntos, ranking semanal y mensual, premios. El motor de retención #1 para un club.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-alto">esfuerzo alto</span></div></div>
+    <div class="card"><span class="num">G2</span><h3>Niveles, insignias y rachas</h3><p>"Olimpista desde…", insignias (primero de tu ciudad, fue a la cancha, validó socio), racha de días. Gamificación liviana = vuelven.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">G3</span><h3>Push / PWA</h3><p>Recordatorio de partido, resultado de sorteo, apertura de preventa. Ya hay manifest PWA; falta el canal de notificaciones.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">G4</span><h3>Sorteos con referidos</h3><p>Cada amigo que sumás = +1 chance. Convierte el sorteo (que ya existe) en una máquina de captación.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">G5</span><h3>Wallet pass (Apple/Google)</h3><p>El carnet vive en la billetera del teléfono. Presencia de marca cada vez que abren la billetera, sin abrir la app.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">G6</span><h3>Descargables: wallpapers &amp; stickers</h3><p>Fondos de pantalla, stickers de WhatsApp y marcos "Soy Olimpista" oficiales. Contenido que ellos mismos difunden.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+  </div>
+
+  <!-- ADORNOS -->
+  <h2><span class="em">✨</span> Adornos &amp; momentos de deleite</h2>
+  <p class="sub">Los detalles que dan ganas de compartir.</p>
+  <div class="grid">
+    <div class="card"><span class="num">A1</span><h3>Celebración al unirse / subir a Plus</h3><p>Confetti blanco-negro, animación del carnet "aterrizando" en el mapa, "sos el Olimpista #N". El momento más compartible del flujo.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">A2</span><h3>Mapa vivo con pulso</h3><p>Ticker "Juan, de Asunción, se acaba de unir" + pulsos cuando entra alguien. Prueba social en tiempo real = FOMO sano.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">A3</span><h3>Hitos de comunidad</h3><p>"Faltan X para 250.000" con barra, y festejo público al cruzar cada hito. Convierte el contador en evento.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">A4</span><h3>Tarjetas de logro para redes</h3><p>"Validé mi carnet Plus", "Top fan del mes", "1er Olimpista en [país]". Imagen lista para Stories (ya tenemos el generador).</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+  </div>
+
+  <!-- CRECIMIENTO -->
+  <h2><span class="em">🌎</span> Motores de crecimiento de comunidad</h2>
+  <p class="sub">Loops que crecen solos cuando se prenden.</p>
+  <div class="grid">
+    <div class="card"><span class="num">C1</span><h3>Referidos (loop central)</h3><p>Invitá y ambos ganan. Tablero de "tu hinchada". Es el multiplicador que potencia a todo el resto.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">C2</span><h3>Peñas / ciudades que compiten</h3><p>Ranking por ciudad y por peña/filial. Aprovecha la rivalidad sana y las hinchadas ya organizadas para captar en bloque.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">C3</span><h3>Activación en partidos</h3><p>QR en el estadio y en la transmisión → "unite en vivo", y mostrar el contador en pantalla. Picos de captación masivos en cada fecha.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">C4</span><h3>Embajadores por país</h3><p>"Primer Olimpista en Japón/España…" + embajador que suma a su comunidad. La diáspora es el diferencial único de Olimpistas.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+    <div class="card"><span class="num">C5</span><h3>Ciclo de vida por email/WhatsApp</h3><p>Bienvenida, día de partido, sorteo, "te extrañamos". Ya está la infraestructura; falta orquestar la secuencia.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">C6</span><h3>Alianzas con sponsors</h3><p>Cada sorteo con una marca: premios sin costo, alcance compartido e ingreso. Win-win-win.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+  </div>
+
+  <!-- MONETIZACION -->
+  <h2><span class="em">💰</span> Monetización (combustible para crecer)</h2>
+  <p class="sub">Que la comunidad se sostenga sola.</p>
+  <div class="grid">
+    <div class="card"><span class="num">M1</span><h3>Definir la escalera de valor</h3><p>Hoy Plus se regala al validar socio. Decidir el modelo y dar a Plus beneficios <b>tangibles</b> (sorteos exclusivos, descuentos partner, contenido real) que justifiquen pagar.</p><div class="chips"><span class="chip imp-alto">impacto alto</span><span class="chip esf-bajo">esfuerzo bajo</span></div></div>
+    <div class="card"><span class="num">M2</span><h3>Tienda / merch integrada</h3><p>El footer ya promete "Tienda oficial". Camisetas y productos con el carnet como puerta de entrada (y descuento para Plus).</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-alto">esfuerzo alto</span></div></div>
+    <div class="card"><span class="num">M3</span><h3>Beneficios partner para Plus</h3><p>Descuentos en comercios/gastronomía con el carnet. Valor real, bajo costo, y datos de uso.</p><div class="chips"><span class="chip imp-medio">impacto medio</span><span class="chip esf-medio">esfuerzo medio</span></div></div>
+  </div>
+
+  <footer>
+    <p>Documento de trabajo · ideas priorizadas por impacto/esfuerzo, no un compromiso de roadmap. Próximo paso sugerido: elegir 2–3 tarjetas para detallar y estimar de verdad.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — El Decano en todo el mundo</p>
+  </footer>
+
+</div>
+</body>
+</html>

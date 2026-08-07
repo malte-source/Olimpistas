@@ -4,7 +4,7 @@
  * instante) y usa la caché solo como respaldo offline. La API nunca se cachea.
  * (Se evita el cache-first para que el usuario no quede "pegado" a versiones viejas.)
  */
-const VERSION = "oli-v4";
+const VERSION = "oli-v6";
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -20,6 +20,12 @@ self.addEventListener("fetch", (e) => {
   const { request } = e;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
+  // Canónico: si la navegación cayó en el dominio PELADO (típico shell cacheado), el propio
+  // SW redirige a www ANTES de servir nada. Evita el "Failed to fetch" por origen equivocado.
+  if (request.mode === "navigate" && url.hostname === "olimpistas.com") {
+    e.respondWith(Response.redirect("https://www.olimpistas.com" + url.pathname + url.search, 302));
+    return;
+  }
   if (url.origin !== location.origin) return;
   if (url.pathname.startsWith("/api")) return; // API: siempre a la red
 

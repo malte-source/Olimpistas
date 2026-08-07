@@ -27,7 +27,8 @@ El registro (escritura) es lo que no se puede cachear. Requisitos:
   es de una sola instancia y se pierde al reiniciar. Setear `OLIMPISTAS_DATABASE_URL`.
 - **Pooler de conexiones obligatorio** (pgbouncer / pooler de Supabase/Neon). Con
   muchas instancias de Cloud Run, abrir conexiones directas agota Postgres. El driver
-  ya usa pool chico por instancia (`max: 5`); el pooler hace el resto.
+  ya usa pool chico por instancia (`max: 6` → 6 × max-instances 50 = 300 conexiones al
+  pooler; verificar que el "max client connections" de Supavisor lo soporte); el pooler hace el resto.
 - Índices ya creados (`sesiones`, `membresias`, `pedidos`). La sesión se busca por PK.
 - Para 50k escrituras en ráfaga, considerar **encolar** los registros (Cloud Tasks /
   Pub/Sub) y responder al usuario al toque, procesando el alta detrás.

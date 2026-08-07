@@ -12,6 +12,7 @@
  */
 
 const path = require("path");
+const log = require("../lib/log");
 const { createMemoryStore } = require("./memory-store");
 const { createPgStore }     = require("./pg-store");
 
@@ -21,7 +22,7 @@ function memoria() {
   const filePath = process.env.OLIMPISTAS_PERSIST === "0"
     ? null
     : path.join(__dirname, ".olimpistas-state.json");
-  console.log("[olimpistas] store: memoria" + (filePath ? " (persistida a JSON)" : ""));
+  log.info("store: memoria" + (filePath ? " (persistida a JSON)" : ""));
   return createMemoryStore({ filePath });
 }
 
@@ -31,14 +32,23 @@ function getStore() {
   if (/^postgres(ql)?:\/\//.test(dbUrl)) {
     try {
       _store = createPgStore({ databaseUrl: dbUrl });
-      console.log("[olimpistas] store: Postgres");
+      log.info("store: Postgres");
       return _store;
     } catch (e) {
-      // URL mal formada u otro fallo al construir → NO tiramos abajo el sitio.
-      console.error("[olimpistas] OLIMPISTAS_DATABASE_URL inválida (" + e.message + "). Uso store en memoria.");
+      log.error({ err: e.message }, "OLIMPISTAS_DATABASE_URL inválida");
+      if (process.env.NODE_ENV === "production") {
+        log.fatal("en producción se REQUIERE Postgres. Abortando para no servir datos en memoria.");
+        process.exit(1);
+      }
+      log.warn("uso store en memoria (solo dev)");
     }
   } else if (dbUrl) {
-    console.error("[olimpistas] OLIMPISTAS_DATABASE_URL no parece una URL postgres. Uso store en memoria.");
+    log.error("OLIMPISTAS_DATABASE_URL no parece una URL postgres");
+  }
+  // En producción nunca caemos a memoria (single-instance, se pierde al reiniciar).
+  if (process.env.NODE_ENV === "production" && (!_store)) {
+    log.fatal("falta OLIMPISTAS_DATABASE_URL válida en producción. Abortando.");
+    process.exit(1);
   }
   _store = memoria();
   return _store;

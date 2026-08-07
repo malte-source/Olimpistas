@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Rediseño del panel de Admin</title>
+<style>
+  :root{
+    --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33;
+    --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78;
+    --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 20px 80px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(28px,5vw,44px);line-height:1.15;margin:10px 0 14px;font-weight:900}
+  h1 .gold{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:17px;max-width:780px}
+  h2{font-size:23px;margin:54px 0 6px;font-weight:800;display:flex;align-items:center;gap:10px}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .bad{background:var(--panel);border:1px solid var(--linea);border-left:4px solid var(--rojo);border-radius:12px;padding:16px 20px;margin:22px 0}
+  .bad b{color:#f0a0ad}
+  .north{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:18px;padding:22px 26px;margin:22px 0 8px}
+  .north b{color:var(--oro2)}
+  /* mockup de la nueva estructura */
+  .mock{display:grid;grid-template-columns:200px 1fr;gap:0;border:1px solid var(--linea);border-radius:14px;overflow:hidden;margin:18px 0;background:var(--panel)}
+  .mock .side{background:var(--panel2);border-right:1px solid var(--linea);padding:14px 10px}
+  .mock .side .logo{font-weight:900;color:var(--oro2);font-size:13px;padding:6px 10px 14px}
+  .mock .nav{display:flex;flex-direction:column;gap:2px}
+  .mock .nav span{padding:8px 10px;border-radius:8px;font-size:13px;color:var(--gris)}
+  .mock .nav span.on{background:rgba(201,162,39,.16);color:var(--oro2);font-weight:700}
+  .mock .main{padding:16px 18px}
+  .mock .topbar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--linea);padding-bottom:12px;margin-bottom:14px}
+  .mock .search{background:#0f0f15;border:1px solid var(--linea);border-radius:8px;padding:6px 12px;color:var(--gris2);font-size:12px;flex:1;max-width:280px}
+  .mock .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .mock .kpi{background:var(--panel2);border:1px solid var(--linea);border-top:2px solid var(--oro);border-radius:10px;padding:12px}
+  .mock .kpi .n{font-size:22px;font-weight:900}
+  .mock .kpi .l{font-size:11px;color:var(--gris2)}
+  @media(max-width:640px){.mock{grid-template-columns:1fr}.mock .side{border-right:none;border-bottom:1px solid var(--linea)}.mock .nav{flex-direction:row;flex-wrap:wrap}.mock .kpis{grid-template-columns:repeat(2,1fr)}}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:6px}
+  .card{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:20px 20px 18px;position:relative}
+  .card h3{margin:0 0 8px;font-size:16px;font-weight:800}
+  .card p{margin:0 0 10px;color:var(--gris);font-size:14px}
+  .card ul{margin:0;padding-left:18px;color:var(--gris);font-size:13.5px}
+  .card li{margin:3px 0}
+  .num{position:absolute;top:16px;right:18px;font-size:13px;font-weight:900;color:var(--gris2)}
+  .phase{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px;margin:12px 0}
+  .phase .dot{flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:linear-gradient(120deg,var(--oro2),var(--oro));color:#1a1500;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .phase h4{margin:2px 0 5px;font-size:16px}
+  .phase p{margin:0;color:var(--gris);font-size:14px}
+  .phase .esf{font-size:11px;font-weight:800;color:var(--oro2);text-transform:uppercase;letter-spacing:.5px}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+  .keep{background:rgba(46,194,126,.08);border:1px solid rgba(46,194,126,.3);border-radius:12px;padding:16px 20px;margin:18px 0;font-size:14px;color:#a7e8c8}
+  .keep b{color:#7be0b0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Panel de Admin</span>
+  <h1>Rediseño del panel:<br><span class="gold">de "casero" a centro de control</span></h1>
+  <p class="lead">El panel tiene TODO lo que hace falta (se construyó en 6 tandas), pero creció apilando secciones en una sola página infinita. Este plan lo <b style="color:#fff">reordena, lo hace navegable y lo profesionaliza</b> — sin perder ninguna función ni tocar el backend.</p>
+
+  <div class="bad">
+    🔍 <b>El problema hoy:</b> ~15 secciones en un solo scroll sin fin · sin navegación (hay que scrollear todo para encontrar algo) · acciones con <b>pop-ups del navegador</b> (<code>alert/confirm/prompt</code>) · tablas sin orden/filtro/paginado · estilos y espaciados inconsistentes · todo carga de golpe al entrar. Tiene los datos correctos, pero <b>no se puede operar cómodo.</b>
+  </div>
+
+  <div class="north">
+    🎯 <b>Norte:</b> que cualquiera del equipo entre, <b>encuentre lo que busca en 1 clic</b> (no scrolleando), y resuelva el caso (un pago, un socio) <b>sin fricción ni pop-ups feos</b>. Que se sienta una herramienta seria, no un borrador.
+  </div>
+
+  <!-- NUEVA ESTRUCTURA -->
+  <h2>🧭 Nueva estructura: navegación por áreas</h2>
+  <p class="sub">Adiós al scroll infinito. Un menú lateral (o pestañas) con 6 áreas claras; cada una muestra solo lo suyo.</p>
+
+  <div class="mock">
+    <div class="side">
+      <div class="logo">🤍🖤 OLIMPISTAS · admin</div>
+      <div class="nav">
+        <span class="on">📊 Dashboard</span>
+        <span>👤 Socios</span>
+        <span>💳 Pagos</span>
+        <span>📣 Campañas</span>
+        <span>🎁 Contenido</span>
+        <span>🛠️ Sistema</span>
+      </div>
+    </div>
+    <div class="main">
+      <div class="topbar"><div class="search">🔎 Buscar socio, email, cédula…</div><span style="font-size:12px;color:var(--gris2)">malte ▾</span></div>
+      <div class="kpis">
+        <div class="kpi"><div class="n">3.5k</div><div class="l">Socios reales</div></div>
+        <div class="kpi"><div class="n">+771</div><div class="l">Altas hoy</div></div>
+        <div class="kpi"><div class="n">9</div><div class="l">Pagos</div></div>
+        <div class="kpi"><div class="n" style="color:var(--rojo)">11</div><div class="l">Sin match</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><span class="num">1</span><h3>📊 Dashboard (inicio)</h3><p>Lo importante de un vistazo: KPIs (socios, altas hoy/ayer, ingresos, sin-match), embudo y salud compacta. La pantalla que ves al entrar.</p></div>
+    <div class="card"><span class="num">2</span><h3>👤 Socios</h3><p>Búsqueda + segmentos + ficha. Tabla con filtros, orden y paginado. La ficha se abre en un <b>panel lateral</b> (no un modal pegado arriba).</p></div>
+    <div class="card"><span class="num">3</span><h3>💳 Pagos</h3><p>Reconciliación Metrepay, cuadre, pendientes, abandonos y export — todo "la plata" junto, con los "sin match" arriba para resolver.</p></div>
+    <div class="card"><span class="num">4</span><h3>📣 Campañas</h3><p>Campañas + tasa de conversión + conector GoHighLevel, en su propia área.</p></div>
+    <div class="card"><span class="num">5</span><h3>🎁 Contenido</h3><p>Sorteos, preventas y contenido (alta/edición) + cola de validación del padrón.</p></div>
+    <div class="card"><span class="num">6</span><h3>🛠️ Sistema</h3><p>Salud, log de auditoría, feature flags, roles/usuarios y moderación de selfies.</p></div>
+  </div>
+
+  <!-- SISTEMA DE DISEÑO -->
+  <h2>🎨 Sistema de diseño (consistencia)</h2>
+  <p class="sub">Componentes reutilizables en vez de cada sección "a mano".</p>
+  <div class="grid">
+    <div class="card"><h3>Tablas de verdad</h3><p>Un solo componente de tabla con:</p><ul><li>Orden por columna, filtros y <b>paginado</b></li><li>Header fijo al scrollear</li><li>Estados de carga (skeleton) y vacío con mensaje</li><li>Export CSV desde cualquier tabla</li></ul></div>
+    <div class="card"><h3>Adiós a los pop-ups del navegador</h3><p>Reemplazar <code>alert/confirm/prompt</code> por:</p><ul><li><b>Toasts</b> para confirmaciones ("✓ Activado")</li><li><b>Diálogos</b> propios para confirmar acciones</li><li><b>Panel lateral</b> (drawer) para la ficha y los formularios</li></ul></div>
+    <div class="card"><h3>KPIs y cards uniformes</h3><p>Tarjetas de métrica, botones, badges y formularios con un estilo único (tamaños, colores, espaciado). Que todo "hable el mismo idioma".</p></div>
+    <div class="card"><h3>Búsqueda global</h3><p>Una barra arriba siempre visible: escribís email/cédula/nombre y saltás directo a la ficha, desde cualquier área.</p></div>
+    <div class="card"><h3>Responsive + móvil</h3><p>Que funcione bien desde el celular (operar pagos/socios en la cancha). Menú colapsable, tablas que se adaptan.</p></div>
+    <div class="card"><h3>Feedback y errores claros</h3><p>Cada acción muestra resultado; los errores dicen qué pasó y cómo seguir. Nada que quede "pensando" sin avisar.</p></div>
+  </div>
+
+  <div class="keep">
+    ✅ <b>Lo que NO cambia (y por eso es seguro):</b> todos los endpoints <code>/admin/*</code> que ya funcionan se quedan igual. Esto es <b>rediseño de la interfaz</b>, no del backend. Cero riesgo para los datos, pagos o reportes. <b>Bonus:</b> al cargar cada área por separado (y no todo de golpe), el panel también va a <b>cargar más rápido</b>.
+  </div>
+
+  <!-- PLAN POR FASES -->
+  <h2>🛠️ Plan por fases</h2>
+  <p class="sub">Incremental: cada fase ya deja el panel mejor, sin romper lo anterior.</p>
+
+  <div class="phase"><div class="dot">1</div><div><span class="esf">esfuerzo medio · el salto grande</span><h4>Esqueleto navegable</h4><p>Menú lateral + ruteo por área (#/socios, #/pagos…). Mover las secciones actuales adentro de cada área. Cada área carga sus datos al abrirla (no todo junto). <b>Solo con esto ya deja de ser un scroll infinito.</b></p></div></div>
+  <div class="phase"><div class="dot">2</div><div><span class="esf">esfuerzo medio</span><h4>Dashboard de inicio</h4><p>Pantalla de entrada con los KPIs clave + embudo + salud compacta, en vez de aterrizar en una lista. Lo que el equipo mira primero cada día.</p></div></div>
+  <div class="phase"><div class="dot">3</div><div><span class="esf">esfuerzo medio</span><h4>Componentes: tablas, toasts, drawer</h4><p>Reemplazar pop-ups del navegador por toasts/diálogos propios, y la ficha por un panel lateral. Tabla única con orden/filtro/paginado.</p></div></div>
+  <div class="phase"><div class="dot">4</div><div><span class="esf">esfuerzo bajo-medio</span><h4>Búsqueda global + polish visual</h4><p>Barra de búsqueda siempre arriba, tipografía/espaciados consistentes, badges de estado, microinteracciones. Que se vea pro.</p></div></div>
+  <div class="phase"><div class="dot">5</div><div><span class="esf">esfuerzo bajo</span><h4>Móvil + roles</h4><p>Responsive para operar desde el celu, y el menú que muestre solo las áreas según el rol del admin (ya tenemos multi-usuario).</p></div></div>
+
+  <h2 style="font-size:19px">⚙️ Cómo se construye</h2>
+  <p class="sub">Se mantiene <b>vanilla</b> (sin framework ni build, como ahora) — un solo <code>admin.html</code> con un mini-router por hash, vistas que se montan por área y helpers reutilizables (tabla, toast, drawer, card). Es la opción de menor riesgo y continuidad con el código actual. Si más adelante crece mucho, se puede evaluar un framework liviano, pero no hace falta para esto.</p>
+
+  <footer>
+    <p>Documento de trabajo. Próximo paso sugerido: arrancar por la <b>Fase 1</b> (esqueleto navegable) — es la que más cambia la sensación de "casero → pro" con un solo deploy, sin tocar nada del backend.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — Panel de control del Decano</p>
+  </footer>
+
+</div>
+</body>
+</html>

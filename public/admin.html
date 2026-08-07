@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Admin — Olimpistas</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <style>
+    :root {
+      --negro:#0b0b0f; --panel:#14141b; --panel2:#16161d; --panel3:#1e1e28; --linea:#2a2a33; --linea2:#33333f;
+      --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#8a909a; --gris2:#6f6f78;
+      --verde:#2ec27e; --verde-bg:rgba(46,194,126,.13); --rojo:#e0556b; --rojo-bg:rgba(224,85,107,.13); --azul:#5b9bd5;
+      --sombra:0 10px 34px rgba(0,0,0,.45); --sombra-sm:0 2px 10px rgba(0,0,0,.3); --r:14px;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust:100%; }
+    body { margin:0; background:var(--negro); color:var(--blanco); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+    ::selection { background:rgba(201,162,39,.32); }
+    :focus-visible { outline:2px solid var(--oro2); outline-offset:2px; border-radius:6px; }
+    /* Scrollbars oscuras y finas */
+    ::-webkit-scrollbar { width:10px; height:10px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:#2e2e3a; border-radius:8px; border:2px solid var(--negro); }
+    ::-webkit-scrollbar-thumb:hover { background:#3a3a48; }
+    h1 { font-size:19px; margin:0; letter-spacing:-.2px; }
+    h2 { font-size:14px; margin:32px 0 12px; color:var(--oro2); font-weight:800; letter-spacing:.3px; display:flex; align-items:center; gap:8px; }
+    h2:first-of-type { margin-top:4px; }
+    .btn { background:linear-gradient(120deg,var(--oro2),var(--oro)); color:#1a1500; border:none; font-weight:800; padding:10px 16px; border-radius:10px; cursor:pointer; font-size:14px; min-height:42px; transition:transform .08s ease, box-shadow .15s ease, background .15s ease, opacity .15s; box-shadow:0 2px 8px rgba(201,162,39,.18); }
+    .btn:hover { box-shadow:0 4px 16px rgba(201,162,39,.3); }
+    .btn:active { transform:translateY(1px); }
+    .btn-ghost { background:transparent; color:var(--blanco); border:1px solid var(--linea2); box-shadow:none; }
+    .btn-ghost:hover { background:rgba(255,255,255,.05); border-color:#444452; }
+    .btn-sm { padding:8px 12px; font-size:13px; border-radius:8px; min-height:38px; }
+    .btn-ok { background:var(--verde); color:#06281a; box-shadow:0 2px 8px rgba(46,194,126,.2); }
+    .btn-no { background:transparent; border:1px solid var(--rojo); color:var(--rojo); box-shadow:none; }
+    .btn-no:hover { background:var(--rojo-bg); }
+    .btn-danger { background:var(--rojo); color:#fff; border:none; box-shadow:0 2px 8px rgba(224,85,107,.25); }
+    input, select { width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--linea); background:#0f0f15; color:#fff; font-size:16px; transition:border-color .15s, box-shadow .15s; }
+    input::placeholder { color:var(--gris2); }
+    input:focus, select:focus { outline:none; border-color:var(--oro); box-shadow:0 0 0 3px rgba(201,162,39,.16); }
+
+    /* Login */
+    .login { max-width:380px; margin:13vh auto 0; text-align:center; padding:32px 26px; background:linear-gradient(160deg,var(--panel3),var(--panel)); border:1px solid var(--linea); border-radius:20px; box-shadow:var(--sombra); }
+    .login img { height:40px; margin-bottom:14px; }
+    .login h1 { font-size:18px; margin-bottom:4px; }
+    .login input { margin:16px 0 6px; }
+
+    /* Layout: sidebar + main */
+    #dash { display:flex; min-height:100vh; }
+    #dash[hidden] { display:none; }   /* el hidden debe ganarle al display:flex */
+    #login[hidden] { display:none; }
+    .sidebar { width:218px; flex:0 0 218px; background:linear-gradient(180deg,var(--panel2),#121218); border-right:1px solid var(--linea); padding:18px 12px; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; gap:2px; }
+    .sb-brand { padding:4px 10px 18px; }
+    .sb-brand img { height:25px; }
+    .sb-label { font-size:10px; font-weight:800; letter-spacing:1.3px; text-transform:uppercase; color:var(--gris2); padding:14px 12px 6px; }
+    .nav-link { position:relative; display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:10px; color:var(--gris); text-decoration:none; font-size:14px; font-weight:600; cursor:pointer; transition:background .15s, color .15s; }
+    .nav-link:hover { background:rgba(255,255,255,.05); color:#fff; }
+    .nav-link.on { background:rgba(201,162,39,.14); color:var(--oro2); }
+    .nav-link.on::before { content:""; position:absolute; left:-12px; top:50%; transform:translateY(-50%); width:3px; height:20px; border-radius:0 3px 3px 0; background:linear-gradient(var(--oro2),var(--oro)); }
+    .nav-link .ic { font-size:16px; width:20px; text-align:center; }
+    .sb-spacer { flex:1; }
+    .sb-salir { color:var(--gris); margin-top:6px; border-top:1px solid var(--linea); border-radius:0; padding-top:14px; }
+    .sb-salir:hover { color:var(--rojo); background:transparent; }
+
+    .main { flex:1; min-width:0; }
+    .topbar { position:sticky; top:0; z-index:20; background:rgba(11,11,15,.82); backdrop-filter:blur(12px) saturate(140%); -webkit-backdrop-filter:blur(12px) saturate(140%); border-bottom:1px solid var(--linea); display:flex; align-items:center; gap:18px; padding:14px 26px; }
+    .topbar h1 { flex:0 0 auto; }
+    .tsearch { flex:1; max-width:360px; }
+    .tsearch input { padding:10px 14px 10px 14px; font-size:16px; }
+    .main-inner { padding:26px 26px 90px; max-width:1080px; }
+    .area[hidden] { display:none; }
+    .area { animation:fade .22s ease; }
+    @keyframes fade { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+
+    .cards { display:flex; gap:14px; flex-wrap:wrap; }
+    .stat { flex:1 1 150px; background:linear-gradient(160deg,var(--panel3),var(--panel)); border:1px solid var(--linea); border-radius:var(--r); padding:16px 20px; min-width:150px; position:relative; overflow:hidden; transition:border-color .15s, transform .12s; }
+    .stat::before { content:""; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--oro2),var(--oro)); }
+    .stat:hover { border-color:var(--linea2); transform:translateY(-2px); }
+    .stat .n { font-size:28px; font-weight:900; font-variant-numeric:tabular-nums; letter-spacing:-.5px; line-height:1.1; }
+    .stat .l { color:var(--gris); font-size:12px; font-weight:600; letter-spacing:.2px; margin-top:3px; }
+    table { width:100%; border-collapse:collapse; margin-top:6px; font-size:14px; }
+    th,td { text-align:left; padding:11px 10px; border-bottom:1px solid var(--linea); }
+    th { color:var(--gris); font-size:11px; text-transform:uppercase; letter-spacing:.6px; position:sticky; top:57px; background:var(--negro); z-index:1; }
+    tbody tr { transition:background .12s; }
+    tbody tr:hover { background:rgba(255,255,255,.025); }
+    tbody tr:last-child td { border-bottom:none; }
+    .muted { color:var(--gris); }
+    .pill { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; background:rgba(201,162,39,.15); color:var(--oro2); white-space:nowrap; }
+    .pill-ok { background:var(--verde-bg); color:#6fe0ad; }
+    .pill-warn { background:var(--rojo-bg); color:#f0939f; }
+    .row-actions { display:flex; gap:8px; }
+    .err { color:var(--rojo); font-size:13px; min-height:18px; }
+    .empty { color:var(--gris); padding:22px 4px; font-size:14px; }
+    .loading { color:var(--gris2); padding:18px 4px; font-size:14px; animation:pulse 1.3s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+    .search-row { display:flex; gap:10px; }
+    .search-row input { flex:1; }
+    .hint { color:var(--gris); font-size:13px; margin:0 0 8px; }
+
+    @media (max-width:860px){
+      #dash { display:block; }
+      .sidebar { width:auto; height:auto; position:static; flex-direction:row; overflow-x:auto; gap:6px; border-right:none; border-bottom:1px solid var(--linea); padding:10px; }
+      .sb-brand, .sb-spacer, .sb-label { display:none; }
+      .nav-link { white-space:nowrap; padding:9px 12px; }
+      .nav-link.on::before { display:none; }
+      .sb-salir { border-top:none; padding-top:9px; margin-top:0; }
+      .topbar { position:static; padding:12px 16px; flex-wrap:wrap; }
+      .tsearch { order:3; flex:1 0 100%; max-width:none; }
+      .main-inner { padding:16px; }
+      th { position:static; }
+    }
+    @media (max-width:560px){ table, thead, tbody, th, td, tr { display:block; } thead { display:none; } tr { border:1px solid var(--linea); border-radius:10px; margin-bottom:10px; padding:8px; } td { border:none; padding:4px 6px; } td::before { content:attr(data-l) ": "; color:var(--gris); font-size:12px; } td[data-l=""]::before, td:not([data-l])::before { content:""; } }
+
+    .modalbg{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow:auto;z-index:50}
+    .modalbg[hidden]{display:none}
+    .modalbox{background:linear-gradient(165deg,var(--panel3),var(--panel));border:1px solid var(--linea2);border-radius:18px;max-width:640px;width:100%;padding:24px;box-shadow:var(--sombra)}
+    .modalbox h3{margin:0 0 4px;font-size:19px;letter-spacing:-.2px}
+    .modalbox .close{float:right;cursor:pointer;color:var(--gris);font-size:20px;line-height:1;border:1px solid var(--linea);background:var(--panel);width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:color .15s,border-color .15s}
+    .modalbox .close:hover{color:#fff;border-color:var(--linea2)}
+    .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+    .fgrid label{display:block;font-size:12px;color:var(--gris);margin-bottom:4px}
+    .fgrid .full{grid-column:1 / -1}
+    /* Subida de imagen (con vista previa) para campos tipo "imagen" del CRUD */
+    .img-up-row{display:flex;align-items:center;gap:14px}
+    .img-up-prev{width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid var(--linea);background:var(--panel3);flex:0 0 auto}
+    .img-up-empty{display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--gris2)}
+    .img-up-acts{flex:1;min-width:0}
+    /* Previsualización en vivo de la subasta (imita la card real de la app del socio) */
+    .sub-preview-wrap{margin:18px 0 6px;padding-top:14px;border-top:1px solid var(--linea)}
+    .sub-preview-lbl{font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--gris);margin-bottom:10px}
+    .sub-preview-card{width:230px;background:linear-gradient(165deg,var(--panel3),var(--panel));border:1px solid var(--linea2);border-radius:16px;overflow:hidden;box-shadow:var(--sombra-sm)}
+    .sub-preview-thumb{aspect-ratio:16/9;position:relative;background:linear-gradient(135deg,#3a3a52,#14141b);display:flex;align-items:center;justify-content:center}
+    .sub-preview-thumb img{width:100%;height:100%;object-fit:cover}
+    .sub-preview-thumb .ic{font-size:32px;opacity:.85}
+    .sub-preview-cd{position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+    .sub-preview-body{padding:12px 14px 14px}
+    .sub-preview-chip{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.3px;padding:2px 8px;border-radius:999px;background:var(--rojo-bg);color:#f0939f;margin-bottom:6px}
+    .sub-preview-h4{font-size:14px;font-weight:800;margin:0 0 6px;line-height:1.25;min-height:18px}
+    .sub-preview-precio{font-size:11px;color:var(--gris);margin:0 0 10px}
+    .sub-preview-precio strong{display:block;font-size:15px;color:var(--blanco);font-variant-numeric:tabular-nums}
+    .sub-preview-cta{display:block;width:100%;text-align:center;background:linear-gradient(120deg,var(--oro2),var(--oro));color:#1a1500;font-weight:800;font-size:12px;padding:8px;border-radius:8px}
+    .mini{font-size:13px;color:var(--gris);margin:10px 0 4px;border-top:1px solid var(--linea);padding-top:10px}
+    .ok{color:var(--verde);font-size:13px;min-height:16px}
+
+    /* ── Componentes UI (toast / confirm / info) ── */
+    #uiModalBg{z-index:60;align-items:center}
+    #uiModalBox{max-width:440px}
+    .listado{max-height:50vh;overflow:auto;margin-top:8px}
+    .li-row{padding:9px 0;border-bottom:1px solid var(--linea);font-size:14px}
+    .toastwrap{position:fixed;left:0;right:0;bottom:18px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:70;pointer-events:none;padding:0 12px}
+    .toast{background:#23232c;border:1px solid var(--linea);color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:0 10px 34px rgba(0,0,0,.55);max-width:480px;opacity:0;transform:translateY(12px);transition:opacity .25s,transform .25s;pointer-events:auto}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toast-ok{border-left:4px solid var(--verde)}
+    .toast-err{border-left:4px solid var(--rojo)}
+    body{overflow-x:hidden}
+
+    /* ── Tabla interactiva (filtro / orden / paginado) ── */
+    .tbl-controls{display:flex;align-items:center;gap:10px;margin:8px 0 2px}
+    .tbl-filter{flex:1;max-width:320px;padding:9px 12px;font-size:15px}
+    .tbl-count{font-size:12px;white-space:nowrap}
+    th[data-sort]{user-select:none;cursor:pointer}
+    th[data-sort]:hover{color:var(--oro2)}
+    .tbl-pager{display:flex;align-items:center;gap:14px;justify-content:center;margin-top:12px}
+    .tbl-pager .muted{font-size:13px}
+    .tbl-pager .btn[disabled]{opacity:.35;cursor:default}
+
+    /* ── Mobile: hoja inferior + campos en 1 columna + acciones grandes ── */
+    @media (max-width:560px){
+      .fgrid{grid-template-columns:1fr}
+      .stat{flex:1 1 calc(50% - 7px);min-width:0;padding:14px 16px}
+      .stat .n{font-size:24px}
+      .modalbg{align-items:flex-end;padding:0}
+      #uiModalBg{align-items:flex-end}
+      .modalbox{border-radius:18px 18px 0 0;max-height:92vh;width:100%;overflow-y:auto;padding:20px 16px calc(22px + env(safe-area-inset-bottom));animation:sheet .25s ease-out}
+      @keyframes sheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
+      td .row-actions{flex-wrap:wrap}
+      td .row-actions .btn{flex:1 1 auto}
+      .btn-sm{padding:11px 12px;min-height:42px}
+      .tbl-filter{max-width:none}
+      .tbl-controls{flex-wrap:wrap}
+    }
+  </style>
+</head>
+<body>
+  <!-- Login -->
+  <div class="login" id="login">
+    <img src="/assets/logo-horizontal.svg?v=78" alt="Olimpistas" />
+    <h1>Panel de administración</h1>
+    <div id="loginUser">
+      <input id="usuario" type="text" placeholder="Usuario" autocomplete="username" />
+      <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" style="margin-top:10px" />
+      <button class="btn" id="entrar" style="width:100%;margin-top:14px">Entrar</button>
+      <p style="margin:14px 0 0"><a id="toggleKey" style="color:var(--gris);cursor:pointer;font-size:13px">Entrar con clave de acceso</a></p>
+    </div>
+    <div id="loginKey" hidden>
+      <input id="key" type="password" placeholder="Clave de acceso (admin)" autocomplete="off" />
+      <button class="btn" id="entrarKey" style="width:100%;margin-top:14px">Entrar</button>
+      <p style="margin:14px 0 0"><a id="toggleUser" style="color:var(--gris);cursor:pointer;font-size:13px">← Volver a usuario y contraseña</a></p>
+    </div>
+    <p class="err" id="loginErr"></p>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash" hidden>
+    <aside class="sidebar">
+      <div class="sb-brand"><img src="/assets/logo-horizontal.svg?v=78" alt="Olimpistas" /></div>
+      <div class="sb-label">General</div>
+      <a class="nav-link" data-area="dashboard" href="#/dashboard"><span class="ic">📊</span> Dashboard</a>
+      <div class="sb-label">Gestión</div>
+      <a class="nav-link" data-area="socios" href="#/socios"><span class="ic">👤</span> Socios</a>
+      <a class="nav-link" data-area="pagos" href="#/pagos"><span class="ic">💳</span> Pagos</a>
+      <a class="nav-link" data-area="campanas" href="#/campanas"><span class="ic">📣</span> Campañas</a>
+      <a class="nav-link" data-area="contenido" href="#/contenido"><span class="ic">🎁</span> Contenido</a>
+      <div class="sb-label">Sistema</div>
+      <a class="nav-link" data-area="sistema" href="#/sistema"><span class="ic">🛠️</span> Sistema</a>
+      <div class="sb-spacer"></div>
+      <a class="nav-link sb-salir" id="salir"><span class="ic">↩</span> Salir</a>
+    </aside>
+
+    <div class="main">
+      <div class="topbar">
+        <h1 id="areaTitle">Dashboard</h1>
+        <div class="tsearch"><input id="gsearch" type="search" placeholder="🔎 Buscar socio, email o cédula…" /></div>
+        <span id="adminWho" class="muted" style="font-size:12px;white-space:nowrap"></span>
+      </div>
+      <div class="main-inner">
+
+        <!-- ÁREA: DASHBOARD -->
+        <section class="area" id="area-dashboard">
+          <div class="cards">
+            <div class="stat"><div class="n" id="stTotal">—</div><div class="l">Socios reales</div></div>
+            <div class="stat"><div class="n" id="stPend">—</div><div class="l">Pagos pendientes</div></div>
+            <div class="stat"><div class="n" id="stRev">—</div><div class="l">Validaciones a revisar</div></div>
+          </div>
+          <h2>🩺 Salud del sistema</h2>
+          <div class="cards" id="saludCards"><p class="loading">Cargando…</p></div>
+          <h2>📊 Reportes</h2>
+          <div class="cards" id="repCards"><p class="loading">Cargando…</p></div>
+          <div id="repTablas"></div>
+        </section>
+
+        <!-- ÁREA: SOCIOS -->
+        <section class="area" id="area-socios" hidden>
+          <h2>Buscar socios</h2>
+          <div class="search-row">
+            <input id="q" type="search" placeholder="Email, nombre o cédula…" />
+            <button class="btn btn-sm" id="buscar">Buscar</button>
+          </div>
+          <div id="searchWrap"></div>
+
+          <h2>🎯 Segmentos de socios</h2>
+          <div class="search-row" style="flex-wrap:wrap;gap:8px">
+            <select id="segTier" style="flex:0 0 auto;width:auto"><option value="">Cualquier nivel</option><option value="socio">Socio</option><option value="olimpista">Olimpista</option><option value="premium">Plus</option><option value="kids">Junior</option></select>
+            <input id="segPais" placeholder="País ISO (PY, AR…)" style="flex:0 0 auto;width:150px" />
+            <label class="muted" style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" id="segSocio" style="width:auto" /> validó socio</label>
+            <label class="muted" style="font-size:13px;display:flex;align-items:center;gap:5px"><input type="checkbox" id="segSinFoto" style="width:auto" /> sin foto</label>
+            <button class="btn btn-sm" id="segBtn">Filtrar</button>
+            <button class="btn btn-sm btn-ghost" id="segExport">⬇ CSV</button>
+          </div>
+          <div id="segWrap"></div>
+
+          <h2>🗂️ Padrón Olimpia <span id="padronStats" class="muted" style="font-size:13px;font-weight:400"></span></h2>
+          <div class="search-row"><input id="padronQ" type="search" placeholder="cédula, nombre, email o nº socio…" /><button class="btn btn-sm" id="padronBtn">Buscar</button></div>
+          <div id="padronWrap"></div>
+        </section>
+
+        <!-- ÁREA: PAGOS -->
+        <section class="area" id="area-pagos" hidden>
+          <h2>💵 Pagos recibidos <button class="btn btn-sm btn-ghost" id="btnExportRec" style="font-size:12px;font-weight:700">⬇ Exportar CSV</button></h2>
+          <p class="hint">Pagos acreditados (membresías Plus/Junior y entradas de preventa). Montos en guaraníes.</p>
+          <div class="cards" id="recCards"><p class="loading">Cargando…</p></div>
+          <div id="recConcepto" style="margin-top:8px"></div>
+          <div id="recWrap" style="margin-top:14px"></div>
+
+          <h2 style="margin-top:34px">💳 Pagos Metrepay (reconciliación)</h2>
+          <p class="hint">Cada pago que llegó por webhook. ⚠️ "Sin match" = pagó pero no se vinculó cuenta: buscalo en Socios y activá el nivel a mano.</p>
+          <div id="metreWrap"><p class="loading">Cargando…</p></div>
+
+          <h2>💰 Cuadre de pagos <button class="btn btn-sm btn-ghost" id="btnExport" style="font-size:12px;font-weight:700">⬇ Exportar CSV</button></h2>
+          <div class="cards" id="cuadreCards"><p class="loading">Cargando…</p></div>
+
+          <h2>🚪 Abandonos de pago <span id="abCount" class="muted" style="font-size:14px;font-weight:400"></span></h2>
+          <p class="hint">Empezaron Plus/Junior y no completaron. Tocá "Ficha" para resolver (editar datos o activar).</p>
+          <div id="abWrap"><p class="loading">Cargando…</p></div>
+
+          <h2>Pagos pendientes de confirmar</h2>
+          <p class="hint">Confirmá el pago en la pasarela y luego "Activar" para darle la membresía al socio.</p>
+          <div id="pendWrap"><p class="loading">Cargando…</p></div>
+        </section>
+
+        <!-- ÁREA: CAMPAÑAS -->
+        <section class="area" id="area-campanas" hidden>
+          <h2>📧 Correos (Resend) <span class="muted" style="font-size:13px;font-weight:400">· últimos 30 días</span></h2>
+          <p class="hint">Entrega, aperturas y clics de los correos. ⚠️ La apertura es referencial (Apple Mail y otros la inflan/bloquean); el clic y la conversión en el sitio son más fiables.</p>
+          <div class="cards" id="emailCards"><p class="loading">Cargando…</p></div>
+
+          <h2 style="margin-top:34px">📣 Campañas <button class="btn btn-sm" id="campLanzar" style="font-size:12px;font-weight:700">+ Lanzar "Completá tu pago"</button></h2>
+          <p class="hint">Congela el cohort de abandonos y mide cuántos pagan después (tasa de conversión). El envío de emails se corre por CLI.</p>
+          <div id="campWrap"><p class="loading">Cargando…</p></div>
+
+          <h2>🔗 GoHighLevel</h2>
+          <p class="hint" id="ghlStatus">Verificando…</p>
+          <button class="btn btn-sm" id="ghlSync">Sincronizar segmento actual → GHL</button>
+        </section>
+
+        <!-- ÁREA: CONTENIDO -->
+        <section class="area" id="area-contenido" hidden>
+          <h2>🎁 Sorteos, preventas y contenido</h2>
+          <div class="search-row" style="gap:8px">
+            <select id="crudSel" style="flex:0 0 auto;width:auto"><option value="sorteos">Sorteos</option><option value="preventas">Preventas</option><option value="subastas">Subastas</option><option value="encuestas">Encuestas</option><option value="contenido">Contenido</option></select>
+            <button class="btn btn-sm" id="crudNuevo">➕ Nuevo</button>
+          </div>
+          <div id="crudForm"></div>
+          <div id="crudList"><p class="loading">Cargando…</p></div>
+
+          <h2>Cola de Actualización (socios)</h2>
+          <p class="hint">Datos capturados en el onboarding. Verificá contra el padrón y <b>Unificá</b> para volcarlos a la base oficial, o <b>Rechazá</b>.</p>
+          <div class="search-row" style="margin-bottom:10px">
+            <select id="actEstado" style="flex:1">
+              <option value="a_revisar">A revisar (sin match automático)</option>
+              <option value="validado_auto">Validados automáticos (match padrón)</option>
+              <option value="">Todos</option>
+              <option value="unificado">Unificados</option>
+              <option value="rechazado">Rechazados</option>
+            </select>
+            <button class="btn btn-sm" id="actCargar">Cargar</button>
+          </div>
+          <div id="actWrap"><p class="loading">Cargando…</p></div>
+        </section>
+
+        <!-- ÁREA: SISTEMA -->
+        <section class="area" id="area-sistema" hidden>
+          <div id="usuariosBox">
+            <h2>👤 Usuarios del panel <button class="btn btn-sm" id="usuNuevo" style="font-size:12px;font-weight:700">➕ Nuevo usuario</button></h2>
+            <p class="hint">Cuentas con usuario + contraseña y rol. Cada uno ve y puede solo lo de su rol. El log de auditoría registra quién hace qué.</p>
+            <div id="usuForm"></div>
+            <div id="usuWrap"><p class="loading">Cargando…</p></div>
+          </div>
+
+          <h2>🖼️ Moderación de selfies</h2>
+          <p class="hint">Últimas fotos subidas. "Ver / moderar" abre la ficha con la foto y el botón para quitarla.</p>
+          <div id="selfiesWrap"><p class="loading">Cargando…</p></div>
+
+          <h2>📜 Acciones de admin (auditoría)</h2>
+          <div id="accWrap"><p class="loading">Cargando…</p></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ficha de socio -->
+  <div id="fichaBg" class="modalbg" hidden><div class="modalbox" id="fichaBox"></div></div>
+
+  <!-- Modal genérico (confirmar / info) + toasts -->
+  <div id="uiModalBg" class="modalbg" hidden><div class="modalbox" id="uiModalBox"></div></div>
+  <div id="toastWrap" class="toastwrap"></div>
+
+  <script>
+    var KEY_LS = "oli_admin_key", TOKEN_LS = "oli_admin_token";
+    var $ = function (id) { return document.getElementById(id); };
+    var TIER = { kids: "Junior", premium: "Plus", olimpista: "Olimpista", socio: "Socio" };
+    var TIER_ORDEN_FICHA = ["socio", "premium", "kids", "olimpista"]; // de mayor a menor, para los botones de la ficha
+
+    // Identidad de la sesión (se llena con /admin/whoami). Default FAIL-CLOSED (sin permisos) hasta saber.
+    var ADMIN_ROL = "", ADMIN_PERMS = [], ADMIN_AREAS = ["dashboard"];
+    function puede(perm) { return ADMIN_ROL === "owner" || ADMIN_PERMS.indexOf("*") > -1 || ADMIN_PERMS.indexOf(perm) > -1; }
+    // Limpia identidad + estado de tablas/listas para que NO se filtre data entre sesiones de distinto rol.
+    function resetAdminState() {
+      ADMIN_ROL = ""; ADMIN_PERMS = []; ADMIN_AREAS = ["dashboard"];
+      crudItems = []; ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura"]; areaLoaded = {};
+      ["usuWrap", "segWrap", "searchWrap", "metreWrap", "abWrap", "actWrap", "padronWrap", "selfiesWrap", "accWrap", "campWrap", "crudList", "pendWrap"].forEach(function (id) {
+        var c = $(id); if (c) { c.innerHTML = ""; try { delete c._tbl; delete c._tblInit; } catch (e) {} }
+      });
+    }
+
+    function getKey() { try { return localStorage.getItem(KEY_LS) || ""; } catch (e) { return ""; } }
+    function setKey(k) { try { localStorage.setItem(KEY_LS, k); } catch (e) {} }
+    function clearKey() { try { localStorage.removeItem(KEY_LS); } catch (e) {} }
+    function getToken() { try { return localStorage.getItem(TOKEN_LS) || ""; } catch (e) { return ""; } }
+    function setToken(t) { try { localStorage.setItem(TOKEN_LS, t); } catch (e) {} }
+    function clearToken() { try { localStorage.removeItem(TOKEN_LS); } catch (e) {} }
+
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]; }); }
+    function fmtFecha(s) { try { return new Date(s).toLocaleString("es-PY", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch (e) { return s || ""; } }
+    function fmtMonto(m, mon) { return (mon === "USD" ? "US$ " : "₲ ") + Number(m || 0).toLocaleString(mon === "USD" ? "en-US" : "es-PY"); }
+
+    async function api(path, opts) {
+      opts = opts || {};
+      var ctrl = new AbortController();
+      var to = setTimeout(function () { ctrl.abort(); }, opts.timeout || 15000);
+      var res;
+      try {
+        res = await fetch("/api" + path, {
+          method: opts.method || "GET",
+          headers: { "Content-Type": "application/json", "x-admin-token": getToken(), "x-admin-key": getKey() },
+          body: opts.body ? JSON.stringify(opts.body) : undefined,
+          signal: ctrl.signal,
+        });
+      } catch (e) { clearTimeout(to); throw new Error(e.name === "AbortError" ? "Tardó demasiado (timeout). Reintentá." : "Sin conexión."); }
+      clearTimeout(to);
+      if (res.status === 401 || res.status === 503) { var er = await res.json().catch(function () { return {}; }); throw new Error((er && er.error) || "No autorizado"); }
+      var data = await res.json().catch(function () { return null; });
+      if (!res.ok) throw new Error((data && data.error) || ("Error " + res.status));
+      return data;
+    }
+
+    function showLogin(msg) { $("login").hidden = false; $("dash").hidden = true; $("loginErr").textContent = msg || ""; }
+    function showDash() { $("login").hidden = true; $("dash").hidden = false; }
+
+    // ── UI: toast / confirmar / infoModal (reemplazan alert/confirm/prompt) ──
+    function toast(msg, type) {
+      var t = document.createElement("div");
+      t.className = "toast " + (type === "err" ? "toast-err" : "toast-ok");
+      t.textContent = msg;
+      $("toastWrap").appendChild(t);
+      setTimeout(function () { t.classList.add("show"); }, 10);
+      setTimeout(function () { t.classList.remove("show"); setTimeout(function () { if (t.parentNode) t.remove(); }, 300); }, 3400);
+    }
+    // Devuelve Promise<{ok:boolean, val:string}>. opts: {titulo, ok, danger, input, placeholder}
+    function confirmar(msg, opts) {
+      opts = opts || {};
+      return new Promise(function (resolve) {
+        var inp = opts.input ? '<input id="uiCfInput" placeholder="' + esc(opts.placeholder || "") + '" style="margin:2px 0 14px" />' : '';
+        $("uiModalBox").innerHTML =
+          '<h3>' + esc(opts.titulo || "Confirmar") + '</h3>' +
+          '<p class="muted" style="margin:6px 0 ' + (opts.input ? "10" : "18") + 'px">' + esc(msg).replace(/\n/g, "<br>") + '</p>' + inp +
+          '<div class="row-actions" style="justify-content:flex-end"><button class="btn btn-ghost" data-no>Cancelar</button><button class="btn ' + (opts.danger ? "btn-danger" : "") + '" data-yes>' + esc(opts.ok || "Sí") + '</button></div>';
+        $("uiModalBg").hidden = false;
+        if (opts.input) setTimeout(function () { var i = $("uiCfInput"); if (i) i.focus(); }, 60);
+        function done(yes) {
+          var val = (yes && opts.input && $("uiCfInput")) ? $("uiCfInput").value : "";
+          $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; $("uiModalBg").onclick = null;
+          resolve({ ok: yes, val: val });
+        }
+        $("uiModalBg").onclick = function (e) {
+          if (e.target === $("uiModalBg") || e.target.closest("[data-no]")) done(false);
+          else if (e.target.closest("[data-yes]")) done(true);
+        };
+      });
+    }
+    function infoModal(titulo, bodyHtml) {
+      $("uiModalBox").innerHTML = '<button class="close" data-no>×</button><h3>' + esc(titulo) + '</h3>' + bodyHtml;
+      $("uiModalBg").hidden = false;
+      $("uiModalBg").onclick = function (e) {
+        if (e.target === $("uiModalBg") || e.target.closest("[data-no]")) { $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; $("uiModalBg").onclick = null; }
+      };
+    }
+
+    // ── Tabla interactiva reutilizable: filtro + orden por columna + paginado ──
+    // cols: [{ key, label, cell(row)->htmlTd, text(row)->str (filtro/orden), sortable }]
+    // opts: { rowId(row), pageSize=25, filtro, filterPh, empty }
+    function tabla(cont, cols, rows, opts) {
+      opts = opts || {};
+      var st = cont._tbl || (cont._tbl = { sortKey: opts.sortKey || null, sortDir: opts.sortDir || 1, filter: "" });
+      st.cols = cols; st.rows = rows || []; st.opts = opts; st.pageSize = opts.pageSize || 25; st.page = 0;
+      if (!cont._tblInit) {
+        cont._tblInit = true;
+        cont.addEventListener("input", function (e) {
+          if (e.target.classList.contains("tbl-filter")) { cont._tbl.filter = e.target.value; cont._tbl.page = 0; renderTablaBody(cont); }
+        });
+        cont.addEventListener("click", function (e) {
+          var s = e.target.closest("[data-sort]");
+          if (s) { var k = s.dataset.sort; if (cont._tbl.sortKey === k) cont._tbl.sortDir = -cont._tbl.sortDir; else { cont._tbl.sortKey = k; cont._tbl.sortDir = 1; } cont._tbl.page = 0; renderTablaBody(cont); return; }
+          var p = e.target.closest("[data-pg]");
+          if (p && !p.disabled) { cont._tbl.page += (p.dataset.pg === "next" ? 1 : -1); renderTablaBody(cont); }
+        });
+      }
+      var filt = opts.filtro ? '<div class="tbl-controls"><input class="tbl-filter" type="search" placeholder="' + esc(opts.filterPh || "Filtrar…") + '" value="' + esc(st.filter) + '" /><span class="tbl-count muted"></span></div>' : '';
+      cont.innerHTML = filt + '<div class="tbl-body"></div>';
+      renderTablaBody(cont);
+    }
+    function renderTablaBody(cont) {
+      var st = cont._tbl, cols = st.cols, opts = st.opts;
+      var rows = st.rows.slice();
+      if (st.filter) { var f = st.filter.toLowerCase(); rows = rows.filter(function (r) { return cols.some(function (c) { return c.text && String(c.text(r) || "").toLowerCase().indexOf(f) > -1; }); }); }
+      if (st.sortKey) { var col = cols.filter(function (c) { return c.key === st.sortKey; })[0]; if (col && col.text) rows.sort(function (a, b) { var av = String(col.text(a) || ""), bv = String(col.text(b) || ""); return av.localeCompare(bv, "es", { numeric: true }) * st.sortDir; }); }
+      var total = rows.length, pages = Math.max(1, Math.ceil(total / st.pageSize));
+      if (st.page >= pages) st.page = pages - 1; if (st.page < 0) st.page = 0;
+      var slice = rows.slice(st.page * st.pageSize, st.page * st.pageSize + st.pageSize);
+      var body = cont.querySelector(".tbl-body"), cc = cont.querySelector(".tbl-count");
+      if (!total) { body.innerHTML = '<p class="empty">' + esc(opts.empty || "Sin resultados.") + '</p>'; if (cc) cc.textContent = ""; return; }
+      var thead = '<thead><tr>' + cols.map(function (c) { var arr = st.sortKey === c.key ? (st.sortDir > 0 ? " ▲" : " ▼") : ""; return '<th' + (c.sortable !== false && c.text ? ' data-sort="' + c.key + '"' : '') + '>' + esc(c.label || "") + arr + '</th>'; }).join("") + '</tr></thead>';
+      var trs = slice.map(function (r) { return '<tr' + (opts.rowId ? ' data-id="' + esc(opts.rowId(r)) + '"' : '') + '>' + cols.map(function (c) { return '<td data-l="' + esc(c.label || "") + '">' + (c.cell ? c.cell(r) : "") + '</td>'; }).join("") + '</tr>'; }).join("");
+      var pager = pages > 1 ? '<div class="tbl-pager"><button class="btn btn-sm btn-ghost" data-pg="prev"' + (st.page === 0 ? " disabled" : "") + '>‹ Anterior</button><span class="muted">' + (st.page + 1) + ' / ' + pages + '</span><button class="btn btn-sm btn-ghost" data-pg="next"' + (st.page >= pages - 1 ? " disabled" : "") + '>Siguiente ›</button></div>' : '';
+      body.innerHTML = '<table>' + thead + '<tbody>' + trs + '</tbody></table>' + pager;
+      if (cc) cc.textContent = total + (st.filter ? " (filtrado)" : "");
+    }
+
+    // ── Navegación por áreas (router por hash + carga perezosa) ──
+    var AREAS = ["dashboard", "socios", "pagos", "campanas", "contenido", "sistema"];
+    var AREA_TITLE = { dashboard: "📊 Dashboard", socios: "👤 Socios", pagos: "💳 Pagos", campanas: "📣 Campañas", contenido: "🎁 Contenido", sistema: "🛠️ Sistema" };
+    // Loaders que se disparan la PRIMERA vez que se abre cada área (no todo de golpe al entrar).
+    var AREA_LOADERS = {
+      dashboard: [cargarSalud, cargarReportes, cargarRevCount],
+      socios: [],                                 // búsqueda/segmentos/padrón corren a demanda
+      pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
+      campanas: [cargarEmailMetricas, cargarCampanas, cargarGhl],
+      contenido: [cargarCrud, cargarActualizaciones],
+      sistema: [cargarUsuarios, cargarSelfies, cargarAcciones],
+    };
+    var areaLoaded = {};
+    function navTo(area) {
+      if (AREAS.indexOf(area) < 0) area = "dashboard";
+      if (ADMIN_AREAS.indexOf(area) < 0) area = ADMIN_AREAS[0] || "dashboard"; // rol sin acceso → primera permitida
+      AREAS.forEach(function (a) { var el = $("area-" + a); if (el) el.hidden = (a !== area); });
+      var links = document.querySelectorAll(".nav-link[data-area]");
+      for (var i = 0; i < links.length; i++) { links[i].classList.toggle("on", links[i].dataset.area === area); }
+      $("areaTitle").textContent = AREA_TITLE[area];
+      if (!areaLoaded[area]) { areaLoaded[area] = true; (AREA_LOADERS[area] || []).forEach(function (f) { try { f(); } catch (e) {} }); }
+      try { window.scrollTo(0, 0); } catch (e) {}
+    }
+    function onHash() { var a = (location.hash || "").replace(/^#\/?/, "") || "dashboard"; navTo(a); }
+    window.addEventListener("hashchange", onHash);
+
+    async function cargar() {
+      try {
+        resetAdminState();                        // limpia identidad/tablas de la sesión anterior
+        var who = await api("/admin/whoami");   // identidad + rol + áreas/permisos (y valida la sesión)
+        ADMIN_ROL = who.rol || "lectura"; ADMIN_PERMS = who.perms || []; ADMIN_AREAS = (who.areas && who.areas.length) ? who.areas : ["dashboard"];
+        showDash();
+        aplicarRol();
+        $("adminWho").textContent = (who.usuario || "") + " · " + ADMIN_ROL;
+        var r = await api("/admin/resumen");
+        $("stTotal").textContent = Number(r.totalReal || 0).toLocaleString("es-PY");
+        $("stPend").textContent = (r.pendientes || []).length;
+        renderPend(r.pendientes || []);
+        areaLoaded = {};   // al (re)entrar, cada área se recarga fresca la primera vez
+        onHash();          // rutea al área actual y dispara su carga perezosa
+      } catch (e) { showLogin(e.message); }
+    }
+
+    // Aplica el rol a la UI (oculta áreas y la gestión de usuarios). La seguridad real es server-side.
+    function aplicarRol() {
+      var links = document.querySelectorAll(".nav-link[data-area]");
+      for (var i = 0; i < links.length; i++) { links[i].style.display = (ADMIN_AREAS.indexOf(links[i].dataset.area) > -1) ? "" : "none"; }
+      var us = $("usuariosBox"); if (us) us.style.display = puede("usuarios") ? "" : "none";
+      // Botones de acción a nivel sección (los por-fila se gatean al renderizar).
+      var setVis = function (id, ok) { var el = $(id); if (el) el.style.display = ok ? "" : "none"; };
+      setVis("crudNuevo", puede("contenido.write"));
+      setVis("campLanzar", puede("campanas.write"));
+      setVis("ghlSync", puede("campanas.write"));
+      setVis("segExport", puede("export"));   // export de PII de socios
+      setVis("btnExport", puede("export"));   // export de pagos
+      setVis("btnExportRec", puede("export")); // export de pagos recibidos
+    }
+
+    // Contador liviano para el KPI "Validaciones a revisar" del dashboard.
+    async function cargarRevCount() {
+      try { var r = await api("/admin/actualizaciones?estado=a_revisar"); $("stRev").textContent = (r.items || []).length; } catch (e) {}
+    }
+
+    function renderPend(list) {
+      if (!list.length) { $("pendWrap").innerHTML = '<p class="empty">No hay pagos pendientes. ✓</p>'; return; }
+      var rows = list.map(function (p) {
+        var nombre = [p.nombre, p.apellido].filter(Boolean).join(" ") || "—";
+        return '<tr data-id="' + esc(p.id) + '">' +
+          '<td data-l="Socio"><strong>' + esc(nombre) + '</strong><br><span class="muted">' + esc(p.email || "") + '</span></td>' +
+          '<td data-l="Nivel"><span class="pill">' + esc(TIER[p.tier_slug] || p.tier_slug || "") + '</span></td>' +
+          '<td data-l="Monto">' + esc(p.precioTxt || fmtMonto(p.monto, p.moneda)) + '</td>' +
+          '<td data-l="Fecha" class="muted">' + esc(fmtFecha(p.creado)) + '</td>' +
+          '<td data-l="Acción">' + (puede("pagos.write") ? '<div class="row-actions"><button class="btn btn-sm btn-ok" data-act="activar">Activar</button><button class="btn btn-sm btn-no" data-act="rechazar">Rechazar</button></div>' : '<span class="muted">—</span>') + '</td></tr>';
+      }).join("");
+      $("pendWrap").innerHTML = '<table><thead><tr><th>Socio</th><th>Nivel</th><th>Monto</th><th>Fecha</th><th>Acción</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
+    async function accionPedido(id, act) {
+      try {
+        await api("/admin/pedidos/" + encodeURIComponent(id) + "/" + act, { method: "POST" });
+        toast(act === "activar" ? "Pedido activado" : "Pedido rechazado");
+        cargar();
+      } catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Cola de Actualización (staging de socios) ──
+    async function cargarActualizaciones() {
+      var estado = $("actEstado").value;
+      try {
+        var r = await api("/admin/actualizaciones" + (estado ? "?estado=" + encodeURIComponent(estado) : ""));
+        renderAct(r.items || []);
+        if (estado === "a_revisar") $("stRev").textContent = (r.items || []).length;
+      } catch (e) { $("actWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    function renderAct(list) {
+      tabla($("actWrap"), [
+        { key: "socio", label: "Socio", text: function (a) { return [a.nombre, a.apellido, a.email].filter(Boolean).join(" "); }, cell: function (a) { return '<strong>' + esc([a.nombre, a.apellido].filter(Boolean).join(" ") || "—") + '</strong><br><span class="muted">' + esc(a.email || "") + '</span>'; } },
+        { key: "cedula", label: "Cédula", text: function (a) { return a.cedula || ""; }, cell: function (a) { return esc(a.cedula || "—"); } },
+        { key: "nivel", label: "Nivel", text: function (a) { return TIER[a.tier_pretendido] || a.tier_pretendido || ""; }, cell: function (a) { return '<span class="pill">' + esc(TIER[a.tier_pretendido] || a.tier_pretendido || "—") + '</span>'; } },
+        { key: "match", label: "Match", text: function (a) { return a.match_padron_id ? "1" : "0"; }, cell: function (a) { return a.match_padron_id ? "✓ padrón" : "—"; } },
+        { key: "estado", label: "Estado", text: function (a) { return a.estado || ""; }, cell: function (a) { return '<span class="muted">' + esc(a.estado) + '</span>'; } },
+        { key: "fecha", label: "Fecha", text: function (a) { return a.creado || ""; }, cell: function (a) { return '<span class="muted">' + esc(fmtFecha(a.creado)) + '</span>'; } },
+        { key: "acc", label: "Acción", sortable: false, cell: function (a) { var resuelto = a.estado === "unificado" || a.estado === "rechazado"; return (resuelto || !puede("padron.resolve")) ? '<span class="muted">' + esc(a.estado) + '</span>' : '<div class="row-actions"><button class="btn btn-sm btn-ok" data-act="unificar">Unificar</button><button class="btn btn-sm btn-no" data-act="rechazar">Rechazar</button></div>'; } }
+      ], list || [], { rowId: function (a) { return a.id; }, filtro: true, filterPh: "Filtrar por nombre, cédula, estado…", empty: "Nada en esta cola." });
+    }
+    async function accionAct(id, accion) {
+      try {
+        await api("/admin/actualizaciones/" + encodeURIComponent(id) + "/" + accion, { method: "POST" });
+        toast(accion === "unificar" ? "Unificado al padrón" : "Rechazado");
+        cargarActualizaciones();
+      } catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Reportes de negocio ──
+    async function cargarReportes() {
+      try {
+        var r = await api("/admin/reportes");
+        var byTier = {}; (r.membresias || []).forEach(function (m) { byTier[m.tier_slug] = m; });
+        function card(n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; }
+        var e = r.embudo || {};
+        var socio = byTier.socio || { total: 0 };
+        var plus = byTier.premium || { total: 0, pagados: 0 };
+        var jun = byTier.kids || { total: 0, pagados: 0 };
+        var oli = byTier.olimpista || { total: 0 };
+        var pct = function (x) { return e.total ? Math.round(100 * (x || 0) / e.total) + "%" : "—"; };
+        $("repCards").innerHTML =
+          card(socio.total || 0, "Socios del Club") +
+          card(plus.total + '<span style="font-size:13px;font-weight:600"> · ' + plus.pagados + ' pagos</span>', "Plus activos") +
+          card(jun.total + '<span style="font-size:13px;font-weight:600"> · ' + jun.pagados + ' pagos</span>', "Junior activos") +
+          card(oli.total || 0, "Olimpista (gratis)") +
+          card(pct(e.con_foto), "Con foto") +
+          card(pct(e.valido_socio), "Validó socio") +
+          card(pct(e.email_verif), "Email verificado");
+        var memRows = (r.membresias || []).map(function (m) {
+          return '<tr><td data-l="Nivel"><span class="pill">' + esc(m.nombre || m.tier_slug) + '</span></td><td data-l="Total">' + (m.total || 0) + '</td><td data-l="Pagados">' + (m.pagados || 0) + '</td><td data-l="Gratis">' + (m.gratis || 0) + '</td></tr>';
+        }).join("");
+        var paisRows = (r.paises || []).map(function (p, i) {
+          return '<tr><td data-l="#">' + (i + 1) + '</td><td data-l="País">' + esc(p.nombre) + '</td><td data-l="Socios">' + Number(p.count).toLocaleString("es-PY") + '</td></tr>';
+        }).join("");
+        var altaRows = (r.altas || []).map(function (a) { return '<tr><td data-l="Día">' + esc(a.dia) + '</td><td data-l="Altas">' + a.n + '</td></tr>'; }).join("");
+        var pag = (r.membresias || []).reduce(function (a, m) { return a + (m.pagados || 0); }, 0);
+        var max = e.total || 1;
+        var pasos = [["Altas", e.total || 0], ["Con foto", e.con_foto || 0], ["Validó socio", e.valido_socio || 0], ["Inició pago", e.iniciaron_pago || 0], ["Pagó", pag]];
+        var funnel = '<h2>Embudo de conversión</h2><div style="margin-top:6px">' + pasos.map(function (p) {
+          var pct = Math.round(100 * (p[1] || 0) / max);
+          return '<div style="margin:7px 0"><div style="display:flex;justify-content:space-between;font-size:13px"><span>' + p[0] + '</span><span class="muted">' + Number(p[1]).toLocaleString("es-PY") + ' · ' + pct + '%</span></div><div style="background:#0f0f15;border-radius:6px;overflow:hidden;height:10px;margin-top:3px"><div style="height:10px;width:' + pct + '%;background:linear-gradient(90deg,var(--oro2),var(--oro))"></div></div></div>';
+        }).join("") + '</div>';
+        var t = r.tiempo || {};
+        var delta = t.ayer ? Math.round(100 * ((t.hoy || 0) - (t.ayer || 0)) / t.ayer) : null;
+        var tiempoHtml = '<h2>Altas: hoy vs ayer</h2><div class="cards"><div class="stat"><div class="n">' + (t.hoy || 0) + '</div><div class="l">Hoy (PY)</div></div><div class="stat"><div class="n">' + (t.ayer || 0) + '</div><div class="l">Ayer</div></div>' + (delta !== null ? '<div class="stat"><div class="n" style="color:' + (delta >= 0 ? "var(--verde)" : "var(--rojo)") + '">' + (delta >= 0 ? "+" : "") + delta + '%</div><div class="l">vs ayer</div></div>' : "") + '</div>';
+        $("repTablas").innerHTML = funnel + tiempoHtml +
+          '<h2>Membresías: pagas vs gratis</h2><table><thead><tr><th>Nivel</th><th>Total</th><th>Pagados</th><th>Gratis</th></tr></thead><tbody>' + memRows + '</tbody></table>' +
+          '<h2>Top países (reales)</h2><table><thead><tr><th>#</th><th>País</th><th>Socios</th></tr></thead><tbody>' + paisRows + '</tbody></table>' +
+          ((r.altas && r.altas.length) ? '<h2>Altas por día (7d)</h2><table><thead><tr><th>Día</th><th>Altas</th></tr></thead><tbody>' + altaRows + '</tbody></table>' : "");
+      } catch (e) { $("repCards").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
+    // ── Pagos Metrepay (reconciliación) ──
+    async function cargarMetrepay() {
+      try {
+        var r = await api("/admin/actualizaciones?tipo=pago_metrepay");
+        tabla($("metreWrap"), [
+          { key: "pagador", label: "Pagador", text: function (a) { return [a.nombre, a.apellido, a.email].filter(Boolean).join(" "); }, cell: function (a) { return '<strong>' + esc([a.nombre, a.apellido].filter(Boolean).join(" ") || a.email || "—") + '</strong>'; } },
+          { key: "cedula", label: "Cédula", text: function (a) { return a.cedula || ""; }, cell: function (a) { return esc(a.cedula || "—"); } },
+          { key: "nivel", label: "Nivel", text: function (a) { return TIER[a.tier_pretendido] || a.tier_pretendido || ""; }, cell: function (a) { return '<span class="pill">' + esc(TIER[a.tier_pretendido] || a.tier_pretendido || "—") + '</span>'; } },
+          { key: "estado", label: "Estado", text: function (a) { return a.estado === "validado_auto" ? "activado" : "sin match"; }, cell: function (a) { return a.estado === "validado_auto" ? '<span style="color:var(--verde);font-weight:700">✅ activado</span>' : '<span style="color:var(--rojo);font-weight:700">⚠️ sin match</span>'; } },
+          { key: "fecha", label: "Fecha", text: function (a) { return a.creado || ""; }, cell: function (a) { return '<span class="muted">' + esc(fmtFecha(a.creado)) + '</span>'; } },
+          { key: "detalle", label: "Detalle", text: function (a) { return a.notas || ""; }, cell: function (a) { return '<span class="muted" style="font-size:12px">' + esc(a.notas || "") + '</span>'; } }
+        ], r.items || [], { filtro: true, filterPh: "Filtrar por pagador, cédula, estado…", empty: "Sin pagos Metrepay registrados." });
+      } catch (e) { $("metreWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
+    async function activarTier(id, tier) {
+      try { await api("/admin/socios/" + encodeURIComponent(id) + "/membresia", { method: "POST", body: { tier: tier } }); toast("Activado: " + (TIER[tier] || tier)); buscar(); cargarReportes(); }
+      catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Salud del sistema ──
+    async function cargarSalud() {
+      try {
+        var s = await api("/admin/salud");
+        function c(n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; }
+        var db = s.db || {};
+        var col = db.ok && db.ms < 1500 ? "var(--verde)" : "var(--rojo)";
+        $("saludCards").innerHTML =
+          c('<span style="color:' + col + '">' + (db.ok ? db.ms + " ms" : "✖") + '</span>', "DB (ping)") +
+          c(s.ramp && s.ramp.objetivo != null ? Number(s.ramp.objetivo).toLocaleString("es-PY") : "—", "Rampa objetivo") +
+          c(s.statsCacheEdadSeg != null ? s.statsCacheEdadSeg + "s" : "—", "Cache stats") +
+          c('<span style="font-size:19px">' + (s.emailVerif === "off" ? "🔴 off" : "🟢 on") + '</span>', "Verif. email") +
+          c('<span style="font-size:12px">' + esc(s.rev || "—") + '</span>', "Revisión");
+      } catch (e) { $("saludCards").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
+    // ── Abandonos de pago ──
+    async function cargarAbandonos() {
+      try {
+        var r = await api("/admin/abandonos");
+        $("abCount").textContent = "· " + r.total;
+        tabla($("abWrap"), [
+          { key: "socio", label: "Socio", text: function (a) { return [a.nombre, a.apellido, a.email].filter(Boolean).join(" "); }, cell: function (a) { return '<strong>' + esc([a.nombre, a.apellido].filter(Boolean).join(" ") || "—") + '</strong><br><span class="muted">' + esc(a.email || "") + '</span>'; } },
+          { key: "nivel", label: "Nivel", text: function (a) { return TIER[a.tier_slug] || a.tier_slug || ""; }, cell: function (a) { return '<span class="pill">' + esc(TIER[a.tier_slug] || a.tier_slug || "—") + '</span>'; } },
+          { key: "pais", label: "País", text: function (a) { return a.pais_iso || ""; }, cell: function (a) { return '<span class="muted">' + esc(a.pais_iso || "—") + '</span>'; } },
+          { key: "desde", label: "Desde", text: function (a) { return a.creado || ""; }, cell: function (a) { return '<span class="muted">' + esc(fmtFecha(a.creado)) + '</span>'; } },
+          { key: "acc", label: "", sortable: false, cell: function (a) { return '<button class="btn btn-sm btn-ghost" data-ficha="' + esc(a.id) + '">Ficha</button>'; } }
+        ], r.items || [], { filtro: true, filterPh: "Filtrar por nombre, email, país…", empty: "Sin abandonos. ✓" });
+      } catch (e) { $("abWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
+    // ── Gestión de usuarios del panel (solo owner) ──
+    var ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura"];
+    async function cargarUsuarios() {
+      if (!puede("usuarios")) return;
+      $("usuForm").innerHTML = "";
+      try {
+        var r = await api("/admin/usuarios");
+        if (r.roles && r.roles.length) ROLES_ADMIN = r.roles;
+        tabla($("usuWrap"), [
+          { key: "usuario", label: "Usuario", text: function (u) { return u.usuario + " " + (u.nombre || ""); }, cell: function (u) { return '<strong>' + esc(u.usuario) + '</strong>' + (u.nombre ? '<br><span class="muted">' + esc(u.nombre) + '</span>' : ''); } },
+          { key: "rol", label: "Rol", text: function (u) { return u.rol; }, cell: function (u) { return '<span class="pill">' + esc(u.rol) + '</span>'; } },
+          { key: "activo", label: "Activo", text: function (u) { return u.activo ? "1" : "0"; }, cell: function (u) { return u.activo ? '<span style="color:var(--verde)">✓</span>' : '<span class="muted">inactivo</span>'; } },
+          { key: "acceso", label: "Último acceso", text: function (u) { return u.ultimo_acceso || ""; }, cell: function (u) { return '<span class="muted">' + (u.ultimo_acceso ? esc(fmtFecha(u.ultimo_acceso)) : "—") + '</span>'; } },
+          { key: "acc", label: "", sortable: false, cell: function (u) { return '<div class="row-actions"><button class="btn btn-sm" data-uedit="' + esc(u.id) + '">Editar</button><button class="btn btn-sm btn-no" data-udel="' + esc(u.id) + '">Borrar</button></div>'; } }
+        ], r.items || [], { rowId: function (u) { return u.id; }, empty: "Sin usuarios. Creá el primero con ➕." });
+      } catch (e) { $("usuWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    function formUsuario(item) {
+      item = item || {}; var esNuevo = !item.id;
+      var roles = ROLES_ADMIN.map(function (rr) { return '<option value="' + rr + '"' + (item.rol === rr ? ' selected' : '') + '>' + rr + '</option>'; }).join("");
+      $("usuForm").innerHTML = '<div class="fgrid">' +
+        '<div><label>Usuario</label><input id="uf_usuario" value="' + esc(item.usuario || "") + '"' + (esNuevo ? '' : ' disabled') + ' /></div>' +
+        '<div><label>Nombre</label><input id="uf_nombre" value="' + esc(item.nombre || "") + '" /></div>' +
+        '<div><label>Rol</label><select id="uf_rol">' + roles + '</select></div>' +
+        '<div><label>' + (esNuevo ? "Contraseña" : "Nueva contraseña (opcional)") + '</label><input id="uf_password" type="password" placeholder="mín 8 caracteres" autocomplete="new-password" /></div>' +
+        (esNuevo ? '' : '<label class="full" style="display:flex;align-items:center;gap:6px;color:var(--gris);font-size:13px"><input type="checkbox" id="uf_activo" style="width:auto"' + (item.activo !== false ? ' checked' : '') + ' /> activo</label>') +
+        '</div><p class="ok" id="ufOk"></p><div class="row-actions"><button class="btn btn-sm" data-usave="' + esc(item.id || "") + '">' + (esNuevo ? "Crear usuario" : "Guardar cambios") + '</button><button class="btn btn-sm btn-ghost" data-ucancel>Cancelar</button></div>';
+    }
+    async function guardarUsuario(id) {
+      var body = { usuario: ($("uf_usuario") || {}).value, nombre: ($("uf_nombre") || {}).value, rol: ($("uf_rol") || {}).value };
+      var pass = ($("uf_password") || {}).value; if (pass) body.password = pass;
+      var act = $("uf_activo"); if (act) body.activo = act.checked;
+      var el = $("ufOk"); if (el) el.style.color = "var(--verde)";
+      try {
+        if (id) await api("/admin/usuarios/" + encodeURIComponent(id), { method: "PATCH", body: body });
+        else await api("/admin/usuarios", { method: "POST", body: body });
+        $("usuForm").innerHTML = ""; cargarUsuarios(); cargarAcciones(); toast(id ? "Usuario actualizado" : "Usuario creado");
+      } catch (e) { if (el) { el.style.color = "var(--rojo)"; el.textContent = e.message; } else toast(e.message, "err"); }
+    }
+    async function borrarUsuario(id) {
+      if (!(await confirmar("¿Borrar este usuario del panel? No podrá entrar más.", { titulo: "Borrar usuario", ok: "Borrar", danger: true })).ok) return;
+      try { await api("/admin/usuarios/" + encodeURIComponent(id), { method: "DELETE" }); cargarUsuarios(); cargarAcciones(); toast("Usuario borrado"); }
+      catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── CRUD: sorteos / preventas / contenido ──
+    var CRUDCFG = {
+      sorteos: { t: "Sorteos", lbl: function (x) { return x.titulo; }, info: function (x) { return (TIER[x.tier_min] || x.tier_min) + (x.cierra ? " · cierra " + String(x.cierra).slice(0, 10) : ""); }, campos: [["titulo", "Título", "text"], ["descripcion", "Descripción", "text"], ["tier_min", "Nivel mínimo", "tier"], ["cierra", "Cierra (YYYY-MM-DD)", "date"], ["imagen", "Imagen URL", "text"]], sorteo: true },
+      preventas: { t: "Preventas", lbl: function (x) { return x.evento; }, info: function (x) { return (x.fecha ? String(x.fecha).slice(0, 10) : "") + (x.sede ? " · " + x.sede : "") + " · stock " + (x.stock || 0); }, campos: [["evento", "Evento", "text"], ["fecha", "Fecha", "date"], ["sede", "Sede", "text"], ["abre", "Abre", "date"], ["tier_min", "Nivel mínimo", "tier"], ["precio_desde", "Precio desde", "number"], ["stock", "Stock", "number"], ["imagen", "Imagen URL", "text"]] },
+      contenido: { t: "Contenido", lbl: function (x) { return x.titulo; }, info: function (x) { return (x.tipo || "") + " · " + (TIER[x.tier_min] || x.tier_min); }, campos: [["titulo", "Título", "text"], ["tipo", "Tipo (video/nota…)", "text"], ["tier_min", "Nivel mínimo", "tier"], ["duracion", "Duración", "text"], ["descripcion", "Descripción", "text"], ["thumb", "Thumb URL", "text"], ["publicado", "Publicado", "date"]] },
+      subastas: { t: "Subastas",
+        lbl: function (x) { return x.titulo; },
+        estado: function (x) { return { borrador: { l: "📝 Borrador", c: "" }, programada: { l: "⏳ Programada", c: "pill-warn" }, activa: { l: "🔴 En vivo", c: "pill-ok" }, cerrada: { l: "🏁 Cerrada", c: "" } }[x.estado] || { l: x.estado, c: "" }; },
+        info: function (x) { var extra = (x.estado === "programada" && x.inicia) ? "arranca " + new Date(x.inicia).toLocaleString("es-PY") + " · " : ""; return extra + (TIER[x.nivel_min] || x.nivel_min) + " · desde ₲" + Number(x.precio_inicial || 0).toLocaleString("es-PY") + (Number(x.puja_actual) > Number(x.precio_inicial) ? " · actual ₲" + Number(x.puja_actual).toLocaleString("es-PY") : ""); },
+        campos: [["titulo", "Título", "text"], ["descripcion", "Descripción", "text"], ["emoji", "Emoji", "text"], ["imagen", "Imagen", "imagen"], ["nivel_min", "Quién puja (nivel mínimo)", "tier"], ["precio_inicial", "Precio inicial (₲)", "number"], ["incremento", "Incremento (₲)", "number"], ["duracion_horas", "Duración (horas)", "number"]], subasta: true },
+      encuestas: { t: "Encuestas",
+        lbl: function (x) { return x.titulo || x.pregunta; },
+        estado: function (x) { return { borrador: { l: "📝 Borrador", c: "" }, activa: { l: "🟢 Activa", c: "pill-ok" }, cerrada: { l: "🏁 Cerrada", c: "" } }[x.estado] || { l: x.estado, c: "" }; },
+        info: function (x) { var tp = x.tipo === "texto" ? "respuesta abierta" : ((x.opciones || []).length + " opciones"); return tp + " · " + (TIER[x.nivel_min] || x.nivel_min); },
+        campos: [["titulo", "Título (interno)", "text"], ["pregunta", "Pregunta", "text"], ["tipo", "Tipo", ["opcion", "texto"]], ["opciones", "Opciones (separadas por | )", "text"], ["nivel_min", "Quién responde (nivel)", "tier"], ["estado", "Estado", ["borrador", "activa", "cerrada"]]], encuesta: true },
+    };
+    var crudActual = "sorteos", crudItems = [];
+    async function cargarCrud() {
+      crudActual = $("crudSel").value; $("crudForm").innerHTML = "";
+      try {
+        var r = await api("/admin/" + crudActual);
+        crudItems = r.items || [];
+        var cfg = CRUDCFG[crudActual];
+        if (!crudItems.length) { $("crudList").innerHTML = '<p class="empty">Sin ' + cfg.t.toLowerCase() + ' aún. Creá con ➕ Nuevo.</p>'; return; }
+        var w = puede("contenido.write");
+        var rows = crudItems.map(function (x) {
+          var parts = cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-parts="' + esc(x.id) + '">Participantes</button>' : "";
+          var sub = "";
+          if (cfg.subasta) {
+            if (x.estado === "borrador") {
+              sub += '<button class="btn btn-sm" data-vivo="' + esc(x.id) + '">▶ Poner en vivo</button>';
+              sub += '<button class="btn btn-sm btn-ghost" data-prog="' + esc(x.id) + '">⏱ Programar</button>';
+            } else if (x.estado === "programada") {
+              sub += '<button class="btn btn-sm" data-vivo="' + esc(x.id) + '">▶ En vivo ya</button>';
+              sub += '<button class="btn btn-sm btn-ghost" data-despub="' + esc(x.id) + '">↩ Borrador</button>';
+            } else if (x.estado === "activa") {
+              sub += '<button class="btn btn-sm btn-no" data-cerrar="' + esc(x.id) + '">⏹ Cerrar</button>';
+              sub += '<button class="btn btn-sm btn-ghost" data-despub="' + esc(x.id) + '">↩ Borrador</button>';
+            }
+            sub += '<button class="btn btn-sm btn-ghost" data-pujas="' + esc(x.id) + '">👁 Pujas</button>';
+            // Disponible en CUALQUIER estado (incluso Borrador): sirve para preparar la
+            // comunicación con el link definitivo ANTES de poner la subasta en vivo.
+            sub += '<button class="btn btn-sm btn-ghost" data-link="' + esc(x.id) + '">🔗 Link</button>';
+          }
+          var encb = "";
+          if (cfg.encuesta) {
+            if (x.estado !== "activa") encb += '<button class="btn btn-sm" data-encact="' + esc(x.id) + '">▶ Activar</button>';
+            else encb += '<button class="btn btn-sm btn-no" data-enccer="' + esc(x.id) + '">⏹ Cerrar</button>';
+            encb += '<button class="btn btn-sm btn-ghost" data-encres="' + esc(x.id) + '">📊 Resultados</button>';
+          }
+          var acc = w ? ('<button class="btn btn-sm btn-ghost" data-edit="' + esc(x.id) + '">Editar</button>' + parts + sub + encb + (cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-gana="' + esc(x.id) + '">🎲 Ganador</button>' : '') + '<button class="btn btn-sm btn-no" data-del="' + esc(x.id) + '">Borrar</button>') : (parts + sub + encb);
+          var estadoPill = cfg.estado ? '<span class="pill ' + (cfg.estado(x).c || "") + '" style="margin-right:8px">' + esc(cfg.estado(x).l) + '</span>' : "";
+          return '<tr><td data-l="Item"><strong>' + esc(cfg.lbl(x) || "—") + '</strong><br>' + estadoPill + '<span class="muted">' + esc(cfg.info(x)) + '</span></td><td data-l=""><div class="row-actions" style="flex-wrap:wrap">' + acc + '</div></td></tr>';
+        }).join("");
+        $("crudList").innerHTML = '<table><tbody>' + rows + '</tbody></table>';
+      } catch (e) { $("crudList").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // Valores sugeridos al CREAR (no al editar): igual al default real que aplica el
+    // servidor si se deja vacío, para que el form no mienta con un campo vacío.
+    var DEFAULTS_NUEVO = { duracion_horas: "48", incremento: "50000" };
+    function formCrud(item) {
+      var cfg = CRUDCFG[crudActual]; item = item || {};
+      var fields = cfg.campos.map(function (c) {
+        var v = item[c[0]] == null ? ((!item.id && DEFAULTS_NUEVO[c[0]]) || "") : (c[2] === "date" ? String(item[c[0]]).slice(0, 10) : item[c[0]]);
+        if (c[0] === "opciones" && Array.isArray(v)) v = v.join(" | ");
+        var full = (["titulo", "evento", "descripcion", "imagen", "thumb", "pregunta", "opciones"].indexOf(c[0]) > -1) ? ' class="full"' : "";
+        if (c[2] === "tier") return '<div class="full"><label>' + c[1] + '</label><select id="cf_' + c[0] + '"><option value="olimpista"' + (v === "olimpista" ? " selected" : "") + '>Olimpista (todos los registrados)</option><option value="premium"' + (v === "premium" ? " selected" : "") + '>Plus</option><option value="kids"' + (v === "kids" ? " selected" : "") + '>Junior</option><option value="socio"' + (v === "socio" ? " selected" : "") + '>Socio (solo socios)</option></select></div>';
+        if (Array.isArray(c[2])) return '<div' + full + '><label>' + c[1] + '</label><select id="cf_' + c[0] + '">' + c[2].map(function (op) { return '<option value="' + esc(op) + '"' + (String(v) === op ? " selected" : "") + '>' + esc(op) + '</option>'; }).join("") + '</select></div>';
+        // Imagen: subida directa (redimensiona/comprime en el navegador a data URL) en vez de
+        // exigir ya tener una URL. El input de texto queda debajo como alternativa (pegar URL externa).
+        if (c[2] === "imagen") {
+          var prev = v ? '<img id="imgPrev_' + c[0] + '" class="img-up-prev" src="' + esc(v) + '" alt="" />' : '<div id="imgPrev_' + c[0] + '" class="img-up-prev img-up-empty">🖼</div>';
+          return '<div class="full"><label>' + c[1] + '</label><div class="img-up-row">' + prev +
+            '<div class="img-up-acts"><button type="button" class="btn btn-sm btn-ghost" data-imgpick="' + c[0] + '">📷 Subir imagen</button>' +
+            '<input type="file" id="imgFile_' + c[0] + '" accept="image/*" hidden />' +
+            '<p class="hint" style="margin:6px 0 0">Se ajusta y comprime sola. También podés pegar una URL abajo.</p></div></div>' +
+            '<input id="cf_' + c[0] + '" value="' + esc(v) + '" placeholder="https://… (opcional si subiste una imagen)" style="margin-top:8px" /></div>';
+        }
+        return '<div' + full + '><label>' + c[1] + '</label><input id="cf_' + c[0] + '" value="' + esc(v) + '" /></div>';
+      }).join("");
+      // Previsualización en vivo (solo subastas, por ahora): imita la card real que ve el
+      // socio en Descubrir, para que el admin vea cómo va a quedar ANTES de guardar/publicar.
+      var previewHtml = cfg.subasta ?
+        '<div class="sub-preview-wrap"><div class="sub-preview-lbl">👁 Así se ve en la app</div>' +
+        '<div class="sub-preview-card"><div class="sub-preview-thumb" id="subPrevThumb"><span class="ic">🔨</span></div>' +
+        '<div class="sub-preview-body"><span class="sub-preview-chip">🔴 EN VIVO</span>' +
+        '<h4 class="sub-preview-h4" id="subPrevTitulo">Título de la subasta</h4>' +
+        '<p class="sub-preview-precio">Puja actual<br><strong id="subPrevPrecio">₲ 0</strong></p>' +
+        '<span class="sub-preview-cta">Pujar ›</span></div></div></div>' : "";
+      $("crudForm").innerHTML = '<div class="fgrid">' + fields + '</div>' + previewHtml + '<p class="ok" id="cfOk"></p><div class="row-actions"><button class="btn btn-sm" data-save="' + esc(item.id || "") + '">' + (item.id ? "Guardar cambios" : "Crear") + '</button><button class="btn btn-sm btn-ghost" data-cancel>Cancelar</button></div>';
+      wireSubidaImagenes();
+      if (cfg.subasta) wireSubastaPreview();
+    }
+    // Lee los campos actuales del form y actualiza la card de previsualización. Se llama en
+    // cada tecla (título/precio/emoji) y también tras subir una imagen (que no dispara 'input').
+    function renderSubastaPreview() {
+      var titEl = $("subPrevTitulo"), precioEl = $("subPrevPrecio"), thumbEl = $("subPrevThumb");
+      if (!titEl) return; // no estamos en el form de subastas
+      var t = $("cf_titulo"), pr = $("cf_precio_inicial"), em = $("cf_emoji"), im = $("cf_imagen");
+      titEl.textContent = (t && t.value.trim()) || "Título de la subasta";
+      precioEl.textContent = "₲ " + Number((pr && pr.value) || 0).toLocaleString("es-PY");
+      var imgVal = im ? im.value.trim() : "", emoji = (em && em.value.trim()) || "🔨";
+      thumbEl.innerHTML = imgVal ? '<img src="' + esc(imgVal) + '" alt="" />' : '<span class="ic">' + esc(emoji) + '</span>';
+    }
+    function wireSubastaPreview() {
+      ["cf_titulo", "cf_precio_inicial", "cf_emoji", "cf_imagen"].forEach(function (id) {
+        var el = $(id); if (el) el.addEventListener("input", renderSubastaPreview);
+      });
+      renderSubastaPreview();
+    }
+    // Convierte un archivo de imagen a data URL, redimensionado (lado mayor a maxDim) y
+    // comprimido en JPEG — así la foto pesa poco en vez de subir el archivo original tal cual.
+    function leerImagenComoDataURL(file, maxDim, calidad) {
+      return new Promise(function (resolve, reject) {
+        var fr = new FileReader();
+        fr.onload = function () {
+          var img = new Image();
+          img.onload = function () {
+            var w = img.width, h = img.height;
+            if (w > h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else if (h >= w && h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+            var c = document.createElement("canvas"); c.width = w; c.height = h;
+            c.getContext("2d").drawImage(img, 0, 0, w, h);
+            resolve(c.toDataURL("image/jpeg", calidad || 0.82));
+          };
+          img.onerror = function () { reject(new Error("No se pudo leer la imagen")); };
+          img.src = fr.result;
+        };
+        fr.onerror = function () { reject(new Error("No se pudo leer el archivo")); };
+        fr.readAsDataURL(file);
+      });
+    }
+    function wireSubidaImagenes() {
+      $("crudForm").querySelectorAll('input[type="file"][id^="imgFile_"]').forEach(function (inp) {
+        var key = inp.id.slice("imgFile_".length);
+        inp.addEventListener("change", async function () {
+          var f = inp.files && inp.files[0]; if (!f) return;
+          try {
+            var dataUrl = await leerImagenComoDataURL(f, 900, 0.82);
+            var target = $("cf_" + key); if (target) target.value = dataUrl;
+            var prevEl = $("imgPrev_" + key);
+            if (prevEl) {
+              var img = document.createElement("img"); img.id = "imgPrev_" + key; img.className = "img-up-prev"; img.alt = ""; img.src = dataUrl;
+              prevEl.replaceWith(img);
+            }
+            if (typeof renderSubastaPreview === "function") renderSubastaPreview(); // el .value programático no dispara 'input'
+          } catch (e) { toast(e.message || "No se pudo procesar la imagen", "err"); }
+        });
+      });
+    }
+    async function guardarCrud(id) {
+      var cfg = CRUDCFG[crudActual], body = {};
+      cfg.campos.forEach(function (c) { var el = $("cf_" + c[0]); if (el) body[c[0]] = el.value; });
+      var el = $("cfOk"); el.style.color = "var(--verde)";
+      try {
+        if (id) await api("/admin/" + crudActual + "/" + encodeURIComponent(id), { method: "PATCH", body: body });
+        else await api("/admin/" + crudActual, { method: "POST", body: body });
+        $("crudForm").innerHTML = ""; cargarCrud(); cargarAcciones();
+        toast(id ? "✓ Cambios guardados" : "✓ Creado"); // antes el "ok" se pisaba a sí mismo al vaciar el form, sin feedback visible
+      } catch (e) { el.style.color = "var(--rojo)"; el.textContent = e.message; }
+    }
+    async function borrarCrud(id) {
+      if (!(await confirmar("¿Borrar este item? No se puede deshacer.", { titulo: "Borrar", ok: "Borrar", danger: true })).ok) return;
+      try { await api("/admin/" + crudActual + "/" + encodeURIComponent(id), { method: "DELETE" }); cargarCrud(); cargarAcciones(); toast("Item borrado"); } catch (e) { toast(e.message, "err"); }
+    }
+    async function verParticipantes(id) {
+      try {
+        var r = await api("/admin/sorteos/" + encodeURIComponent(id) + "/participantes"); var l = r.items || [];
+        var body = l.length ? '<div class="listado">' + l.slice(0, 300).map(function (p) { return '<div class="li-row"><strong>' + esc([p.nombre, p.apellido].filter(Boolean).join(" ") || "—") + '</strong> <span class="muted">' + esc(p.email || "") + '</span></div>'; }).join("") + '</div>' : '<p class="empty">Sin participantes.</p>';
+        infoModal("Participantes (" + l.length + ")", body);
+      } catch (e) { toast(e.message, "err"); }
+    }
+    async function sortearGanador(id) {
+      if (!(await confirmar("¿Sortear un ganador al azar? Queda registrado en el log.", { titulo: "Sortear ganador", ok: "Sortear" })).ok) return;
+      try { var r = await api("/admin/sorteos/" + encodeURIComponent(id) + "/ganador", { method: "POST" }); infoModal("🎲 Ganador", '<p style="font-size:19px;font-weight:800;margin:8px 0 2px">' + esc([r.ganador.nombre, r.ganador.apellido].filter(Boolean).join(" ") || "—") + '</p><p class="muted" style="margin:0">' + esc(r.ganador.email || "") + '</p><p class="muted" style="font-size:13px;margin-top:8px">de ' + r.total + ' participantes</p>'); cargarAcciones(); } catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Subastas: poner en vivo / cerrar / ver pujas ──
+    async function publicarSubasta(id) {
+      var it = crudItems.filter(function (x) { return x.id === id; })[0] || {};
+      var horas = Number(it.duracion_horas) || 48;
+      if (!(await confirmar("¿Poner en vivo? Cierra en " + horas + " horas y los socios (Plus y Socio) van a poder pujar.", { titulo: "Poner en vivo", ok: "Poner en vivo" })).ok) return;
+      try { await api("/admin/subastas/" + encodeURIComponent(id) + "/publicar", { method: "POST" }); toast("🔴 Subasta en vivo"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function cerrarSubasta(id) {
+      if (!(await confirmar("¿Cerrar la subasta ahora? Gana la puja más alta y se le avisa al ganador.", { titulo: "Cerrar subasta", ok: "Cerrar", danger: true })).ok) return;
+      try { await api("/admin/subastas/" + encodeURIComponent(id) + "/cerrar", { method: "POST" }); toast("Subasta cerrada"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function despublicarSubasta(id) {
+      if (!(await confirmar("¿Volver a borrador? Deja de estar visible para los socios; podés reconfigurarla y volver a publicarla.", { titulo: "Volver a borrador", ok: "Volver a borrador" })).ok) return;
+      try { await api("/admin/subastas/" + encodeURIComponent(id) + "/despublicar", { method: "POST" }); toast("↩ En borrador"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function programarSubasta(id) {
+      var d = new Date(Date.now() + 3600000), p = function (n) { return (n < 10 ? "0" : "") + n; };
+      var def = d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
+      // Modal propio (mismo patrón que confirmar/infoModal) en vez de window.prompt(): consistente
+      // con el resto del panel y con un input datetime-local real, no texto libre a mano.
+      $("uiModalBox").innerHTML =
+        '<h3>⏱ Programar subasta</h3>' +
+        '<p class="muted" style="margin:6px 0 10px">¿Cuándo arranca? (hora de Paraguay)</p>' +
+        '<input id="progFecha" type="datetime-local" value="' + def + '" style="margin-bottom:6px" />' +
+        '<p class="err" id="progErr"></p>' +
+        '<div class="row-actions" style="justify-content:flex-end;margin-top:8px"><button class="btn btn-ghost" data-no>Cancelar</button><button class="btn" data-yes>Programar</button></div>';
+      $("uiModalBg").hidden = false;
+      setTimeout(function () { var i = $("progFecha"); if (i) i.focus(); }, 60);
+      var t = await new Promise(function (resolve) {
+        function cerrar() { $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; $("uiModalBg").onclick = null; }
+        $("uiModalBg").onclick = function (e) {
+          if (e.target === $("uiModalBg") || e.target.closest("[data-no]")) { cerrar(); resolve(null); }
+          else if (e.target.closest("[data-yes]")) {
+            var v = $("progFecha").value, tt = new Date(v);
+            if (!v || isNaN(tt.getTime()) || tt.getTime() <= Date.now()) { $("progErr").textContent = "Fecha inválida o no futura"; return; }
+            cerrar(); resolve(tt);
+          }
+        };
+      });
+      if (!t) return;
+      try { await api("/admin/subastas/" + encodeURIComponent(id) + "/programar", { method: "POST", body: { inicia: t.toISOString() } }); toast("⏱ Programada: " + t.toLocaleString("es-PY")); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function verPujasSubasta(id) {
+      try {
+        var r = await api("/admin/subastas/" + encodeURIComponent(id) + "/pujas");
+        var g = r.ganador ? '<p style="margin:0 0 10px"><strong>Líder:</strong> ' + esc(r.ganador.nombre || "—") + ' · ' + esc(r.ganador.email || "") + (r.ganador.whatsapp ? ' · 📱 ' + esc(r.ganador.whatsapp) : "") + '</p>' : "";
+        var pujas = r.pujas || [];
+        var body = '<p class="muted" style="margin:0 0 8px">Puja actual <strong>₲' + Number(r.subasta.puja_actual || 0).toLocaleString("es-PY") + '</strong> · ' + (r.pujadores || 0) + ' pujadores · ' + esc(r.subasta.estado) + '</p>' + g +
+          (pujas.length ? '<div class="listado">' + pujas.map(function (p) { return '<div class="li-row"><strong>₲' + Number(p.monto).toLocaleString("es-PY") + '</strong> <span class="muted">' + esc(p.nombre || "Olimpista") + '</span></div>'; }).join("") + '</div>' : '<p class="empty">Sin pujas aún.</p>');
+        infoModal("Pujas — " + esc(r.subasta.titulo || ""), body);
+      } catch (e) { toast(e.message, "err"); }
+    }
+    // Link DEFINITIVO para preparar la comunicación (redes, WhatsApp, email) con el ID real
+    // de la subasta — nada de adivinar o copiar a mano desde la URL de la API.
+    function verLinkSubasta(id) {
+      var it = crudItems.filter(function (x) { return x.id === id; })[0] || {};
+      var url = location.origin + "/subasta/" + encodeURIComponent(it.slug || id); // slug legible si existe
+      var aviso = (it.estado === "borrador" || it.estado === "programada")
+        ? '<p style="color:var(--rojo);font-size:13px;margin:0 0 12px">⚠️ Todavía NO está en vivo (' + (it.estado === "borrador" ? "Borrador" : "Programada") + '). El link no va a funcionar hasta que la publiques con "Poner en vivo" — pero ya podés usarlo para preparar la comunicación.</p>'
+        : '<p style="color:var(--verde);font-size:13px;margin:0 0 12px">✓ Ya está en vivo — el link funciona ahora mismo.</p>';
+      infoModal("🔗 Link — " + esc(it.titulo || ""), aviso +
+        '<div class="fgrid" style="grid-template-columns:1fr"><div><label>Link para compartir</label><input id="linkUrlBox" value="' + esc(url) + '" readonly onclick="this.select()" /></div></div>' +
+        '<div class="row-actions" style="justify-content:flex-end;margin-top:10px"><button class="btn btn-sm" id="linkCopyBtn">📋 Copiar</button></div>');
+      var btn = document.getElementById("linkCopyBtn");
+      if (btn) btn.onclick = function () {
+        var inp = document.getElementById("linkUrlBox"); if (inp) inp.select();
+        var hecho = function () { toast("Link copiado ✓"); };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(hecho).catch(function () { try { document.execCommand("copy"); hecho(); } catch (e) { toast("Seleccioná el texto y copiá manualmente", "err"); } });
+        else { try { document.execCommand("copy"); hecho(); } catch (e) { toast("Seleccioná el texto y copiá manualmente", "err"); } }
+      };
+    }
+
+    async function cambiarEstadoEncuesta(id, estado) {
+      try { await api("/admin/encuestas/" + encodeURIComponent(id), { method: "PATCH", body: { estado: estado } }); cargarCrud(); toast(estado === "activa" ? "Encuesta activada" : "Encuesta cerrada"); }
+      catch (e) { toast(e.message, "err"); }
+    }
+    async function verResultadosEncuesta(id) {
+      try {
+        var r = await api("/admin/encuestas/" + encodeURIComponent(id) + "/resultados");
+        var body;
+        if (r.tipo === "texto") {
+          body = '<p class="muted" style="margin:0 0 8px">' + (r.total || 0) + ' respuestas</p>' +
+            ((r.textos || []).length ? '<div class="listado">' + r.textos.map(function (t) { return '<div class="li-row">' + esc(t) + '</div>'; }).join("") + '</div>' : '<p class="empty">Sin respuestas aún.</p>');
+        } else {
+          var total = r.total || 0;
+          body = '<p class="muted" style="margin:0 0 10px">' + total + ' votos</p>' + (r.conteo || []).map(function (c) {
+            var pct = total ? Math.round(c.n / total * 100) : 0;
+            return '<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span>' + esc(c.opcion) + '</span><span class="muted">' + c.n + ' · ' + pct + '%</span></div><div style="height:8px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#e7c64b,#c9a227)"></div></div></div>';
+          }).join("");
+        }
+        infoModal("📊 " + esc(r.pregunta || "Resultados"), body);
+      } catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Segmentos de socios ──
+    function segParams() {
+      var p = [];
+      if ($("segTier").value) p.push("tier=" + $("segTier").value);
+      if ($("segPais").value.trim()) p.push("pais=" + encodeURIComponent($("segPais").value.trim()));
+      if ($("segSocio").checked) p.push("validoSocio=1");
+      if ($("segSinFoto").checked) p.push("sinFoto=1");
+      return p.join("&");
+    }
+    async function cargarSegmento() {
+      try {
+        var r = await api("/admin/segmento?" + segParams());
+        tabla($("segWrap"), [
+          { key: "socio", label: "Socio", text: function (s) { return [s.nombre, s.apellido, s.email].filter(Boolean).join(" "); }, cell: function (s) { return '<strong>' + esc([s.nombre, s.apellido].filter(Boolean).join(" ") || "—") + '</strong><br><span class="muted">' + esc(s.email || "") + '</span>'; } },
+          { key: "nivel", label: "Nivel", text: function (s) { return TIER[s.tier_slug] || s.tier_slug || ""; }, cell: function (s) { return '<span class="pill">' + esc(TIER[s.tier_slug] || s.tier_slug) + '</span>'; } },
+          { key: "pais", label: "País", text: function (s) { return s.pais_iso || ""; }, cell: function (s) { return '<span class="muted">' + esc(s.pais_iso || "—") + '</span>'; } },
+          { key: "foto", label: "Foto", text: function (s) { return s.tiene_foto ? "1" : "0"; }, cell: function (s) { return s.tiene_foto ? "✓" : "—"; } },
+          { key: "acc", label: "", sortable: false, cell: function (s) { return '<button class="btn btn-sm btn-ghost" data-ficha="' + esc(s.id) + '">Ficha</button>'; } }
+        ], r.items || [], { rowId: function (s) { return s.id; }, filtro: true, filterPh: "Filtrar segmento…", empty: "Sin resultados (máx 500)." });
+      } catch (e) { $("segWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function exportarSocios() {
+      try {
+        var res = await fetch("/api/admin/export/socios.csv?" + segParams(), { headers: { "x-admin-token": getToken(), "x-admin-key": getKey() } });
+        if (!res.ok) throw new Error("Error " + res.status);
+        var blob = await res.blob(), url = URL.createObjectURL(blob);
+        var a = document.createElement("a"); a.href = url; a.download = "socios.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      } catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Campañas + conversión ──
+    async function cargarCampanas() {
+      try {
+        var r = await api("/admin/campanas");
+        var list = r.items || [];
+        if (!list.length) { $("campWrap").innerHTML = '<p class="empty">Sin campañas todavía. Tocá "Lanzar".</p>'; return; }
+        var rows = list.map(function (c) {
+          var env = c.envios || 0, conv = c.convertidos || 0, pct = env ? Math.round(100 * conv / env) : 0;
+          return '<tr><td data-l="Campaña"><strong>' + esc(c.nombre) + '</strong><br><span class="muted">' + esc(fmtFecha(c.creada)) + '</span></td>' +
+            '<td data-l="Enviados">' + env + ' <span class="muted">(' + (c.enviados_ok || 0) + ' mail ok)</span></td>' +
+            '<td data-l="Convirtieron"><strong>' + conv + '</strong></td>' +
+            '<td data-l="Conversión"><span class="pill">' + pct + '%</span></td>' +
+            '<td data-l="">' + (puede("campanas.write") ? '<button class="btn btn-sm btn-ghost" data-recalc="' + esc(c.id) + '">Recalcular</button>' : '') + '</td></tr>';
+        }).join("");
+        $("campWrap").innerHTML = '<table><thead><tr><th>Campaña</th><th>Enviados</th><th>Convirtieron</th><th>Conversión</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      } catch (e) { $("campWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function lanzarCampana() {
+      if (!(await confirmar("Congela el cohort actual de abandonos para medir conversión. El envío de emails se corre después por CLI (con tu OK).", { titulo: "Lanzar 'Completá tu pago'", ok: "Lanzar" })).ok) return;
+      try { var r = await api("/admin/campanas/pago", { method: "POST" }); infoModal("✅ Campaña creada", '<p style="margin:8px 0 2px"><strong>' + r.total + '</strong> destinatarios congelados.</p><p class="muted" style="font-size:13px;margin:0">ID: ' + esc(r.id) + '</p><p class="muted" style="margin-top:8px">Avisá para correr el envío de emails.</p>'); cargarCampanas(); cargarAcciones(); }
+      catch (e) { toast(e.message, "err"); }
+    }
+    async function recalcCampana(id) {
+      try { await api("/admin/campanas/" + encodeURIComponent(id) + "/recalcular", { method: "POST" }); cargarCampanas(); toast("Conversión recalculada"); }
+      catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── GoHighLevel ──
+    async function cargarEmailMetricas() {
+      try {
+        var r = await api("/admin/email-metricas");
+        var v = r.ventana || {};
+        function card(n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; }
+        var num = function (x) { return Number(x || 0).toLocaleString("es-PY"); };
+        var sent = v.sent || 0, deliv = v.delivered || 0, opened = v.opened || 0, clicked = v.clicked || 0, bounced = v.bounced || 0, complained = v.complained || 0;
+        var base = deliv || sent || 0;
+        var pct = function (x) { return base ? Math.round(100 * (x || 0) / base) + "%" : "—"; };
+        $("emailCards").innerHTML =
+          card(num(sent), "Enviados") +
+          card(num(deliv), "Entregados") +
+          card(num(opened) + '<span style="font-size:13px;font-weight:600"> · ' + pct(opened) + '</span>', "Aperturas") +
+          card(num(clicked) + '<span style="font-size:13px;font-weight:600"> · ' + pct(clicked) + '</span>', "Clics") +
+          card('<span style="color:' + (bounced ? "var(--rojo)" : "var(--gris)") + '">' + num(bounced) + '</span>', "Rebotes") +
+          card('<span style="color:' + (complained ? "var(--rojo)" : "var(--gris)") + '">' + num(complained) + '</span>', "Quejas spam");
+        if (!sent && !deliv && !opened) $("emailCards").innerHTML += '<p class="muted" style="width:100%;margin-top:8px">Sin eventos todavía. Se llenan cuando Resend empiece a mandar el webhook (configurá el webhook + <b>RESEND_WEBHOOK_SECRET</b>).</p>';
+      } catch (e) { $("emailCards").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function cargarGhl() {
+      try { var g = await api("/admin/ghl"); $("ghlStatus").innerHTML = g.configurado ? '🟢 Conectado. "Sincronizar" empuja el segmento filtrado (sección Socios → Segmentos) a GoHighLevel.' : '⚪ Aún no conectado. Configurá <b>GHL_WEBHOOK_URL</b> para enchufar GoHighLevel. Mientras tanto, usá <b>Export CSV</b> e importá en GHL.'; }
+      catch (e) { $("ghlStatus").textContent = e.message; }
+    }
+    async function ghlSync() {
+      if (!(await confirmar("¿Enviar el segmento filtrado actual a GoHighLevel?", { titulo: "Sincronizar GHL", ok: "Enviar" })).ok) return;
+      try { var r = await api("/admin/ghl/sync?" + segParams(), { method: "POST" }); toast("GHL → " + r.enviados + " enviados · " + r.fallidos + " fallidos (de " + r.total + ")"); cargarAcciones(); }
+      catch (e) { toast(e.message, "err"); }
+    }
+    // ── Padrón Olimpia ──
+    async function cargarPadron() {
+      try {
+        var r = await api("/admin/padron?q=" + encodeURIComponent($("padronQ").value.trim()));
+        var st = r.stats || {}; $("padronStats").textContent = "· " + (st.reclamados || 0) + " de " + (st.total || 0) + " ya se sumaron";
+        tabla($("padronWrap"), [
+          { key: "socio", label: "Socio", text: function (p) { return [p.nombre, p.apellido, p.email].filter(Boolean).join(" "); }, cell: function (p) { return '<strong>' + esc([p.nombre, p.apellido].filter(Boolean).join(" ") || "—") + '</strong><br><span class="muted">' + esc(p.email || "") + '</span>'; } },
+          { key: "cedula", label: "Cédula", text: function (p) { return p.cedula || ""; }, cell: function (p) { return esc(p.cedula || "—"); } },
+          { key: "nro", label: "Nº socio", text: function (p) { return p.nro_socio || ""; }, cell: function (p) { return '<span class="muted">' + esc(p.nro_socio || "—") + '</span>'; } },
+          { key: "estado", label: "Estado", text: function (p) { return p.reclamado ? "sumado" : "no"; }, cell: function (p) { return p.reclamado ? '<span style="color:var(--verde)">✓ sumado</span>' : '<span class="muted">no</span>'; } }
+        ], r.items || [], { filtro: true, filterPh: "Filtrar resultados…", empty: "Sin resultados." });
+      } catch (e) { $("padronWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // ── Moderación de selfies ──
+    async function cargarSelfies() {
+      try {
+        var r = await api("/admin/selfies");
+        var list = r.items || [];
+        if (!list.length) { $("selfiesWrap").innerHTML = '<p class="empty">Sin fotos.</p>'; return; }
+        var rows = list.map(function (s) {
+          return '<tr data-id="' + esc(s.id) + '"><td data-l="Socio"><strong>' + esc([s.nombre, s.apellido].filter(Boolean).join(" ") || "—") + '</strong><br><span class="muted">' + esc(s.email || "") + '</span></td><td data-l="Lugar" class="muted">' + esc([s.ciudad, s.pais_iso].filter(Boolean).join(", ") || "—") + '</td><td data-l=""><button class="btn btn-sm btn-ghost" data-ficha="' + esc(s.id) + '">Ver / moderar</button></td></tr>';
+        }).join("");
+        $("selfiesWrap").innerHTML = '<table><tbody>' + rows + '</tbody></table>';
+      } catch (e) { $("selfiesWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function quitarFoto(id) {
+      if (!(await confirmar("¿Quitar la foto de este socio? Se borra del carnet y del mapa.", { titulo: "Quitar foto", ok: "Quitar", danger: true })).ok) return;
+      try { await api("/admin/socios/" + encodeURIComponent(id) + "/quitar-foto", { method: "POST" }); abrirFicha(id); cargarSelfies(); cargarAcciones(); toast("Foto quitada"); }
+      catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Cuadre de pagos ──
+    var RECIBIDOS = [];
+    async function cargarPagosRecibidos() {
+      try {
+        var r = await api("/admin/pagos-recibidos");
+        var t = r.totales || {};
+        function card(n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; }
+        var g = function (m) { return '₲ ' + Number(m || 0).toLocaleString("es-PY"); };
+        $("recCards").innerHTML =
+          card(g(t.total), "Recaudado total") +
+          card(g(t.hoy), "Hoy") +
+          card(g(t.d7), "Últimos 7 días") +
+          card(g(t.d30), "Últimos 30 días") +
+          card(t.n || 0, "Pagos acreditados");
+        var LBL = { plus: "Membresía Plus", junior: "Membresía Junior", entrada: "Entradas", otro: "Otro" };
+        var conc = (r.porConcepto || []).map(function (c) {
+          return '<tr><td data-l="Concepto">' + esc(LBL[c.tipo] || c.tipo) + '</td><td data-l="Cant.">' + (c.n || 0) + '</td><td data-l="Monto">' + g(c.monto) + '</td></tr>';
+        }).join("");
+        $("recConcepto").innerHTML = conc
+          ? '<table><thead><tr><th>Concepto</th><th>Cant.</th><th>Monto</th></tr></thead><tbody>' + conc + '</tbody></table>'
+          : '<p class="muted">Sin pagos acreditados todavía.</p>';
+        RECIBIDOS = r.ultimos || [];
+        tabla($("recWrap"), [
+          { key: "creado", label: "Fecha", text: function (p) { return p.creado; }, cell: function (p) { return fmtFecha(p.creado); } },
+          { key: "socio", label: "Socio", text: function (p) { return (p.nombre || "") + " " + (p.apellido || "") + " " + (p.email || ""); }, cell: function (p) { return esc(((p.nombre || "") + " " + (p.apellido || "")).trim() || p.email || "—"); } },
+          { key: "concepto", label: "Concepto", text: function (p) { return p.concepto; }, cell: function (p) { return esc(p.concepto || ""); } },
+          { key: "monto", label: "Monto", text: function (p) { return String(p.monto); }, cell: function (p) { return fmtMonto(p.monto, p.moneda); } },
+          { key: "via", label: "Vía", text: function (p) { return p.ref_externa ? "Pagopar" : ""; }, cell: function (p) { return p.ref_externa ? "Pagopar" : "—"; } },
+        ], RECIBIDOS, { rowId: function (p) { return p.id; }, filtro: true, filterPh: "Filtrar pagos…", empty: "Sin pagos acreditados." });
+      } catch (e) { if ($("recCards")) $("recCards").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    function exportarRecibidos() {
+      try {
+        var head = ["fecha", "socio", "email", "concepto", "monto", "moneda", "via"];
+        var rows = (RECIBIDOS || []).map(function (p) {
+          return [p.creado || "", ((p.nombre || "") + " " + (p.apellido || "")).trim(), p.email || "", p.concepto || "", p.monto || 0, p.moneda || "PYG", p.ref_externa ? "Pagopar" : "-"];
+        });
+        var csv = [head].concat(rows).map(function (r) { return r.map(function (x) { return '"' + String(x).replace(/"/g, '""') + '"'; }).join(","); }).join("\n");
+        var blob = new Blob([csv], { type: "text/csv;charset=utf-8" }), url = URL.createObjectURL(blob);
+        var a = document.createElement("a"); a.href = url; a.download = "pagos-recibidos.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      } catch (e) { toast(e.message, "err"); }
+    }
+    async function cargarCuadre() {
+      try {
+        var c = await api("/admin/cuadre");
+        function card(n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; }
+        var ped = c.pedidos || {}, mp = c.metrepay || {}, mem = c.membresiasPagas || {};
+        $("cuadreCards").innerHTML =
+          card(mp.total || 0, "Metrepay recibidos") +
+          card('<span style="color:var(--verde)">' + (mp.activados || 0) + '</span>', "Activados auto") +
+          card('<span style="color:' + ((mp.sin_match || 0) ? "var(--rojo)" : "var(--gris)") + '">' + (mp.sin_match || 0) + '</span>', "Sin match") +
+          card((mem.premium || 0) + (mem.kids || 0), "Membresías pagas") +
+          card(ped.pendiente || 0, "Pedidos pendientes");
+      } catch (e) { $("cuadreCards").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function exportarPagos() {
+      try {
+        var res = await fetch("/api/admin/export/pagos.csv", { headers: { "x-admin-token": getToken(), "x-admin-key": getKey() } });
+        if (!res.ok) throw new Error("Error " + res.status);
+        var blob = await res.blob(), url = URL.createObjectURL(blob);
+        var a = document.createElement("a"); a.href = url; a.download = "pagos-metrepay.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      } catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Acciones de admin (auditoría) ──
+    async function cargarAcciones() {
+      try {
+        var r = await api("/admin/acciones?limit=80");
+        tabla($("accWrap"), [
+          { key: "accion", label: "Acción", text: function (a) { return a.accion || ""; }, cell: function (a) { return '<span class="pill">' + esc(a.accion) + '</span>'; } },
+          { key: "detalle", label: "Detalle", text: function (a) { return a.detalle || ""; }, cell: function (a) { return '<span class="muted">' + esc(a.detalle || "") + '</span>'; } },
+          { key: "por", label: "Por", text: function (a) { return a.por || ""; }, cell: function (a) { return '<span class="muted">' + esc(a.por || "") + '</span>'; } },
+          { key: "cuando", label: "Cuándo", text: function (a) { return a.creado || ""; }, cell: function (a) { return '<span class="muted">' + esc(fmtFecha(a.creado)) + '</span>'; } }
+        ], r.items || [], { filtro: true, filterPh: "Filtrar por acción, detalle, admin…", empty: "Sin acciones registradas aún.", sortKey: "cuando", sortDir: -1 });
+      } catch (e) { $("accWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
+    // ── Ficha de socio ──
+    function cerrarFicha() { $("fichaBg").hidden = true; $("fichaBox").innerHTML = ""; }
+    async function abrirFicha(id) {
+      $("fichaBg").hidden = false; $("fichaBox").innerHTML = '<p class="loading">Cargando…</p>';
+      try {
+        var d = await api("/admin/socios/" + encodeURIComponent(id));
+        var s = d.socio || {}, mem = d.membresia || {};
+        var tierAct = mem.tier_slug || "olimpista";
+        function fld(i, l, v, full) { return '<div' + (full ? ' class="full"' : '') + '><label>' + l + '</label><input id="' + i + '" value="' + esc(v == null ? "" : v) + '" /></div>'; }
+        var hist = (d.historial || []).map(function (m) { return '<div class="muted" style="font-size:13px">• ' + esc(TIER[m.tier_slug] || m.tier_slug) + ' — ' + esc(m.estado) + ' — ' + esc(fmtFecha(m.inicio)) + (m.pago_ref ? ' (' + esc(m.pago_ref) + ')' : '') + '</div>'; }).join("") || '<span class="muted">—</span>';
+        var peds = (d.pedidos || []).map(function (p) { return '<div class="muted" style="font-size:13px">• ' + esc(TIER[p.tier_slug] || p.tier_slug || '') + ' — ' + esc(p.estado) + ' — ' + esc(fmtFecha(p.creado)) + '</div>'; }).join("") || '<span class="muted">—</span>';
+        $("fichaBox").innerHTML =
+          '<button class="close" data-cerrar>×</button>' +
+          '<h3>' + esc([s.nombre, s.apellido].filter(Boolean).join(" ") || "Socio") + '</h3>' +
+          '<p class="muted" style="margin:0">' + esc(s.email || "") + ' · <span class="pill">' + esc(TIER[tierAct] || tierAct) + '</span>' + (s.es_socio_olimpia ? ' · ✓ socio Olimpia' : '') + '</p>' +
+          (s.foto ? '<div style="text-align:center;margin:12px 0"><img src="' + esc(s.foto) + '" alt="" style="max-width:150px;max-height:150px;border-radius:12px;border:1px solid var(--linea)" /></div>' : '') +
+          '<div class="fgrid">' + fld("fNombre", "Nombre", s.nombre) + fld("fApellido", "Apellido", s.apellido) + fld("fEmail", "Email", s.email, true) + fld("fCedula", "Cédula", s.cedula) + fld("fIso", "ISO país", s.pais_iso) + fld("fCiudad", "Ciudad", s.ciudad) + fld("fPais", "País", s.pais) + '</div>' +
+          '<p class="ok" id="fOk"></p>' +
+          // Acciones agrupadas por función (antes eran 7-8 botones sueltos en una sola fila,
+          // mezclando "guardar datos" con "otorgar membresía" con "dar de baja" sin jerarquía).
+          (puede("socios.write") ?
+            '<div class="row-actions"><button class="btn btn-sm" data-guardar="' + esc(s.id) + '">💾 Guardar datos</button></div>' +
+            '<div class="mini">Nivel de membresía</div>' +
+            '<div class="row-actions" style="flex-wrap:wrap">' +
+              TIER_ORDEN_FICHA.map(function (tk) {
+                var activo = tierAct === tk;
+                return '<button class="btn btn-sm ' + (activo ? "btn-ok" : "btn-ghost") + '" data-tier2="' + tk + '" data-sid="' + esc(s.id) + '">' + (activo ? "✓ " : "") + esc(TIER[tk] || tk) + '</button>';
+              }).join("") +
+            '</div>' +
+            '<div class="row-actions" style="flex-wrap:wrap;margin-top:10px">' +
+              '<button class="btn btn-sm btn-ghost" data-reenviar="' + esc(s.id) + '">✉ Reenviar verificación</button>' +
+              ((s.foto && puede("moderacion")) ? '<button class="btn btn-sm btn-no" data-quitarfoto="' + esc(s.id) + '">🖼 Quitar foto</button>' : "") +
+            '</div>' +
+            '<div class="row-actions" style="justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid var(--linea)">' +
+              '<button class="btn btn-sm btn-no" data-baja="' + esc(s.id) + '">Dar de baja</button>' +
+            '</div>'
+          : ((s.foto && puede("moderacion")) ? '<div class="row-actions"><button class="btn btn-sm btn-no" data-quitarfoto="' + esc(s.id) + '">🖼 Quitar foto</button></div>' : '')) +
+          '<div class="mini">Historial de membresías</div>' + hist +
+          '<div class="mini">Pedidos de pago</div>' + peds;
+      } catch (e) { $("fichaBox").innerHTML = '<button class="close" data-cerrar>×</button><p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function guardarFicha(id) {
+      var body = { nombre: $("fNombre").value, apellido: $("fApellido").value, email: $("fEmail").value, cedula: $("fCedula").value, ciudad: $("fCiudad").value, pais: $("fPais").value, pais_iso: $("fIso").value };
+      var el = $("fOk"); el.style.color = "var(--verde)";
+      try { await api("/admin/socios/" + encodeURIComponent(id), { method: "PATCH", body: body }); el.textContent = "Guardado ✓"; cargarAbandonos(); }
+      catch (e) { el.style.color = "var(--rojo)"; el.textContent = e.message; }
+    }
+    async function reenviarVerif(id) {
+      var el = $("fOk"); el.style.color = "var(--verde)";
+      try { var r = await api("/admin/socios/" + encodeURIComponent(id) + "/reenviar-verificacion", { method: "POST" }); el.textContent = r.ok ? "Verificación reenviada ✓" : "No se pudo enviar (revisá RESEND)"; }
+      catch (e) { el.style.color = "var(--rojo)"; el.textContent = e.message; }
+    }
+
+    async function buscar() {
+      var q = $("q").value.trim();
+      if (!q) { $("searchWrap").innerHTML = ""; return; }
+      try {
+        var r = await api("/admin/buscar?q=" + encodeURIComponent(q));
+        tabla($("searchWrap"), [
+          { key: "socio", label: "Socio", text: function (s) { return [s.nombre, s.apellido, s.email].filter(Boolean).join(" "); }, cell: function (s) { return '<strong>' + esc([s.nombre, s.apellido].filter(Boolean).join(" ") || "—") + '</strong><br><span class="muted">' + esc(s.email || "") + '</span>'; } },
+          { key: "cedula", label: "Cédula", text: function (s) { return s.cedula || ""; }, cell: function (s) { return esc(s.cedula || "—"); } },
+          { key: "lugar", label: "Lugar", text: function (s) { return [s.ciudad, s.pais].filter(Boolean).join(", "); }, cell: function (s) { return '<span class="muted">' + esc([s.ciudad, s.pais].filter(Boolean).join(", ") || "—") + '</span>'; } },
+          { key: "olimpia", label: "Socio Olimpia", text: function (s) { return s.es_socio_olimpia ? "1" : "0"; }, cell: function (s) { return s.es_socio_olimpia ? "✓" : "—"; } },
+          { key: "acc", label: "Activar", sortable: false, cell: function (s) { return '<div class="row-actions"><button class="btn btn-sm btn-ghost" data-ficha="' + esc(s.id) + '">Ficha</button>' + (puede("socios.write") ? '<button class="btn btn-sm btn-ok" data-tier="socio">Socio</button><button class="btn btn-sm" data-tier="premium">Plus</button><button class="btn btn-sm" data-tier="kids">Junior</button><button class="btn btn-sm btn-ghost" data-tier="olimpista">Olimpista</button>' : '') + '</div>'; } }
+        ], r.socios || [], { rowId: function (s) { return s.id; }, filtro: true, filterPh: "Filtrar resultados…", empty: "Sin resultados." });
+      } catch (e) { toast(e.message, "err"); }
+    }
+
+    // ── Eventos ──
+    // Login con usuario + contraseña → token de sesión. Deshabilita el botón para evitar doble submit.
+    async function entrarUsuario() {
+      $("loginErr").textContent = ""; $("entrar").disabled = true;
+      try {
+        var res = await fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ usuario: $("usuario").value.trim(), password: $("password").value }) });
+        var d = await res.json().catch(function () { return {}; });
+        if (!res.ok) throw new Error(d.error || "Error " + res.status);
+        clearKey(); setToken(d.token); $("password").value = "";
+        await cargar();
+      } catch (e) { $("loginErr").textContent = e.message; }
+      finally { $("entrar").disabled = false; }
+    }
+    // Break-glass: valida la clave ANTES de persistirla (así una clave mala no queda en loop 401).
+    async function entrarKey() {
+      $("loginErr").textContent = ""; $("entrarKey").disabled = true;
+      var k = $("key").value.trim();
+      try {
+        var res = await fetch("/api/admin/whoami", { headers: { "x-admin-key": k } });
+        if (!res.ok) { var d = await res.json().catch(function () { return {}; }); throw new Error(d.error || "Clave inválida"); }
+        clearToken(); setKey(k); await cargar();
+      } catch (e) { $("loginErr").textContent = e.message; }
+      finally { $("entrarKey").disabled = false; }
+    }
+    $("entrar").addEventListener("click", entrarUsuario);
+    $("password").addEventListener("keydown", function (e) { if (e.key === "Enter") entrarUsuario(); });
+    $("usuario").addEventListener("keydown", function (e) { if (e.key === "Enter") { $("password").focus(); } });
+    $("entrarKey").addEventListener("click", entrarKey);
+    $("key").addEventListener("keydown", function (e) { if (e.key === "Enter") entrarKey(); });
+    $("toggleKey").addEventListener("click", function () { $("loginUser").hidden = true; $("loginKey").hidden = false; $("loginErr").textContent = ""; });
+    $("toggleUser").addEventListener("click", function () { $("loginKey").hidden = true; $("loginUser").hidden = false; $("loginErr").textContent = ""; });
+    $("salir").addEventListener("click", function () { api("/admin/logout", { method: "POST" }).catch(function () {}); clearToken(); clearKey(); resetAdminState(); showLogin(""); });
+    // A11y: Escape cierra el modal abierto (confirmar/info o ficha).
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (!$("uiModalBg").hidden) { var no = $("uiModalBox").querySelector("[data-no]"); if (no) no.click(); else { $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; } return; }
+      if (!$("fichaBg").hidden) cerrarFicha();
+    });
+    // A11y: los <a> que actúan como botones deben ser accesibles por teclado.
+    ["toggleKey", "toggleUser", "salir"].forEach(function (id) {
+      var el = $(id); if (!el) return;
+      el.setAttribute("role", "button"); el.setAttribute("tabindex", "0");
+      el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); el.click(); } });
+    });
+    // A11y: labels para inputs sueltos (sólo tienen placeholder).
+    [["usuario", "Usuario"], ["password", "Contraseña"], ["key", "Clave de acceso"], ["gsearch", "Buscar socio, email o cédula"], ["q", "Buscar socio"], ["segPais", "País ISO"], ["padronQ", "Buscar en el padrón"]].forEach(function (p) { var el = $(p[0]); if (el && !el.getAttribute("aria-label")) el.setAttribute("aria-label", p[1]); });
+    // Gestión de usuarios
+    $("usuNuevo").addEventListener("click", function () { formUsuario(null); });
+    $("usuWrap").addEventListener("click", function (e) {
+      var ed = e.target.closest("button[data-uedit]"); if (ed) { var u = (($("usuWrap")._tbl || {}).rows || []).filter(function (x) { return x.id === ed.dataset.uedit; })[0]; if (u) formUsuario(u); return; }
+      var dl = e.target.closest("button[data-udel]"); if (dl) borrarUsuario(dl.dataset.udel);
+    });
+    $("usuForm").addEventListener("click", function (e) {
+      var s = e.target.closest("button[data-usave]"); if (s) { guardarUsuario(s.dataset.usave); return; }
+      if (e.target.closest("button[data-ucancel]")) $("usuForm").innerHTML = "";
+    });
+    $("gsearch").addEventListener("keydown", function (e) { if (e.key === "Enter") { var v = $("gsearch").value.trim(); if (!v) return; $("q").value = v; if ((location.hash || "").indexOf("socios") < 0) location.hash = "#/socios"; else navTo("socios"); buscar(); } });
+    $("buscar").addEventListener("click", buscar);
+    $("btnExport").addEventListener("click", exportarPagos);
+    if ($("btnExportRec")) $("btnExportRec").addEventListener("click", exportarRecibidos);
+    $("segBtn").addEventListener("click", cargarSegmento);
+    $("segExport").addEventListener("click", exportarSocios);
+    $("crudSel").addEventListener("change", cargarCrud);
+    $("crudNuevo").addEventListener("click", function () { formCrud(null); });
+    $("crudList").addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.edit) { var it = crudItems.filter(function (x) { return x.id === b.dataset.edit; })[0]; if (it) formCrud(it); }
+      else if (b.dataset.del) borrarCrud(b.dataset.del);
+      else if (b.dataset.parts) verParticipantes(b.dataset.parts);
+      else if (b.dataset.gana) sortearGanador(b.dataset.gana);
+      else if (b.dataset.vivo) publicarSubasta(b.dataset.vivo);
+      else if (b.dataset.prog) programarSubasta(b.dataset.prog);
+      else if (b.dataset.despub) despublicarSubasta(b.dataset.despub);
+      else if (b.dataset.cerrar) cerrarSubasta(b.dataset.cerrar);
+      else if (b.dataset.pujas) verPujasSubasta(b.dataset.pujas);
+      else if (b.dataset.link) verLinkSubasta(b.dataset.link);
+      else if (b.dataset.encact) cambiarEstadoEncuesta(b.dataset.encact, "activa");
+      else if (b.dataset.enccer) cambiarEstadoEncuesta(b.dataset.enccer, "cerrada");
+      else if (b.dataset.encres) verResultadosEncuesta(b.dataset.encres);
+    });
+    $("crudForm").addEventListener("click", function (e) {
+      var s = e.target.closest("button[data-save]"); if (s) { guardarCrud(s.dataset.save); return; }
+      if (e.target.closest("button[data-cancel]")) { $("crudForm").innerHTML = ""; return; }
+      var pick = e.target.closest("[data-imgpick]"); if (pick) { var f = $("imgFile_" + pick.dataset.imgpick); if (f) f.click(); }
+    });
+    $("campLanzar").addEventListener("click", lanzarCampana);
+    $("campWrap").addEventListener("click", function (e) { var b = e.target.closest("button[data-recalc]"); if (b) recalcCampana(b.dataset.recalc); });
+    $("ghlSync").addEventListener("click", ghlSync);
+    $("padronBtn").addEventListener("click", cargarPadron);
+    $("padronQ").addEventListener("keydown", function (e) { if (e.key === "Enter") cargarPadron(); });
+    $("selfiesWrap").addEventListener("click", function (e) { var fb = e.target.closest("button[data-ficha]"); if (fb) abrirFicha(fb.dataset.ficha); });
+    $("segWrap").addEventListener("click", function (e) {
+      var fb = e.target.closest("button[data-ficha]"); if (fb) abrirFicha(fb.dataset.ficha);
+    });
+    $("q").addEventListener("keydown", function (e) { if (e.key === "Enter") buscar(); });
+    $("actCargar").addEventListener("click", cargarActualizaciones);
+    $("actEstado").addEventListener("change", cargarActualizaciones);
+    $("actWrap").addEventListener("click", async function (e) {
+      var btn = e.target.closest("button[data-act]"); if (!btn) return;
+      var tr = btn.closest("tr[data-id]"); if (!tr) return;
+      if (btn.dataset.act === "rechazar" && !(await confirmar("¿Rechazar esta actualización?", { ok: "Rechazar", danger: true })).ok) return;
+      accionAct(tr.dataset.id, btn.dataset.act);
+    });
+    $("pendWrap").addEventListener("click", async function (e) {
+      var btn = e.target.closest("button[data-act]"); if (!btn) return;
+      var tr = btn.closest("tr[data-id]"); if (!tr) return;
+      if (btn.dataset.act === "rechazar" && !(await confirmar("¿Rechazar este pedido?", { ok: "Rechazar", danger: true })).ok) return;
+      accionPedido(tr.dataset.id, btn.dataset.act);
+    });
+    $("searchWrap").addEventListener("click", async function (e) {
+      var fb = e.target.closest("button[data-ficha]"); if (fb) { abrirFicha(fb.dataset.ficha); return; }
+      var btn = e.target.closest("button[data-tier]"); if (!btn) return;
+      var tr = btn.closest("tr[data-id]"); if (!tr) return;
+      if (!(await confirmar("¿Activar " + (TIER[btn.dataset.tier] || btn.dataset.tier) + " para este socio?", { ok: "Activar" })).ok) return;
+      activarTier(tr.dataset.id, btn.dataset.tier);
+    });
+    $("abWrap").addEventListener("click", function (e) {
+      var fb = e.target.closest("button[data-ficha]"); if (fb) abrirFicha(fb.dataset.ficha);
+    });
+    $("fichaBg").addEventListener("click", async function (e) {
+      if (e.target === $("fichaBg") || e.target.closest("[data-cerrar]")) { cerrarFicha(); return; }
+      var g = e.target.closest("button[data-guardar]"); if (g) { guardarFicha(g.dataset.guardar); return; }
+      var rv = e.target.closest("button[data-reenviar]"); if (rv) { reenviarVerif(rv.dataset.reenviar); return; }
+      var qf = e.target.closest("button[data-quitarfoto]"); if (qf) { quitarFoto(qf.dataset.quitarfoto); return; }
+      var bj = e.target.closest("button[data-baja]"); if (bj) {
+        var r = await confirmar("Vuelve a Olimpista gratis. El reembolso real se hace en Metrepay.", { titulo: "Dar de baja", ok: "Dar de baja", danger: true, input: true, placeholder: "Motivo (opcional)" });
+        if (!r.ok) return;
+        try { await api("/admin/socios/" + encodeURIComponent(bj.dataset.baja) + "/baja", { method: "POST", body: { motivo: r.val } }); abrirFicha(bj.dataset.baja); cargarReportes(); cargarCuadre(); cargarAcciones(); toast("Socio dado de baja"); }
+        catch (err) { toast(err.message, "err"); }
+        return;
+      }
+      var t2 = e.target.closest("button[data-tier2]"); if (t2) {
+        if (!(await confirmar("¿Activar " + (TIER[t2.dataset.tier2] || t2.dataset.tier2) + "?", { ok: "Activar" })).ok) return;
+        try { await api("/admin/socios/" + encodeURIComponent(t2.dataset.sid) + "/membresia", { method: "POST", body: { tier: t2.dataset.tier2 } }); abrirFicha(t2.dataset.sid); cargarReportes(); cargarAbandonos(); toast("Membresía actualizada"); }
+        catch (err) { toast(err.message, "err"); }
+      }
+    });
+
+    // Arranque: si ya hay sesión (token) o clave break-glass, intentar cargar.
+    if (getToken() || getKey()) cargar(); else showLogin("");
+  </script>
+</body>
+</html>

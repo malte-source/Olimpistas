@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Red de Beneficios y la escalera de valor — estudio</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; --viol:#9b87f5; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1060px;margin:0 auto;padding:48px 20px 90px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(30px,5.5vw,46px);line-height:1.1;margin:10px 0 16px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:18px;max-width:880px}
+  h2{font-size:25px;margin:60px 0 8px;font-weight:900}
+  h3.s{font-size:18px;margin:30px 0 6px;color:var(--oro2);font-weight:800}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .prob{background:rgba(224,85,107,.08);border:1px solid rgba(224,85,107,.35);border-radius:18px;padding:22px 26px;margin:24px 0}
+  .prob b{color:#f0939f}
+  .key{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:20px;padding:24px 28px;margin:24px 0}
+  .key .big{font-size:20px;font-weight:800;line-height:1.4;margin:0} .key .big b{color:var(--oro2)}
+  .key p{color:var(--gris);margin:12px 0 0;font-size:15px}
+  /* ejes */
+  .ejes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:8px}
+  .eje{background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--linea);border-radius:16px;padding:18px 20px}
+  .eje .ax{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--oro2)}
+  .eje h4{margin:6px 0 4px;font-size:16px}
+  .eje p{margin:0 0 10px;color:var(--gris);font-size:13px}
+  .eje ol{margin:0;padding-left:18px;font-size:13.5px;color:var(--blanco)} .eje li{margin:4px 0}
+  .eje .top{color:var(--oro2);font-weight:800}
+  @media(max-width:760px){.ejes{grid-template-columns:1fr}}
+  /* tabla mapeo */
+  .tablewrap{overflow-x:auto;margin:14px 0;border:1px solid var(--linea);border-radius:14px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:680px}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--linea);vertical-align:top}
+  thead th{color:var(--gris);font-size:11px;text-transform:uppercase;letter-spacing:.5px;background:var(--panel2)}
+  tbody tr:last-child td{border-bottom:none}
+  .chk{color:var(--verde);font-weight:800}
+  /* benchmark */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:8px}
+  .b{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px}
+  .b .src{color:var(--oro2);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .b h4{margin:3px 0 0;font-size:15px;font-weight:800}
+  .b p{margin:7px 0 0;color:var(--gris);font-size:13.5px}
+  .b .rob{color:var(--blanco);font-weight:600}
+  /* flywheel */
+  .flow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+  .fstep{background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:12px 16px;font-size:13.5px;flex:1;min-width:150px}
+  .fstep b{color:var(--oro2)}
+  .farr{color:var(--oro);font-size:20px;font-weight:900}
+  /* revenue */
+  .rev{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:16px 18px;margin:10px 0}
+  .rev .em{font-size:22px;flex:0 0 auto}
+  .rev h4{margin:0 0 3px;font-size:15px} .rev p{margin:0;color:var(--gris);font-size:13.5px}
+  .dict{background:rgba(155,135,245,.08);border:1px solid rgba(155,135,245,.35);border-radius:18px;padding:24px 28px;margin:24px 0;font-size:15px;color:#d8cffb}
+  .dict b{color:#c0b4f8} .dict ul{margin:10px 0 0;padding-left:20px} .dict li{margin:6px 0}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+  code{background:#0f0f15;border:1px solid var(--linea);border-radius:6px;padding:1px 6px;font-size:12.5px;color:var(--oro2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Estrategia de valor</span>
+  <h1>La Red de Beneficios<br><span class="g">y la escalera de valor, desenredada</span></h1>
+  <p class="lead">Dos cosas en una: (1) separar bien <b style="color:#fff">qué es ser Socio del Club</b> de <b style="color:#fff">qué es pagar Plus</b> — hoy están mezclados — y (2) diseñar un <b style="color:#fff">ecosistema de beneficios en comercios adheridos</b> que le dé valor real al hincha y convierta a Olimpistas en una plataforma que vende infinitas cosas.</p>
+
+  <div class="prob">
+    🔍 <b>El problema de fondo:</b> hoy "Plus" hace <b>tres trabajos distintos a la vez</b> y los confunde: es <b>membresía</b> (ser del Decano), es <b>suscripción digital</b> (contenido/sorteos) y debería ser <b>llave de beneficios</b> (descuentos reales). Al socio real del club le dimos "Plus" — pero eso es <b>mezclar los tantos</b>: el socio del club está en un escalón superior y propio, no es "un suscriptor más". Y no existe todavía la capa de beneficios reales, que es justo lo que engancha a la masa y la monetiza.
+  </div>
+
+  <h2>🧭 La arquitectura: 3 ejes, no 1</h2>
+  <p class="sub">La clave del dictamen: estos son <b>ejes independientes</b> que se refuerzan, no un solo nivel. Un hincha tiene una posición en cada eje.</p>
+  <div class="ejes">
+    <div class="eje"><div class="ax">Eje A · Membresía</div><h4>Quién sos en el club</h4><p>Pertenencia institucional. La cima aspiracional y el objetivo de conversión supremo.</p><ol><li>Visitante</li><li>Olimpista (gratis)</li><li>Olimpista activo</li><li class="top">★ Socio del Club Olimpia</li></ol></div>
+    <div class="eje"><div class="ax">Eje B · Suscripción</div><h4>Qué pagás en la app</h4><p>Producto digital: contenido, sorteos, preventas, experiencias. Monetización del público masivo.</p><ol><li>Olimpista (free)</li><li>Junior (menores)</li><li class="top">Plus (digital completo)</li></ol></div>
+    <div class="eje"><div class="ax">Eje C · Beneficios</div><h4>Qué te da en la vida real</h4><p>Red de comercios adheridos. Capa transversal con profundidad creciente — el gancho diario.</p><ol><li>Básicos (todos)</li><li>Plus (más y mejores)</li><li class="top">Elite (Socio del club)</li></ol></div>
+  </div>
+
+  <h3 class="s">Cómo se mapea (quién accede a qué)</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Nivel</th><th>Eje A · Es</th><th>Comunidad / app</th><th>Suscripción (B)</th><th>Beneficios (C)</th></tr></thead>
+      <tbody>
+        <tr><td><b>Olimpista (gratis)</b></td><td>Hincha registrado</td><td class="chk">✓ carnet, globo, comunidad</td><td>—</td><td>Beneficios <b>básicos</b> (gancho)</td></tr>
+        <tr><td><b>Olimpista Plus</b></td><td>Hincha suscriptor</td><td class="chk">✓ todo</td><td class="chk">✓ Media+, sorteos, preventas</td><td>Beneficios <b>ampliados</b></td></tr>
+        <tr><td><b>★ Socio del Club</b></td><td><b style="color:var(--oro2)">Miembro institucional del Decano</b></td><td class="chk">✓ + estatus verificado</td><td class="chk">✓ incluido / preferente</td><td>Beneficios <b>elite + exclusivos</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">Al socio del club no "le damos Plus" — le damos <b>su lugar superior</b>: estatus verificado propio (escudo del socio, n° de socio real), los mejores beneficios, y lo digital incluido como cortesía. Plus deja de ser "casi socio" y vuelve a ser lo que es: una suscripción digital.</p>
+
+  <h2>🎟️ La Red de Beneficios "Club del Decano"</h2>
+  <p class="sub">Un marketplace de dos lados: la pasión y escala de la hinchada (demanda) ↔ los comercios que quieren llegar a ella (oferta). Paraguay primero.</p>
+
+  <h3 class="s">Por qué funciona (las tres caras ganan)</h3>
+  <div class="grid">
+    <div class="b"><div class="src">El hincha gana</div><h4>Valor real, todos los días</h4><p>Descuentos y beneficios en gastronomía, combustible, retail, salud, educación, turismo — mostrando el <b class="rob">carnet digital</b> (que ya existe, con QR y geolocalización: la tarjeta de fidelidad perfecta). "Ser olimpista te conviene de verdad."</p></div>
+    <div class="b"><div class="src">El comercio gana</div><h4>Acceso a una hinchada masiva, identificada y geolocalizada</h4><p>Olimpia tiene millones de hinchas en PY. Para un comercio, asociarse al Decano = tráfico + branding + clientes fieles. <b class="rob">Pagan por estar adentro.</b></p></div>
+    <div class="b"><div class="src">Olimpia / Olimpistas gana</div><h4>Ingreso recurrente + conversión + datos</h4><p>Cuota/comisión de comercios, niveles premium de beneficios, sponsoreo. Y lo más valioso: <b class="rob">la red da utilidad diaria que convierte masa → Plus → Socio del club.</b></p></div>
+  </div>
+
+  <h3 class="s">Mecánica (sobre rieles que ya existen)</h3>
+  <div class="grid">
+    <div class="b"><h4>🪪 El carnet = la tarjeta de beneficios</h4><p>Mostrás el carnet digital → descuento. El QR ya está para validar en caja. Cero plástico.</p></div>
+    <div class="b"><h4>📍 "Beneficios cerca tuyo"</h4><p>Ya capturamos ubicación: mapa de comercios adheridos alrededor del hincha. Utilidad inmediata.</p></div>
+    <div class="b"><h4>🎚️ Beneficios por nivel</h4><p>Gratis ve algunos; Plus mejores; Socio del club los exclusivos. <b>Esto hace que valga la pena subir.</b></p></div>
+    <div class="b"><h4>🔥 Drops y exclusivos</h4><p>Beneficios por tiempo limitado, "solo para olimpistas", combos día de partido. Urgencia + pertenencia.</p></div>
+  </div>
+
+  <h2>🌍 Benchmark global: quién ya ganó con esto</h2>
+  <div class="grid">
+    <div class="b"><div class="src">Club La Nación / Clarín 365 · AR</div><h4>Marca querida → club de beneficios masivo</h4><p>Un medio monetiza su audiencia con una red enorme de comercios adheridos + suscripción. <b class="rob">El análogo más directo:</b> una marca con amor de marca convierte ese amor en beneficios y plata recurrente.</p></div>
+    <div class="b"><div class="src">FC Barcelona · Socis vs Culers</div><h4>Membresía institucional ≠ fan digital</h4><p>≈144.000 <b>socis</b> (con derechos, voto, finitos, lista de espera) y <b>millones de Culers</b> (membresía digital gratis). <b class="rob">Es EXACTAMENTE tu separación:</b> Socio del Club (Eje A, aspiracional) vs Olimpista digital (masa).</p></div>
+    <div class="b"><div class="src">Costco</div><h4>La membresía ES el negocio</h4><p>La cuota de socio es la ganancia; los productos van casi a costo. <b class="rob">Lección:</b> la membresía bien hecha puede ser la línea de ingreso, no un accesorio.</p></div>
+    <div class="b"><div class="src">Amazon Prime / MELI+</div><h4>Bundle de beneficios que fideliza y aumenta gasto</h4><p>Juntan envío + streaming + perks → más lealtad y más compra. <b class="rob">Lección:</b> empaquetar beneficios sube el valor percibido y el ticket.</p></div>
+    <div class="b"><div class="src">Starbucks Rewards</div><h4>Loyalty de clase mundial</h4><p>Saldo precargado + estrellas + niveles = hábito. <b class="rob">Lección:</b> puntos/estrellas y niveles convierten el beneficio en juego recurrente.</p></div>
+    <div class="b"><div class="src">Coalición (Payback/Avios/Nectar)</div><h4>Una identidad, muchos comercios</h4><p>Programas de coalición acumulan en una red de marcas. <b class="rob">Lección:</b> el valor está en la <b>red</b>, no en un comercio suelto. Densidad = utilidad.</p></div>
+  </div>
+
+  <h2>⚙️ El flywheel: cómo se conecta todo</h2>
+  <p class="sub">Olimpistas (masa, gratis, mundial) es la BOCA del embudo. Socio del Club (premium, institucional) es el FONDO. La Red de Beneficios es la cinta que mueve gente hacia abajo dándole valor real — y monetiza en cada paso.</p>
+  <div class="flow">
+    <div class="fstep"><b>Masa gratis</b> entra por identidad + prueba social (lo que ya existe)</div>
+    <div class="farr">→</div>
+    <div class="fstep"><b>Beneficios reales</b> dan utilidad diaria → hábito y confianza</div>
+    <div class="farr">→</div>
+    <div class="fstep"><b>Plus</b> por mejores beneficios + contenido (upsell natural)</div>
+    <div class="farr">→</div>
+    <div class="fstep"><b>★ Socio del Club</b>: la aspiración, el vínculo real con el Decano</div>
+  </div>
+  <p class="sub" style="margin-top:14px">Y sin dejar a la masa: al público amplio (no socio) <b>le vendés infinitas cosas</b> — Plus, beneficios premium, merch, entradas, experiencias, productos co-branded — porque está <b>identificado, geolocalizado y enamorado de la marca</b>. La red es la plataforma de venta.</p>
+
+  <h2>💰 De dónde sale la plata</h2>
+  <div class="rev"><div class="em">🏪</div><div><h4>Comercios adheridos</h4><p>Cuota mensual por estar en la red + comisión por canje/transacción + posiciones destacadas. La base recurrente.</p></div></div>
+  <div class="rev"><div class="em">💳</div><div><h4>Suscripción digital (Plus / Junior)</h4><p>Eje B: contenido + beneficios ampliados. Monetiza a la masa que aún no es socio del club.</p></div></div>
+  <div class="rev"><div class="em">★</div><div><h4>Membresía del Club</h4><p>Eje A: la cuota de socio del Decano — el escalón premium, alimentado por todo el embudo.</p></div></div>
+  <div class="rev"><div class="em">🤝</div><div><h4>Sponsors y co-branded</h4><p>Una hinchada identificada y segmentada es oro para marcas: patrocinios, tarjeta co-branded, seguros, telco, combustible.</p></div></div>
+  <div class="rev"><div class="em">🛍️</div><div><h4>Transaccional</h4><p>Merch, entradas, preventas, experiencias, drops — vendidos sobre la base instalada.</p></div></div>
+
+  <div class="dict">
+    ⚖️ <b>Dictamen (nivel dios):</b>
+    <ul>
+      <li><b>Separá los 3 ejes ya en el modelo de datos.</b> Membresía del Club (A), Suscripción (B) y Beneficios (C) son cosas distintas. Hoy "Plus" las colapsa y por eso se siente mezclado. Desenredarlas es el cambio estructural #1.</li>
+      <li><b>Devolvele al Socio del Club su lugar superior.</b> No "Plus": estatus verificado propio + los mejores beneficios + digital incluido. El socio real es la cima, no un suscriptor.</li>
+      <li><b>La Red de Beneficios es el corazón, no un agregado.</b> Es lo que da utilidad diaria (retención), monetiza a la masa (comercios + premium), y mueve gente hacia Socio del club (conversión). Es un marketplace de dos lados sobre rieles que ya tenés (carnet + QR + geo).</li>
+      <li><b>Paraguay primero, denso.</b> El valor de una red de coalición es la densidad: que en cualquier esquina haya un beneficio. Arrancá con verticales de uso diario (gastronomía, combustible, farmacia, retail).</li>
+      <li><b>Compone con los grupos.</b> Plan Familia con beneficios familiares; peñas con beneficios locales de su zona. Tribu + beneficios = lealtad imbatible.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>Estudio estratégico para ver el panorama y decidir — no orden de trabajo. Se complementa con el panorama de Grupos: Identidad (ya lograda) + Tribu (grupos) + <b>Valor real (beneficios)</b> = la mejor app de hinchas del mundo. Cuando elijas avanzar, el primer paso técnico es el de fondo: <b>separar los 3 ejes en el modelo de datos</b>; lo demás se monta encima.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — El Decano, que te conviene</p>
+  </footer>
+
+</div>
+</body>
+</html>

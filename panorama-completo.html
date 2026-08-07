@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · El panorama completo — la mejor app de hinchas del mundo</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; --viol:#9b87f5; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 20px 90px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(30px,5.5vw,46px);line-height:1.1;margin:10px 0 16px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:18px;max-width:860px}
+  h2{font-size:25px;margin:60px 0 8px;font-weight:900;display:flex;align-items:center;gap:10px}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .thesis{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:20px;padding:26px 30px;margin:26px 0}
+  .thesis .big{font-size:21px;font-weight:800;line-height:1.4;margin:0}
+  .thesis .big b{color:var(--oro2)}
+  .thesis p{color:var(--gris);margin:12px 0 0;font-size:15px}
+  /* benchmark cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:8px}
+  .b{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px}
+  .b h3{margin:0 0 4px;font-size:15px;font-weight:800}
+  .b .src{color:var(--oro2);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .b p{margin:6px 0 0;color:var(--gris);font-size:13.5px}
+  /* group types */
+  .types{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:8px}
+  .type{background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--linea);border-radius:16px;padding:20px 22px;position:relative;overflow:hidden}
+  .type::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--oro2),var(--oro))}
+  .type .em{font-size:26px}
+  .type h3{margin:8px 0 4px;font-size:17px;font-weight:800}
+  .type .tag{color:var(--gris2);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  .type p{margin:8px 0 0;color:var(--gris);font-size:14px}
+  /* engine */
+  .engine{display:flex;gap:16px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px;margin:12px 0}
+  .engine .ic{flex:0 0 auto;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(201,162,39,.14)}
+  .engine h3{margin:0 0 4px;font-size:16px} .engine p{margin:0;color:var(--gris);font-size:14px}
+  .engine b{color:var(--oro2)}
+  /* roadmap */
+  .phase{border:1px solid var(--linea);border-radius:16px;padding:20px 24px;margin:14px 0;background:var(--panel)}
+  .phase.now{border-color:var(--verde)} .phase.next{border-color:var(--oro)} .phase.vision{border-color:var(--viol)}
+  .phase .ph{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+  .now .ph{color:var(--verde)} .next .ph{color:var(--oro2)} .vision .ph{color:#c0b4f8}
+  .phase h3{margin:4px 0 8px;font-size:19px}
+  .phase ul{margin:0;padding-left:20px;color:var(--gris);font-size:14.5px} .phase li{margin:5px 0}
+  .phase li b{color:var(--blanco)}
+  .star{background:rgba(155,135,245,.08);border:1px solid rgba(155,135,245,.35);border-radius:16px;padding:22px 26px;margin:22px 0;font-size:15px;color:#d8cffb}
+  .star b{color:#c0b4f8}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+  code{background:#0f0f15;border:1px solid var(--linea);border-radius:6px;padding:1px 6px;font-size:12.5px;color:var(--oro2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Visión de producto</span>
+  <h1>El panorama completo:<br><span class="g">la mejor app de hinchas del mundo</span></h1>
+  <p class="lead">No "una app de fans más". La idea es construir algo que ningún club tiene completo: identidad mundial + comunidad tribal + crecimiento viral, todo en un lugar. Y la pieza que lo une es la que pediste: <b style="color:#fff">los grupos</b>.</p>
+
+  <div class="thesis">
+    <p class="big">El hincha <b>no es individual — es tribal.</b> Hereda el cuadro del viejo, va a la cancha con la banda, arma el grupo de WhatsApp de la familia, se junta con los paraguayos del exterior.</p>
+    <p>Hoy la app te hace sentir <b style="color:#fff">un</b> olimpista (carnet, tu bandera, tu foto). Los grupos te hacen sentir parte de <b style="color:#fff">una tribu</b> olimpista. Ese salto — de individual a tribal — es lo que activa de una sola vez los 3 motores que el benchmark marcó como faltantes: <b style="color:#fff">viralidad, retención y monetización.</b> Los grupos no son una feature: son el <b style="color:#fff">chasis</b>.</p>
+  </div>
+
+  <h2>🌍 Benchmark global: cómo lo hacen los mejores</h2>
+  <p class="sub">Quién ya probó que el grupo es el motor — y qué le robamos a cada uno.</p>
+  <div class="grid">
+    <div class="b"><div class="src">Peñas · FC Barcelona</div><h3>+1.200 peñas oficiales en el mundo</h3><p>El club formaliza los grupos de hinchas reales: cada peña tiene identidad, sede, reconocimiento oficial. Es la estructura social que sostiene la membresía global. <b style="color:var(--oro2)">→ Peñas Olimpistas verificadas.</b></p></div>
+    <div class="b"><div class="src">Clubs · Strava</div><h3>Clubes con ranking y desafíos</h3><p>Te unís a clubes, hay tablas y retos de club, actividades en grupo. La competencia entre grupos genera uso diario. <b style="color:var(--oro2)">→ Ligas y desafíos de grupo.</b></p></div>
+    <div class="b"><div class="src">Ligas · Duolingo</div><h3>Competir con amigos = volver cada día</h3><p>Ligas semanales + rachas + push. El motor de retención #1 del mundo. La presión social del grupo es lo que engancha. <b style="color:var(--oro2)">→ Ligas semanales de hinchas.</b></p></div>
+    <div class="b"><div class="src">Family · Spotify / Apple</div><h3>Plan Familia: uno paga, todos entran</h3><p>El plan familiar convierte y retiene mejor: una sola persona decide y paga por varios. <b style="color:var(--oro2)">→ Plan Familia Olimpista.</b></p></div>
+    <div class="b"><div class="src">Equipos · Pokémon GO</div><h3>Metas colaborativas (raids)</h3><p>El grupo desbloquea recompensas juntos. La cooperación + pertenencia a un equipo crea identidad fuerte. <b style="color:var(--oro2)">→ Desafíos: "tu grupo llega a 50 → sorteo grupal".</b></p></div>
+    <div class="b"><div class="src">Ligas privadas · Fantasy</div><h3>El grupo de amigos compite entre sí</h3><p>Las ligas privadas familia/amigos son el corazón del fantasy. El pique entre conocidos es más fuerte que con extraños. <b style="color:var(--oro2)">→ La Banda: liga privada de tu grupo.</b></p></div>
+    <div class="b"><div class="src">Wrapped · Spotify</div><h3>Momentos compartibles diseñados</h3><p>Convertir datos en un momento hermoso para compartir = adquisición orgánica. <b style="color:var(--oro2)">→ "Tu familia: 3 generaciones, 8 banderas, 2 países".</b></p></div>
+    <div class="b"><div class="src">Fan tokens · Socios.com</div><h3>Participación, no solo acceso</h3><p>Votaciones, influencia, recompensas por ser fan activo. <b style="color:var(--oro2)">→ El grupo vota, predice y gana junto.</b></p></div>
+  </div>
+
+  <h2>🛡️ El sistema de Grupos para Olimpistas</h2>
+  <p class="sub">Una sola mecánica — "tu tribu" — con sabores distintos. Cada hincha puede estar en varias.</p>
+  <div class="types">
+    <div class="type"><div class="em">👨‍👩‍👧‍👦</div><span class="tag">Sangre</span><h3>La Familia Olimpista</h3><p>Invitás a tu familia. Aparecen juntos en el globo, comparten un escudo familiar y un carnet de familia. Bonus emocional: <b style="color:var(--oro2)">"3 generaciones olimpistas"</b> — abuelo, papá, hijo verificados. Heredás el cuadro, ahora también el número de socio.</p></div>
+    <div class="type"><div class="em">🤝</div><span class="tag">Elegida</span><h3>La Banda (amigos)</h3><p>Tu grupo del barrio/cancha. Liga privada entre ustedes, pique sano, chat liviano, desafíos. El grupo de WhatsApp de hinchas, pero con identidad y juego.</p></div>
+    <div class="type"><div class="em">🏛️</div><span class="tag">Oficial</span><h3>Peñas verificadas</h3><p>Las peñas reales de Olimpia (Paraguay y el mundo) formalizadas: página propia, escudo, sede, contador de miembros, reclutamiento. Estatus oficial del club. La estructura que ya existe en la cultura, digitalizada.</p></div>
+    <div class="type"><div class="em">🌎</div><span class="tag">Territorio</span><h3>Selección por país / ciudad</h3><p>"Olimpistas en México", "Olimpistas en Asunción". Te sumás con un tap. Y acá viene lo grande: <b style="color:var(--oro2)">la guerra de banderas</b> — los países compiten por quién tiene más, en vivo, en el globo.</p></div>
+  </div>
+
+  <h2>🔥 Por qué esto es la pieza que faltaba</h2>
+  <p class="sub">Los grupos no son un 4º motor — son el chasis donde se montan los 3 que el benchmark marcó ausentes.</p>
+  <div class="engine"><div class="ic">🔁</div><div><h3>Viralidad — el referido se vuelve natural y de alta intención</h3><p>Nadie invita a desconocidos; invitás a <b>tu</b> familia y a <b>tu</b> banda a <b>tu</b> grupo. El tamaño del grupo es estatus y sube en el ranking. "Te falta el primo" deja de ser spam y pasa a ser una misión del grupo. <b>Ahí está el loop viral que no existía.</b></p></div></div>
+  <div class="engine"><div class="ic">🔔</div><div><h3>Retención — tu tribu te trae de vuelta</h3><p>Volvés porque tu país pasó al rival en el ranking, porque tu primo se sumó a la Familia, porque tu peña está a 3 de desbloquear el sorteo. <b>Las notificaciones que faltaban ahora tienen de qué hablar:</b> son del grupo, no genéricas.</p></div></div>
+  <div class="engine"><div class="ic">💳</div><div><h3>Monetización — el Plan Familia/Grupo dispara el ARPU</h3><p>Es más fácil convencer a UNO de pagar por la familia que a cinco de pagar uno por uno — y la familia entera queda adentro (retención brutal). <b>Plan Familia Olimpista</b> = nueva línea de ingreso + conversión más alta. La peña paga su pack y se sienta junta en la preventa.</p></div></div>
+  <div class="engine"><div class="ic">🎮</div><div><h3>Gamificación — con sentido, porque es social</h3><p>Rachas, niveles e insignias rinden cuando hay con quién compararse. <b>Ligas semanales, ranking de peñas, guerra de países, desafíos colaborativos.</b> El carnet ya no es estático: crece con vos y con tu tribu.</p></div></div>
+
+  <h2>🗺️ El panorama completo (roadmap por fases)</h2>
+  <p class="sub">Integrando el plan ya aprobado (dictamen) + la capa de grupos. Lo que está aprobado sigue; los grupos lo potencian.</p>
+
+  <div class="phase now">
+    <div class="ph">✅ Fase 1 — Cimientos (ya aprobado)</div>
+    <h3>Encender los motores base</h3>
+    <ul>
+      <li><b>Loop de referido</b> con atribución (<code>?ref=</code>) + premio a ambos — base del crecimiento.</li>
+      <li><b>Meta/TikTok Pixel + eventos de conversión</b> — antes de gastar en ads.</li>
+      <li><b>Push notifications + reminders</b> (cumplir "te avisamos") + WhatsApp vía GHL.</li>
+      <li><b>⚠️ Proteger el mapa</b> (nombre de pila + coordenada difuminada) — urgente por privacidad.</li>
+      <li><b>Gamificación liviana</b> (rachas, insignias) — la base sobre la que crecen los grupos.</li>
+    </ul>
+  </div>
+
+  <div class="phase next">
+    <div class="ph">🛡️ Fase 2 — Grupos (la gran apuesta)</div>
+    <h3>De app individual a app tribal</h3>
+    <ul>
+      <li><b>Crear / unirse a grupos</b>: Familia, Banda, Peña, País. Escudo, nombre, color, miembros.</li>
+      <li><b>Grupos en el globo</b>: las banderas de tu tribu agrupadas; "tu familia tiene 8 banderas en 3 países".</li>
+      <li><b>Referido = crecé tu grupo</b>: el loop de la Fase 1 se enchufa al grupo (invitá a tu tribu).</li>
+      <li><b>Ranking y guerra de países/peñas</b>: competencia en vivo — el gancho de retención.</li>
+      <li><b>Plan Familia / Plan Grupo</b>: monetización nueva, conversión más alta.</li>
+    </ul>
+  </div>
+
+  <div class="phase vision">
+    <div class="ph">🚀 Fase 3 — Visión (lo que nos vuelve los #1)</div>
+    <h3>La tribu se vuelve experiencia</h3>
+    <ul>
+      <li><b>Desafíos colaborativos</b> (tipo raid): "tu peña llega a 100 → camiseta firmada para el grupo".</li>
+      <li><b>Ligas semanales</b> entre amigos/familias (motor Duolingo).</li>
+      <li><b>Participación</b>: el grupo vota, predice resultados, gana junto (motor Socios.com).</li>
+      <li><b>Momento "Wrapped"</b> familiar/grupal compartible → adquisición orgánica.</li>
+      <li><b>Preventas/experiencias grupales</b>: sentarse juntos, ir juntos. PT + alcance regional.</li>
+    </ul>
+  </div>
+
+  <div class="star">
+    ⭐ <b>North Star:</b> que un hincha no diga "tengo la app de Olimpia", sino <b>"mi familia/mi banda/mi peña está en Olimpistas"</b>. Cuando la unidad deja de ser la persona y pasa a ser la tribu, el producto se vuelve imparable: cada miembro nuevo trae a su tribu, cada tribu compite con otra, y nadie se va porque su gente está adentro. Eso ningún club lo tiene completo hoy. <b>Esa es la mejor app de hinchas del mundo.</b>
+  </div>
+
+  <footer>
+    <p>Este es el panorama, no la orden de trabajo. El plan de la Fase 1 sigue aprobado; los grupos (Fase 2-3) son la dirección estratégica para discutir y refinar antes de construir. La base de identidad y prueba social que ya tienen es justo el cimiento ideal para montarlo.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — El Decano, una tribu mundial</p>
+  </footer>
+
+</div>
+</body>
+</html>

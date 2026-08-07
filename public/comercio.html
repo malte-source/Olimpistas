@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Panel del comercio — Olimpistas</title>
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#0b0b0f" />
+  <style>
+    :root{--negro:#0a0a0e;--panel:#14141c;--panel2:#1b1b25;--linea:rgba(201,162,39,.16);
+      --oro:#c9a227;--oro2:#e7c64b;--blanco:#f3efe4;--gris:#8f8f9b;--verde:#37b26b;--rojo:#e94560;
+      --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+    *{box-sizing:border-box} body{margin:0;background:var(--negro);color:var(--blanco);font-family:var(--sans);line-height:1.5}
+    .wrap{max-width:440px;margin:0 auto;padding:22px 16px 60px}
+    header{text-align:center;padding:16px 0 22px}
+    .wm{font-weight:900;letter-spacing:.3em;font-size:14px;color:var(--oro2);text-transform:uppercase}
+    .stripes{height:5px;width:100px;margin:10px auto;border-radius:3px;background:repeating-linear-gradient(90deg,#fff 0 10px,#000 10px 20px);opacity:.85}
+    h1{font-size:20px;font-weight:900;margin:6px 0 2px}
+    .muted{color:var(--gris);font-size:14px}
+    .card{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:18px}
+    label{display:block;font-size:12px;color:var(--gris);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px}
+    input,select{width:100%;font-family:inherit;font-size:16px;padding:13px;border-radius:11px;background:var(--panel2);color:var(--blanco);border:1px solid var(--linea)}
+    input.cod{font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase}
+    .btn{width:100%;border:0;font-family:inherit;font-weight:900;font-size:16px;padding:15px;border-radius:12px;cursor:pointer;margin-top:16px;
+      background:linear-gradient(135deg,var(--oro2),var(--oro));color:#1a1500;text-transform:uppercase;letter-spacing:.03em}
+    .btn:active{transform:translateY(1px)} .btn:disabled{opacity:.55}
+    .btn.ghost{background:transparent;border:1px solid var(--linea);color:var(--blanco);font-weight:700;text-transform:none;letter-spacing:0}
+    .err{color:#ffa8b6;font-size:13px;margin-top:10px;min-height:16px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+    .topbar .n{font-weight:800}
+    .res{margin-top:16px;border-radius:14px;padding:16px;text-align:center;animation:pop .2s ease}
+    @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    .res.ok{background:rgba(55,178,107,.12);border:1px solid rgba(55,178,107,.5)}
+    .res.no{background:rgba(233,69,96,.12);border:1px solid rgba(233,69,96,.5)}
+    .res .big{font-size:20px;font-weight:900;display:block;margin-bottom:4px}
+    .res.ok .big{color:#7fe3a6} .res.no .big{color:#ffa8b6}
+    .res small{color:var(--gris);font-size:13px}
+    .res .ah{font-size:22px;font-weight:900;color:var(--oro2);margin-top:8px}
+    .badge{display:inline-block;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;padding:3px 10px;border-radius:999px;background:#0a0a0e;color:var(--oro2);border:1px solid var(--oro)}
+    .hide{display:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="wm">Olimpistas</div><div class="stripes"></div>
+      <h1>Panel del comercio</h1>
+      <p class="muted">Validá los beneficios de la Red del Decano</p>
+    </header>
+
+    <!-- LOGIN -->
+    <div class="card" id="loginCard">
+      <label>Usuario</label>
+      <input id="usuario" autocomplete="username" autocapitalize="none" />
+      <label>Contraseña</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <button class="btn" id="loginBtn">Entrar</button>
+      <div class="err" id="loginErr"></div>
+    </div>
+
+    <!-- PANEL -->
+    <div id="panel" class="hide">
+      <div class="topbar"><span class="n" id="comNombre"></span><button class="btn ghost" id="salir" style="width:auto;padding:8px 14px;margin:0">Salir</button></div>
+      <div class="card">
+        <label>Beneficio a canjear</label>
+        <select id="benSel"></select>
+        <label>Código de socio</label>
+        <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" />
+        <label>Monto de la compra (opcional)</label>
+        <input id="monto" type="number" inputmode="numeric" placeholder="₲ 0" />
+        <button class="btn" id="validarBtn">Validar canje</button>
+        <div class="err" id="valErr"></div>
+        <div id="res"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    var TK = "oli_comercio_token";
+    var $ = function(id){ return document.getElementById(id); };
+    var LBL = {olimpista:"Olimpista", kids:"Junior", premium:"Plus", socio:"Socio"};
+    function gs(n){ return "₲ " + Number(n||0).toLocaleString("es-PY"); }
+    function tok(){ try{ return localStorage.getItem(TK) || ""; }catch(e){ return ""; } }
+
+    async function api(path, opts){
+      opts = opts || {};
+      var h = { "Content-Type":"application/json" };
+      if(tok()) h["x-comercio-token"] = tok();
+      var r = await fetch("/api"+path, { method: opts.method||"GET", headers:h, body: opts.body?JSON.stringify(opts.body):undefined });
+      var j = await r.json().catch(function(){ return {}; });
+      if(!r.ok) throw new Error(j.error || ("Error "+r.status));
+      return j;
+    }
+
+    $("loginBtn").addEventListener("click", async function(){
+      $("loginErr").textContent = "";
+      try{
+        var j = await api("/comercio/login", { method:"POST", body:{ usuario:$("usuario").value, password:$("password").value } });
+        try{ localStorage.setItem(TK, j.token); }catch(e){}
+        entrarPanel();
+      }catch(e){ $("loginErr").textContent = e.message; }
+    });
+
+    $("salir").addEventListener("click", function(){ try{ localStorage.removeItem(TK); }catch(e){} location.reload(); });
+
+    async function entrarPanel(){
+      try{
+        var j = await api("/comercio/beneficios");
+        $("comNombre").textContent = (j.comercio && j.comercio.nombre) || "Comercio";
+        var items = j.items || [];
+        $("benSel").innerHTML = items.length
+          ? items.map(function(b){ return '<option value="'+b.id+'">'+esc(b.titulo)+' ('+esc(b.valor||"")+')</option>'; }).join("")
+          : '<option value="">Sin beneficios cargados</option>';
+        $("loginCard").classList.add("hide");
+        $("panel").classList.remove("hide");
+      }catch(e){ /* token inválido → seguir en login */ }
+    }
+    function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+    $("validarBtn").addEventListener("click", async function(){
+      $("valErr").textContent = ""; $("res").innerHTML = "";
+      var btn = this; btn.disabled = true;
+      try{
+        var j = await api("/comercio/validar", { method:"POST", body:{
+          codigo: $("codigo").value.trim(), beneficioId: $("benSel").value, monto: Number($("monto").value)||0
+        }});
+        if(j.ok){
+          var ah = j.ahorro ? '<div class="ah">El socio ahorró '+gs(j.ahorro)+'</div>' : "";
+          $("res").innerHTML = '<div class="res ok"><span class="big">✓ Canje aprobado</span>'+
+            '<div><b>'+esc(j.socio.nombre)+'</b> <span class="badge">'+ (LBL[j.socio.tier]||j.socio.tier) +'</span></div>'+
+            '<small>"'+esc(j.beneficio)+'" registrado.</small>'+ah+'</div>';
+          $("codigo").value = ""; $("monto").value = "";
+        }else{
+          var msg = {socio_no_encontrado:"No encontramos ese código de socio.",beneficio_invalido:"Beneficio inválido.",
+            limite:"Ya usó este beneficio hace poco (límite).",nivel_no_aplica:"Su nivel no incluye este beneficio."}[j.motivo] || "No se pudo validar.";
+          var extra = (j.motivo==="nivel_no_aplica" && j.requiere) ? ' Invitalo a subir a '+(LBL[j.requiere]||j.requiere)+'.' : "";
+          var who = j.socio ? '<div><b>'+esc(j.socio.nombre)+'</b> <span class="badge">'+(LBL[j.socio.tier]||j.socio.tier)+'</span></div>' : "";
+          $("res").innerHTML = '<div class="res no"><span class="big">✗ No aplica</span>'+who+'<small>'+msg+extra+'</small></div>';
+        }
+      }catch(e){ $("valErr").textContent = e.message; if(/inv|401/.test(e.message)){} }
+      btn.disabled = false;
+    });
+
+    // Arranque: si ya hay token, ir directo al panel.
+    if(tok()) entrarPanel();
+  })();
+  </script>
+</body>
+</html>

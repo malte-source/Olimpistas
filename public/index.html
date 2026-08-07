@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <script>/* Canónico: si caímos en el dominio pelado (p.ej. shell cacheado por el SW), ir a www ANTES de cualquier llamada a la API (evita el "Failed to fetch" por origen equivocado). */ if (location.hostname === "olimpistas.com") location.replace("https://www.olimpistas.com" + location.pathname + location.search + location.hash);</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Olimpistas — Hacete Olimpista gratis</title>
+  <title>Olimpistas.com — Sumate gratis al Decano</title>
   <meta name="description" content="Sumate gratis a la comunidad mundial de Olimpia: contenido, sorteos, preventas y beneficios para los hinchas del Decano." />
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
@@ -14,49 +15,52 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Olimpistas" />
-  <meta property="og:title" content="Hacete Olimpista — gratis" />
+  <meta property="og:title" content="Sumate a Olimpistas.com" />
   <meta property="og:description" content="Sumate gratis a la comunidad mundial de Olimpia. Contenido, sorteos, preventas y beneficios del Decano." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="/assets/og.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Hacete Olimpista — gratis" />
+  <meta name="twitter:title" content="Sumate a Olimpistas.com" />
   <meta name="twitter:image" content="/assets/og.jpg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css?v=34" />
+  <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/inter-400.woff2" crossorigin />
+  <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/archivo-900.woff2" crossorigin />
+  <link rel="stylesheet" href="/assets/fonts/fonts.css" />
+  <link rel="stylesheet" href="/css/styles.css?v=86" />
 </head>
 <body>
   <header class="nav">
-    <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg" alt="Olimpistas" /></a>
+    <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=86" alt="Olimpistas" /></a>
     <div class="nav-right">
-      <button class="nav-sw" id="curSw" title="Moneda / Currency">US$</button>
       <a class="nav-sw" id="langSw" href="/en">EN</a>
       <button class="btn btn-ghost" id="accederBtn" data-i18n="nav_login">Ingresar</button>
-      <button class="btn" id="navCta" data-i18n="nav_join">Hacete Olimpista</button>
+      <button class="btn" id="navCta" data-i18n="nav_join">Unite gratis</button>
     </div>
   </header>
 
   <section class="hero">
     <div class="hero-bg">
       <picture>
-        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=34" />
-        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=34" />
-        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=34" />
-        <img src="/assets/hero-desktop.jpg?v=34" alt="" fetchpriority="high" />
+        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=86" />
+        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=86" />
+        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=86" />
+        <img src="/assets/hero-desktop.jpg?v=86" alt="" fetchpriority="high" />
       </picture>
     </div>
     <div class="hero-inner wrap">
       <span class="pill" data-i18n="hero_pill">El Rey de Copas · El Decano</span>
-      <h1 id="heroTitle">Hacete Olimpista</h1>
+      <h1 id="heroTitle">OLIMPISTAS.COM</h1>
       <p class="sub" id="heroSub">Cargando…</p>
-      <button class="btn btn-hero" id="heroCta">Hacete Olimpista gratis</button>
+      <button class="btn btn-hero" id="heroCta">Unite gratis</button>
       <p class="hero-note" data-i18n="hero_note">Gratis y en 30 segundos. Sin tarjeta.</p>
       <p class="hero-social" id="heroSocial" hidden></p>
       <a class="ver-todas" href="#planes" data-i18n="hero_vermas">Ver niveles y beneficios ↓</a>
     </div>
   </section>
+
+  <!-- Destacado dinámico (subasta en vivo / campaña) — lo llena landing.js -->
+  <div class="wrap" id="destacadoWrap"></div>
 
   <!-- Olimpistas en el mundo -->
   <section class="section mundo" id="mundo">
@@ -96,7 +100,14 @@
     <div class="wrap">
       <span class="eyebrow" data-i18n="planes_eyebrow">Niveles</span>
       <h2 data-i18n="planes_h2">Elegí tu nivel</h2>
-      <p class="lead" data-i18n="planes_lead">Empezá gratis. Cuando quieras, subí a Kids o Premium.</p>
+      <p class="lead" data-i18n="planes_lead">Empezá gratis. Cuando quieras, subí a Junior o Plus.</p>
+      <div class="cur-sel" id="curSel" role="group" aria-label="Moneda">
+        <span class="cur-sel-lbl" data-i18n="cur_label">Ver precios en</span>
+        <div class="cur-sel-opts">
+          <button class="cur-opt" data-cur="PYG">₲ Guaraníes</button>
+          <button class="cur-opt" data-cur="USD">US$ Dólares</button>
+        </div>
+      </div>
       <div class="tiers" id="tiers"><!-- tiers van acá --></div>
     </div>
   </section>
@@ -104,12 +115,12 @@
   <footer class="footer">
     <div class="wrap footer-inner">
       <div>
-        <div class="brand"><img class="brand-h" src="/assets/logo-horizontal.svg" alt="Olimpistas" /></div>
+        <div class="brand"><img class="brand-h" src="/assets/logo-horizontal.svg?v=86" alt="Olimpistas" /></div>
         <p class="muted" data-i18n="footer_tagline">Una iniciativa de Club Olimpia para su comunidad mundial de hinchas.</p>
       </div>
       <nav class="footer-links">
-        <a href="#" data-stub data-i18n="footer_tienda">Tienda oficial</a>
-        <a href="#" data-stub data-i18n="footer_web">Web de Olimpia</a>
+        <a href="https://store.clubolimpia.com.py/" target="_blank" rel="noopener" data-i18n="footer_tienda">Tienda oficial</a>
+        <a href="https://www.clubolimpia.com.py/" target="_blank" rel="noopener" data-i18n="footer_web">Web de Olimpia</a>
         <a href="/legal#terminos" data-i18n="footer_terminos">Términos y condiciones</a>
         <a href="/legal#privacidad" data-i18n="footer_privacidad">Política de privacidad</a>
         <a href="/legal#sorteos" data-i18n="footer_sorteos">Bases de sorteos</a>
@@ -119,8 +130,8 @@
 
   <!-- Modal auth -->
   <div class="modal-bg" id="modalBg">
-    <div class="modal">
-      <h3 id="modalTitle">Hacete Olimpista</h3>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h3 id="modalTitle">Sumate a Olimpistas.com</h3>
       <p class="muted" id="modalSub">Creá tu cuenta gratis.</p>
       <div class="field" id="nombreField">
         <label data-i18n="m_nombre">Nombre</label>
@@ -136,7 +147,11 @@
       </div>
       <div class="field">
         <label data-i18n="m_pass">Contraseña</label>
-        <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+        <div class="pw-wrap"><input id="password" type="password" placeholder="••••••••" autocomplete="current-password" /><button class="pw-toggle" type="button" data-i18n-aria="m_pw_ver" aria-label="Mostrar contraseña">👁</button></div>
+      </div>
+      <div class="field" id="password2Field">
+        <label data-i18n="ob_pass2">Repetí la contraseña</label>
+        <div class="pw-wrap"><input id="password2" type="password" placeholder="••••••••" autocomplete="new-password" /><button class="pw-toggle" type="button" data-i18n-aria="m_pw_ver" aria-label="Mostrar contraseña">👁</button></div>
       </div>
       <label class="consent" id="consentRow">
         <input type="checkbox" id="consent" />
@@ -145,16 +160,17 @@
       <p class="error" id="modalError"></p>
       <button class="btn btn-block" id="submitBtn">Crear cuenta gratis</button>
       <p class="switch" id="switchMode"></p>
+      <p class="switch" id="forgotRow" hidden><a id="forgotLink" data-i18n="m_forgot">¿Olvidaste tu contraseña?</a></p>
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/js/i18n.js?v=34"></script>
-  <script src="/js/common.js?v=34"></script>
+  <script src="/js/i18n.js?v=86"></script>
+  <script src="/js/common.js?v=86"></script>
   <script src="/assets/vendor/qrcode.js"></script>
-  <script src="/js/onboarding.js?v=34"></script>
+  <script src="/js/onboarding.js?v=86"></script>
   <!-- MapLibre + globe.js se cargan en diferido (lazy) al llegar a la sección del mundo -->
-  <script src="/js/landing.js?v=34"></script>
+  <script src="/js/landing.js?v=86"></script>
 </body>
 </html>

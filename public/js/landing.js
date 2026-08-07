@@ -1,6 +1,6 @@
 /* landing.js — embudo de captación: registro gratis + upsell a Kids/Premium. */
 (function () {
-  const { api, precioTier, toast, yo, carnet, makeQR, currency, setCurrency } = window.OLI;
+  const { api, precioTier, toast, yo, carnet, makeQR, currency, setCurrency, esc, gs } = window.OLI;
   const I18N = window.OLI_I18N;
   const T = (k) => (I18N ? I18N.t(k) : k);
   const LANG = I18N ? I18N.lang() : "es";
@@ -8,8 +8,12 @@
   let CONFIG = null;
   let SESSION = null;
   let intentTier = null; // nivel que se quiso comprar antes de registrarse
+  let intentSub = null;  // subasta en la que se quiso pujar antes de registrarse
 
   const ICONOS = { olimpista: "★", kids: "🎈", premium: "♛" };
+
+  // Wireo estático (no depende de la sesión/config): mostrar/ocultar contraseña.
+  if (window.OLI.wirePasswordToggles) window.OLI.wirePasswordToggles();
 
   async function init() {
     CONFIG = await api("/config");
@@ -29,7 +33,36 @@
     );
     const pago = new URLSearchParams(location.search).get("pago_simulado");
     if (pago) confirmarSimulado(pago);
+    // Intención de pujar (viene de /subasta/:id cuando no hay sesión) → abrir registro
+    // y, al terminar, ir directo a esa subasta dentro de la app.
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("intent") === "pujar" && qs.get("sub")) {
+      intentSub = qs.get("sub");
+      if (SESSION) location.href = "/miembro?sub=" + encodeURIComponent(intentSub);
+      else openModal("registro");
+    }
+    renderDestacado();
     initMundo();
+  }
+
+  // Slot destacado del home: si hay una subasta EN VIVO, la muestra arriba como gancho
+  // principal (link a la página dedicada). Si no hay, no muestra nada (queda el hero normal).
+  function cdCorto(t) {
+    const ms = new Date(t).getTime() - Date.now(); if (ms <= 0) return "cerrada";
+    const s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    return d > 0 ? d + "d " + h + "h" : h > 0 ? h + "h " + m + "m" : m + "m";
+  }
+  async function renderDestacado() {
+    const host = document.getElementById("destacadoWrap"); if (!host) return;
+    let items = [];
+    try { ({ items } = await api("/subastas")); } catch (e) { return; }
+    const s = (items || []).find((x) => x.estado === "activa"); if (!s) return;
+    host.innerHTML = '<a class="destacado" href="/subasta/' + encodeURIComponent(s.id) + '">' +
+      '<div class="destacado-ic">' + (s.emoji || "🔨") + '</div>' +
+      '<div class="destacado-txt"><span class="destacado-tag">🔴 ' + T("m_sub_envivo") + ' · ' + T("tab_subastas") + '</span>' +
+      '<strong>' + esc(s.titulo) + '</strong>' +
+      '<span class="destacado-meta">' + T("m_sub_actual") + ' ' + gs(s.puja_actual) + ' · ⏳ ' + cdCorto(s.termina) + ' · 👥 ' + s.pujadores + '</span></div>' +
+      '<span class="destacado-cta">' + T("m_sub_pujar") + ' →</span></a>';
   }
 
   // Carga diferida de assets (devuelve Promise). Para el mapa pesado (MapLibre).
@@ -44,7 +77,7 @@
     if (_mapaCargado) return; _mapaCargado = true;
     await cargarCss("/assets/vendor/maplibre-gl.css");
     await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=34");
+    await cargarJs("/js/globe.js?v=80");
   }
 
   async function initIdiomaMoneda() {
@@ -59,11 +92,12 @@
       try { const { pais } = await api("/geo"); setCurrency(pais && pais.iso === "PY" ? "PYG" : "USD"); }
       catch { setCurrency("PYG"); }
     }
-    const curSw = document.getElementById("curSw");
-    if (curSw) {
-      const sync = () => { curSw.textContent = currency() === "USD" ? "₲ Gs" : "US$"; };
+    const curSel = document.getElementById("curSel");
+    if (curSel) {
+      const opts = curSel.querySelectorAll(".cur-opt");
+      const sync = () => opts.forEach((o) => o.classList.toggle("on", o.dataset.cur === currency()));
       sync();
-      curSw.addEventListener("click", () => { setCurrency(currency() === "USD" ? "PYG" : "USD"); sync(); renderTiers(); });
+      opts.forEach((o) => o.addEventListener("click", () => { setCurrency(o.dataset.cur); sync(); renderTiers(); }));
     }
   }
 
@@ -81,6 +115,65 @@
       if (hs) { hs.textContent = `${T("social_pre")} ${stats.total.toLocaleString(loc)} ${T("social_in")} ${stats.paises} ${stats.paises === 1 ? T("pais") : T("paises")}`; hs.hidden = false; }
     }
     document.getElementById("globoCta").onclick = () => empezarGratis();
+
+    // ── Conteo EN VIVO: trae el objetivo del server cada 20s y sube suave ──────
+    // (sin recargar la página; arranca tras la animación inicial)
+    {
+      const loc = LANG === "en" ? "en-US" : "es-PY";
+      const numEl = document.getElementById("contadorNum");
+      const paisesEl = document.getElementById("contadorPaises");
+      const heroEl = document.getElementById("heroSocial");
+      let meta = stats.total, mostrado = stats.total, paisesMeta = stats.paises;
+      let paisBase = (stats.porPais || []).reduce((a, p) => a + Number(p.count || 0), 0) || stats.total;
+      // El ranking sube EN VIVO: escala cada país por (mostrado / base) para que
+      // crezca en proporción al contador, entre refrescos del /stats.
+      function renderRankingVivo() {
+        const lista = stats.porPais;
+        if (!lista || !lista.length || !paisBase) return;
+        const f = mostrado / paisBase;
+        renderTopPaises(lista.map((p) => ({ ...p, count: Math.round(Number(p.count || 0) * f) })));
+      }
+      // Total casi en vivo: endpoint liviano (solo total + países), cache corto.
+      async function pollContador() {
+        try {
+          const s = await api("/contador");
+          if (!s || typeof s.total !== "number") return;
+          if (s.total >= meta) { meta = s.total; if (s.paises) paisesMeta = s.paises; }
+        } catch (e) {}
+      }
+      // Globo + top países: payload pesado, refresco espaciado.
+      async function pollGlobo() {
+        try {
+          const s = await api("/stats");
+          if (!s || !Array.isArray(s.porPais)) return;
+          stats.porPais = s.porPais;
+          stats.puntos = s.puntos || s.porPais;
+          if (s.paises) paisesMeta = s.paises;
+          paisBase = s.porPais.reduce((a, p) => a + Number(p.count || 0), 0) || meta;
+          renderRankingVivo();
+          const gl = window.__oliGl;
+          if (gl) { try { gl.setCountries(s.porPais); gl.setData(s.puntos || s.porPais); } catch (e) {} }
+        } catch (e) {}
+      }
+      function tick() {
+        if (mostrado >= meta) return;
+        const paso = Math.max(1, Math.ceil((meta - mostrado) / 8));
+        mostrado = Math.min(meta, mostrado + paso);
+        if (numEl) numEl.textContent = mostrado.toLocaleString(loc);
+        if (paisesEl && paisesMeta) paisesEl.textContent = paisesMeta;
+        if (heroEl && !heroEl.hidden) {
+          heroEl.textContent = `${T("social_pre")} ${mostrado.toLocaleString(loc)} ${T("social_in")} ${paisesMeta} ${paisesMeta === 1 ? T("pais") : T("paises")}`;
+        }
+        renderRankingVivo();
+      }
+      setTimeout(() => {
+        mostrado = meta;                  // sincroniza con lo que dejó animarContador
+        setInterval(pollContador, 30000); // actualiza el total cada 30s (mismo ritmo)
+        setInterval(pollGlobo, 30000);    // globo/top (cache 30s)
+        setInterval(tick, 600);           // conteo corto suave hacia el nuevo valor
+        pollContador();
+      }, 1800);
+    }
 
     // El globo (MapLibre, ~1MB) se carga recién cuando la sección entra en viewport.
     const stage = document.getElementById("mundo");
@@ -165,8 +258,8 @@
 
   function renderNav() {
     const btn = document.getElementById("accederBtn");
-    if (SESSION) { btn.textContent = "Mi cuenta"; btn.onclick = () => (location.href = "/miembro"); }
-    else { btn.textContent = "Ingresar"; btn.onclick = () => openModal("login"); }
+    if (SESSION) { btn.textContent = T("nav_micuenta"); btn.onclick = () => (location.href = "/miembro"); }
+    else { btn.textContent = T("nav_ingresar"); btn.onclick = () => openModal("login"); }
     const navCta = document.getElementById("navCta");
     if (navCta) navCta.style.display = SESSION ? "none" : "";
   }
@@ -181,17 +274,17 @@
   function renderTiers() {
     const cont = document.getElementById("tiers");
     const previewQR = makeQR("https://olimpistas.olimpia.com"); // QR genérico para la vista previa
-    cont.innerHTML = CONFIG.tiers.map((t) => {
+    cont.innerHTML = CONFIG.tiers.filter((t) => t.comprable !== false).map((t) => {
       const p = precioTier(t, CONFIG.brand.usdRate);
-      const bullets = fld(t, "beneficios").map((b) => `<li>${b}</li>`).join("");
+      const bullets = fld(t, "beneficios").map((b) => `<li>${esc(b)}</li>`).join("");
       const carnetHtml = carnet({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre",
         numero: "OLI-••••••••", icono: ICONOS[t.slug], qr: previewQR });
       return `
-      <div class="tier ${t.destacado ? "tier-destacado" : ""}">
-        ${t.destacado ? `<span class="tier-ribbon">${T("ribbon")}</span>` : ""}
+      <div class="tier ${(t.destacado || t.recomendado) ? "tier-destacado" : ""}">
+        ${t.recomendado ? `<span class="tier-ribbon">${T("ribbon_rec")}</span>` : (t.destacado ? `<span class="tier-ribbon">${T("ribbon")}</span>` : "")}
         ${carnetHtml}
         <div class="price"><div class="big">${p.big}</div><div class="small">${p.small}</div></div>
-        <button class="btn cta ${t.nivel === 0 ? "" : "btn-ghost"}" data-tier="${t.slug}">${fld(t, "cta")}</button>
+        <button class="btn cta ${(t.nivel === 0 || t.recomendado) ? "" : "btn-ghost"}" data-tier="${t.slug}">${fld(t, "cta")}</button>
         <ul class="benefits">${bullets}</ul>
       </div>`;
     }).join("");
@@ -200,13 +293,19 @@
     );
   }
 
-  async function unirse(tierSlug) {
+  async function unirse(tierSlug, cedula) {
     const tier = CONFIG.tiers.find((t) => t.slug === tierSlug);
     if (!SESSION) { intentTier = tierSlug; return openModal("registro"); }
     if (!tier || tier.nivel === 0) return (location.href = "/miembro"); // ya sos Olimpista
     try {
-      const r = await api("/membresia/unirse", { method: "POST", body: { tier: tierSlug } });
+      const r = await api("/membresia/unirse", { method: "POST", body: { tier: tierSlug, moneda: currency(), cedula } });
+      if (r.falta_cedula) {                                    // Pagopar exige cédula: la pedimos y reintentamos
+        const c = await OLI.pedirCedula(T("m_cedula_pago"));
+        if (!c) return;
+        return unirse(tierSlug, c);
+      }
       if (r.gratis) return (location.href = "/miembro");
+      window.OLI.track("InicioPago", "InitiateCheckout", { content_name: tierSlug });
       location.href = r.pago.urlPago; // simulado → /miembro?pago_simulado=… | real → URL de PAGOPAR
     } catch (e) { toast(e.message); }
   }
@@ -217,9 +316,33 @@
   }
 
   // ─── Modal auth ────────────────────────────────────────────────────────────
-  let mode = "registro";
-  function openModal(m) { mode = m; syncModal(); document.getElementById("modalBg").classList.add("open"); }
-  function closeModal() { document.getElementById("modalBg").classList.remove("open"); document.getElementById("modalError").textContent = ""; }
+  let mode = "registro", _modalPrevFocus = null;
+  function _modalKey(e) {
+    const bg = document.getElementById("modalBg");
+    if (!bg.classList.contains("open")) return;
+    if (e.key === "Escape") { e.preventDefault(); closeModal(); return; }
+    if (e.key === "Tab") {
+      const f = Array.prototype.slice.call(bg.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled])'))
+        .filter((el) => el.offsetParent !== null); // solo visibles (el form cambia según modo)
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+  function openModal(m) {
+    mode = m; syncModal();
+    _modalPrevFocus = document.activeElement;
+    document.getElementById("modalBg").classList.add("open");
+    document.addEventListener("keydown", _modalKey, true);
+    setTimeout(() => { const i = document.getElementById(mode === "registro" ? "nombre" : "email"); if (i) i.focus(); }, 40);
+  }
+  function closeModal() {
+    document.getElementById("modalBg").classList.remove("open");
+    document.getElementById("modalError").textContent = "";
+    document.removeEventListener("keydown", _modalKey, true);
+    if (_modalPrevFocus && _modalPrevFocus.focus) { try { _modalPrevFocus.focus(); } catch (e) {} }
+  }
 
   function syncModal() {
     const reg = mode === "registro";
@@ -227,18 +350,33 @@
     document.getElementById("modalSub").textContent = reg ? T("m_sub_reg") : T("m_sub_login");
     document.getElementById("nombreField").style.display = reg ? "block" : "none";
     document.getElementById("apellidoField").style.display = reg ? "block" : "none";
+    document.getElementById("password2Field").style.display = reg ? "block" : "none";
     document.getElementById("consentRow").style.display = reg ? "flex" : "none";
     document.getElementById("submitBtn").textContent = reg ? T("m_submit_reg") : T("m_submit_login");
     document.getElementById("switchMode").innerHTML = reg
       ? `${T("m_switch_reg")} <a id="switchLink">${T("m_switch_reg_a")}</a>`
       : `${T("m_switch_login")} <a id="switchLink">${T("m_switch_login_a")}</a>`;
     document.getElementById("switchLink").onclick = () => { mode = reg ? "login" : "registro"; syncModal(); };
+    const fr = document.getElementById("forgotRow"); if (fr) fr.hidden = reg; // solo en login
+  }
+
+  async function recuperarPass() {
+    const email = document.getElementById("email").value.trim();
+    const errEl = document.getElementById("modalError");
+    if (!email) { errEl.textContent = T("m_forgot_need"); return; }
+    errEl.textContent = "";
+    try {
+      await api("/auth/recuperar", { method: "POST", body: { email } });
+      document.getElementById("modalSub").textContent = T("m_forgot_sent");
+      document.getElementById("forgotRow").hidden = true;
+    } catch (e) { errEl.textContent = e.message; }
   }
 
   function wireModal() {
     document.getElementById("modalBg").addEventListener("click", (e) => { if (e.target.id === "modalBg") closeModal(); });
     document.getElementById("submitBtn").addEventListener("click", submitAuth);
     document.getElementById("password").addEventListener("keydown", (e) => { if (e.key === "Enter") submitAuth(); });
+    const fl = document.getElementById("forgotLink"); if (fl) fl.addEventListener("click", recuperarPass);
   }
 
   async function submitAuth() {
@@ -248,21 +386,38 @@
     const apellido = document.getElementById("apellido").value.trim();
     const errEl = document.getElementById("modalError");
     errEl.textContent = "";
-    if (mode === "registro" && !document.getElementById("consent").checked) {
-      errEl.textContent = T("consent_err");
-      return;
+    if (mode === "registro") {
+      if (password !== document.getElementById("password2").value) { errEl.textContent = T("ob_pass2_err"); return; }
+      if (!document.getElementById("consent").checked) { errEl.textContent = T("consent_err"); return; }
     }
+    const btn = document.getElementById("submitBtn");
+    const t0 = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = T("m_guardando"); } // evita doble envío
     try {
       const path = mode === "registro" ? "/auth/registro" : "/auth/login";
-      const body = mode === "registro" ? { email, password, nombre, apellido } : { email, password };
+      const body = mode === "registro" ? { email, password, nombre, apellido, ref: window.OLI.ref(), idioma: LANG } : { email, password };
       SESSION = await api(path, { method: "POST", body });
+      if (mode === "registro") window.OLI.track("Registro", "CompleteRegistration");
       closeModal();
+      if (intentSub) { const sub = intentSub; intentSub = null; location.href = "/miembro?sub=" + encodeURIComponent(sub); return; } // quería pujar
       const intent = intentTier; intentTier = null;
       const tier = intent && CONFIG.tiers.find((t) => t.slug === intent);
       if (tier && tier.nivel > 0) unirse(intent); // quería un nivel pago → al pago
       else location.href = "/miembro";
     } catch (e) { errEl.textContent = e.message; }
+    finally { if (btn) { btn.disabled = false; btn.textContent = t0; } }
   }
 
-  init().catch((e) => { document.getElementById("heroSub").textContent = "Error: " + e.message; });
+  // Arranque resiliente: si una llamada inicial falla (típico bache de red móvil), reintenta
+  // con backoff antes de mostrar error. La parte que puede fallar (api/config, yo) está al
+  // tope de init() antes de tocar el DOM, así que reintentar de nuevo es seguro.
+  (async function arranque() {
+    for (let i = 1; i <= 3; i++) {
+      try { await init(); return; }
+      catch (e) {
+        if (i === 3) { document.getElementById("heroSub").textContent = T("m_error_generico"); return; }
+        await new Promise((r) => setTimeout(r, 700 * i)); // 0.7s, 1.4s
+      }
+    }
+  })();
 })();

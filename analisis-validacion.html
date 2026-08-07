@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Plataforma de validación de beneficios — análisis</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; --viol:#9b87f5; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 20px 90px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(29px,5.2vw,44px);line-height:1.12;margin:10px 0 16px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:18px;max-width:870px}
+  h2{font-size:24px;margin:58px 0 8px;font-weight:900}
+  h3.s{font-size:18px;margin:28px 0 6px;color:var(--oro2);font-weight:800}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .flip{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:20px;padding:24px 28px;margin:24px 0}
+  .flip .big{font-size:20px;font-weight:800;line-height:1.4;margin:0} .flip .big b{color:var(--oro2)}
+  .flip p{color:var(--gris);margin:12px 0 0;font-size:15px}
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+  .cmp>div{border-radius:14px;padding:18px 20px}
+  .bad{background:rgba(224,85,107,.07);border:1px solid rgba(224,85,107,.3)}
+  .good{background:rgba(46,194,126,.07);border:1px solid rgba(46,194,126,.3)}
+  .cmp h4{margin:0 0 8px;font-size:15px} .bad h4{color:#f0939f} .good h4{color:#7be0b0}
+  .cmp ul{margin:0;padding-left:18px;color:var(--gris);font-size:13.5px} .cmp li{margin:4px 0}
+  @media(max-width:680px){.cmp{grid-template-columns:1fr}}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:8px}
+  .b{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px}
+  .b .src{color:var(--oro2);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .b h4{margin:3px 0 0;font-size:15px;font-weight:800} .b p{margin:7px 0 0;color:var(--gris);font-size:13.5px}
+  .b .rob{color:var(--blanco);font-weight:600}
+  .pat{border:1px solid var(--linea);border-radius:14px;padding:18px 20px;margin:12px 0;background:var(--panel)}
+  .pat.win{border-color:var(--verde)}
+  .pat h4{margin:0 0 4px;font-size:16px} .pat .who{font-size:12px;color:var(--gris2);text-transform:uppercase;letter-spacing:.5px}
+  .pat p{margin:6px 0 0;color:var(--gris);font-size:14px}
+  .pat .ok{color:var(--verde);font-weight:700} .pat .no{color:var(--rojo);font-weight:700}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0}
+  .fstep{background:var(--panel2);border:1px solid var(--linea);border-radius:11px;padding:11px 14px;font-size:13px;flex:1;min-width:130px}
+  .fstep b{color:var(--oro2)} .farr{color:var(--oro);font-size:18px;font-weight:900}
+  .rev{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:15px 18px;margin:10px 0}
+  .rev .em{font-size:20px;flex:0 0 auto;width:26px;text-align:center}
+  .rev h4{margin:0 0 2px;font-size:14.5px} .rev p{margin:0;color:var(--gris);font-size:13.5px}
+  .dict{background:rgba(155,135,245,.08);border:1px solid rgba(155,135,245,.35);border-radius:18px;padding:24px 28px;margin:24px 0;font-size:15px;color:#d8cffb}
+  .dict b{color:#c0b4f8} .dict ul{margin:10px 0 0;padding-left:20px} .dict li{margin:6px 0}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+  code{background:#0f0f15;border:1px solid var(--linea);border-radius:6px;padding:1px 6px;font-size:12.5px;color:var(--oro2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Red de Beneficios</span>
+  <h1>La plataforma de validación:<br><span class="g">el comercio valida, no integramos</span></h1>
+  <p class="lead">Cómo canjear un beneficio en el local sin pelear con el POS de cada comercio, y sin que el QR se pueda screenshotear y regalar. Tu instinto va por el camino correcto — y es justo como lo hacen los que escalaron a miles de comercios.</p>
+
+  <div class="flip">
+    <p class="big">El error clásico es querer <b>integrarse con el sistema de cada comercio.</b> No escala: cada uno tiene un POS distinto, y cada integración son semanas. <b>Hay que darlo vuelta:</b> nosotros le damos al comercio una <b>plataforma simple con su usuario</b> para validar el QR del hincha. Cero integración. Se da de alta en minutos y valida desde cualquier celular o compu.</p>
+    <p>Y para que nadie haga trampa con una captura de pantalla: el QR del hincha es <b>vivo (rotativo)</b> — cambia cada ~30–60s y vence. Como el código de Starbucks, el pase de embarque o el QR de WhatsApp Web.</p>
+  </div>
+
+  <h2>🔌 Integrar al POS vs. plataforma propia</h2>
+  <div class="cmp">
+    <div class="bad"><h4>❌ Integrar a cada POS</h4><ul><li>Cada comercio usa un sistema distinto (o ninguno).</li><li>Semanas de desarrollo por comercio → no escala a cientos.</li><li>Dependés de su IT, sus tiempos, sus permisos.</li><li>Onboarding lentísimo = la red nunca alcanza densidad.</li></ul></div>
+    <div class="good"><h4>✅ Plataforma propia de validación (el flip)</h4><ul><li>Web/PWA: entran con usuario desde cualquier teléfono/tablet/PC.</li><li>Alta en minutos, sin tocar su sistema de cobro.</li><li>Aplican el descuento a mano (o se integra después si quieren).</li><li><b>Escala a cientos/miles de comercios rápido.</b> Densidad = valor.</li></ul></div>
+  </div>
+
+  <h2>🔳 El QR vivo (rotativo) — por qué y cómo</h2>
+  <p class="sub">Un QR estático en el carnet se saca foto y se manda al grupo → fraude. La solución es estándar en la industria.</p>
+  <div class="grid">
+    <div class="b"><h4>Cómo funciona</h4><p>La app del hincha muestra un QR que codifica un <b class="rob">token firmado de vida corta</b> (HMAC de <code>{socio, tier, timestamp}</code>) que <b class="rob">rota cada 30–60s</b>. El comercio lo escanea; el server valida que esté <b>fresco + firmado + con beneficio vigente</b>.</p></div>
+    <div class="b"><h4>Por qué es seguro</h4><p>Una captura vence en segundos → no se puede reenviar ni reusar. Además el servidor chequea <b class="rob">titularidad y límites</b> (1 canje por día, nivel correcto) y registra cada canje.</p></div>
+    <div class="b"><h4>Anti-suplantación</h4><p>Al validar, el comercio ve <b class="rob">foto + nombre + nivel</b> del hincha (el carnet ya tiene foto). Evita que uses el QR de otro.</p></div>
+    <div class="b"><h4>Sin internet del lado del comercio</h4><p>El token se puede <b class="rob">verificar offline por firma</b> (validez básica), y el registro del canje sincroniza cuando vuelve la señal. Online-first, con red de PY que casi siempre tiene datos.</p></div>
+  </div>
+
+  <h2>🔁 Los 3 patrones de canje (y cuál gana)</h2>
+  <div class="pat win"><span class="who">★ Recomendado</span><h4>A · El hincha muestra QR vivo → el comercio escanea</h4><p>El comercio abre su plataforma (cámara), escanea el QR rotativo del hincha, ve "✓ válido · Plus · Juan P. · 15% off" con foto, y confirma. <span class="ok">Mejor UX + seguro + el comercio solo necesita un celular.</span> Es el modelo Starbucks / pase de embarque.</p></div>
+  <div class="pat"><span class="who">Útil para alta masiva</span><h4>B · El comercio muestra un QR (cartel) → el hincha escanea</h4><p>Cada local tiene un QR impreso en la caja. El hincha lo escanea con la app, que valida y muestra la confirmación. <span class="ok">Cero dispositivo del lado del comercio</span> (solo un cartel), pero <span class="no">más fácil de falsear la pantalla</span> → sirve para arrancar/beneficios chicos, con código de confirmación que el cajero ve.</p></div>
+  <div class="pat"><span class="who">Fallback</span><h4>C · El comercio tipea el N° de socio</h4><p>Si falla la cámara: el hincha dice su número, el cajero lo busca en la plataforma y aplica. <span class="ok">Siempre funciona</span>, más lento. Buen plan B dentro de la misma plataforma.</p></div>
+  <p class="sub" style="margin-top:14px"><b style="color:#fff">El ganador es A + C en una sola plataforma del comercio:</b> escaneo del QR vivo como principal, tipear número como respaldo. B (cartel) para comercios que no quieren ni abrir una app.</p>
+
+  <h2>⚙️ La arquitectura recomendada</h2>
+  <div class="flow">
+    <div class="fstep"><b>Hincha</b> abre el carnet → QR vivo rotativo</div>
+    <div class="farr">→</div>
+    <div class="fstep"><b>Comercio</b> (su PWA) escanea con la cámara</div>
+    <div class="farr">→</div>
+    <div class="fstep"><b>Server</b> valida token + titularidad + límites</div>
+    <div class="farr">→</div>
+    <div class="fstep">Muestra <b>foto+nivel+beneficio</b> → cajero confirma</div>
+    <div class="farr">→</div>
+    <div class="fstep">Canje <b>registrado</b> (dashboard + auditoría)</div>
+  </div>
+  <p class="sub">Sobre rieles que YA existen: el carnet digital con QR y la identidad/foto del socio. Solo hay que volver el QR dinámico y construir la PWA del comercio. Tecnológicamente: <code>BarcodeDetector</code>/jsQR para escanear en el navegador, token HMAC de vida corta, endpoint de validación. Nada de integrar POS.</p>
+
+  <h2>🏪 La plataforma del comercio (qué tiene)</h2>
+  <div class="grid">
+    <div class="b"><h4>👤 Login por comercio + cajeros</h4><p>Dueño del local + usuarios de caja (roles), multi-sucursal. Igual que el panel admin, pero scope al comercio.</p></div>
+    <div class="b"><h4>📷 Validar / escanear</h4><p>Cámara para el QR vivo + opción de tipear N° de socio. Resultado claro: válido/no, nivel, beneficio, foto.</p></div>
+    <div class="b"><h4>📊 Tablero del comercio</h4><p>Canjes de hoy/mes, ticket, qué beneficio se usa más. Base para liquidar/cobrar la red.</p></div>
+    <div class="b"><h4>🎚️ Gestión de su beneficio</h4><p>El comercio define/edita su oferta (15% off, 2x1, regalo), días/horarios, tope. Autoservicio.</p></div>
+  </div>
+
+  <h2>🌍 Benchmark global</h2>
+  <div class="grid">
+    <div class="b"><div class="src">Starbucks</div><h4>Código rotativo escaneado en caja</h4><p>El estándar de "el cliente muestra, la caja escanea" con código dinámico. <b class="rob">Valida tu patrón A + QR vivo.</b></p></div>
+    <div class="b"><div class="src">Too Good To Go</div><h4>App del comercio, sin tocar el POS</h4><p>Consumidor + comercio cada uno con su app; el comercio confirma el canje en la suya. <b class="rob">La prueba de que el flip escala</b> a decenas de miles de comercios.</p></div>
+    <div class="b"><div class="src">Apple Wallet / pase de embarque</div><h4>Token firmado, verificable offline</h4><p>Pases con firma criptográfica que se validan sin conexión. <b class="rob">El modelo para el modo offline</b> del QR.</p></div>
+    <div class="b"><div class="src">WhatsApp Web / login QR</div><h4>QR efímero que rota</h4><p>QR de vida corta para que una captura no sirva. <b class="rob">Exactamente el anti-screenshot</b> que necesitás.</p></div>
+    <div class="b"><div class="src">Club La Nación · ClubPersonal</div><h4>El comercio valida con su app/portal</h4><p>Redes de beneficios masivas en la región: el local valida con una herramienta simple, no integrando sistemas. <b class="rob">El modelo de negocio análogo.</b></p></div>
+    <div class="b"><div class="src">Fivestars / Square (qué NO copiar)</div><h4>Loyalty atada al POS</h4><p>Potentes pero <b class="rob">dependen de integrar el POS</b> → por eso viven en EE.UU. con POS estandarizado. Para PY/escala rápida, ese camino traba.</p></div>
+  </div>
+
+  <h2>🛡️ Stack anti-fraude (capas)</h2>
+  <div class="rev"><div class="em">⏱️</div><div><h4>QR vivo (TTL corto)</h4><p>Una captura vence en segundos. No se reenvía ni se reusa.</p></div></div>
+  <div class="rev"><div class="em">🔏</div><div><h4>Token firmado (HMAC) server-side</h4><p>No se puede falsificar; el server verifica firma + frescura.</p></div></div>
+  <div class="rev"><div class="em">🧾</div><div><h4>Reglas de canje</h4><p>1 por día, por nivel, por comercio; registro de cada canje (auditoría + límites).</p></div></div>
+  <div class="rev"><div class="em">🪪</div><div><h4>Foto + nombre al validar</h4><p>El cajero ve quién es → evita usar el QR ajeno.</p></div></div>
+  <div class="rev"><div class="em">📍</div><div><h4>Geocerca (opcional)</h4><p>El canje debe ocurrir cerca del local. Corta el "validá a distancia".</p></div></div>
+
+  <div class="dict">
+    ⚖️ <b>Dictamen:</b>
+    <ul>
+      <li><b>Confirmado el flip:</b> plataforma de validación propia (web/PWA) con login del comercio. <b>Cero integración con POS</b> — es lo único que escala a cientos de comercios en PY.</li>
+      <li><b>QR vivo (rotativo) + token firmado</b> es la forma correcta y estándar de evitar el fraude por captura. Se monta sobre el carnet+QR que ya existe.</li>
+      <li><b>Patrón A (hincha muestra, comercio escanea) + C (tipear N° de fallback)</b> en una sola PWA del comercio. Dejar B (cartel) para los que no quieren ni abrir una app.</li>
+      <li><b>Foto + nivel + beneficio en pantalla</b> al validar — UX clara y anti-suplantación.</li>
+      <li><b>Diseñar para la realidad de PY:</b> online-first con verificación offline por firma de respaldo; cámara del navegador (sin instalar nada).</li>
+      <li>Es, en esencia, un <b>tercer "panel"</b> hermano del admin: mismo enfoque de auth+roles, pero scope al comercio. Reusa todo lo que ya construimos.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>Análisis para decidir la arquitectura — no orden de trabajo. Encaja con el estudio de la Red de Beneficios: esta plataforma es el <b>"cómo se canjea"</b> que hace que la red funcione en la calle. El primer paso técnico cuando avancemos: volver dinámico el QR del carnet + el endpoint de validación; después la PWA del comercio.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — El Decano, en cada esquina</p>
+  </footer>
+
+</div>
+</body>
+</html>

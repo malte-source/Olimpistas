@@ -66,6 +66,7 @@ const PAISES = {
   ID: { nombre: "Indonesia", lat: -0.79, lng: 113.92 },
   PH: { nombre: "Filipinas", lat: 12.88, lng: 121.77 },
   TH: { nombre: "Tailandia", lat: 15.87, lng: 100.99 },
+  TW: { nombre: "Taiwán", lat: 23.70, lng: 120.96 },
   VN: { nombre: "Vietnam", lat: 14.06, lng: 108.28 },
   AU: { nombre: "Australia", lat: -25.27, lng: 133.78 },
   NZ: { nombre: "Nueva Zelanda", lat: -40.90, lng: 174.89 },

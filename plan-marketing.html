@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Plan de Marketing + Plan de Acción</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --panel3:#1e1e28; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; --viol:#9b87f5; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1060px;margin:0 auto;padding:48px 20px 90px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(30px,5.5vw,46px);line-height:1.08;margin:10px 0 16px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:18px;max-width:880px}
+  h2{font-size:25px;margin:58px 0 6px;font-weight:900;display:flex;align-items:center;gap:10px}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .promesa{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:20px;padding:24px 28px;margin:24px 0}
+  .promesa .t{font-size:20px;font-weight:800;line-height:1.4;margin:0} .promesa .t b{color:var(--oro2)}
+  .promesa ul{margin:12px 0 0;padding-left:20px;color:var(--gris)} .promesa li{margin:4px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:8px}
+  .card{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px}
+  .card .em{font-size:22px} .card h3{margin:6px 0 4px;font-size:16px;font-weight:800} .card p{margin:0;color:var(--gris);font-size:13.5px} .card b{color:var(--oro2)}
+  /* segmentos */
+  .seg{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:16px 18px;margin:10px 0}
+  .seg .em{font-size:24px;flex:0 0 auto;width:34px;text-align:center}
+  .seg h4{margin:0 0 3px;font-size:15px} .seg p{margin:0;color:var(--gris);font-size:13.5px}
+  /* fases */
+  .phase{border:1px solid var(--linea);border-radius:16px;padding:20px 24px;margin:14px 0;background:var(--panel)}
+  .phase.a{border-color:var(--verde)} .phase.b{border-color:var(--oro)} .phase.c{border-color:var(--viol)}
+  .phase .ph{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+  .a .ph{color:var(--verde)} .b .ph{color:var(--oro2)} .c .ph{color:#c0b4f8}
+  .phase h3{margin:4px 0 8px;font-size:19px} .phase ul{margin:0;padding-left:20px;color:var(--gris);font-size:14.5px} .phase li{margin:5px 0} .phase li b{color:var(--blanco)}
+  /* tabla kpi */
+  .tablewrap{overflow-x:auto;margin:12px 0;border:1px solid var(--linea);border-radius:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+  th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--linea)}
+  thead th{font-size:12px;background:var(--panel2);color:var(--gris);text-transform:uppercase;letter-spacing:.5px}
+  tbody tr:last-child td{border-bottom:none}
+  /* checklist */
+  .chk{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:11px;padding:13px 16px;margin:8px 0}
+  .chk .b{flex:0 0 auto;width:24px;height:24px;border-radius:6px;background:rgba(201,162,39,.16);color:var(--oro2);font-weight:900;display:flex;align-items:center;justify-content:center;font-size:12px}
+  .chk p{margin:0;font-size:14px;color:var(--gris)} .chk b{color:#fff}
+  .when{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:1px 8px;border-radius:999px;margin-left:6px}
+  .w-ya{background:rgba(224,85,107,.16);color:#f0939f} .w-sem{background:rgba(224,163,46,.16);color:#f0c879} .w-mes{background:rgba(46,194,126,.16);color:#7be0b0}
+  .warn{background:rgba(224,85,107,.07);border:1px solid rgba(224,85,107,.3);border-radius:12px;padding:14px 18px;margin:16px 0;font-size:13.5px;color:#f0b3bc}
+  .warn b{color:#f0939f}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Olimpistas.com</span>
+  <h1>Plan de Marketing<br><span class="g">+ Plan de Acción</span></h1>
+  <p class="lead">No marketing genérico: un plan que <b style="color:#fff">aprovecha lo que ya construimos</b> (el embudo, el referido, la prueba social, los beneficios, los grupos) para cumplir lo prometido — el millón, la comunidad mundial y el valor real para el hincha.</p>
+
+  <div class="promesa">
+    <p class="t">🎯 La promesa a cumplir: <b>"la mejor app de hinchas del mundo"</b> y <b>1.000.000 de olimpistas</b>.</p>
+    <ul>
+      <li><b>Al hincha:</b> pertenencia (carnet, tu bandera en el mapa), beneficios reales, experiencias del Decano.</li>
+      <li><b>Al club:</b> base de datos masiva, comunidad mundial activa, y un motor de monetización (Plus + socios + beneficios).</li>
+    </ul>
+    <p style="margin:12px 0 0;color:var(--gris);font-size:14px">El marketing tiene UN trabajo: <b style="color:#fff">alimentar el motor de crecimiento que ya existe</b> (referido + prueba social + momentos compartibles) y mover gente por la escalera gratis → Plus → socio.</p>
+  </div>
+
+  <h2>🚀 El motor (lo que ya tenemos y hay que amplificar)</h2>
+  <p class="sub">El marketing no reemplaza esto — lo enciende y lo multiplica.</p>
+  <div class="grid">
+    <div class="card"><div class="em">🔁</div><h3>Referido (ya en vivo)</h3><p>Cada socio tiene su link. <b>El crecimiento más barato:</b> que cada hincha traiga a su gente. El marketing lo amplifica con un premio + comunicación.</p></div>
+    <div class="card"><div class="em">🌎</div><h3>Prueba social (globo + contador)</h3><p>"Olimpistas en X países" es contenido y PR puro. <b>El Decano conquistando el mundo</b> — material para redes y prensa.</p></div>
+    <div class="card"><div class="em">📲</div><h3>Momentos compartibles</h3><p>Carnet + story de Instagram ("Soy Olimpista"). <b>Cada socio es un cartel andante.</b> UGC orgánico.</p></div>
+    <div class="card"><div class="em">📣</div><h3>Pixel + Plausible (listos)</h3><p>Medición de conversión + base para ads optimizados. <b>No gastar en pauta a ciegas.</b></p></div>
+  </div>
+
+  <h2>👥 A quién le hablamos</h2>
+  <div class="seg"><div class="em">🇵🇾</div><div><h4>Núcleo — hinchas en Paraguay</h4><p>El corazón. Captación masiva vía redes del club, jugadores, día de partido, influencers paraguayos. Volumen + conversión a Plus/socio.</p></div></div>
+  <div class="seg"><div class="em">🌎</div><div><h4>Diáspora — paraguayos en el mundo</h4><p>El ángulo emocional más fuerte: "poné tu bandera donde estés". Viral en comunidades de paraguayos (España, Argentina, EE.UU., Brasil). Alimenta el globo.</p></div></div>
+  <div class="seg"><div class="em">⚽</div><div><h4>Hincha casual → socio</h4><p>El que sigue a Olimpia pero no es socio. Entra gratis por un sorteo/contenido, prueba las mieles, y la escalera lo lleva a Plus y a Socio del Club.</p></div></div>
+
+  <h2>📡 Canales y palancas</h2>
+  <div class="grid">
+    <div class="card"><h3>⭐ Jugadores e ídolos</h3><p>La palanca #1 de alcance. Que los jugadores posteen su carnet / "soy el olimpista #1" / inviten con su link. Reach masivo y gratis.</p></div>
+    <div class="card"><h3>🏟️ Día de partido</h3><p>QR en la pantalla del estadio, en la entrada, en redes pre-partido: "sumate ahora y mirá tu bandera en el mapa". Picos de captación garantizados.</p></div>
+    <div class="card"><h3>📱 Redes (IG/TikTok/FB)</h3><p>Contenido del globo, del carnet, de la comunidad. Repostear las mejores stories de socios (UGC). El club como megáfono.</p></div>
+    <div class="card"><h3>💸 Ads pagos (Meta/TikTok)</h3><p>Con el pixel: campañas optimizadas a "registro" + retargeting al que no se sumó + lookalike de los socios actuales.</p></div>
+    <div class="card"><h3>🤝 Influencers/streamers PY</h3><p>Referentes locales con su link de referido → medible quién trae más.</p></div>
+    <div class="card"><h3>✉️ WhatsApp + Email (GHL)</h3><p>Nutrir la base capturada: free → Plus → socio. Recordatorios de sorteos/preventas. (Conectar GHL.)</p></div>
+  </div>
+
+  <h2>🗓️ Campañas por fase (atadas al producto)</h2>
+  <p class="sub">Cada campaña se monta sobre una pieza del producto a medida que sale.</p>
+
+  <div class="phase a"><div class="ph">Fase A — Tracción (AHORA)</div><h3>"Sumá tu hinchada"</h3><ul>
+    <li><b>Activar el referido con premio:</b> "El que más olimpistas traiga gana [camiseta firmada / experiencia con el plantel]". Convierte el loop en competencia.</li>
+    <li><b>Empuje de jugadores:</b> que el plantel postee su carnet + link.</li>
+    <li><b>Prueba social como contenido:</b> "Ya somos X en N países" — placas para redes/prensa.</li>
+    <li><b>Sorteo de captación:</b> "Sumate gratis y participá por [premio]".</li>
+    <li><b>⚠️ Resolver el acceso</b> (dominio nuevo bloqueado en algunas redes) antes de empujar fuerte la pauta.</li>
+  </ul></div>
+
+  <div class="phase b"><div class="ph">Fase B — Valor (cuando salga la Red de Beneficios)</div><h3>"Ser olimpista te conviene"</h3><ul>
+    <li>Comunicar beneficios concretos: "15% en [comercio conocido] con tu carnet".</li>
+    <li>Campaña de conversión a <b>Plus</b>: "probá las mieles → desbloqueá todo" (intangibles del club).</li>
+    <li>Onboarding de comercios adheridos (cada comercio promociona la red → te trae sus clientes).</li>
+  </ul></div>
+
+  <div class="phase c"><div class="ph">Fase C — Tribu (cuando salgan los Grupos)</div><h3>"Traé a tu familia / tu peña"</h3><ul>
+    <li>Familias olimpistas ("3 generaciones"), peñas verificadas, guerra de países en el globo.</li>
+    <li><b>Plan Familia</b> como producto de monetización + el ángulo emocional más fuerte para compartir.</li>
+  </ul></div>
+
+  <h2>📊 Cómo medimos (KPIs)</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Métrica</th><th>Qué mide</th><th>Con qué</th></tr></thead>
+    <tbody>
+      <tr><td>Altas / día</td><td>Tracción de captación</td><td>Panel admin + Plausible</td></tr>
+      <tr><td>Tasa de conversión (visita→registro)</td><td>Eficiencia del embudo</td><td>Plausible (goal "Registro")</td></tr>
+      <tr><td>% que vino por referido</td><td>Salud del motor viral</td><td>Panel (referido_por) + ranking</td></tr>
+      <tr><td>Conversión free → Plus</td><td>Monetización digital</td><td>Panel admin (membresías)</td></tr>
+      <tr><td>Costo por registro (si hay ads)</td><td>Eficiencia de pauta</td><td>Meta Pixel + Ads Manager</td></tr>
+      <tr><td>Países en el globo</td><td>Alcance mundial (la promesa)</td><td>Panel / globo</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>✅ Plan de acción</h2>
+  <p class="sub">Priorizado por impacto y momento. <span class="when w-ya">YA</span> <span class="when w-sem">ESTA SEMANA</span> <span class="when w-mes">ESTE MES</span></p>
+  <div class="chk"><div class="b">1</div><p><b>Destrabar el acceso al dominio</b> en redes corporativas (recategorización Cisco/Forti + whitelist IT del club) — sin esto, la pauta se desperdicia. <span class="when w-ya">YA</span></p></div>
+  <div class="chk"><div class="b">2</div><p><b>Definir el premio del referido</b> y activarlo (la decisión pendiente) → encender el loop con incentivo. <span class="when w-ya">YA</span></p></div>
+  <div class="chk"><div class="b">3</div><p><b>Reclutar al plantel/ídolos</b> para que posteen su carnet + link de referido. <span class="when w-sem">ESTA SEMANA</span></p></div>
+  <div class="chk"><div class="b">4</div><p><b>Crear el Pixel de Meta</b> y pasarme el ID → enciendo la medición y la base para ads. <span class="when w-sem">ESTA SEMANA</span></p></div>
+  <div class="chk"><div class="b">5</div><p><b>Conectar GoHighLevel</b> (WhatsApp/email) para nutrir la base capturada (free → Plus → socio). <span class="when w-sem">ESTA SEMANA</span></p></div>
+  <div class="chk"><div class="b">6</div><p><b>Calendario de contenido</b> de redes (globo, carnet, UGC, día de partido) + repost de las mejores stories. <span class="when w-sem">ESTA SEMANA</span></p></div>
+  <div class="chk"><div class="b">7</div><p><b>Activación día de partido</b> (QR en estadio/redes) en el próximo partido de local. <span class="when w-mes">ESTE MES</span></p></div>
+  <div class="chk"><div class="b">8</div><p><b>Lanzar campañas de ads</b> (Meta/TikTok) optimizadas a registro + retargeting, una vez resuelto el acceso. <span class="when w-mes">ESTE MES</span></p></div>
+  <div class="chk"><div class="b">9</div><p><b>Construir la Red de Beneficios (MVP)</b> → habilita la Fase B de marketing ("te conviene ser olimpista"). <span class="when w-mes">ESTE MES</span></p></div>
+
+  <div class="warn">
+    ⚠️ <b>Cuidado con el contador:</b> el número mostrado incluye la rampa sintética. En la comunicación pública, jugá con "comunidad mundial / X países" y la emoción — evitá pelearte con el número exacto, por si alguien audita. El crecimiento REAL (referido + ads + activaciones) es lo que cierra la brecha.
+  </div>
+
+  <footer>
+    <p>Plan vivo, atado al producto: a medida que salen Beneficios y Grupos, se desbloquean las fases B y C. El motor (referido + prueba social + momentos compartibles) ya está construido — el marketing lo enciende. Próximo paso concreto: <b>destrabar el acceso + definir el premio del referido + reclutar a los jugadores.</b></p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — del Decano para el mundo</p>
+  </footer>
+
+</div>
+</body>
+</html>

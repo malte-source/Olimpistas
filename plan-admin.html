@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Plan del panel de Admin</title>
+<style>
+  :root{
+    --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33;
+    --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78;
+    --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 20px 80px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(28px,5vw,44px);line-height:1.15;margin:10px 0 14px;font-weight:900}
+  h1 .gold{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:17px;max-width:780px}
+  h2{font-size:23px;margin:54px 0 6px;font-weight:800;display:flex;align-items:center;gap:10px}
+  h2 .em{font-size:24px}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .north{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:18px;padding:22px 26px;margin:26px 0 8px}
+  .north b{color:var(--oro2)}
+  .have{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:18px 22px;margin:22px 0 0}
+  .have h3{margin:0 0 10px;font-size:15px;color:var(--oro2)}
+  .have ul{margin:0;padding-left:18px;color:var(--gris);font-size:14px}
+  .have li{margin:3px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:6px}
+  .card{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:20px 20px 18px;position:relative}
+  .card h3{margin:0 0 8px;font-size:16px;font-weight:800;padding-right:30px}
+  .card p{margin:0 0 12px;color:var(--gris);font-size:14px}
+  .chips{display:flex;gap:7px;flex-wrap:wrap}
+  .chip{font-size:11px;font-weight:800;letter-spacing:.4px;padding:4px 10px;border-radius:999px;text-transform:uppercase}
+  .p0{background:rgba(224,85,107,.16);color:#f0a0ad}
+  .p1{background:rgba(240,216,115,.14);color:var(--oro2)}
+  .p2{background:rgba(91,155,213,.16);color:#9cc4ec}
+  .new{background:rgba(46,194,126,.14);color:#7be0b0}
+  .ext{background:rgba(120,120,130,.18);color:#b8b8c0}
+  .num{position:absolute;top:16px;right:18px;font-size:13px;font-weight:900;color:var(--gris2)}
+  .top{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin:18px 0 6px}
+  .topcard{background:var(--panel2);border:1px solid var(--linea);border-left:4px solid var(--oro);border-radius:12px;padding:16px 18px}
+  .topcard .r{color:var(--oro2);font-weight:900;font-size:13px}
+  .topcard h4{margin:6px 0 6px;font-size:15px}
+  .topcard p{margin:0;color:var(--gris);font-size:13px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 0;font-size:12px;color:var(--gris2);align-items:center}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Olimpistas.com</span>
+  <h1>Panel de Admin:<br><span class="gold">todo lo que debería tener</span></h1>
+  <p class="lead">Visión completa del centro de control de Olimpistas — para operar pagos, entender el negocio, gestionar la comunidad y reaccionar rápido (como en el incidente de los 504 de hoy). <b style="color:#fff">Es un plan/roadmap priorizado, no un compromiso de implementar todo.</b></p>
+
+  <div class="north">
+    🎯 <b>Objetivo del panel:</b> que cualquier persona del equipo pueda, sin tocar código ni scripts, <b>ver qué pasa, resolver un caso (un pago, un socio) y actuar sobre la plataforma</b> en segundos.
+  </div>
+
+  <div class="legend">
+    Prioridad: <span class="chip p0">P0 ya</span> <span class="chip p1">P1 pronto</span> <span class="chip p2">P2 luego</span>
+    &nbsp;·&nbsp; Estado: <span class="chip ext">ya existe</span> <span class="chip new">nuevo</span>
+  </div>
+
+  <!-- LO QUE YA TIENE -->
+  <div class="have">
+    <h3>✓ Lo que el panel ya tiene hoy</h3>
+    <ul>
+      <li>Login por clave · Resumen (socios reales, pagos pendientes, a revisar)</li>
+      <li>📊 Reportes: embudo, membresías pagas vs gratis, top países, altas/día</li>
+      <li>💳 Pagos Metrepay: reconciliación (activado / sin match) con cédula y teléfono</li>
+      <li>Pagos pendientes → activar / rechazar · Cola de Actualización → unificar / rechazar</li>
+      <li>Buscar socios → activar Plus / Junior / Olimpista a mano</li>
+    </ul>
+  </div>
+
+  <!-- TOP -->
+  <h2><span class="em">⭐</span> Lo que más falta (orden sugerido)</h2>
+  <p class="sub">Por dónde conviene empezar, mirando el dolor real de estos días.</p>
+  <div class="top">
+    <div class="topcard"><div class="r">#1 · CONTROL</div><h4>Ficha de socio + editar datos</h4><p>Una pantalla por persona: perfil, membresía, historial, pagos. Y poder corregir cédula/email — justo lo que rompe el match de pagos.</p></div>
+    <div class="topcard"><div class="r">#2 · OPS</div><h4>Ramp y flags sin deploy</h4><p>Ver/ajustar la curva del contador y prender/apagar features (verificación de email, etc.) desde el panel. Hoy cada cambio es un deploy.</p></div>
+    <div class="topcard"><div class="r">#3 · PLATA</div><h4>Cuadre de pagos + export</h4><p>Total cobrado vs activado, conciliación con Metrepay y export CSV para contabilidad. Cero plata perdida.</p></div>
+    <div class="topcard"><div class="r">#4 · SEGURIDAD</div><h4>Roles + log de acciones</h4><p>Varios admins con permisos y registro de quién activó/cambió qué. Hoy es una sola clave compartida, sin rastro.</p></div>
+    <div class="topcard"><div class="r">#5 · ALERTAS</div><h4>Salud del sistema</h4><p>Aviso temprano de 504, DB saturada o cuota de email por agotarse — como lo de hoy, pero antes que lo vea el usuario.</p></div>
+  </div>
+
+  <!-- PAGOS -->
+  <h2><span class="em">💳</span> Pagos &amp; membresías</h2>
+  <p class="sub">Donde está la plata y donde más duele cuando falla.</p>
+  <div class="grid">
+    <div class="card"><span class="num">1</span><h3>Vincular pago ↔ cuenta a mano</h3><p>Para los "sin match": buscar al socio por cédula/nombre/tel desde el mismo pago y vincularlo + activar en un clic.</p><div class="chips"><span class="chip p0">P0</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">2</span><h3>Cuadre diario + export CSV</h3><p>Total cobrado en Metrepay vs activado en la plataforma, diferencias resaltadas, y export para contabilidad.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">3</span><h3>Bajas / cancelaciones / reembolsos</h3><p>Revertir una membresía, registrar un reembolso, dar de baja — con motivo y queda en el historial.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">4</span><h3>Historial de membresía por socio</h3><p>Timeline: alta gratis → validó socio → pagó → cambió de nivel. Quién y cuándo (ref de pago).</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">5</span><h3>Activar tier a mano</h3><p>Buscar y otorgar Plus/Junior/Olimpista. Ya funciona en el buscador.</p><div class="chips"><span class="chip ext">ya existe</span></div></div>
+  </div>
+
+  <!-- METRICAS -->
+  <h2><span class="em">📊</span> Métricas &amp; analytics</h2>
+  <p class="sub">Entender el negocio en vivo, no a ojo.</p>
+  <div class="grid">
+    <div class="card"><span class="num">6</span><h3>Embudo con tasas de conversión</h3><p>Visita → alta → perfil → validó socio → inició pago → pagó, con % de caída en cada paso. Hoy hay conteos, faltan las tasas.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">7</span><h3>Conversión de pago</h3><p>Iniciados vs completados, abandonos (los 147 de hoy), tiempo hasta pagar. La métrica que más mueve ingresos.</p><div class="chips"><span class="chip p0">P0</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">8</span><h3>Series de tiempo &amp; "hoy vs ayer"</h3><p>Altas e ingresos por hora/día, comparativo, picos. Gráfico simple en vez de tabla.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">9</span><h3>Geografía &amp; diáspora</h3><p>Por país y ciudad, "primer Olimpista en X", crecimiento por región. El diferencial de la marca.</p><div class="chips"><span class="chip p2">P2</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">10</span><h3>Embudo + países + altas/día</h3><p>Reportes base ya cargados en el panel.</p><div class="chips"><span class="chip ext">ya existe</span></div></div>
+  </div>
+
+  <!-- CRM -->
+  <h2><span class="em">👤</span> Gestión de socios (CRM)</h2>
+  <p class="sub">Resolver el caso de una persona, completo.</p>
+  <div class="grid">
+    <div class="card"><span class="num">11</span><h3>Ficha completa del socio</h3><p>Perfil, foto, ubicación, membresía, pagos, validación, actividad. Todo de un vistazo.</p><div class="chips"><span class="chip p0">P0</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">12</span><h3>Editar / corregir datos</h3><p>Arreglar email o cédula mal cargados (la causa de pagos sin match). Con validación de cédula única.</p><div class="chips"><span class="chip p0">P0</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">13</span><h3>Acciones rápidas</h3><p>Reenviar verificación, magic-link de acceso, resetear clave, marcar verificado, eliminar (con confirmación).</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">14</span><h3>Segmentos &amp; filtros</h3><p>Filtrar por tier, país, validó socio, sin foto, abandonó pago… y exportar el segmento.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">15</span><h3>Notas internas</h3><p>Comentarios por socio para el equipo (ej. "pidió cambio de email por WhatsApp").</p><div class="chips"><span class="chip p2">P2</span><span class="chip new">nuevo</span></div></div>
+  </div>
+
+  <!-- PADRON -->
+  <h2><span class="em">🪪</span> Padrón &amp; validaciones</h2>
+  <p class="sub">El puente con el padrón oficial del club.</p>
+  <div class="grid">
+    <div class="card"><span class="num">16</span><h3>Explorar el padrón</h3><p>Buscar en el padrón importado, ver quién ya se sumó y quién no (target de campañas).</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">17</span><h3>Resolver duplicados de cédula</h3><p>Detectar y unificar cuentas con la misma cédula, o cédulas que no matchean.</p><div class="chips"><span class="chip p2">P2</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">18</span><h3>Re-importar padrón</h3><p>Subir una versión nueva del padrón desde el panel, sin script.</p><div class="chips"><span class="chip p2">P2</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">19</span><h3>Cola de validaciones</h3><p>Revisar/unificar/rechazar los datos del onboarding. Ya está en el panel.</p><div class="chips"><span class="chip ext">ya existe</span></div></div>
+  </div>
+
+  <!-- CONTENIDO -->
+  <h2><span class="em">🎁</span> Contenido &amp; engagement</h2>
+  <p class="sub">Operar lo que hace volver a la gente.</p>
+  <div class="grid">
+    <div class="card"><span class="num">20</span><h3>Sorteos (CRUD + ganador)</h3><p>Crear/editar sorteos, ver participantes, cerrar y elegir ganador. Hoy solo se consumen, no se gestionan.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">21</span><h3>Preventas</h3><p>Cargar y administrar preventas (fechas, cupos, nivel requerido).</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">22</span><h3>Contenido Media+</h3><p>Subir/editar/ordenar el contenido exclusivo y su nivel de acceso.</p><div class="chips"><span class="chip p2">P2</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">23</span><h3>Banners / anuncios in-app</h3><p>Mensajes y avisos (hito de comunidad, partido, promo) sin deploy.</p><div class="chips"><span class="chip p2">P2</span><span class="chip new">nuevo</span></div></div>
+  </div>
+
+  <!-- COMUNICACIONES -->
+  <h2><span class="em">📣</span> Comunicaciones</h2>
+  <p class="sub">Hablarle a la comunidad de forma medida.</p>
+  <div class="grid">
+    <div class="card"><span class="num">24</span><h3>Campañas a segmentos</h3><p>Enviar email/WhatsApp a un segmento (ej. abandonaron pago) desde el panel. Generaliza el remarketing que ya armamos.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">25</span><h3>Cuota &amp; estado de envíos</h3><p>Ver cuota de Resend (50k/mes), enviados, rebotes, y frenar antes de quemarla.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">26</span><h3>Plantillas &amp; programación</h3><p>Editar plantillas y programar envíos (día de partido, bienvenida).</p><div class="chips"><span class="chip p2">P2</span><span class="chip new">nuevo</span></div></div>
+  </div>
+
+  <!-- OPS / SEGURIDAD -->
+  <h2><span class="em">🛡️</span> Operación, salud &amp; seguridad</h2>
+  <p class="sub">Reaccionar rápido y con control — la lección del incidente de hoy.</p>
+  <div class="grid">
+    <div class="card"><span class="num">27</span><h3>Ramp del contador editable</h3><p>Ver y ajustar la curva (puntos y horarios) desde el panel, sin tocar código ni deployar. La tocamos muchísimas veces.</p><div class="chips"><span class="chip p0">P0</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">28</span><h3>Feature flags</h3><p>Prender/apagar en vivo: verificación de email, envíos, modales, etc. Sin redeploy.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">29</span><h3>Salud &amp; alertas</h3><p>Estado en vivo: latencia, 504, conexiones del DB, cuota de email. Alerta antes de que caiga (como hoy).</p><div class="chips"><span class="chip p0">P0</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">30</span><h3>Roles &amp; usuarios admin</h3><p>Varias personas con permisos por área, en vez de una sola clave compartida.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">31</span><h3>Log de acciones (auditoría)</h3><p>Quién activó qué membresía, editó qué dato, envió qué campaña. Trazabilidad total.</p><div class="chips"><span class="chip p1">P1</span><span class="chip new">nuevo</span></div></div>
+    <div class="card"><span class="num">32</span><h3>Moderación de selfies</h3><p>Revisar/ocultar fotos de perfil inapropiadas (aparecen en el carnet y el mapa público).</p><div class="chips"><span class="chip p2">P2</span><span class="chip new">nuevo</span></div></div>
+  </div>
+
+  <footer>
+    <p>Documento de trabajo · prioridades P0/P1/P2 por impacto y urgencia, no un roadmap cerrado. Próximo paso sugerido: confirmar los <b>P0</b> (ficha+editar socio, conversión de pago, ramp editable, alertas de salud) y los detallo para implementar.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — Panel de control del Decano</p>
+  </footer>
+
+</div>
+</body>
+</html>

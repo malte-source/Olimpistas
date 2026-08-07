@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas.com · Dictamen vs. los mejores del mundo</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 20px 80px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(28px,5vw,42px);line-height:1.14;margin:10px 0 14px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:17px;max-width:840px}
+  h2{font-size:23px;margin:54px 0 6px;font-weight:800;display:flex;align-items:center;gap:10px}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .fin{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:18px;padding:22px 26px;margin:24px 0 8px}
+  .fin b{color:var(--oro2)}
+  .grades{display:flex;gap:16px;flex-wrap:wrap;margin:22px 0}
+  .gcard{flex:1;min-width:200px;background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:18px 20px;text-align:center}
+  .gcard .g{font-size:44px;font-weight:900;line-height:1}
+  .gA{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .gC{color:var(--ambar)}
+  .gcard .l{color:var(--gris);font-size:13px;margin-top:6px}
+  .tablewrap{overflow-x:auto;margin-top:10px;border:1px solid var(--linea);border-radius:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}
+  th,td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--linea);vertical-align:top}
+  thead th{color:var(--gris);font-size:11px;text-transform:uppercase;letter-spacing:.6px;background:var(--panel2)}
+  tbody tr:last-child td{border-bottom:none}
+  .dim{font-weight:700} .ref{color:var(--gris2);font-size:12.5px}
+  .score{font-weight:900;white-space:nowrap}
+  .s5{color:var(--verde)} .s4{color:#9ee8c0} .s3{color:var(--ambar)} .s2{color:var(--rojo)}
+  .dict{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 22px;margin:14px 0}
+  .dict h3{margin:0 0 6px;font-size:16px;font-weight:800;color:var(--oro2)}
+  .dict p{margin:0 0 8px;color:var(--gris);font-size:14px}
+  .dict .nos{font-size:13.5px;border-top:1px solid var(--linea);padding-top:8px;margin-top:4px}
+  .nos b{color:var(--blanco)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:8px}
+  .card{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px}
+  .card.r{border-left:4px solid var(--rojo)} .card.y{border-left:4px solid var(--ambar)} .card.g{border-left:4px solid var(--verde)}
+  .card h3{margin:0 0 6px;font-size:15px;font-weight:800} .card p{margin:0;color:var(--gris);font-size:13.5px}
+  .pill{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:999px;margin-bottom:8px}
+  .p1{background:rgba(224,85,107,.16);color:#f0939f} .p2{background:rgba(224,163,46,.16);color:#f0c879} .p3{background:rgba(46,194,126,.16);color:#7be0b0}
+  .win{background:rgba(46,194,126,.08);border:1px solid rgba(46,194,126,.3);border-radius:12px;padding:16px 20px;margin:18px 0;font-size:14px;color:#a7e8c8}
+  .win b{color:#7be0b0} .win ul{margin:8px 0 0;padding-left:20px} .win li{margin:3px 0}
+  footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Olimpistas.com</span>
+  <h1>Dictamen:<br><span class="g">el embudo vs. lo mejor del mundo</span></h1>
+  <p class="lead">Auditamos la app pública contra los referentes de captación y fidelización de hinchas — <b style="color:#fff">Socios.com / fan tokens</b>, apps de <b style="color:#fff">FC Barcelona · Real Madrid · PSG</b>, y los motores de crecimiento de <b style="color:#fff">Duolingo · Strava · Spotify Wrapped</b> y los <b style="color:#fff">loops de referido</b> (Dropbox/Robinhood). Entendiendo el fin, no solo el código.</p>
+
+  <div class="fin">
+    🎯 <b>El fin (para juzgar bien):</b> Olimpistas.com no es una web institucional — es una <b>máquina de captar hinchas a escala mundial</b> y convertirlos: gratis → comunidad (globo + contador) → pago (Junior/Plus) → pertenencia (carnet, bandera en el mapa). La meta declarada es <b>1.000.000 de socios</b>. Entonces el sistema se juzga por una sola pregunta: <b>¿tiene los motores que usan los mejores para CRECER masivo y RETENER?</b>
+  </div>
+
+  <div class="grades">
+    <div class="gcard"><div class="g gA">A−</div><div class="l">Producto · Identidad · Prueba social</div></div>
+    <div class="gcard"><div class="g gC">C+</div><div class="l">Motores de crecimiento y retención</div></div>
+    <div class="gcard"><div class="g" style="color:var(--oro2)">B</div><div class="l">Veredicto global</div></div>
+  </div>
+  <p class="sub">Traducido: <b style="color:#fff">construyeron una base de producto excelente</b> (lo difícil de copiar: identidad y prueba social), pero <b style="color:#fff">faltan los 3 motores</b> que separan "buen lanzamiento" de "llegar al millón y que se queden".</p>
+
+  <h2>📊 Scorecard vs. clase mundial</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Dimensión</th><th>Lo que hacen los mejores</th><th>Olimpistas hoy</th><th>/5</th></tr></thead>
+      <tbody>
+        <tr><td class="dim">Identidad / pertenencia</td><td class="ref">Carnet de socio, peñas, "soy del club"</td><td>Carnet digital + QR + bandera en TU casa + story de IG. <b>Excelente.</b></td><td class="score s5">5</td></tr>
+        <tr><td class="dim">Prueba social / FOMO</td><td class="ref">Contadores, mapas de comunidad</td><td>Contador en vivo + globo 3D + ranking de países + "tu bandera aterrizó". <b>Sobresaliente.</b></td><td class="score s5">4.5</td></tr>
+        <tr><td class="dim">Fricción de alta</td><td class="ref">1-tap, social login, sin tarjeta</td><td>Gratis, sin tarjeta, perfilado progresivo. Falta login social / magic-link.</td><td class="score s4">4</td></tr>
+        <tr><td class="dim">Escalera de valor</td><td class="ref">Tiers claros + perks + scarcity</td><td>3 niveles + gating server-side. Falta urgencia/"socio fundador".</td><td class="score s4">4</td></tr>
+        <tr><td class="dim">🔁 Loop viral / referidos</td><td class="ref">Invitá y ganá (Dropbox, Robinhood)</td><td><b>NO EXISTE.</b> Hay cosas para compartir, pero sin link de referido, sin atribución, sin premio. Crecé "de boca", no por loop.</td><td class="score s2">1.5</td></tr>
+        <tr><td class="dim">📣 Adquisición paga</td><td class="ref">Meta/TikTok Pixel + eventos de conversión</td><td><b>SIN Meta Pixel</b> ni eventos sign_up/purchase. Imposible retargetear u optimizar ads. Solo GA4 si está la env.</td><td class="score s2">1.5</td></tr>
+        <tr><td class="dim">🔔 Retención (volver)</td><td class="ref">Push + reminders + WhatsApp</td><td><b>CERO push</b> (el SW no las maneja), sin WhatsApp saliente, sin reminders. "Te avisamos primero" es promesa sin backend.</td><td class="score s2">1.5</td></tr>
+        <tr><td class="dim">🎮 Gamificación</td><td class="ref">Rachas, puntos, insignias, ranking (Duolingo/Strava)</td><td>Solo el % de perfil (un uso). Sin rachas, puntos, logros ni leaderboard de hinchas.</td><td class="score s2">2</td></tr>
+        <tr><td class="dim">Contenido / experiencia</td><td class="ref">Video real, exclusivos, en vivo</td><td>Sorteos/preventas reales; <b>Media+ es demo</b> (no reproduce). Catálogo plano.</td><td class="score s3">3</td></tr>
+        <tr><td class="dim">i18n / alcance global</td><td class="ref">Multi-idioma + localización</td><td>ES/EN completo. Falta <b>PT</b> (Brasil/región) y emails solo en ES.</td><td class="score s4">4</td></tr>
+        <tr><td class="dim">Performance mobile</td><td class="ref">LCP &lt;2.5s en 3G</td><td>Landing ágil (lazy globe). Área socio baja ~1MB de mapa siempre; fonts bloqueantes; 3MB de assets muertos.</td><td class="score s3">3</td></tr>
+        <tr><td class="dim">Privacidad / confianza</td><td class="ref">Mínimo dato público, opt-in real</td><td><b>Riesgo:</b> el mapa expone nombre+apellido y ubicación EXACTA de casa, público y cacheable → doxing a escala.</td><td class="score s2">2</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="win">
+    ✅ <b>Lo que ya es de PRIMERA (y es lo más difícil de lograr):</b>
+    <ul>
+      <li><b>La capa de identidad y prueba social.</b> El globo 3D, el contador en vivo, el carnet con tu foto y "tu bandera en tu casa" + story de Instagram — esto es exactamente lo que genera pertenencia y FOMO, y está muy bien ejecutado. Muchos clubes no lo tienen.</li>
+      <li><b>Fundamentos sólidos:</b> alta sin fricción, gating de pago server-side, resiliencia (cache + stale-while-revalidate), PWA instalable, i18n ES/EN, seguridad base (helmet/CSP/rate-limit).</li>
+    </ul>
+  </div>
+
+  <h2>⚖️ Dictamen: qué hacen los mejores — y dónde estamos</h2>
+  <p class="sub">El corazón del análisis. Cada motor que usan los líderes mundiales, y nuestra posición.</p>
+
+  <div class="dict"><h3>🔁 Loop de referido (Dropbox · Robinhood · PayPal)</h3><p>Los productos que crecen exponencial no dependen del "compartí si querés": construyen un <b>loop con incentivo y atribución</b>. "Invitá un amigo → los dos ganan algo" (chances extra de sorteo, subir de nivel, acceso anticipado). Robinhood escaló su lista de espera con "saltá la fila invitando".</p><p class="nos"><b>Olimpistas:</b> tiene activos compartibles muy lindos (carnet, story IG) pero el link cae en la home genérica, sin trackear quién trajo a quién ni recompensa. <b>Es la brecha de crecimiento #1.</b></p></div>
+
+  <div class="dict"><h3>🎮 Motor de retención y gamificación (Duolingo · Strava)</h3><p>Duolingo es la referencia mundial de retención: <b>rachas (streaks) + push notifications + ligas/leaderboards</b> que te hacen volver cada día. Strava usa retos, segmentos y kudos. La emoción del hincha es ideal para esto: rachas de actividad, insignias por antigüedad, ranking de "hinchas más fieles", misiones.</p><p class="nos"><b>Olimpistas:</b> no hay nada de esto — ni push, ni rachas, ni puntos, ni ranking. El carnet no "crece" con vos. <b>Hoy la app es un carnet + catálogo, no un producto que te haga volver.</b></p></div>
+
+  <div class="dict"><h3>🪙 Fan engagement y monetización (Socios.com · fan tokens · Barça/Madrid/PSG)</h3><p>Los grandes monetizan la PASIÓN, no solo el acceso: <b>votaciones, predicciones, recompensas, experiencias exclusivas, niveles de fan influence</b>. Las apps de los megaclubes ofrecen contenido personalizado, peñas globales, ticketing y loyalty. El engagement se vuelve ingreso recurrente.</p><p class="nos"><b>Olimpistas:</b> tiene la escalera de pago y el gating bien, pero el "para qué pago" se queda en perks pasivos (preventas/sorteos/Media+ que es demo). Falta la mecánica de <b>participación</b> que hace que valga la pena ser Plus.</p></div>
+
+  <div class="dict"><h3>📣 Adquisición paga instrumentada (cualquier D2C serio)</h3><p>Nadie llega a 1M sin ads pagas, y nadie hace ads sin <b>pixel + eventos de conversión</b> (Meta Pixel + Conversions API, TikTok Pixel). Sin eso no podés retargetear al 98% que no convirtió en la primera visita, ni decirle a Meta "optimizá hacia registros".</p><p class="nos"><b>Olimpistas:</b> sin Meta Pixel ni eventos de conversión. Para fútbol en Paraguay/región, donde el canal natural es Meta/TikTok, esto es <b>plata quemada</b> en cuanto se invierta en ads.</p></div>
+
+  <div class="dict"><h3>📲 Momentos compartibles diseñados (Spotify Wrapped)</h3><p>Wrapped convirtió "tus datos" en un fenómeno viral anual: un momento personalizado, hermoso y armado para compartir. Es adquisición orgánica de marca pura.</p><p class="nos"><b>Olimpistas:</b> ya tiene la materia prima (carnet + story IG + "soy el olimpista de [ciudad]"). Falta convertirlo en un <b>momento con gancho viral</b> ("sos el olimpista #1.234 de México", reposteo de las mejores) y cerrarlo con el loop de referido.</p></div>
+
+  <h2>🚀 Recomendación priorizada</h2>
+  <p class="sub">Qué movería de verdad la aguja hacia el millón, en orden.</p>
+  <div class="grid">
+    <div class="card r"><span class="pill p1">Motor de crecimiento</span><h3>1. Loop de referido con atribución</h3><p>Link único por socio (<code>?ref=</code>), guardar quién invitó, y premio a ambos (chances extra de sorteo / insignia / acceso). Convierte el carnet/story —que ya existen— en crecimiento medible.</p></div>
+    <div class="card r"><span class="pill p1">Adquisición</span><h3>2. Meta Pixel + eventos de conversión</h3><p>Instalar pixel (Meta/TikTok) y disparar <code>sign_up</code> y <code>purchase</code>. Sin esto no se puede escalar con ads. Es lo primero antes de invertir un guaraní en pauta.</p></div>
+    <div class="card r"><span class="pill p1">Retención</span><h3>3. Push + reminders (cumplir "te avisamos")</h3><p>Activar push en el SW + recordatorios de sorteos/preventas (y WhatsApp vía GHL, que ya está casi). Es lo que trae a la gente de vuelta.</p></div>
+    <div class="card y"><span class="pill p2">Privacidad — antes del pico</span><h3>4. Proteger el mapa</h3><p>Mostrar solo nombre de pila, difuminar la coordenada (~200m), y consentimiento más explícito. Hoy expone domicilio + nombre real público: riesgo de doxing a escala 1M.</p></div>
+    <div class="card y"><span class="pill p2">Engagement</span><h3>5. Gamificación liviana</h3><p>Rachas, insignias por antigüedad, "ranking de hinchas", misiones. Hace que el carnet crezca y que ser Plus participe, no solo acceda.</p></div>
+    <div class="card y"><span class="pill p2">Performance</span><h3>6. Aligerar mobile</h3><p>Diferir MapLibre en el área socio, borrar 3MB de assets muertos, self-host de fonts. Mejora el LCP en el tráfico móvil que llega de redes.</p></div>
+    <div class="card g"><span class="pill p3">Alcance</span><h3>7. Portugués + emails multi-idioma</h3><p>PT abre Brasil y la región. Hoy ES/EN y emails solo en ES.</p></div>
+    <div class="card g"><span class="pill p3">Confianza</span><h3>8. El contador</h3><p>El número es una rampa sintética hacia 1M. Funciona como FOMO, pero conviene una postura clara por si se audita públicamente.</p></div>
+  </div>
+
+  <footer>
+    <p><b>Resumen del dictamen:</b> Olimpistas ganó la parte difícil — <b>identidad, pertenencia y prueba social de nivel mundial</b>. Pero para llegar al millón y retener, le faltan los <b>3 motores</b> que usan todos los líderes: <b>loop de referido</b>, <b>pixel/eventos para ads</b>, y <b>push/gamificación para volver</b>. No son arreglos cosméticos: son lo que separa un gran lanzamiento de un fenómeno sostenido. La base ya está; faltan los motores.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — El Decano, en todo el mundo</p>
+  </footer>
+
+</div>
+</body>
+</html>

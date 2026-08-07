@@ -9,17 +9,22 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
     "dotenv": "16.4.5",
-    "express": "4.19.2",
+    "express": "^4.22.2",
+    "express-rate-limit": "^8.5.2",
     "fast-geoip": "^1.1.88",
+    "helmet": "^8.2.0",
+    "pino": "^10.3.1",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "sharp": "^0.35.1"
+    "sharp": "^0.35.1",
+    "xlsx": "^0.18.5"
   }
 }

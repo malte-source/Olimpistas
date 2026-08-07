@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · De red socio-only a plataforma de lealtad — plan</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; --viol:#9b87f5; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1060px;margin:0 auto;padding:48px 20px 90px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(29px,5.2vw,44px);line-height:1.12;margin:10px 0 16px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:18px;max-width:880px}
+  h2{font-size:24px;margin:58px 0 8px;font-weight:900}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .start{background:var(--panel);border:1px solid var(--linea);border-left:4px solid var(--azul);border-radius:14px;padding:20px 24px;margin:22px 0}
+  .start b{color:#9cc4ec}
+  .key{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:20px;padding:24px 28px;margin:24px 0}
+  .key .big{font-size:21px;font-weight:800;line-height:1.42;margin:0} .key .big b{color:var(--oro2)}
+  .key p{color:var(--gris);margin:12px 0 0;font-size:15px}
+  .tension{background:rgba(224,85,107,.07);border:1px solid rgba(224,85,107,.3);border-radius:16px;padding:20px 24px;margin:20px 0}
+  .tension b{color:#f0939f} .tension .fix{color:var(--verde);font-weight:700}
+  /* flywheel */
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:14px 0}
+  .fstep{background:var(--panel2);border:1px solid var(--linea);border-radius:11px;padding:11px 14px;font-size:13px;flex:1;min-width:140px}
+  .fstep b{color:var(--oro2)} .farr{color:var(--oro);font-size:18px;font-weight:900}
+  /* jugadas */
+  .play{display:flex;gap:16px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:20px 22px;margin:12px 0}
+  .play .num{flex:0 0 auto;width:34px;height:34px;border-radius:10px;background:linear-gradient(120deg,var(--oro2),var(--oro));color:#1a1500;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .play h3{margin:0 0 5px;font-size:17px} .play p{margin:0;color:var(--gris);font-size:14px} .play b{color:var(--oro2)}
+  /* tiers mini */
+  .tablewrap{overflow-x:auto;margin:14px 0;border:1px solid var(--linea);border-radius:14px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:600px}
+  th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--linea)}
+  thead th{font-size:12px;background:var(--panel2)} thead th.e{color:var(--viol)} thead th.h{color:var(--oro2)}
+  tbody tr:last-child td{border-bottom:none}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:8px}
+  .b{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px}
+  .b .src{color:var(--oro2);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .b h4{margin:3px 0 0;font-size:15px;font-weight:800} .b p{margin:7px 0 0;color:var(--gris);font-size:13.5px}
+  .b .rob{color:var(--blanco);font-weight:600}
+  .rev{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:15px 18px;margin:10px 0}
+  .rev .em{font-size:20px;flex:0 0 auto;width:26px;text-align:center}
+  .rev h4{margin:0 0 2px;font-size:14.5px} .rev p{margin:0;color:var(--gris);font-size:13.5px}
+  .phase{border:1px solid var(--linea);border-radius:14px;padding:18px 22px;margin:12px 0;background:var(--panel)}
+  .phase.now{border-color:var(--verde)} .phase.next{border-color:var(--oro)} .phase.vision{border-color:var(--viol)}
+  .phase .ph{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+  .now .ph{color:var(--verde)} .next .ph{color:var(--oro2)} .vision .ph{color:#c0b4f8}
+  .phase h3{margin:4px 0 8px;font-size:18px} .phase ul{margin:0;padding-left:20px;color:var(--gris);font-size:14px} .phase li{margin:5px 0} .phase li b{color:var(--blanco)}
+  .dict{background:rgba(155,135,245,.08);border:1px solid rgba(155,135,245,.35);border-radius:18px;padding:24px 28px;margin:24px 0;font-size:15px;color:#d8cffb}
+  .dict b{color:#c0b4f8} .dict ul{margin:10px 0 0;padding-left:20px} .dict li{margin:6px 0}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Red de Beneficios</span>
+  <h1>De red "solo socios"<br><span class="g">a la plataforma de lealtad del Decano</span></h1>
+  <p class="lead">Ya tenés lo más difícil de construir: <b style="color:#fff">una red de comercios funcionando</b>. Hoy está encerrada para socios. El plan: usar la escala masiva de Olimpistas para multiplicarla — sin diluir lo que hace especial ser socio. Al contrario: haciéndolo más valioso.</p>
+
+  <div class="start">
+    📍 <b>Punto de partida (el activo que ya existe):</b> una red de beneficios <b>exclusiva para socios del club</b>, con comercios de terceros que dan principalmente <b>% de descuento</b>. Es un activo valioso — pero <b>subutilizado</b>: su valor está limitado por el tamaño de la audiencia.
+  </div>
+
+  <div class="key">
+    <p class="big">La red es chica <b>no porque falten comercios — sino porque la audiencia es finita.</b> Un comercio le da descuento a "los socios" (un grupo acotado). Si esa audiencia pasa a ser <b>los millones de hinchas de Olimpia</b>, la red se vuelve irresistible para los comercios: más demanda → más comercios quieren entrar → red más densa → más valor para todos.</p>
+    <p><b style="color:#fff">La escala misma se vuelve el activo.</b> Y acá está lo clave: eso no diluye al socio — lo convierte en el <b style="color:#fff">rey de un reino mucho más grande</b>.</p>
+  </div>
+
+  <div class="tension">
+    ⚠️ <b>La tensión a resolver:</b> "si le doy los beneficios a todos, ¿para qué ser socio?". <span class="fix">La respuesta: no se abre el mismo beneficio a todos — se escalona.</span> La masa accede a una versión liviana (gancho); el socio conserva y profundiza la mejor (exclusividad). El socio pasa de "acceso exclusivo a una red chica" a "el mejor nivel de la red de lealtad más grande del país". Eso es un <b style="color:var(--verde)">upgrade</b> para el socio, no una pérdida.
+  </div>
+
+  <h2>🎚️ Cómo se escalona (sin romper la exclusividad)</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>En un comercio</th><th>Olimpista (masa)</th><th class="h">Plus</th><th class="e">★ Socio del Club</th></tr></thead>
+      <tbody>
+        <tr><td>Descuento</td><td>10%</td><td class="h">15%</td><td class="e">20% + exclusivos</td></tr>
+        <tr><td>Cashback</td><td>2%</td><td class="h">4%</td><td class="e">6%</td></tr>
+        <tr><td>Drops / experiencias</td><td>—</td><td>algunos</td><td class="e">prioridad + únicos</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">El comercio define una oferta por nivel (lo controla él). El socio siempre tiene el mejor trato. La masa tiene suficiente para engancharse y querer subir.</p>
+
+  <h2>⚙️ El flywheel que se enciende</h2>
+  <div class="flow">
+    <div class="fstep"><b>Masa de Olimpistas</b> (millones) entra a la red</div>
+    <div class="farr">→</div>
+    <div class="fstep">Audiencia enorme = <b>los comercios quieren entrar</b></div>
+    <div class="farr">→</div>
+    <div class="fstep">Red más <b>densa</b> (beneficio en cada esquina)</div>
+    <div class="farr">→</div>
+    <div class="fstep">Más valor → <b>más hinchas se suman y suben de nivel</b></div>
+    <div class="farr">↺</div>
+  </div>
+
+  <h2>🎯 El plan: 5 jugadas potentes</h2>
+  <div class="play"><div class="num">1</div><div><h3>Abrir la red a la masa, escalonada</h3><p>De "solo socios" a <b>toda la hinchada</b>, con beneficios por nivel (tabla de arriba). El socio queda en la cima. La masa entra por la base — y se vuelve el imán que atrae comercios.</p></div></div>
+  <div class="play"><div class="num">2</div><div><h3>Convertir el descuento en un motor medible</h3><p>Sumar al % de descuento el <b>cashback ("Estrellas del Decano")</b> + la <b>declaración de compra</b> (con el hincha confirmando) → datos, comisión sobre venta, y el <b>dashboard de ROI</b> que le prueba al comercio cuánto le trajo Olimpistas. De "favor al club" a "canal de ventas que rinde".</p></div></div>
+  <div class="play"><div class="num">3</div><div><h3>Encender la máquina de captar comercios</h3><p>Con la audiencia masiva como argumento + la plataforma de autoservicio (alta en minutos, sin integrar POS), <b>reclutar comercios a escala</b>. Apuntar a densidad en uso diario: gastronomía, combustible, farmacia, retail. La red pasa de decenas a cientos.</p></div></div>
+  <div class="play"><div class="num">4</div><div><h3>Usar la red como carnada de conversión a socio</h3><p>La masa prueba el valor real (descuentos diarios) → quiere más → sube a Plus → aspira a Socio del Club (el mejor trato). <b>La red de beneficios se vuelve el embudo que llena el club de socios</b> — que es el objetivo supremo.</p></div></div>
+  <div class="play"><div class="num">5</div><div><h3>Reposicionar: de "perk" a línea de negocio</h3><p>Dejar de pensarla como "un beneficio para socios" y pasar a "<b>la plataforma de lealtad de El Decano</b>": ingreso recurrente de comercios, sponsors, co-branded. Un activo estratégico del club, no un accesorio.</p></div></div>
+
+  <h2>🌍 Benchmark: escalar sin diluir lo premium</h2>
+  <div class="grid">
+    <div class="b"><div class="src">Aerolíneas (status)</div><h4>La masa que vuela hace valioso el programa; los élite mantienen el privilegio</h4><p>Millones de pasajeros base + Gold/Platinum con lounges y upgrades. <b class="rob">Coexisten:</b> la escala da poder de negociación, la profundidad preserva la exclusividad.</p></div>
+    <div class="b"><div class="src">Costco</div><h4>El volumen de socios = poder ante proveedores</h4><p>Cuantos más socios, mejores precios consigue. <b class="rob">La escala es la palanca</b> para que los comercios den mejores condiciones.</p></div>
+    <div class="b"><div class="src">Spotify Free → Premium</div><h4>El gratis no mata al premium</h4><p>El tier gratis es el embudo; el premium claramente mejor es la plata. <b class="rob">Abrir la base no canibaliza la cima</b> si la cima es netamente superior.</p></div>
+    <div class="b"><div class="src">Tarjetas (Classic→Black)</div><h4>Misma red, profundidad escalonada</h4><p>Todos acceden a la red; el nivel define cuánto te da. <b class="rob">La exclusividad vive en la profundidad,</b> no en el portón cerrado.</p></div>
+    <div class="b"><div class="src">Club La Nación</div><h4>Marca querida → red de beneficios masiva y rentable</h4><p>Audiencia amplia monetizada vía comercios + suscripción. <b class="rob">El modelo de negocio análogo</b> que ya probó funcionar en la región.</p></div>
+    <div class="b"><div class="src">Amazon Prime</div><h4>Todos compran; Prime gana más</h4><p>La base gratis alimenta Prime. <b class="rob">El free tier es el funnel,</b> el pago es el margen.</p></div>
+  </div>
+
+  <h2>🔄 Transición sin romper nada</h2>
+  <div class="rev"><div class="em">🛡️</div><div><h4>Blindá al socio actual</h4><p>El socio existente queda automáticamente en la cima, con MÁS valor (cashback + más comercios). Se comunica como upgrade: "tu beneficio ahora es más grande", nunca como pérdida.</p></div></div>
+  <div class="rev"><div class="em">🏪</div><div><h4>Cuidá al comercio actual</h4><p>Los comercios ya adheridos eligen su oferta por nivel; ganan MÁS volumen (toda la hinchada, no solo socios). Se les vende como "ahora te llega muchísima más gente".</p></div></div>
+  <div class="rev"><div class="em">📣</div><div><h4>Claridad total (anti-fricción)</h4><p>Una sola matriz "qué incluye cada nivel", igual en landing, app, carnet y pantalla del comercio. El socio entiende su privilegio, la masa entiende a qué aspira.</p></div></div>
+
+  <h2>💰 Lo que esto monetiza</h2>
+  <div class="rev"><div class="em">🏪</div><div><h4>Comercios (cuota + comisión sobre venta)</h4><p>Más audiencia = más comercios pagando por estar + comisión sobre las ventas declaradas-y-confirmadas.</p></div></div>
+  <div class="rev"><div class="em">⬆️</div><div><h4>Más socios y más Plus</h4><p>La red empuja a la masa hacia los niveles pagos y hacia la membresía del club — la conversión que más vale.</p></div></div>
+  <div class="rev"><div class="em">🤝</div><div><h4>Sponsors y co-branded</h4><p>Una red masiva e identificada es vendible a marcas grandes: patrocinio de la red, tarjeta co-branded, combustible, telco.</p></div></div>
+
+  <h2>🗺️ Fases</h2>
+  <div class="phase now"><div class="ph">Fase 1 — Cimientos</div><h3>Digitalizar y escalonar lo que ya hay</h3><ul><li><b>Migrar la red socio-only</b> al carnet digital + QR vivo (validación que ya diseñamos).</li><li><b>Escalonar las ofertas</b> por nivel (socio = mejor). Blindar al socio actual.</li><li><b>Abrir el acceso base</b> a toda la hinchada (la masa entra).</li></ul></div>
+  <div class="phase next"><div class="ph">Fase 2 — Motor</div><h3>Crecer comercios + medir</h3><ul><li><b>Reclutar comercios a escala</b> con la audiencia como argumento + autoservicio.</li><li><b>Cashback + declaración de compra</b> + dashboard de ROI al comercio.</li><li><b>Densidad en uso diario</b> (gastronomía, combustible, farmacia, retail).</li></ul></div>
+  <div class="phase vision"><div class="ph">Fase 3 — Plataforma</div><h3>La lealtad del Decano como negocio</h3><ul><li><b>Comisión sobre venta</b> + sponsors + co-branded.</li><li><b>Compone con grupos</b>: beneficios familiares, de peña, de zona.</li><li><b>Horizonte:</b> ser también el medio de pago (el monto perfecto + economía del pago).</li></ul></div>
+
+  <div class="dict">
+    ⚖️ <b>Dictamen:</b>
+    <ul>
+      <li><b>Tenés un activo raro y valioso ya construido</b> (red de comercios real). El problema no es crearlo — es <b>liberarle el techo de audiencia</b>.</li>
+      <li><b>Abrila a la masa, escalonada.</b> La escala vuelve la red irresistible para los comercios y se convierte en el embudo que llena el club de socios.</li>
+      <li><b>El socio no se diluye — se corona.</b> Pasa a ser el mejor nivel de la red más grande del país. Comunicalo como upgrade.</li>
+      <li><b>Evolucioná el % de descuento</b> a un motor medible: cashback + declaración de compra + ROI. Eso retiene comercios y genera ingreso nuevo.</li>
+      <li><b>Reposicionala</b>: de perk de socios a la plataforma de lealtad de El Decano — una línea de negocio del club.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>Plan estratégico sobre el activo que ya existe. Se conecta con todo lo anterior: la validación (cómo se canjea), el motor transaccional (cashback/compra), la claridad de niveles (sin fricción) y los grupos (beneficios de familia/peña). Cuando quieras, lo aterrizamos a pantallas y modelo de datos.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — los beneficios del Decano, para todo su pueblo</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Probar las mieles — el arte del freemium y el foso de Plus</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; --viol:#9b87f5; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 20px 90px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(29px,5.2vw,44px);line-height:1.12;margin:10px 0 16px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:18px;max-width:870px}
+  h2{font-size:24px;margin:56px 0 8px;font-weight:900}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+  .ka{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:18px;padding:22px 24px}
+  .ka h3{margin:0 0 8px;font-size:17px;color:var(--oro2)} .ka p{margin:0;color:var(--gris);font-size:14.5px} .ka b{color:#fff}
+  @media(max-width:720px){.two{grid-template-columns:1fr}}
+  .note{background:rgba(91,155,213,.08);border:1px solid rgba(91,155,213,.3);border-radius:12px;padding:14px 18px;margin:18px 0;font-size:14px;color:#bcd6f0}
+  .note b{color:#9cc4ec}
+  /* tease mechanics */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:8px}
+  .b{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px}
+  .b h4{margin:0 0 5px;font-size:15px;font-weight:800} .b .em{font-size:22px} .b p{margin:6px 0 0;color:var(--gris);font-size:13.5px}
+  .b .src{color:var(--oro2);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .b .rob{color:var(--blanco);font-weight:600}
+  /* moat */
+  .moat{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:16px 18px;margin:10px 0;border-left:4px solid var(--viol)}
+  .moat .em{font-size:22px;flex:0 0 auto;width:30px;text-align:center}
+  .moat h4{margin:0 0 3px;font-size:15px} .moat p{margin:0;color:var(--gris);font-size:13.5px} .moat b{color:#c0b4f8}
+  /* matriz */
+  .tablewrap{overflow-x:auto;margin:14px 0;border:1px solid var(--linea);border-radius:14px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+  th,td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--linea);vertical-align:top}
+  thead th{font-size:12px;background:var(--panel2)} thead th.h{color:var(--oro2)} thead th.e{color:var(--viol)}
+  tbody tr:last-child td{border-bottom:none}
+  .chk{color:var(--verde);font-weight:800} .x{color:var(--gris2)} .feat{font-weight:600}
+  .taste{color:var(--ambar);font-weight:700}
+  .dict{background:rgba(155,135,245,.08);border:1px solid rgba(155,135,245,.35);border-radius:18px;padding:24px 28px;margin:26px 0;font-size:15px;color:#d8cffb}
+  .dict b{color:#c0b4f8} .dict ul{margin:10px 0 0;padding-left:20px} .dict li{margin:6px 0}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Estrategia de conversión</span>
+  <h1>Probar las mieles:<br><span class="g">el free seduce, Plus siempre gana</span></h1>
+  <p class="lead">El Olimpista gratis no recibe "beneficios" — recibe una <b style="color:#fff">probada diseñada para generar deseo</b>. Y Plus no gana por dar mejores descuentos: gana por los <b style="color:#fff">intangibles del club</b> que nadie más puede ofrecer. Ese es el foso.</p>
+
+  <div class="two">
+    <div class="ka"><h3>🍯 Principio 1 — Tentar, no saciar</h3><p>El error freemium clásico es dar demasiado gratis → nadie paga. El arte es <b>la probada</b>: beneficios puntuales, rotativos, que muestran lo bueno que es Plus sin saciar. Como el sample del súper o el fin de semana de prueba. El free <b>abre la puerta y deja ver adentro</b> — no te deja quedarte.</p></div>
+    <div class="ka"><h3>🏟️ Principio 2 — El foso son los intangibles</h3><p>Los descuentos son <b>commodity</b> (cualquier programa los tiene, el % lo pone el comercio). Lo que SOLO Olimpia puede dar — <b>experiencias, estatus, pertenencia, acceso</b> — no se copia ni se gana por guerra de precios. Plus compite donde nadie más puede.</p></div>
+  </div>
+
+  <div class="note">
+    💡 <b>Cashback: afuera por ahora.</b> Buena decisión — simplifica el mensaje (menos para explicar = menos fricción), evita el terreno regulatorio/financiero, y enfoca el valor de Plus en lo que de verdad importa: <b>las mieles y los intangibles</b>. Queda como carta para más adelante si hace falta.
+  </div>
+
+  <h2>🍯 Cómo se da "la probada" al Olimpista gratis</h2>
+  <p class="sub">Suficiente para querer más. Nunca suficiente para no necesitar Plus.</p>
+  <div class="grid">
+    <div class="b"><div class="em">🎁</div><h4>Beneficio del mes (rotativo)</h4><p>Un beneficio bueno, gratis para todos, que cambia cada mes. "Esto es lo que se siente ser parte" — y con Plus lo tenés <b class="rob">todo el tiempo y mejor</b>.</p></div>
+    <div class="b"><div class="em">🔓</div><h4>La primera probada</h4><p>Un beneficio Plus desbloqueado una sola vez al registrarte. Probás la miel — después está bajo llave.</p></div>
+    <div class="b"><div class="em">👀</div><h4>La vidriera (mostrar lo que te perdés)</h4><p>El free VE los beneficios Plus, marcados como "Plus". El deseo nace de ver lo que casi tenés. (El truco de LinkedIn/Tinder.)</p></div>
+    <div class="b"><div class="em">🎟️</div><h4>Gustito ocasional</h4><p>Un sorteo abierto a todos de vez en cuando, una preventa con cupo mínimo para free. El sabor de las experiencias — la versión completa es Plus.</p></div>
+  </div>
+
+  <h2>🏟️ El foso de Plus: lo que el dinero no compra fácil</h2>
+  <p class="sub">Acá Plus es imbatible — porque son cosas que solo El Decano tiene. Y el Socio del Club, el nivel máximo de esto.</p>
+  <div class="moat"><div class="em">🤝</div><div><h4>Experiencias del club</h4><p>Conocer jugadores, visita al vestuario/entrenamiento, viajar con el equipo, estar en la cancha. <b>"Money-can't-buy"</b> — el activo más poderoso y el menos copiable.</p></div></div>
+  <div class="moat"><div class="em">🎖️</div><div><h4>Estatus y reconocimiento</h4><p>Tu nivel visible, prioridad en todo, "sos del Decano de verdad". <b>El reconocimiento pesa más que el descuento</b> (lo sabe cualquier programa de status).</p></div></div>
+  <div class="moat"><div class="em">❤️</div><div><h4>Pertenencia e identidad</h4><p>Ser parte de adentro, no mirar de afuera. El hincha paga por <b>pertenecer</b>, no por ahorrar 5%. Es emocional, no transaccional.</p></div></div>
+  <div class="moat"><div class="em">🔑</div><div><h4>Acceso y exclusividad</h4><p>Preventas reales, contenido exclusivo, drops solo-Plus, lo primero y lo mejor. <b>La puerta que para el free está cerrada.</b></p></div></div>
+
+  <h2>🪜 La escalera, actualizada (sin cashback)</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Qué te llevás</th><th>Olimpista<br><span class="x" style="font-weight:400">Gratis</span></th><th class="h">Plus<br><span style="font-weight:400">Suscripción</span></th><th class="e">★ Socio del Club</th></tr></thead>
+      <tbody>
+        <tr><td class="feat">Carnet, comunidad, tu bandera</td><td class="chk">✓</td><td class="chk">✓</td><td class="chk">✓</td></tr>
+        <tr><td class="feat">Beneficios en comercios</td><td class="taste">Una probada (puntual/rotativo)</td><td class="h" style="font-weight:700">Acceso completo, los mejores %</td><td class="e" style="font-weight:700">Elite + exclusivos</td></tr>
+        <tr><td class="feat">Contenido / sorteos / preventas</td><td class="taste">Gustito ocasional</td><td class="chk">✓ completo</td><td class="chk">✓</td></tr>
+        <tr><td class="feat">Experiencias del club (intangibles)</td><td class="x">— (las ves)</td><td class="chk">✓ acceso</td><td class="e" style="font-weight:700">prioridad + únicas</td></tr>
+        <tr><td class="feat">Estatus y reconocimiento</td><td class="x">—</td><td>nivel Plus</td><td class="e" style="font-weight:700">máximo (socio real)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">El free entiende en 5 segundos: "tengo una probada, lo bueno es Plus, lo máximo es ser Socio". Cada peldaño se siente claramente mejor — y la cima, de otra liga.</p>
+
+  <h2>🌍 Benchmark</h2>
+  <div class="grid">
+    <div class="b"><div class="src">LinkedIn / Tinder</div><h4>Te muestran lo que te perdés</h4><p>Ves quién te vio (borroso) / te quedaste sin likes. <b class="rob">El deseo nace de ver la puerta cerrada.</b> Es el motor de "la vidriera".</p></div>
+    <div class="b"><div class="src">Spotify / Duolingo</div><h4>El free molesta lo justo</h4><p>Shuffle only, se acaban las vidas. <b class="rob">Suficiente para usar, incómodo para quedarte.</b> Tentar, no saciar.</p></div>
+    <div class="b"><div class="src">Mastercard "Priceless" / Amex</div><h4>Experiencias, no descuentos</h4><p>Venden lo que el dinero no compra (acceso, momentos). <b class="rob">El premium emocional</b> que define el foso de Plus.</p></div>
+    <div class="b"><div class="src">Status aéreo / Barça socis</div><h4>El reconocimiento &gt; el ahorro</h4><p>La gente persigue el estatus y la pertenencia, no el cupón. <b class="rob">Lo intangible es lo que fideliza de verdad.</b></p></div>
+    <div class="b"><div class="src">Costco / Amazon (sampling)</div><h4>La probada que engancha</h4><p>El sample y el mes gratis convierten porque mostraron el valor real. <b class="rob">Probar la miel funciona.</b></p></div>
+    <div class="b"><div class="src">Apple / lujo</div><h4>Simplicidad = deseo</h4><p>Menos opciones, mensaje limpio (sin cashback que explicar). <b class="rob">La claridad también seduce.</b></p></div>
+  </div>
+
+  <div class="dict">
+    ⚖️ <b>Dictamen:</b>
+    <ul>
+      <li><b>El free es marketing, no producto:</b> su trabajo es generar deseo de Plus, no satisfacer. Beneficios puntuales/rotativos + "la vidriera" de lo que se pierde.</li>
+      <li><b>El foso de Plus son los intangibles del club</b> (experiencias, estatus, pertenencia, acceso), no los % de descuento. Ahí Olimpia es imbatible y nadie puede competir por precio.</li>
+      <li><b>Plus siempre gana, en todo eje</b> — más y mejores beneficios, y además lo que el free ni toca. El salto se siente.</li>
+      <li><b>Sin cashback por ahora:</b> simplifica el mensaje, evita lo regulatorio, y enfoca el valor donde importa. Carta guardada para después.</li>
+      <li><b>El Socio del Club es la cima de los intangibles</b> — las experiencias únicas y el reconocimiento máximo. No "Plus premium": otra liga.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>Afina la estrategia de la Red de Beneficios y la escalera de valor: el free prueba, Plus seduce con intangibles, el Socio reina. Conecta con la claridad de niveles (una escalera simple) y la red abierta-escalonada. Cuando avancemos, esto define qué beneficios marcar como "probada" vs "Plus" vs "Socio".</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — probás la gloria, después la querés toda</p>
+  </footer>
+
+</div>
+</body>
+</html>

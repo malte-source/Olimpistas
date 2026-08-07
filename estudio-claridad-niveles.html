@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Claridad de niveles y anti-fricción — estudio a fondo</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; --viol:#9b87f5; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1060px;margin:0 auto;padding:48px 20px 90px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(29px,5.2vw,44px);line-height:1.12;margin:10px 0 16px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:18px;max-width:880px}
+  h2{font-size:24px;margin:58px 0 8px;font-weight:900}
+  h3.s{font-size:18px;margin:30px 0 6px;color:var(--oro2);font-weight:800}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .key{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:20px;padding:24px 28px;margin:24px 0}
+  .key .big{font-size:21px;font-weight:800;line-height:1.4;margin:0} .key .big b{color:var(--oro2)}
+  .key p{color:var(--gris);margin:12px 0 0;font-size:15px}
+  /* fricción audiences */
+  .aud{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:8px}
+  .ac{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px;border-top:3px solid var(--rojo)}
+  .ac h4{margin:0 0 6px;font-size:15px} .ac .em{font-size:22px}
+  .ac p{margin:6px 0 0;color:var(--gris);font-size:13.5px}
+  @media(max-width:760px){.aud{grid-template-columns:1fr}}
+  /* friction list */
+  .fr{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:15px 18px;margin:10px 0}
+  .fr .n{flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:rgba(224,85,107,.16);color:#f0939f;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:13px}
+  .fr h4{margin:0 0 2px;font-size:14.5px} .fr p{margin:0;color:var(--gris);font-size:13.5px}
+  /* benchmark */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-top:8px}
+  .b{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px}
+  .b .src{color:var(--oro2);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .b h4{margin:3px 0 0;font-size:15px;font-weight:800} .b p{margin:7px 0 0;color:var(--gris);font-size:13.5px}
+  .b .rob{color:var(--blanco);font-weight:600}
+  /* matriz */
+  .tablewrap{overflow-x:auto;margin:14px 0;border:1px solid var(--linea);border-radius:14px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:680px}
+  th,td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--linea);vertical-align:top}
+  thead th{font-size:12px;background:var(--panel2)}
+  thead th.hl{color:var(--oro2)} thead th.elite{color:var(--viol)}
+  tbody tr:last-child td{border-bottom:none}
+  .chk{color:var(--verde);font-weight:800} .x{color:var(--gris2)}
+  .feat{font-weight:600}
+  /* principios */
+  .pr{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:16px 18px;margin:10px 0}
+  .pr .em{font-size:20px;flex:0 0 auto;width:26px;text-align:center}
+  .pr h4{margin:0 0 3px;font-size:15px} .pr p{margin:0;color:var(--gris);font-size:13.5px}
+  .pr b{color:var(--oro2)}
+  .dict{background:rgba(155,135,245,.08);border:1px solid rgba(155,135,245,.35);border-radius:18px;padding:24px 28px;margin:24px 0;font-size:15px;color:#d8cffb}
+  .dict b{color:#c0b4f8} .dict ul{margin:10px 0 0;padding-left:20px} .dict li{margin:6px 0}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Diseño de valor</span>
+  <h1>Claridad de niveles:<br><span class="g">el enemigo silencioso es la confusión</span></h1>
+  <p class="lead">Tenés razón: la mejor arquitectura del mundo fracasa si el hincha <b style="color:#fff">no entiende en 5 segundos qué le toca en cada nivel</b>. Si no es cristalino, hay fricción — y la fricción no se ve, solo se nota en la conversión que no pasa. Estudio a fondo de cómo evitarla.</p>
+
+  <div class="key">
+    <p class="big">El insight central: armamos <b>3 ejes</b> (Membresía, Suscripción, Beneficios) porque es la arquitectura correcta para el <b>negocio</b>. Pero exponerle esos 3 ejes al hincha es la <b>fuente #1 de fricción.</b></p>
+    <p>La regla de oro: <b style="color:#fff">arquitectá en 3 ejes por dentro, comunicá UNA sola escalera por fuera.</b> El hincha no debe ver la máquina — debe ver una promesa clara y creciente. La complejidad es nuestra; la claridad es de él.</p>
+  </div>
+
+  <h2>🎯 La fricción es de 3 audiencias, no una</h2>
+  <p class="sub">Cada una se confunde distinto. Las tres rompen la experiencia.</p>
+  <div class="aud">
+    <div class="ac"><div class="em">🙋</div><h4>El hincha que decide</h4><p>"¿Para qué pago Plus si ya tengo el carnet gratis?" Si no ve el salto de valor, no convierte. Confusión = no-compra.</p></div>
+    <div class="ac"><div class="em">⭐</div><h4>El socio que ya pagó</h4><p>"¿Qué tengo yo exactamente?" Si no lo tiene claro, no usa los beneficios, no los valora, y no renueva. Confusión = no-retención.</p></div>
+    <div class="ac"><div class="em">🏪</div><h4>El cajero en el local</h4><p>"¿A este qué descuento le doy?" Si el cajero duda, la experiencia se traba en el peor momento. Confusión = fricción operativa.</p></div>
+  </div>
+
+  <h2>🔍 De dónde nace la fricción (diagnóstico)</h2>
+  <div class="fr"><div class="n">1</div><div><h4>Exponer la arquitectura interna</h4><p>Mostrar "Membresía + Suscripción + Beneficios + Cashback" como cosas separadas abruma. El hincha quiere saber "qué gano", no nuestro organigrama.</p></div></div>
+  <div class="fr"><div class="n">2</div><div><h4>Beneficios vagos</h4><p>"Descuentos en comercios" no convierte. "15% en [marca conocida]" sí. Lo abstracto no se valora; lo concreto se desea.</p></div></div>
+  <div class="fr"><div class="n">3</div><div><h4>Demasiadas opciones</h4><p>Olimpista / Junior / Plus / Socio del Club / cashback… La parálisis por elección mata. La decisión principal debe ser de 3 opciones máximo.</p></div></div>
+  <div class="fr"><div class="n">4</div><div><h4>Salto de valor invisible</h4><p>Si no se ve por qué el siguiente nivel vale más, nadie sube. El "¿por qué pagar?" tiene que sentirse, no deducirse.</p></div></div>
+  <div class="fr"><div class="n">5</div><div><h4>Mensajes inconsistentes</h4><p>Si la landing dice una cosa, la app otra, y el cajero otra, se rompe la confianza. Lo que incluye cada nivel debe ser <b style="color:var(--blanco)">idéntico en todos lados</b>.</p></div></div>
+  <div class="fr"><div class="n">6</div><div><h4>"Socio del Club" mal ubicado</h4><p>Si el socio real parece "un Plus más", se diluye la aspiración. La cima tiene que sentirse distinta, no "más features".</p></div></div>
+
+  <h2>🌍 Cómo lo hacen los que tienen niveles clarísimos</h2>
+  <div class="grid">
+    <div class="b"><div class="src">Spotify / Netflix</div><h4>Free vs Premium, en una línea</h4><p>Cada plan tiene un "qué tenés" cortito y concreto, con el recomendado destacado. Family plan clarísimo. <b class="rob">Una escalera, cero ambigüedad.</b></p></div>
+    <div class="b"><div class="src">SaaS pricing (Stripe, Notion)</div><h4>La matriz "qué incluye"</h4><p>Tabla comparativa con ✓/✗ por columna + plan "más popular" resaltado + ancla de precio. <b class="rob">El activo de conversión #1.</b></p></div>
+    <div class="b"><div class="src">MELI+ / Mercado Puntos</div><h4>Niveles que desbloquean perks claros</h4><p>Subís de nivel por actividad y cada uno dice exactamente qué da (envío gratis, Disney+…). <b class="rob">Progresión gamificada y legible.</b></p></div>
+    <div class="b"><div class="src">Costco</div><h4>"Executive = 2% de vuelta"</h4><p>La diferencia entre niveles es UNA frase que se entiende al instante. <b class="rob">Claridad brutal en el upgrade.</b></p></div>
+    <div class="b"><div class="src">Status de aerolíneas/bancos</div><h4>Escalera aspiracional (Gold/Black)</h4><p>Niveles con escalón claro de beneficios + "cómo llegar" + "qué desbloqueás". <b class="rob">La cima se siente especial.</b></p></div>
+    <div class="b"><div class="src">Starbucks</div><h4>Ganás → canjeás → Gold</h4><p>Reglas simples y visibles. El cashback como progreso claro, no letra chica. <b class="rob">El valor se ve mientras lo usás.</b></p></div>
+  </div>
+
+  <h2>✅ El modelo claro para Olimpistas</h2>
+  <p class="sub">Una escalera de 3 peldaños visibles. Cashback como un número simple transversal. Junior = "Plus para los más chicos" (variante, no peldaño extra).</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Qué te llevás</th><th>Olimpista<br><span class="x" style="font-weight:400">Gratis</span></th><th class="hl">Plus<br><span style="font-weight:400">Suscripción</span></th><th class="elite">★ Socio del Club<br><span style="font-weight:400">El Decano</span></th></tr></thead>
+      <tbody>
+        <tr><td class="feat">Carnet, comunidad, tu bandera en el mapa</td><td class="chk">✓</td><td class="chk">✓</td><td class="chk">✓</td></tr>
+        <tr><td class="feat">Beneficios en comercios</td><td>Básicos</td><td class="hl" style="font-weight:700">Mejores y más</td><td class="elite" style="font-weight:700">Elite + exclusivos</td></tr>
+        <tr><td class="feat">Cashback "Estrellas del Decano"</td><td>2%</td><td class="hl" style="font-weight:700">4%</td><td class="elite" style="font-weight:700">6%</td></tr>
+        <tr><td class="feat">Contenido Media+, sorteos, preventas</td><td class="x">—</td><td class="chk">✓</td><td class="chk">✓</td></tr>
+        <tr><td class="feat">Estatus verificado del Decano</td><td class="x">—</td><td class="x">—</td><td class="chk">✓</td></tr>
+        <tr><td class="feat">Lo que da el Club (cancha, voto, etc.)</td><td class="x">—</td><td class="x">—</td><td class="chk">✓</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">Una sola tabla que el hincha entiende en 5 segundos. El salto de cada columna es obvio. La cima (Socio del Club) tiene cosas que <b style="color:#fff">ningún pago digital da</b> → se siente aspiracional, no "más features".</p>
+
+  <h2>🧭 Principios anti-fricción (las reglas)</h2>
+  <div class="pr"><div class="em">1️⃣</div><div><h4>Una escalera, no tres ejes</h4><p>El usuario ve <b>un</b> camino claro. Los 3 ejes viven en el backend, no en la pantalla.</p></div></div>
+  <div class="pr"><div class="em">🎯</div><div><h4>Beneficios concretos, con marcas</h4><p>"15% en [comercio real]", no "descuentos". Lo concreto convierte; lo abstracto se ignora.</p></div></div>
+  <div class="pr"><div class="em">📊</div><div><h4>La matriz "qué incluye" como pieza central</h4><p>Tabla comparativa con el peldaño recomendado resaltado. Es el activo de conversión #1.</p></div></div>
+  <div class="pr"><div class="em">⬆️</div><div><h4>El salto de valor tiene que SENTIRSE</h4><p>En cada nivel, una razón de upgrade obvia y emocional, no una lista de features deducida.</p></div></div>
+  <div class="pr"><div class="em">🔁</div><div><h4>Mismo mensaje en todos lados</h4><p>Landing, app, carnet y pantalla del cajero dicen <b>lo mismo</b> sobre cada nivel. Una sola fuente de verdad.</p></div></div>
+  <div class="pr"><div class="em">👁️</div><div><h4>Disclosure progresivo</h4><p>Mostrar lo justo en cada momento (al registrarse, al canjear, al considerar pagar). No volcar todo de golpe.</p></div></div>
+  <div class="pr"><div class="em">🏪</div><div><h4>Cero decisión en la caja</h4><p>La pantalla de validación le dice al cajero "Plus → 15%" — no tiene que recordar ni pensar. La claridad operativa elimina la fricción del canje.</p></div></div>
+
+  <div class="dict">
+    ⚖️ <b>Dictamen:</b>
+    <ul>
+      <li><b>El riesgo que marcaste es real y es el #1 de toda escalera de valor:</b> la confusión no grita, solo baja la conversión. Vale invertir en claridad tanto como en features.</li>
+      <li><b>Regla madre: arquitectá en 3 ejes, comunicá 1 escalera.</b> El hincha ve 3 peldaños (Gratis → Plus → Socio del Club) con una matriz "qué incluye". La complejidad es nuestra.</li>
+      <li><b>Beneficios concretos + cashback como un número simple</b> (2/4/6%). Lo abstracto no vende.</li>
+      <li><b>La cima (Socio del Club) debe sentirse de otra liga</b> — cosas que ningún pago digital da. No "Plus premium".</li>
+      <li><b>Una sola fuente de verdad de "qué incluye cada nivel"</b>, replicada en landing + app + carnet + pantalla del comercio. La inconsistencia destruye confianza.</li>
+      <li><b>El cajero nunca decide:</b> la pantalla de validación muestra el beneficio exacto del nivel. Claridad = canje sin fricción.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>Estudio para blindar la claridad antes de construir la Red de Beneficios. Es la pieza que hace que toda la escalera de valor (membresía + suscripción + beneficios + cashback) se sienta <b>simple</b> para quien la usa, aunque por dentro sea sofisticada. Próximo paso natural cuando avancemos: diseñar la pantalla de "Niveles" y la pantalla de validación con esta matriz como base.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — claro como el blanco, fuerte como el negro</p>
+  </footer>
+
+</div>
+</body>
+</html>

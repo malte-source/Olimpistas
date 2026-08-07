@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · Roles y accesos del Admin</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1000px;margin:0 auto;padding:48px 20px 80px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(28px,5vw,42px);line-height:1.15;margin:10px 0 14px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:17px;max-width:780px}
+  h2{font-size:23px;margin:52px 0 6px;font-weight:800;display:flex;align-items:center;gap:10px}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  .obj{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:18px;padding:22px 26px;margin:22px 0}
+  .obj b{color:var(--oro2)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:6px}
+  .card{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:20px}
+  .card h3{margin:0 0 4px;font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .card .who{color:var(--gris2);font-size:12px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px}
+  .card p{margin:0;color:var(--gris);font-size:14px}
+  .tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:999px;margin-bottom:8px}
+  .t-owner{background:rgba(201,162,39,.18);color:var(--oro2)}
+  .t-fin{background:rgba(46,194,126,.16);color:#7be0b0}
+  .t-mkt{background:rgba(91,155,213,.18);color:#9cc4ec}
+  .t-sop{background:rgba(224,85,107,.16);color:#f0939f}
+  .t-lec{background:rgba(154,154,164,.18);color:#c4c4ce}
+  .tablewrap{overflow-x:auto;margin-top:10px;border:1px solid var(--linea);border-radius:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+  th,td{padding:11px 12px;text-align:center;border-bottom:1px solid var(--linea)}
+  th:first-child,td:first-child{text-align:left;font-weight:700}
+  thead th{color:var(--gris);font-size:12px;text-transform:uppercase;letter-spacing:.5px;background:var(--panel2)}
+  tbody tr:last-child td{border-bottom:none}
+  .yes{color:var(--verde);font-weight:800}
+  .ver{color:var(--azul);font-size:12px}
+  .no{color:var(--gris2)}
+  code{background:#0f0f15;border:1px solid var(--linea);border-radius:6px;padding:1px 7px;font-size:13px;color:var(--oro2)}
+  .step{display:flex;gap:14px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px 20px;margin:12px 0}
+  .step .dot{flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:linear-gradient(120deg,var(--oro2),var(--oro));color:#1a1500;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .step h4{margin:2px 0 5px;font-size:16px}
+  .step p{margin:0;color:var(--gris);font-size:14px}
+  .warn{background:rgba(224,85,107,.08);border:1px solid rgba(224,85,107,.3);border-radius:12px;padding:16px 20px;margin:20px 0;font-size:14px;color:#f0b3bc}
+  .warn b{color:#f0939f}
+  .keep{background:rgba(46,194,126,.08);border:1px solid rgba(46,194,126,.3);border-radius:12px;padding:16px 20px;margin:20px 0;font-size:14px;color:#a7e8c8}
+  .keep b{color:#7be0b0}
+  pre{background:#0f0f15;border:1px solid var(--linea);border-radius:12px;padding:16px;overflow-x:auto;font-size:13px;color:#d6d6e0}
+  footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Panel de Admin</span>
+  <h1>Roles y accesos:<br><span class="g">cada uno ve lo suyo</span></h1>
+  <p class="lead">Hoy toda clave de admin da <b style="color:#fff">acceso total</b>. A medida que sumás gente (marketing, finanzas, soporte), conviene que cada uno entre con su clave y vea <b style="color:#fff">solo lo que le toca</b>. Este plan define los roles entendiendo qué hace realmente el sistema.</p>
+
+  <div class="obj">
+    🎯 <b>Qué es este sistema (para diseñar bien los accesos):</b> Olimpistas.com es el <b>embudo mundial de hinchas</b> de Club Olimpia. El admin gestiona: <b>socios</b> (la base), <b>pagos</b> (conciliación Metrepay + membresías Plus/Junior), <b>campañas</b> de remarketing (→ GoHighLevel), <b>contenido</b> (sorteos, preventas, media), el <b>padrón</b> oficial de socios, <b>moderación</b> de selfies, <b>reportes</b> de negocio y <b>sistema</b> (salud, auditoría, claves). Son tareas de equipos distintos → tiene sentido separarlas por rol.
+  </div>
+
+  <h2>👥 Los 5 roles</h2>
+  <p class="sub">Pensados por "trabajo a hacer", no por jerarquía.</p>
+  <div class="grid">
+    <div class="card"><span class="tag t-owner">owner</span><h3>Dueño / Dev</h3><p>Acceso total, incluido <b>Sistema</b> (salud, auditoría, claves, flags). Es vos. Es el rol por defecto si una clave no especifica rol.</p></div>
+    <div class="card"><span class="tag t-fin">finanzas</span><h3>Finanzas / Administración</h3><p>Concilia pagos Metrepay, cuadre, activa/da de baja membresías y exporta CSV contable. No toca contenido ni campañas.</p></div>
+    <div class="card"><span class="tag t-mkt">marketing</span><h3>Marketing / Contenido</h3><p>Crea sorteos, preventas y contenido; lanza campañas y mide conversión; arma segmentos y los empuja a GHL. No toca la plata.</p></div>
+    <div class="card"><span class="tag t-sop">soporte</span><h3>Soporte / Comunidad</h3><p>Busca socios, edita fichas, reenvía verificación, modera selfies y resuelve la cola del padrón. El día a día con el hincha.</p></div>
+    <div class="card"><span class="tag t-lec">lectura</span><h3>Directivo / Lectura</h3><p>Ve el dashboard y los reportes. No puede modificar nada. Ideal para mostrar números sin riesgo.</p></div>
+  </div>
+
+  <h2>🔑 Matriz de acceso por área</h2>
+  <p class="sub"><span class="yes">●</span> total &nbsp; <span class="ver">ver</span> solo lectura &nbsp; <span class="no">—</span> sin acceso</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Área</th><th>owner</th><th>finanzas</th><th>marketing</th><th>soporte</th><th>lectura</th></tr></thead>
+      <tbody>
+        <tr><td>📊 Dashboard / Reportes</td><td class="yes">●</td><td class="ver">ver</td><td class="ver">ver</td><td class="ver">ver</td><td class="ver">ver</td></tr>
+        <tr><td>👤 Socios (ficha, editar, baja)</td><td class="yes">●</td><td class="ver">ver+activar</td><td class="ver">ver</td><td class="yes">●</td><td class="ver">ver</td></tr>
+        <tr><td>💳 Pagos (Metrepay, cuadre)</td><td class="yes">●</td><td class="yes">●</td><td class="no">—</td><td class="ver">ver</td><td class="ver">ver</td></tr>
+        <tr><td>📣 Campañas / GHL</td><td class="yes">●</td><td class="no">—</td><td class="yes">●</td><td class="no">—</td><td class="ver">ver</td></tr>
+        <tr><td>🎁 Contenido (sorteos…)</td><td class="yes">●</td><td class="no">—</td><td class="yes">●</td><td class="no">—</td><td class="ver">ver</td></tr>
+        <tr><td>🪪 Padrón / Moderación</td><td class="yes">●</td><td class="no">—</td><td class="no">—</td><td class="yes">●</td><td class="no">—</td></tr>
+        <tr><td>🛠️ Sistema (auditoría, claves)</td><td class="yes">●</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="sub" style="margin-top:12px">Acciones sensibles siempre acotadas: <b>dar de baja</b>, <b>borrar contenido</b>, <b>sortear ganador</b> y <b>sync a GHL</b> solo para <code>owner</code> + el rol dueño de esa área.</p>
+
+  <h2>⚙️ Cómo se implementa</h2>
+  <p class="sub">Encima del sistema multi-clave que ya existe — cambio chico y no rompe nada.</p>
+  <div class="step"><div class="dot">1</div><div><h4>Rol en la clave</h4><p>Extender el formato de <code>ADMIN_KEYS</code> a <code>nombre:clave:rol</code> (ej. <code>marce:xxxx:marketing</code>). Si no se pone rol, default <code>owner</code> → las claves de hoy siguen con acceso total. Cero migración forzada.</p></div></div>
+  <div class="step"><div class="dot">2</div><div><h4>Permisos en el server (la seguridad de verdad)</h4><p>El middleware lee el rol y una <b>matriz de permisos</b> protege cada grupo de endpoints. Esto es lo que realmente bloquea — no alcanza con esconder botones.</p></div></div>
+  <div class="step"><div class="dot">3</div><div><h4>La interfaz se adapta (UX)</h4><p>Un endpoint <code>/admin/whoami</code> devuelve el rol; el panel <b>oculta las áreas y botones</b> que ese rol no puede usar. Es comodidad visual; la barrera real es el paso 2.</p></div></div>
+  <div class="step"><div class="dot">4</div><div><h4>Auditoría por rol</h4><p>El log ya registra <b>quién</b> (<code>por: nombre</code>); se le suma el <b>rol</b>. Trazabilidad completa de quién tocó qué.</p></div></div>
+
+  <div class="warn">
+    ⚠️ <b>Regla de oro:</b> esconder botones en el navegador <b>no es seguridad</b> — cualquiera con la clave podría llamar la API igual. La protección real va <b>en el servidor</b> (paso 2). Lo del frontend es solo para que cada uno vea una pantalla limpia con lo suyo.
+  </div>
+
+  <div class="keep">
+    ✅ <b>No rompe nada:</b> se construye sobre el <code>ADMIN_KEYS</code> que ya funciona. Las claves actuales quedan como <code>owner</code> (acceso total) hasta que les asignes un rol. Se puede hacer gradual: primero ocultar áreas en la UI, después endurecer el server.
+  </div>
+
+  <h2 style="font-size:19px">🚀 A futuro (opcional)</h2>
+  <p class="sub">Si el equipo crece mucho: pasar de "claves compartidas" a <b>cuentas reales</b> (usuario + contraseña con sesión), gestión de altas/bajas desde el propio panel, y 2FA para <code>owner</code>. Es un salto más grande; no hace falta para arrancar con roles.</p>
+
+  <footer>
+    <p>Recomendación de arranque: implementar <b>pasos 1–3</b> (rol en la clave + permisos en server + UI adaptada) para los 3 perfiles que más se usan: <code>owner</code>, <code>marketing</code> y <code>finanzas</code>. El resto se suma cuando haga falta.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — Panel de control del Decano</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Olimpistas · MEGA Master Plan</title>
+<style>
+  :root{ --negro:#0b0b0f; --panel:#14141b; --panel2:#181820; --panel3:#1e1e28; --linea:#2a2a33; --oro:#c9a227; --oro2:#f0d873; --blanco:#fff; --gris:#9a9aa4; --gris2:#6f6f78; --verde:#2ec27e; --azul:#5b9bd5; --rojo:#e0556b; --ambar:#e0a32e; --viol:#9b87f5; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--negro);color:var(--blanco);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 20px 90px}
+  .kicker{color:var(--oro2);font-weight:800;letter-spacing:2px;font-size:12px;text-transform:uppercase}
+  h1{font-size:clamp(32px,6vw,52px);line-height:1.05;margin:10px 0 16px;font-weight:900}
+  h1 .g{background:linear-gradient(120deg,var(--oro2),var(--oro));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{color:var(--gris);font-size:18px;max-width:880px}
+  h2{font-size:26px;margin:62px 0 6px;font-weight:900;display:flex;align-items:center;gap:10px}
+  .sub{color:var(--gris);margin:0 0 22px;font-size:15px}
+  /* north star */
+  .north{background:linear-gradient(135deg,#1a1606,#14141b);border:1px solid var(--oro);border-radius:22px;padding:26px 30px;margin:26px 0}
+  .north .t{font-size:22px;font-weight:800;line-height:1.4;margin:0} .north .t b{color:var(--oro2)}
+  .north p{color:var(--gris);margin:12px 0 0;font-size:15px}
+  /* pillars */
+  .pillars{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:8px}
+  .pil{background:linear-gradient(160deg,var(--panel3),var(--panel));border:1px solid var(--linea);border-radius:16px;padding:18px 20px;position:relative;overflow:hidden}
+  .pil::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--oro2),var(--oro))}
+  .pil .em{font-size:24px} .pil h3{margin:8px 0 4px;font-size:16px} .pil p{margin:0;color:var(--gris);font-size:13px}
+  /* decisions */
+  .dec{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--linea);border-radius:11px;padding:13px 16px;margin:8px 0}
+  .dec .ck{color:var(--verde);font-weight:900;flex:0 0 auto} .dec p{margin:0;font-size:14px;color:var(--gris)} .dec b{color:#fff}
+  /* status */
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px}
+  @media(max-width:720px){.twocol{grid-template-columns:1fr}}
+  .done{background:rgba(46,194,126,.07);border:1px solid rgba(46,194,126,.3);border-radius:16px;padding:18px 22px}
+  .todo{background:rgba(201,162,39,.07);border:1px solid rgba(201,162,39,.3);border-radius:16px;padding:18px 22px}
+  .done h3{color:#7be0b0;margin:0 0 8px;font-size:16px} .todo h3{color:var(--oro2);margin:0 0 8px;font-size:16px}
+  .done ul,.todo ul{margin:0;padding-left:18px;font-size:14px;color:var(--gris)} .done li,.todo li{margin:5px 0}
+  /* roadmap */
+  .phase{border:1px solid var(--linea);border-radius:16px;padding:20px 24px;margin:14px 0;background:var(--panel);position:relative}
+  .phase.f0{border-color:var(--verde)} .phase.f1{border-color:var(--oro)} .phase.f2{border-color:var(--azul)} .phase.f3{border-color:var(--viol)} .phase.f4{border-color:var(--gris2)}
+  .phase .ph{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+  .f0 .ph{color:var(--verde)} .f1 .ph{color:var(--oro2)} .f2 .ph{color:#9cc4ec} .f3 .ph{color:#c0b4f8} .f4 .ph{color:var(--gris)}
+  .phase h3{margin:4px 0 8px;font-size:20px} .phase ul{margin:0;padding-left:20px;color:var(--gris);font-size:14.5px} .phase li{margin:5px 0} .phase li b{color:var(--blanco)}
+  /* index */
+  .idx{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:8px}
+  .ix{display:block;background:var(--panel);border:1px solid var(--linea);border-radius:13px;padding:16px 18px;text-decoration:none;color:inherit;transition:border-color .15s,transform .12s}
+  .ix:hover{border-color:var(--oro);transform:translateY(-2px)}
+  .ix .cat{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--oro2)}
+  .ix h4{margin:4px 0 4px;font-size:15px} .ix p{margin:0;color:var(--gris);font-size:13px}
+  .ix .arr{color:var(--oro);font-size:13px;font-weight:700;margin-top:6px;display:inline-block}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--linea);color:var(--gris2);font-size:13px}
+  .hearts{letter-spacing:3px}
+  .tag{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:999px;margin-left:8px}
+  .t-done{background:rgba(46,194,126,.16);color:#7be0b0} .t-plan{background:rgba(201,162,39,.16);color:#f0c879}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <span class="kicker">Club Olimpia · Olimpistas.com</span>
+  <h1>MEGA <span class="g">Master Plan</span></h1>
+  <p class="lead">Todo el panorama en un solo lugar: la visión, las decisiones tomadas, lo que ya está vivo, el roadmap maestro y el índice de los 10 estudios. De una app de captura de hinchas a <b style="color:#fff">la mejor app de hinchas del mundo</b>.</p>
+
+  <div class="north">
+    <p class="t">⭐ North Star: que el hincha no diga <b>"tengo la app de Olimpia"</b>, sino <b>"mi familia / mi banda / mi peña está en Olimpistas — y me conviene de verdad ser del Decano".</b></p>
+    <p>La unidad deja de ser la persona y pasa a ser la tribu; el valor deja de ser solo emocional y pasa a ser también cotidiano (beneficios reales). Eso ningún club lo tiene completo. Esa es la oportunidad.</p>
+  </div>
+
+  <h2>🏛️ Los 4 pilares</h2>
+  <p class="sub">Sobre qué se construye todo.</p>
+  <div class="pillars">
+    <div class="pil"><div class="em">🪪</div><h3>1. Identidad</h3><p>Carnet, bandera en el mapa, globo, prueba social. <b style="color:#7be0b0">Ya logrado, nivel mundial.</b></p></div>
+    <div class="pil"><div class="em">🛡️</div><h3>2. Tribu</h3><p>Grupos: Familia, Banda, Peñas, País. El chasis que vuelve todo social y viral.</p></div>
+    <div class="pil"><div class="em">🎟️</div><h3>3. Valor real</h3><p>Red de beneficios escalonada + plataforma de validación. El gancho cotidiano.</p></div>
+    <div class="pil"><div class="em">🚀</div><h3>4. Motores</h3><p>Referido, pixel/ads, push, gamificación. Lo que mueve a escala y retiene.</p></div>
+  </div>
+
+  <h2>🔒 Decisiones estratégicas tomadas</h2>
+  <p class="sub">Lo que ya quedó definido en los estudios — la base del diseño.</p>
+  <div class="dec"><span class="ck">✓</span><p><b>3 ejes por dentro, 1 escalera por fuera.</b> Membresía (Socio del Club) + Suscripción (Plus) + Beneficios son ejes distintos en el backend; el hincha ve una sola escalera clara.</p></div>
+  <div class="dec"><span class="ck">✓</span><p><b>Socio del Club ≠ Plus.</b> El socio real es la cima institucional, con estatus propio y los mejores beneficios. No se le "da Plus".</p></div>
+  <div class="dec"><span class="ck">✓</span><p><b>El free prueba las mieles; Plus siempre gana.</b> El gratis recibe una probada para generar deseo. El foso de Plus son los <b>intangibles del club</b> (experiencias, estatus, pertenencia), no los descuentos.</p></div>
+  <div class="dec"><span class="ck">✓</span><p><b>La red de beneficios se abre a la masa, escalonada.</b> De "solo socios" a la plataforma de lealtad del Decano. La escala atrae comercios; el socio se corona como el mejor nivel.</p></div>
+  <div class="dec"><span class="ck">✓</span><p><b>No integramos POS: el comercio valida.</b> Plataforma propia con login + QR vivo (rotativo) para evitar fraude. Escala a cientos de comercios.</p></div>
+  <div class="dec"><span class="ck">✓</span><p><b>Cashback: afuera por ahora.</b> Simplifica el mensaje y evita lo regulatorio. Carta guardada (junto con "ser medio de pago") para el horizonte.</p></div>
+
+  <h2>📍 Dónde estamos hoy</h2>
+  <div class="twocol">
+    <div class="done"><h3>✅ Ya construido y EN VIVO</h3><ul>
+      <li><b>App base:</b> alta sin fricción, contador en vivo, globo 3D, carnet digital + QR, niveles, pagos Metrepay, i18n ES/EN, PWA.</li>
+      <li><b>Panel admin completo:</b> 6 áreas navegables, mobile-first, tablas pro, pulido visual.</li>
+      <li><b>Usuarios + roles</b> (cuentas reales, 5 roles, permisos server-side) — auditado nivel A−.</li>
+    </ul></div>
+    <div class="todo"><h3>🎯 Estrategia definida, a construir</h3><ul>
+      <li><b>Motores de crecimiento</b> (referido, pixel, push, gamificación).</li>
+      <li><b>Red de beneficios</b> (3 ejes, validación, escalonada, freemium).</li>
+      <li><b>Grupos / tribu.</b></li>
+      <li><b>Arreglos urgentes:</b> privacidad del mapa, performance mobile.</li>
+    </ul></div>
+  </div>
+
+  <h2>🗺️ El roadmap maestro</h2>
+  <p class="sub">La secuencia ejecutable, consolidando todos los estudios. Cada fase deja valor solo.</p>
+
+  <div class="phase f0"><div class="ph">✅ Fase 0 — Hecho</div><h3>La base sólida</h3><ul><li>App pública (identidad + prueba social) + panel admin completo + usuarios/roles. <b>En producción.</b></li></ul></div>
+
+  <div class="phase f1"><div class="ph">🔧 Fase 1 — Motores base + higiene</div><h3>Encender crecimiento y blindar</h3><ul>
+    <li><b>⚠️ Privacidad del mapa</b> (nombre de pila + coordenada difuminada) — urgente.</li>
+    <li><b>Loop de referido</b> con atribución (<code>?ref=</code>) + premio.</li>
+    <li><b>Meta/TikTok Pixel + eventos de conversión</b> — antes de pautar.</li>
+    <li><b>Push + reminders</b> (cumplir "te avisamos") + WhatsApp vía GHL.</li>
+    <li><b>Gamificación liviana</b> (rachas, insignias) + aligerar mobile.</li>
+  </ul></div>
+
+  <div class="phase f2"><div class="ph">🎟️ Fase 2 — Red de Beneficios</div><h3>El valor cotidiano que convierte</h3><ul>
+    <li><b>Separar los 3 ejes en el modelo de datos</b> (Membresía / Suscripción / Beneficios) — el cambio estructural de fondo.</li>
+    <li><b>QR vivo</b> en el carnet + endpoint de validación.</li>
+    <li><b>Plataforma del comercio</b> (PWA, login, escaneo) — sin integrar POS.</li>
+    <li><b>Abrir la red escalonada</b> (free = probada, Plus mejor, Socio elite) + blindar socios/comercios actuales.</li>
+    <li><b>Captación de comercios a escala</b> + densidad en uso diario.</li>
+  </ul></div>
+
+  <div class="phase f3"><div class="ph">🛡️ Fase 3 — Grupos / Tribu</div><h3>De individual a tribal</h3><ul>
+    <li><b>Crear/unirse a grupos</b>: Familia (con "3 generaciones"), Banda, Peñas verificadas, País.</li>
+    <li><b>Grupos en el globo</b> + ranking y guerra de países/peñas.</li>
+    <li><b>Referido = crecé tu grupo</b> + <b>Plan Familia</b> (monetización).</li>
+    <li><b>Beneficios de grupo</b> (familia, peña, zona) — grupos × beneficios.</li>
+  </ul></div>
+
+  <div class="phase f4"><div class="ph">🚀 Fase 4 — Visión / los #1</div><h3>La tribu se vuelve experiencia</h3><ul>
+    <li>Desafíos colaborativos, ligas semanales, participación (votar/predecir).</li>
+    <li>Momento "Wrapped" familiar compartible + portugués (Brasil/región).</li>
+    <li><b>Horizonte:</b> cashback + ser medio de pago (con asesoría regulatoria).</li>
+    <li><b>Admin A+:</b> 2FA + cookie httpOnly (plan diferido aprobado).</li>
+  </ul></div>
+
+  <h2>📚 El índice: los 10 estudios</h2>
+  <p class="sub">Todo el detalle, enlazado. (Tocá cada uno para abrir el estudio completo.)</p>
+  <div class="idx">
+    <a class="ix" href="https://claude.ai/code/artifact/cf683176-4992-4481-bed9-e07d9620c27f" target="_blank"><div class="cat">Diagnóstico</div><h4>Dictamen de la app vs. el mundo</h4><p>Benchmark global. Nota B: identidad fuerte, faltan los motores.</p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/f47f7340-7efe-4784-b3be-99020c6f3e80" target="_blank"><div class="cat">Pilar · Tribu</div><h4>Panorama de Grupos</h4><p>Familia, Banda, Peñas, País — el chasis viral/retención.</p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/8a41943b-ead6-4d6b-8b14-5b1e5e37ccfe" target="_blank"><div class="cat">Pilar · Valor</div><h4>Red de Beneficios + escalera de valor</h4><p>Los 3 ejes, Socio del Club ≠ Plus, el flywheel.</p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/2ced84cb-07da-41e2-be1e-2b3205ad6848" target="_blank"><div class="cat">Estrategia</div><h4>De red socio-only a plataforma de lealtad</h4><p>Abrir a la masa escalonada, sin diluir al socio.</p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/a2d3b15a-6122-4f4a-a2a3-1e7bbfec5034" target="_blank"><div class="cat">Estrategia</div><h4>Probar las mieles — freemium y el foso de Plus</h4><p>El free seduce; Plus gana por los intangibles del club.</p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/0294c805-eb2a-4d8d-83f2-eae086f3461b" target="_blank"><div class="cat">Diseño</div><h4>Claridad de niveles y anti-fricción</h4><p>3 ejes por dentro, 1 escalera por fuera. La matriz "qué incluye".</p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/9ad91051-45c6-4455-bb42-1e71bac7278c" target="_blank"><div class="cat">Técnico</div><h4>Plataforma de validación (QR vivo)</h4><p>El comercio valida, no integramos POS. Anti-fraude.</p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/7432b33f-2630-428a-8ca8-ffc7e5251534" target="_blank"><div class="cat">Auditoría</div><h4>Benchmark del Admin</h4><p>Nota A−. Plan A+ (2FA + cookie) diferido.</p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/d8fd286a-c26e-441c-8de8-f2367dd32139" target="_blank"><div class="cat">Construido</div><h4>Plan de Roles y accesos</h4><p>5 roles con permisos server-side. <span class="tag t-done">EN VIVO</span></p><span class="arr">Abrir →</span></a>
+    <a class="ix" href="https://claude.ai/code/artifact/90e1cfe8-efd4-4aa5-aeed-5022d5688fe7" target="_blank"><div class="cat">Construido</div><h4>Rediseño del Admin</h4><p>De "casero" a panel pro, 6 áreas. <span class="tag t-done">EN VIVO</span></p><span class="arr">Abrir →</span></a>
+  </div>
+
+  <h2>🎬 Por dónde arrancar</h2>
+  <p class="sub">Mi recomendación de secuencia para construir.</p>
+  <ol style="color:var(--gris);font-size:15px;max-width:820px">
+    <li><b style="color:#fff">Privacidad del mapa</b> — primero lo urgente (riesgo real antes de escalar tráfico).</li>
+    <li><b style="color:#fff">Separar los 3 ejes en el modelo de datos</b> — el cambio de fondo sobre el que se monta todo (beneficios, claridad, socio≠Plus).</li>
+    <li><b style="color:#fff">Loop de referido + Pixel</b> — encender crecimiento medible (barato y de alto impacto).</li>
+    <li><b style="color:#fff">Red de beneficios MVP</b> (QR vivo + plataforma comercio + 5-10 comercios piloto) — probar el motor de valor en la calle.</li>
+    <li><b style="color:#fff">Grupos</b> — una vez que la base de valor está, sumar la capa tribal que multiplica todo.</li>
+  </ol>
+
+  <footer>
+    <p>Este es el panorama maestro — el mapa, no la orden de obra. Cada fase se aterriza a plan ejecutable (pantallas + modelo de datos) cuando decidas avanzar. La base ya está construida y sólida; lo que sigue es construir, en orden, sobre cimientos firmes.</p>
+    <p class="hearts">🤍🖤🤍 &nbsp;Olimpistas.com — la mejor app de hinchas del mundo, paso a paso</p>
+  </footer>
+
+</div>
+</body>
+</html>

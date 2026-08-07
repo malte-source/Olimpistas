@@ -13,6 +13,13 @@ window.OLI = (function () {
     return data;
   }
 
+  // Escapa texto para interpolar seguro en HTML (anti-XSS). Usar SIEMPRE con datos
+  // de socio (nombre, ciudad, etc.) antes de meterlos en innerHTML/setHTML.
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
   // Formatea guaraníes: 49000 → "₲ 49.000"
   function gs(n) {
     if (n == null) return "";
@@ -33,7 +40,12 @@ window.OLI = (function () {
   // Precio mostrado por tier (en el idioma y moneda actuales). Cobro anual único.
   function precioTier(t, rate) {
     if (!t.precioAnio || t.precioAnio <= 0) return { big: tt("price_gratis"), small: tt("price_forever") };
-    return { big: fmtMoney(t.precioAnio, rate), small: tt("price_year") };
+    // DOS precios independientes: Gs (precioAnio) y USD (precioUSD). NO se convierten
+    // entre sí. El selector de moneda muestra uno u otro tal cual está definido.
+    const big = currency() === "USD"
+      ? "US$ " + (t.precioUSD != null ? Number(t.precioUSD).toFixed(2) : Math.round(t.precioAnio / (rate || 7300)))
+      : "₲ " + Number(t.precioAnio).toLocaleString("es-PY");
+    return { big, small: tt("price_year") };
   }
 
   // Art determinista para tarjetas/thumbs según una semilla (id/slug).
@@ -51,6 +63,22 @@ window.OLI = (function () {
     return `<div style="width:100%;height:100%;background:${grad};display:flex;align-items:center;
       justify-content:center;color:rgba(255,255,255,.9);font-weight:700;position:relative">
       <span style="font-size:34px;opacity:.85">${icon || "▦"}</span></div>`;
+  }
+
+  // Cablea botones .pw-toggle (mostrar/ocultar) para el input de contraseña inmediatamente
+  // anterior en el DOM. Idempotente: se puede llamar de nuevo tras re-renderizar el form.
+  function wirePasswordToggles(root) {
+    (root || document).querySelectorAll(".pw-toggle").forEach((btn) => {
+      if (btn._pwWired) return;
+      btn._pwWired = true;
+      btn.addEventListener("click", () => {
+        const input = btn.previousElementSibling;
+        if (!input) return;
+        const showing = input.type === "password";
+        input.type = showing ? "text" : "password";
+        btn.textContent = showing ? "🙈" : "👁";
+      });
+    });
   }
 
   function toast(msg) {
@@ -88,16 +116,139 @@ window.OLI = (function () {
       ? `<img class="cn-flag" src="https://flagcdn.com/${iso}.svg" alt="" loading="lazy" />` : "";
     return `<div class="cn cn--${slug}">
       <div class="cn-head">
-        <img class="cn-logo" src="/assets/logo-horizontal.svg" alt="Olimpistas" />
+        <img class="cn-logo" src="/assets/logo-horizontal.svg?v=38" alt="Olimpistas" />
       </div>
       <div class="cn-avatar-wrap">${avatar}${flag}</div>
-      <div class="cn-name">${nombre}</div>
-      <div class="cn-level">${nivel}</div>
+      <div class="cn-name">${esc(nombre)}</div>
+      <div class="cn-level">${esc(nivel)}</div>
       ${qr}
       <div class="cn-num">${numero}</div>
       <div class="cn-foot">MIEMBRO · OLIMPISTAS</div>
       <div class="cn-shine" aria-hidden="true"></div>
     </div>`;
+  }
+
+  // Carga una imagen (Promise). crossOrigin para no "tintar" el canvas (flagcdn manda CORS).
+  function _loadImg(src, cross) {
+    return new Promise((res) => { const i = new Image(); if (cross) i.crossOrigin = "anonymous"; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  }
+  function _rr(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
+
+  // Renderiza el carnet a PNG (Blob) para COMPARTIR como imagen (no la página).
+  // Devuelve null si algo falla (el caller cae a compartir la URL).
+  async function carnetImagen(o) {
+    o = o || {};
+    try {
+      const W = 660, H = 940;
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const x = cv.getContext("2d");
+      const tierCol = ({ olimpista: "#3a3a52", kids: "#e94560", premium: "#c9a227", socio: "#c9a227" })[o.tierSlug || "olimpista"] || "#3a3a52";
+      const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#14141b"); g.addColorStop(1, "#0b0b0f");
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+      const gb = x.createLinearGradient(0, 0, W, 0); gb.addColorStop(0, tierCol); gb.addColorStop(1, "#0b0b0f");
+      x.fillStyle = gb; x.fillRect(0, 0, W, 132); x.fillStyle = "#c9a227"; x.fillRect(0, 132, W, 3);
+      const logo = await _loadImg("/assets/logo-horizontal.svg?v=45");
+      if (logo) { const lw = 300, lh = lw * ((logo.height / logo.width) || 0.215); x.drawImage(logo, (W - lw) / 2, 46, lw, lh); }
+      const cx = W / 2, cy = 322, r = 110;
+      x.save(); x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.closePath(); x.clip();
+      const foto = o.foto ? await _loadImg(o.foto) : null;
+      if (foto) x.drawImage(foto, cx - r, cy - r, r * 2, r * 2);
+      else { x.fillStyle = "#23232c"; x.fillRect(cx - r, cy - r, r * 2, r * 2); x.fillStyle = "#f0d873"; x.font = "bold 92px Arial"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(o.icono || "★", cx, cy); }
+      x.restore();
+      x.lineWidth = 5; x.strokeStyle = "#c9a227"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
+      const iso = (o.iso || "").toLowerCase().trim();
+      if (/^[a-z]{2}$/.test(iso)) {
+        const fl = await _loadImg("https://flagcdn.com/" + iso + ".svg", true);
+        if (fl) { const fr = 34, fx = cx + r - 26, fy = cy + r - 34; x.save(); x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.closePath(); x.clip(); x.drawImage(fl, fx - fr, fy - fr, fr * 2, fr * 2); x.restore(); x.lineWidth = 4; x.strokeStyle = "#fff"; x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.stroke(); }
+      }
+      x.textAlign = "center"; x.textBaseline = "alphabetic";
+      x.fillStyle = "#fff"; x.font = "800 44px Arial"; x.fillText(o.nombre || "Tu nombre", cx, 484);
+      x.fillStyle = "#f0d873"; x.font = "700 23px Arial"; x.fillText((o.tierNombre || "Olimpista").toUpperCase(), cx, 520);
+      const qs = 230, qx = (W - qs) / 2, qy = 558;
+      x.fillStyle = "#fff"; _rr(x, qx - 14, qy - 14, qs + 28, qs + 28, 16); x.fill();
+      const qrImg = o.qr ? await _loadImg(o.qr) : null;
+      if (qrImg) x.drawImage(qrImg, qx, qy, qs, qs);
+      x.fillStyle = "#c6c6d0"; x.font = "600 24px monospace"; x.fillText(o.numero || "OLI-••••••••", cx, qy + qs + 46);
+      x.fillStyle = "rgba(255,255,255,.42)"; x.font = "700 15px Arial"; x.fillText("MIEMBRO · OLIMPISTAS", cx, qy + qs + 78);
+      // Dirección web (CTA para quien recibe el carnet compartido).
+      x.fillStyle = "#f0d873"; x.font = "800 26px Arial"; x.fillText("www.olimpistas.com", cx, H - 34);
+      return await new Promise((res) => cv.toBlob((b) => res(b), "image/png", 0.92));
+    } catch (e) { return null; }
+  }
+
+  // Gráfica de ANUNCIO para Instagram Stories (1080×1920) — "ya soy Olimpista".
+  // Selfie protagonista + nombre + ciudad/país + banderita + logo oficial + CTA.
+  async function storyImagen(o) {
+    o = o || {};
+    try {
+      const W = 1080, H = 1920, cx = W / 2;
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const x = cv.getContext("2d");
+      x.fillStyle = "#0b0b0f"; x.fillRect(0, 0, W, H);
+      // Fondo: la hinchada del Decano (cover) + velo oscuro para legibilidad.
+      const bg = await _loadImg("/assets/hero-mobile.jpg?v=51") || await _loadImg("/assets/hero-desktop.jpg?v=51");
+      if (bg && bg.width) {
+        const sc = Math.max(W / bg.width, H / bg.height);
+        const bw = bg.width * sc, bh = bg.height * sc;
+        x.drawImage(bg, (W - bw) / 2, (H - bh) / 2, bw, bh);
+        const g = x.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, "rgba(11,11,15,.93)"); g.addColorStop(0.30, "rgba(11,11,15,.60)");
+        g.addColorStop(0.60, "rgba(11,11,15,.74)"); g.addColorStop(1, "rgba(11,11,15,.96)");
+        x.fillStyle = g; x.fillRect(0, 0, W, H);
+      }
+      x.fillStyle = "rgba(21,19,28,.86)"; x.fillRect(0, 0, W, 300);
+      x.fillStyle = "#c9a227"; x.fillRect(0, 300, W, 4);
+      // Logo OFICIAL (escudo + OLIMPISTAS.com).
+      const logo = await _loadImg("/assets/logo-horizontal.svg?v=49");
+      if (logo) { const lw = 520, lh = lw * ((logo.height / logo.width) || 0.215); x.drawImage(logo, (W - lw) / 2, 95, lw, lh); }
+      // Selfie protagonista.
+      const cy = 645, r = 215;
+      x.save(); x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.closePath(); x.clip();
+      const foto = o.foto ? await _loadImg(o.foto) : null;
+      x.textAlign = "center";
+      if (foto) x.drawImage(foto, cx - r, cy - r, r * 2, r * 2);
+      else { x.fillStyle = "#23232c"; x.fillRect(cx - r, cy - r, r * 2, r * 2); x.fillStyle = "#f0d873"; x.font = "bold 190px Arial"; x.textBaseline = "middle"; x.fillText((o.nombre || "O").trim().charAt(0).toUpperCase(), cx, cy); x.textBaseline = "alphabetic"; }
+      x.restore();
+      x.lineWidth = 10; x.strokeStyle = "#c9a227"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
+      // Banderita en la selfie.
+      const iso = (o.iso || "").toLowerCase().trim();
+      if (/^[a-z]{2}$/.test(iso)) {
+        const fl = await _loadImg("https://flagcdn.com/" + iso + ".svg", true);
+        if (fl) { const fr = 60, fx = cx + r - 58, fy = cy + r - 58; x.save(); x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.closePath(); x.clip(); x.drawImage(fl, fx - fr, fy - fr, fr * 2, fr * 2); x.restore(); x.lineWidth = 8; x.strokeStyle = "#0b0b0f"; x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.stroke(); x.lineWidth = 3; x.strokeStyle = "#fff"; x.beginPath(); x.arc(fx, fy, fr - 2, 0, 6.2832); x.stroke(); }
+      }
+      // Anuncio. (re-centramos: restore() reseteó textAlign a "start")
+      x.textAlign = "center"; x.textBaseline = "alphabetic";
+      x.fillStyle = "#f0d873"; x.font = "700 32px Arial"; try { x.letterSpacing = "8px"; } catch (e) {}
+      x.fillText("ME SUMÉ AL DECANO", cx, 990); try { x.letterSpacing = "0px"; } catch (e) {}
+      x.fillStyle = "#fff"; x.font = "900 96px Arial"; x.fillText("SOY OLIMPISTA", cx, 1170);
+      x.font = "54px Arial"; x.fillText("🤍 🖤 🤍", cx, 1260);
+      x.fillStyle = "#fff"; x.font = "800 56px Arial"; x.fillText(o.nombre || "Olimpista", cx, 1400);
+      const lugar = [o.ciudad, o.pais].filter(Boolean).join(", ") || o.pais || "";
+      if (lugar) { x.fillStyle = "#c6c6d0"; x.font = "600 40px Arial"; x.fillText("📍 " + lugar, cx, 1465); }
+      // CTA pie.
+      x.fillStyle = "rgba(255,255,255,.6)"; x.font = "600 33px Arial"; x.fillText("Sumate al mundo del Decano, estés donde estés", cx, 1670);
+      x.fillStyle = "#f0d873"; x.font = "800 62px Arial"; x.fillText("www.olimpistas.com", cx, 1755);
+      x.fillStyle = "rgba(255,255,255,.55)"; x.font = "600 34px Arial"; x.fillText("@olimpistascom · #SoyOlimpista", cx, 1815);
+      return await new Promise((res) => cv.toBlob((b) => res(b), "image/png", 0.92));
+    } catch (e) { return null; }
+  }
+
+  // Genera la gráfica de story y la comparte (Web Share con archivo) o la descarga
+  // + abre Instagram. Copia el caption al portapapeles. o: {nombre,ciudad,pais,iso,foto,caption,igUrl}
+  async function compartirStory(o) {
+    o = o || {};
+    const blob = await storyImagen(o);
+    if (!blob) return { ok: false };
+    const file = new File([blob], "soy-olimpista.png", { type: "image/png" });
+    try { if (navigator.clipboard && o.caption) await navigator.clipboard.writeText(o.caption); } catch (e) {}
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: "Soy Olimpista", text: o.caption || "" }); return { ok: true, shared: true }; }
+      catch (e) { return { ok: false, cancel: true }; }
+    }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "soy-olimpista.png"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    try { window.open(o.igUrl || "https://instagram.com/olimpistascom", "_blank"); } catch (e) {}
+    return { ok: true, downloaded: true };
   }
 
   // Confeti dorado/blanco/negro (canvas, sin librería). Para el momento "¡Ya sos Olimpista!".
@@ -264,5 +415,87 @@ window.OLI = (function () {
     function finalizar(dataUrl) { cerrar(); if (onFoto) onFoto(dataUrl); }
   }
 
-  return { api, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, currency, setCurrency, fmtMoney, confetti, fotoModal };
+  // ── Modal ACCESIBLE reutilizable ────────────────────────────────────────────
+  // Crea overlay .oli-modal-bg > .oli-modal[role=dialog, aria-modal], mueve el foco al
+  // primer control, ATRAPA Tab dentro, cierra con Escape y RESTAURA el foco al cerrar.
+  // `inner` = HTML del contenido (con un <h3>/<h4> como título). Devuelve { root, close }.
+  function modal(inner, opts = {}) {
+    const prevFocus = document.activeElement;
+    const bg = document.createElement("div");
+    bg.className = "oli-modal-bg";
+    const labId = "mdl_" + Math.random().toString(36).slice(2, 8);
+    bg.innerHTML = `<div class="oli-modal" role="dialog" aria-modal="true" aria-labelledby="${labId}">${inner}</div>`;
+    const root = bg.firstElementChild;
+    const h = root.querySelector("h3, h4"); if (h && !h.id) h.id = labId;
+    document.body.appendChild(bg);
+    const focusables = () => Array.prototype.slice.call(root.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    let closed = false;
+    const close = () => {
+      if (closed) return; closed = true;
+      document.removeEventListener("keydown", onKey, true);
+      bg.remove();
+      if (opts.onClose) { try { opts.onClose(); } catch (e) {} }
+      if (prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch (e) {} }
+    };
+    function onKey(e) {
+      if (e.key === "Escape" && opts.dismissable !== false) { e.preventDefault(); close(); return; }
+      if (e.key === "Tab") {
+        const f = focusables(); if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
+    if (opts.dismissable !== false) bg.addEventListener("click", (e) => { if (e.target === bg) close(); });
+    setTimeout(() => { const f = focusables(); if (f.length) f[0].focus(); }, 40);
+    return { root, close };
+  }
+
+  // Pide la cédula con un modal propio (reemplaza window.prompt). Promise<string|null>.
+  function pedirCedula(titulo) {
+    return new Promise((resolve) => {
+      let done = false;
+      const { root, close } = modal(
+        `<h3>${esc(titulo || tt("m_cedula_pago") || "Ingresá tu cédula")}</h3>
+         <input id="mdlCed" type="text" inputmode="numeric" autocomplete="off" placeholder="${tt("ob_cedula_ph") || "Tu cédula"}" />
+         <p class="err" id="mdlCedErr"></p>
+         <button class="btn btn-block" id="mdlCedOk">${tt("ob_validar") || "Continuar"}</button>
+         <button class="btn btn-ghost btn-block" id="mdlCedX" style="margin-top:8px">${tt("up_cerrar") || "Cancelar"}</button>`,
+        { onClose: () => { if (!done) resolve(null); } });
+      const inp = root.querySelector("#mdlCed");
+      const ok = () => {
+        const c = (inp.value || "").replace(/\D/g, "");
+        if (!c) { root.querySelector("#mdlCedErr").textContent = tt("ob_cedula_err") || "Ingresá tu cédula"; return; }
+        done = true; resolve(c); close();
+      };
+      root.querySelector("#mdlCedOk").onclick = ok;
+      root.querySelector("#mdlCedX").onclick = () => close();
+      inp.addEventListener("keydown", (e) => { if (e.key === "Enter") ok(); });
+    });
+  }
+
+  // ── Referidos: capturar ?ref= al entrar y recordarlo hasta el registro ──
+  (function () {
+    try {
+      const r = new URLSearchParams(location.search).get("ref");
+      if (r) sessionStorage.setItem("oli_ref", String(r).trim().slice(0, 16));
+    } catch (e) {}
+  })();
+  function ref() { try { return sessionStorage.getItem("oli_ref") || ""; } catch (e) { return ""; } }
+  // Link de invitación del socio (para compartir): www.olimpistas.com/?ref=<su_codigo>
+  function refLink(codigo) { return "https://www.olimpistas.com/?ref=" + encodeURIComponent(codigo || ""); }
+
+  // Conversiones: un objetivo en Plausible (medición para vos) + un evento estándar en Meta Pixel
+  // (para optimizar ads). Best-effort: si alguno no está, no rompe. fbEvent = nombre estándar de Meta.
+  // Nombre del evento en GA4 según el evento estándar de Meta (o el goal en minúsculas).
+  const GA_EV = { CompleteRegistration: "sign_up", InitiateCheckout: "begin_checkout", Purchase: "purchase" };
+  function track(goal, fbEvent, fbParams) {
+    try { if (window.plausible) window.plausible(goal); } catch (e) {}
+    try { if (window.fbq && fbEvent) window.fbq("track", fbEvent, fbParams || {}); } catch (e) {}
+    try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
+  }
+
+  return { api, esc, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, fmtMoney, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, refLink, track };
 })();

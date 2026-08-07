@@ -2,54 +2,49 @@
 # Ejecutar desde:  C:\Users\user\olimpistas\
 # Requisito: gcloud autenticado.   > gcloud auth login
 #
-# ANTES del primer deploy (una sola vez), crear el secreto con la URL de Supabase
-# (usar el "Connection Pooler" / Transaction pooler de Supabase, NO la conexión
-# directa, para que escale en Cloud Run):
+# ⚠️ IMPORTANTE (lecciones aprendidas):
+#  - La región REAL es southamerica-east1 (co-locada con Supabase sa-east-1). NO us-central1.
+#  - El servicio vive detrás de un Load Balancer + Cloud CDN + cert gestionado para
+#    www.olimpistas.com. NO se usan domain mappings (no están permitidos en la región).
+#  - NUNCA usar --env-vars-file ni un --set-env-vars PARCIAL: pisa el resto de las vars.
+#    Por eso acá se setean TODAS las env vars y AMBOS secretos en cada deploy.
+#  - Build con `--source .` (Cloud Build / buildpacks). La SA de compute necesita rol builder.
 #
-#   $env:OLIMPISTAS_DB = "postgresql://...pooler.supabase.com:6543/postgres?..."
-#   $env:OLIMPISTAS_DB | gcloud secrets create olimpistas-db --data-file=- --project=olimpistas
-#   # (para actualizarla luego: ... | gcloud secrets versions add olimpistas-db --data-file=-)
-#
-# Y aplicar el schema una vez (Supabase → SQL Editor → pegar data/schema.sql).
+# La rampa del contador se controla por env vars (RAMP_*). Para ARRANCAR la subida
+# el día del lanzamiento, mover RAMP_INICIO al momento exacto (sin redeploy):
+#   gcloud run services update olimpistas --region southamerica-east1 --project olimpistas `
+#     --update-env-vars RAMP_INICIO=2026-06-19T15:00:00Z
+# (Mientras RAMP_INICIO esté en el futuro, el contador queda fijo en RAMP_DESDE_N.)
 # ------------------------------------------------------------------------------
 
 $PROJECT = "olimpistas"
-$REGION  = "us-central1"
-$REPO    = "olimpistas"
-$IMAGE   = "$REGION-docker.pkg.dev/$PROJECT/$REPO/app"
+$REGION  = "southamerica-east1"
 $SERVICE = "olimpistas"
 
-Write-Host "`n[1/5] Configurando proyecto..." -ForegroundColor Cyan
+Write-Host "`n[1/2] Configurando proyecto..." -ForegroundColor Cyan
 gcloud config set project $PROJECT
 
-Write-Host "`n[2/5] Habilitando APIs..." -ForegroundColor Cyan
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com secretmanager.googleapis.com
-
-Write-Host "`n[3/5] Creando Artifact Registry (si no existe)..." -ForegroundColor Cyan
-gcloud artifacts repositories create $REPO `
-  --repository-format=docker --location=$REGION `
-  --description="Olimpistas - socios de Olimpia" 2>$null
-Write-Host "  (si ya existe, se ignora el error)"
-
-Write-Host "`n[4/5] Build y push con Cloud Build..." -ForegroundColor Cyan
-gcloud builds submit --tag $IMAGE .
-
-Write-Host "`n[5/5] Deploy a Cloud Run..." -ForegroundColor Cyan
-# Flags pensadas para aguantar picos de tráfico (ver SCALING.md):
-#   --concurrency 250  : cada instancia atiende ~250 requests a la vez.
-#   --max-instances 100: techo de autoescalado.
-#   --min-instances 1  : 1 instancia caliente (evita cold start; subir para un pico).
-# OLIMPISTAS_DATABASE_URL se inyecta desde Secret Manager (secreto olimpistas-db).
+Write-Host "`n[2/2] Build (--source) y deploy a Cloud Run ($REGION)..." -ForegroundColor Cyan
+# Flags para aguantar picos (post-auditoría 2026-08):
+#  - CPU 2 + concurrency 60: el registro hashea con bcrypt (CPU-bound). Con 1 vCPU y
+#    concurrency 250, la ráfaga de altas congelaba el event loop. 2 vCPU + menos
+#    concurrency deja respirar el hashing sin ahogar el resto de los requests.
+#  - Conexiones al pooler = pg-store max(6) × max-instances(50) = 300. VERIFICAR que el
+#    "max client connections" del pooler de Supabase (Supavisor) sea >= 300 con margen;
+#    si no, bajar max-instances o el max del driver. (Los 3 valores deben coincidir:
+#    data/pg-store.js, este archivo y SCALING.md.)
+#  - min-instances: SUBIR a 4-5 antes de mover RAMP_INICIO el día D (evita cold start en el pico).
 gcloud run deploy $SERVICE `
-  --image $IMAGE `
-  --platform managed --region $REGION `
+  --source . `
+  --project $PROJECT --region $REGION `
   --allow-unauthenticated `
-  --memory 512Mi --cpu 1 `
-  --concurrency 250 `
-  --min-instances 1 --max-instances 100 `
+  --memory 1Gi --cpu 2 `
+  --concurrency 60 `
+  --min-instances 1 --max-instances 50 `
   --port 8080 `
-  --set-env-vars NODE_ENV=production `
-  --set-secrets OLIMPISTAS_DATABASE_URL=olimpistas-db:latest
+  --set-secrets OLIMPISTAS_DATABASE_URL=olimpistas-db:latest,RESEND_API_KEY=olimpistas-resend:latest `
+  --set-env-vars NODE_ENV=production,PLAUSIBLE_DOMAIN=www.olimpistas.com,RAMP_INICIO=2099-01-01T00:00:00Z,RAMP_DESDE_N=180000,RAMP_HASTA_N=1000000,RAMP_HORAS=60
 
 Write-Host "`n✅ Deploy completado." -ForegroundColor Green
 gcloud run services describe $SERVICE --region $REGION --format="value(status.url)"
+Write-Host "Sitio público: https://www.olimpistas.com" -ForegroundColor Green
