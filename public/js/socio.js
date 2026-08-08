@@ -2,7 +2,7 @@
    preventas, carnet. Bilingüe (OLI_I18N) + UX premium (skeletons, transiciones,
    anillo de progreso). El foco del embudo es completar el perfil. */
 (function () {
-  const { api, esc, gs, artSvg, toast, yo, carnet: carnetHTML, makeQR, fotoModal, icon } = window.OLI;
+  const { api, esc, gs, gsUsdRef, artSvg, toast, yo, carnet: carnetHTML, makeQR, fotoModal, icon } = window.OLI;
   const T = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
   const LANG = window.OLI_I18N ? window.OLI_I18N.lang() : "es";
   const LOC = LANG === "en" ? "en-US" : "es-PY";
@@ -240,7 +240,7 @@
         <span class="destacado-tag">${T("tab_subastas")}</span>
         <h3 class="destacado-titulo">${esc(subaViva.titulo)}</h3>
         <div class="destacado-precio-row">
-          <div class="destacado-precio"><span class="destacado-precio-lbl">${T("m_sub_actual")}</span><strong>${gs(subaViva.puja_actual)}</strong></div>
+          <div class="destacado-precio"><span class="destacado-precio-lbl">${T("m_sub_actual")}</span><strong>${gs(subaViva.puja_actual)}</strong><span class="precio-usd">${gsUsdRef(subaViva.puja_actual)}</span></div>
           <span class="destacado-pujadores">${icon("users", { size: 14 })} ${subaViva.pujadores} ${T("m_sub_pujando")}</span></div>
         <span class="destacado-cta">${T("m_sub_pujar")} →</span>
       </div>
@@ -907,7 +907,7 @@
         <span class="sub-cd${cd.urg ? " urg" : ""}">${cerrada ? T("m_sub_cerrada") : icon("hourglass", { size: 12 }) + " " + cd.txt}</span></div>
       <div class="body"><span class="chip ${cerrada ? "" : "on"}">${cerrada ? T("m_sub_finalizada") : T("m_sub_envivo")}</span>
         <h4>${esc(s.titulo)}</h4>
-        <p class="sub-actual">${T("m_sub_actual")}<br><strong>${gs(s.puja_actual)}</strong></p>
+        <p class="sub-actual">${T("m_sub_actual")}<br><strong>${gs(s.puja_actual)}</strong> <span class="precio-usd" style="margin:0">${gsUsdRef(s.puja_actual)}</span></p>
         <p class="muted" style="font-size:12px;margin:0">${icon("users", { size: 14 })} ${s.pujadores} ${T("m_sub_pujando")}</p>
         ${cerrada && s.ganador_nombre ? `<p class="muted" style="font-size:12px;margin:2px 0 0">${icon("trophy", { size: 12 })} ${s.gano ? T("m_sub_vos") : esc(s.ganador_nombre)}</p>` : ""}
         ${cta}</div></div>`;
@@ -973,6 +973,7 @@
       <div class="sub-box">
         <div class="sub-lbl">${T("m_sub_actual")}</div>
         <div class="sub-amt" id="subAmt">${gs(s.puja_actual)}</div>
+        <div class="precio-usd" id="subAmtUsd">${gsUsdRef(s.puja_actual)}</div>
         <div id="subState">${estadoHtml(r, cerrada)}</div>
         <div class="sub-clock${cd.urg ? " urg" : ""}" id="subClock"><span>${T("m_sub_cierra")}</span> <b id="subCd">${cerrada ? T("m_sub_cerrada") : cd.txt}</b></div>
       </div>
@@ -1025,6 +1026,7 @@
     const s = r.subasta, cd = cdTexto(s.termina), cerrada = s.estado !== "activa" || cd.fin;
     if (_subData) _subData.termina = s.termina;
     document.getElementById("subAmt").textContent = gs(s.puja_actual);
+    document.getElementById("subAmtUsd").textContent = gsUsdRef(s.puja_actual);
     document.getElementById("subState").innerHTML = estadoHtml(r, cerrada);
     document.getElementById("subPuj").textContent = r.pujadores;
     document.getElementById("subMia").textContent = r.miPuja ? gs(r.miPuja) : "—";

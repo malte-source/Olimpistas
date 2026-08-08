@@ -1,6 +1,6 @@
 /* landing.js — embudo de captación: registro gratis + upsell a Kids/Premium. */
 (function () {
-  const { api, precioTier, toast, yo, carnet, makeQR, currency, setCurrency, esc, gs, artSvg } = window.OLI;
+  const { api, precioTier, toast, yo, carnet, makeQR, currency, setCurrency, esc, gs, gsUsdRef, artSvg } = window.OLI;
   const I18N = window.OLI_I18N;
   const T = (k) => (I18N ? I18N.t(k) : k);
   const LANG = I18N ? I18N.lang() : "es";
@@ -68,7 +68,7 @@
       '<span class="destacado-tag">' + T("tab_subastas") + '</span>' +
       '<h3 class="destacado-titulo">' + esc(s.titulo) + '</h3>' +
       '<div class="destacado-precio-row">' +
-      '<div class="destacado-precio"><span class="destacado-precio-lbl">' + T("m_sub_actual") + '</span><strong>' + gs(s.puja_actual) + '</strong></div>' +
+      '<div class="destacado-precio"><span class="destacado-precio-lbl">' + T("m_sub_actual") + '</span><strong>' + gs(s.puja_actual) + '</strong><span class="precio-usd">' + gsUsdRef(s.puja_actual) + '</span></div>' +
       '<span class="destacado-pujadores">' + OLI.icon("users", { size: 14 }) + ' ' + s.pujadores + ' ' + T("m_sub_pujando") + '</span></div>' +
       '<span class="destacado-cta">' + T("m_sub_pujar") + ' →</span></div></a>';
   }

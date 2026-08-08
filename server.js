@@ -326,6 +326,7 @@ app.get("/subasta/:id", async (req, res) => {
   <div class="sub-box">
     <div class="sub-lbl">Puja actual</div>
     <div class="sub-amt" id="bid">₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")}</div>
+    <div class="precio-usd" id="bidUsd">≈ US$ ${Math.round(Number(s.puja_actual || 0) / 6500).toLocaleString("en-US")}</div>
     <div class="sub-clock"><span>Cierra en</span> <b id="cd">—</b></div>
   </div>
   <p class="sub-meta">${icUsers} <b id="puj">—</b> pujando</p>
@@ -337,9 +338,10 @@ app.get("/subasta/:id", async (req, res) => {
 OLI.initThemeToggle("themeSw");
 OLI.yo().then(function(y){var b=document.getElementById("accederBtn");if(y&&y.socio){b.textContent="Mi cuenta";b.onclick=function(){location.href="/miembro";};}else{b.textContent="Ingresar";b.onclick=function(){location.href="/?intent=pujar&sub="+encodeURIComponent(id);};}}).catch(function(){});
 function gs(n){return "₲ "+Number(n||0).toLocaleString("es-PY");}
+function gsUsd(n){return "≈ US$ "+Math.round(Number(n||0)/6500).toLocaleString("en-US");}
 function cd(t){var ms=new Date(t).getTime()-Date.now();if(ms<=0)return "Cerrada";var s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),ss=s%60;return d>0?d+"d "+h+"h":h>0?h+"h "+m+"m":(m<10?"0":"")+m+":"+(ss<10?"0":"")+ss;}
 var $=function(x){return document.getElementById(x);};
-async function load(){try{var res=await fetch("/api/subastas/"+id);if(!res.ok)return;var r=await res.json();var su=r.subasta;$("bid").textContent=gs(su.puja_actual);$("cd").textContent=cd(su.termina);$("puj").textContent=r.pujadores;if(su.estado==="cerrada"){$("estadoChip").textContent="Cerrada";$("estadoChip").className="chip";$("cta").textContent="Subasta cerrada";$("cta").disabled=true;$("cta").className="btn btn-ghost btn-block";}}catch(e){}}
+async function load(){try{var res=await fetch("/api/subastas/"+id);if(!res.ok)return;var r=await res.json();var su=r.subasta;$("bid").textContent=gs(su.puja_actual);$("bidUsd").textContent=gsUsd(su.puja_actual);$("cd").textContent=cd(su.termina);$("puj").textContent=r.pujadores;if(su.estado==="cerrada"){$("estadoChip").textContent="Cerrada";$("estadoChip").className="chip";$("cta").textContent="Subasta cerrada";$("cta").disabled=true;$("cta").className="btn btn-ghost btn-block";}}catch(e){}}
 load();setInterval(load,5000);
 $("cta").addEventListener("click",async function(){if(this.disabled)return;var yo=null;try{var r=await fetch("/api/auth/yo");if(r.ok)yo=await r.json();}catch(e){}if(yo&&yo.socio)location.href="/miembro?sub="+id;else location.href="/?intent=pujar&sub="+encodeURIComponent(id);});
 })();</script></body></html>`);

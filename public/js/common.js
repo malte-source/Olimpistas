@@ -26,6 +26,14 @@ window.OLI = (function () {
     return "₲ " + Number(n).toLocaleString("es-PY");
   }
 
+  // Referencia en USD para precios de subastas (siempre en guaraníes al pujar/pagar —
+  // esto es solo informativo). Tipo de cambio propio de subastas, no el de membresías.
+  const SUB_USD_RATE = 6500;
+  function gsUsdRef(n) {
+    if (n == null) return "";
+    return "≈ US$ " + Math.round(Number(n) / SUB_USD_RATE).toLocaleString("en-US");
+  }
+
   // ── Moneda (Gs / USD). Auto por país, con toggle. PAGOPAR cobra en Gs; USD es display. ──
   let _cur = "";
   try { _cur = localStorage.getItem("oli_cur") || ""; } catch (e) {}
@@ -599,5 +607,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, refLink, track, theme, setTheme, initThemeToggle, icon };
+  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, refLink, track, theme, setTheme, initThemeToggle, icon };
 })();
