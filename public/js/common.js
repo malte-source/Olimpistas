@@ -424,9 +424,13 @@ window.OLI = (function () {
     bannerCookies();
     const nav = document.querySelector(".nav");
     if (nav) {
-      const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 30);
+      // Páginas sin foto de fondo en el hero (subasta pública) marcan el nav como
+      // "siempre sólido" — si no, este listener le sacaba la clase "scrolled" apenas
+      // cargaba (scrollY=0) y el texto blanco quedaba invisible sobre fondo claro.
+      const solid = nav.dataset.navSolid === "1";
+      const onScroll = () => nav.classList.toggle("scrolled", solid || window.scrollY > 30);
       onScroll();
-      window.addEventListener("scroll", onScroll, { passive: true });
+      if (!solid) window.addEventListener("scroll", onScroll, { passive: true });
     }
     const els = document.querySelectorAll(".section, .why-item");
     if ("IntersectionObserver" in window && els.length) {

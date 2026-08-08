@@ -298,7 +298,7 @@ app.get("/subasta/:id", async (req, res) => {
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg"><meta name="theme-color" content="#0b0b0f">
 <link rel="stylesheet" href="/assets/fonts/fonts.css"><link rel="stylesheet" href="/css/styles.css?v=${BUILD_ID}">
 </head><body>
-<header class="nav scrolled">
+<header class="nav" data-nav-solid="1">
   <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=${BUILD_ID}" alt="Olimpistas" /></a>
   <div class="nav-right">
     <button class="nav-sw" id="themeSw" type="button">Claro</button>
