@@ -165,6 +165,45 @@ button { font-family: inherit; cursor: pointer; }
   background: rgba(255,255,255,.08); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   color: #fff; font-size: 13px; font-weight: 700; border: 1px solid rgba(255,255,255,.3);
   text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.hero-ctas { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.hero-ctas .btn-hero { margin-top: 0; }
+.hero-ctas .btn-ghost { border-color: rgba(255,255,255,.4); color: #fff; }
+.hero-ctas .btn-ghost:hover { border-color: #fff; }
+/* ─── Hero de escritorio: texto a la izquierda, mundo + subasta apiladas a la
+   derecha (mockup F2 2.1) — mobile se queda como estaba, centrado y apilado. ── */
+@media (min-width: 900px) {
+  .hero-inner { display: flex; align-items: center; justify-content: space-between; gap: 40px; text-align: left; }
+  .hero-text { flex: 1 1 auto; min-width: 0; max-width: 600px; }
+  .hero-text h1 { font-size: 46px; }
+  .hero-text .sub { margin-left: 0; margin-right: 0; }
+  .hero-text .hero-ctas { justify-content: flex-start; }
+  .hero-text .hero-social { margin-left: 0; }
+  .hero-side { flex: 0 0 340px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+}
+@media (min-width: 1180px) {
+  .hero-text h1 { font-size: 58px; }
+  .hero-side { flex-basis: 380px; }
+}
+.hero-mundo-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px;
+  background: rgba(255,255,255,.07); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.18); text-decoration: none; color: #fff; transition: border-color .15s; }
+.hero-mundo-card:hover { border-color: rgba(255,255,255,.4); }
+.hmc-eyebrow { flex: 1; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: rgba(255,255,255,.7); }
+.hmc-num { font-family: var(--display); font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+.hmc-lbl { font-size: 12px; font-weight: 700; white-space: nowrap; }
+/* Subasta en vivo, versión compacta para el hero — mismo dato que el .destacado
+   grande de Descubrir, la caja acá es chica y siempre con tinte de oro (única
+   franja dorada del hero: la lectura es "esto cuesta / vale la pena mirar"). */
+/* Forzamos el layout apilado (media arriba, info abajo) incluso en desktop —
+   la barra lateral del hero es angosta (~340-380px), muy poco para la fila
+   260px+info que usa .destacado en Descubrir a partir de 640px. */
+.hero-side .destacado { margin: 0; background: var(--surface-value); border-color: var(--oro);
+  grid-template-columns: none !important; grid-template-areas: "media" "info" !important; }
+.hero-side .destacado-media { aspect-ratio: 16/9; height: auto; }
+.hero-side .destacado-info { padding: 14px 16px 16px; gap: 8px; }
+.hero-side .destacado-titulo { font-size: 15px; }
+.hero-side .destacado-precio strong { font-size: 20px; }
+.hero-side .destacado-cta { padding: 10px 16px; font-size: 13.5px; }
 
 /* ─── Cabecera de "Niveles": título a la izquierda, selector de moneda a la
    derecha, misma fila (mockup F2 2.1bis) ──────────────────────────────────── */
@@ -227,9 +266,6 @@ button { font-family: inherit; cursor: pointer; }
 .benefits { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; }
 .benefits li { font-size: 13.5px; color: var(--blanco); display: flex; gap: 9px; align-items: flex-start; line-height: 1.35; }
 .benefits li::before { content: "✓"; color: var(--gris-2); font-weight: 700; }
-
-.ver-todas { display: block; text-align: center; margin: 40px auto 60px; color: var(--blanco);
-  text-decoration: underline; text-underline-offset: 4px; font-size: 14px; opacity: .85; }
 
 /* ─── Secciones internas / socio ──────────────────────────────────────────── */
 .section { padding: 56px 0; border-top: 1px solid var(--linea); }
@@ -446,8 +482,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .hero-note { font-size: 13px; color: rgba(255,255,255,.82); margin: 12px 0 0; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
 .hero-cur-note { font-size: 12.5px; color: #fff; margin: 8px 0 0; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
 .hero-cur-note a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
-.hero .ver-todas { margin: 26px auto 0; }
-
 .why { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 8px; }
 .why-item { background: var(--negro-2); border: 1px solid var(--linea); border-radius: var(--radio); padding: 22px; }
 .why-item span { font-size: 28px; }

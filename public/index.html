@@ -50,19 +50,29 @@
       </picture>
     </div>
     <div class="hero-inner wrap">
-      <span class="pill" data-i18n="hero_pill">El Rey de Copas · El Decano</span>
-      <h1 id="heroTitle">OLIMPISTAS.COM</h1>
-      <p class="sub" id="heroSub">Cargando…</p>
-      <button class="btn btn-hero" id="heroCta">Unite gratis</button>
-      <p class="hero-note" data-i18n="hero_note">Gratis y en 30 segundos. Sin tarjeta.</p>
-      <p class="hero-cur-note" id="heroCurNote" hidden></p>
-      <p class="hero-social" id="heroSocial" hidden></p>
-      <a class="ver-todas" href="#planes" data-i18n="hero_vermas">Ver niveles y beneficios ↓</a>
+      <div class="hero-text">
+        <span class="pill" data-i18n="hero_pill">El Rey de Copas · El Decano</span>
+        <h1 id="heroTitle">OLIMPISTAS.COM</h1>
+        <p class="sub" id="heroSub">Cargando…</p>
+        <div class="hero-ctas">
+          <button class="btn btn-hero" id="heroCta">Unite gratis</button>
+          <a class="btn btn-ghost btn-hero" href="#planes" data-i18n="hero_vermas_btn">Ver niveles</a>
+        </div>
+        <p class="hero-note" data-i18n="hero_note">Gratis y en 30 segundos. Sin tarjeta.</p>
+        <p class="hero-cur-note" id="heroCurNote" hidden></p>
+        <p class="hero-social" id="heroSocial" hidden></p>
+      </div>
+      <div class="hero-side">
+        <a class="hero-mundo-card" href="#mundo" id="heroMundoCard">
+          <span class="hmc-eyebrow" data-i18n="mundo_eyebrow">El mundo del Decano</span>
+          <span class="hmc-num" id="heroMundoNum">—</span>
+          <span class="hmc-lbl" data-i18n="hero_mundo_cta">Poner mi bandera →</span>
+        </a>
+        <!-- Destacado dinámico (subasta en vivo / campaña) — lo llena landing.js -->
+        <div id="destacadoWrap"></div>
+      </div>
     </div>
   </section>
-
-  <!-- Destacado dinámico (subasta en vivo / campaña) — lo llena landing.js -->
-  <div class="wrap" id="destacadoWrap"></div>
 
   <!-- Olimpistas en el mundo -->
   <section class="section mundo" id="mundo">
