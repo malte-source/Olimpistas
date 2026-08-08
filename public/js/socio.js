@@ -966,7 +966,7 @@
   function renderDetalle(r) {
     const s = r.subasta, cd = cdTexto(s.termina), cerrada = s.estado !== "activa" || cd.fin;
     _subData = { id: s.id, termina: s.termina, celebrado: false };
-    cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+    cv().innerHTML = `<div class="section sub-detalle-wrap" style="border:none;padding-top:8px">
       <a class="sub-back">‹ ${T("m_sub_volver")}</a>
       <div class="sub-hero">${subastaMedia(s)}<span class="sub-unico">${icon("shield-check", { size: 11 })} ${T("m_sub_unico")}</span></div>
       <h2>${esc(s.titulo)}</h2><p class="lead">${esc(s.descripcion || "")}</p>

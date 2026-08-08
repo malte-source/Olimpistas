@@ -314,7 +314,7 @@ app.get("/subasta/:id", async (req, res) => {
     <button class="btn btn-ghost" id="accederBtn">Ingresar</button>
   </div>
 </header>
-<main class="wrap" style="max-width:640px;padding-top:36px;padding-bottom:60px">
+<main class="wrap" style="max-width:680px;padding-top:36px;padding-bottom:60px">
   <a class="sub-back" href="/">← Volver a Olimpistas.com</a>
   <div class="sub-hero">
     ${s.imagen ? '<img src="' + esc2(s.imagen) + '" alt="">' : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#2a2418,#c9a227);color:#f5efdd">${icGavel}</div>`}

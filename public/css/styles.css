@@ -907,10 +907,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   color: var(--oro-claro); border: 1px solid rgba(231,198,75,.55); }
 .sub-actual { font-size: 13px; color: var(--gris); margin: 6px 0 4px; }
 .sub-actual strong { font-size: 22px; color: var(--blanco); font-weight: 900; letter-spacing: -.5px; }
-.sub-hero { position: relative; aspect-ratio: 16/9; border-radius: 16px; overflow: hidden; margin: 6px 0 14px; max-width: 520px; }
+/* .sub-detalle-wrap constriñe TODO el bloque (título, foto, caja de puja, feed) a un ancho
+   de lectura razonable y lo centra — sin este wrapper, en pantallas anchas el contenido
+   quedaba pegado al borde izquierdo del .wrap general (1180px en /miembro), con un hueco
+   enorme a la derecha. Cada .sub-* de abajo ya no necesita su propio max-width: 520px. */
+.sub-detalle-wrap { max-width: 680px; margin: 0 auto; }
+.sub-hero { position: relative; aspect-ratio: 16/9; border-radius: 16px; overflow: hidden; margin: 6px 0 14px; }
 .sub-hero svg, .sub-hero img { width: 100%; height: 100%; object-fit: cover; }
 /* Bloque de puja: el único fondo con tinte de oro del sistema, fuera de las insignias pagas. */
-.sub-box { max-width: 520px; background: var(--surface-value);
+.sub-box { background: var(--surface-value);
   border: 1px solid var(--oro); border-radius: 16px; padding: 18px; }
 .sub-lbl { text-transform: uppercase; letter-spacing: .14em; font-size: 11px; font-weight: 800; color: var(--oro-claro); }
 .sub-amt { font-weight: 900; font-size: 38px; letter-spacing: -1px; margin: 4px 0 2px; }
@@ -922,24 +927,23 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .sub-clock { margin-top: 12px; font-size: 14px; color: var(--gris); }
 .sub-clock b { font-family: ui-monospace, monospace; color: var(--blanco); font-size: 18px; margin-left: 6px; }
 .sub-clock.urg b { color: var(--blanco); }
-.sub-meta { max-width: 520px; font-size: 13px; color: var(--gris); margin: 14px 0; }
-.sub-antisnipe { max-width: 520px; font-size: 12px; color: var(--gris-2); margin: -4px 0 14px; }
+.sub-meta { font-size: 13px; color: var(--gris); margin: 14px 0; }
+.sub-antisnipe { font-size: 12px; color: var(--gris-2); margin: -4px 0 14px; }
 .sub-meta b { color: var(--blanco); }
-.sub-quick { display: flex; gap: 8px; margin-top: 10px; max-width: 520px; }
+.sub-quick { display: flex; gap: 8px; margin-top: 10px; }
 .chip-btn { flex: 1; border: 1px solid var(--linea); background: var(--negro-2); color: var(--blanco); font: inherit;
   font-weight: 800; font-size: 13px; padding: 11px 6px; border-radius: 11px; cursor: pointer; transition: border-color .15s; }
 .chip-btn:hover { border-color: var(--blanco); }
 .sub-custom-toggle { display: inline-block; margin-top: 12px; font-size: 13px; color: var(--gris); text-decoration: underline; cursor: pointer; }
 .sub-custom-toggle:hover { color: var(--blanco); }
-.sub-custom-form { display: flex; gap: 8px; margin-top: 10px; max-width: 520px; }
+.sub-custom-form { display: flex; gap: 8px; margin-top: 10px; }
 .sub-custom-form input { flex: 1; background: var(--negro-2); border: 1px solid var(--linea); color: var(--blanco); font: inherit;
   font-size: 15px; padding: 11px 14px; border-radius: 11px; min-width: 0; }
 .sub-custom-form input:focus { outline: none; border-color: var(--focus-ring); }
 .sub-custom-form input::-webkit-outer-spin-button, .sub-custom-form input::-webkit-inner-spin-button { margin: 0; }
-.sub-cerrada { max-width: 520px; background: var(--negro-2); border: 1px solid var(--linea); border-radius: 12px;
+.sub-cerrada { background: var(--negro-2); border: 1px solid var(--linea); border-radius: 12px;
   padding: 14px; font-weight: 700; text-align: center; color: var(--gris-2); }
 .sub-back { display: inline-block; color: var(--blanco); cursor: pointer; font-weight: 700; margin-bottom: 10px; text-decoration: underline; text-underline-offset: 2px; }
-.sub-feed { max-width: 520px; }
 .sub-fitem { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--linea); }
 .sub-fitem:last-child { border-bottom: 0; }
 /* Avatar del feed de pujas: neutro — el oro queda para el bloque de puja, no para cada postor. */
