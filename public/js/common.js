@@ -41,11 +41,24 @@ window.OLI = (function () {
     try { localStorage.setItem("oli_theme", t); } catch (e) {}
     document.documentElement.setAttribute("data-theme", t);
   }
+  // Luna/sol: representan el DESTINO del toggle (igual que el texto) — si ahora
+  // está claro, muestra luna ("pasar a oscuro"); si está oscuro, muestra sol.
+  const MOON_ICON = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
+  const SUN_ICON = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
   function initThemeToggle(btnId) {
     document.documentElement.setAttribute("data-theme", theme());
     const btn = document.getElementById(btnId);
     if (!btn) return;
-    const paint = () => { btn.textContent = theme() === "light" ? "Oscuro" : "Claro"; };
+    // Ícono + texto: en mobile el texto se oculta (.nav-sw-label) y queda un botón
+    // cuadrado con el ícono — antes "Oscuro"/"Claro" en texto solo apretaba la
+    // topbar contra el borde en pantallas angostas.
+    const paint = () => {
+      const light = theme() === "light";
+      const label = light ? "Oscuro" : "Claro";
+      btn.innerHTML = '<svg class="nav-sw-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        (light ? MOON_ICON : SUN_ICON) + '</svg><span class="nav-sw-label">' + label + '</span>';
+      btn.setAttribute("aria-label", label);
+    };
     paint();
     btn.addEventListener("click", () => { setTheme(theme() === "light" ? "dark" : "light"); paint(); });
   }

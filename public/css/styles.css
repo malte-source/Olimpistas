@@ -131,9 +131,16 @@ button { font-family: inherit; cursor: pointer; }
 /* Toggles de idioma y moneda */
 .nav-sw { background: transparent; border: 1px solid rgba(255,255,255,.3); color: #fff; font-size: 12px; font-weight: 700;
   padding: 6px 10px; border-radius: 8px; cursor: pointer; letter-spacing: .3px; text-decoration: none; line-height: 1;
-  display: inline-flex; align-items: center; justify-content: center; min-height: 40px; }
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; }
 .nav-sw:hover { border-color: #fff; color: #fff; }
-@media (max-width: 640px) { .nav-sw { padding: 6px 10px; font-size: 11px; min-height: 44px; min-width: 44px; } }
+.nav-sw-ic { display: block; flex: none; }
+@media (max-width: 640px) {
+  .nav-sw { padding: 6px 10px; font-size: 11px; min-height: 44px; min-width: 44px; }
+  /* El toggle de tema queda solo con el ícono en mobile — con texto ("Oscuro"/
+     "Claro") apretaba la topbar contra el borde en pantallas angostas junto a
+     EN + Salir. El de idioma (EN/ES) ya es lo bastante corto, se deja como está. */
+  #themeSw .nav-sw-label { display: none; }
+}
 /* "Ingresar"/"Mi cuenta" (#accederBtn) usa .btn-ghost, cuyo color de texto invierte
    con el tema — pero acá vive sobre el .nav, siempre oscuro (foto o vidrio fijo).
    En claro el texto se volvía negro sobre fondo oscuro = invisible. Fijo, como
@@ -1016,7 +1023,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 640px) {
   .tab-ind { display: block; position: absolute; top: 8px; height: 40px; width: 52px; border-radius: 14px;
     background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
-    transition: transform .4s cubic-bezier(.34,1.4,.5,1); pointer-events: none; z-index: 0; }
+    transition: transform .28s cubic-bezier(.34,1.4,.5,1); pointer-events: none; z-index: 0; }
   .tabs .tab { position: relative; z-index: 1; }
   .tab.active { background: transparent; }
   .tab.active .tab-ic { transform: scale(1.06); }
