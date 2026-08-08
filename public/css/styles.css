@@ -450,7 +450,13 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ─── Header socio ────────────────────────────────────────────────────────── */
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--linea); }
-.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 28px 0; }
+/* Vidrio oscuro fijo, igual que .topbar arriba y la barra inferior en mobile —
+   por eso el texto/borde de .tab no invierte con el tema (ver comentario abajo).
+   Antes .tabs no tenía fondo propio: en modo claro quedaba transparente sobre la
+   página clara y el texto (pensado para fondo oscuro) se volvía invisible. */
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 28px 0; padding: 10px;
+  background: rgba(11,11,15,.72); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,.12); border-radius: 999px; }
 /* .tab vive en .topbar (desktop) y en la barra inferior (mobile) — las dos son
    vidrio oscuro fijo, así que su texto/borde no invierte con el tema. */
 .tab { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px;
@@ -815,9 +821,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .foto-btn { margin: 0; font-size: 14px; }
   /* Navegación tipo app: barra inferior fija con íconos (solo mobile). */
   .tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; margin: 0; gap: 0;
-    display: flex; justify-content: space-around; flex-wrap: nowrap;
+    display: flex; justify-content: space-around; flex-wrap: nowrap; border-radius: 0;
     padding: 8px 4px max(8px, env(safe-area-inset-bottom));
-    background: rgba(11,11,15,.96); backdrop-filter: blur(14px); border-top: 1px solid rgba(255,255,255,.15); }
+    background: rgba(11,11,15,.96); backdrop-filter: blur(14px); border: none; border-top: 1px solid rgba(255,255,255,.15); }
   .tab { flex: 1 1 0; min-width: 0; min-height: 56px; flex-direction: column; gap: 0; padding: 10px 2px; border: none;
     border-radius: 14px; background: transparent; color: rgba(255,255,255,.55); }
   /* En mobile el texto no se VE (solo íconos) pero SIGUE en el árbol de accesibilidad
