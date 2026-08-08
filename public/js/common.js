@@ -31,10 +31,6 @@ window.OLI = (function () {
   try { _cur = localStorage.getItem("oli_cur") || ""; } catch (e) {}
   function currency() { return _cur || "PYG"; }
   function setCurrency(c) { _cur = c; try { localStorage.setItem("oli_cur", c); } catch (e) {} }
-  function fmtMoney(gsAmount, rate) {
-    if (currency() === "USD") return "US$ " + Math.round(gsAmount / (rate || 7300)).toLocaleString("en-US");
-    return "₲ " + Number(gsAmount).toLocaleString("es-PY");
-  }
   // ── Tema (claro/oscuro). Mismo patrón que idioma/moneda: localStorage + toggle manual.
   // Default oscuro explícito (no prefers-color-scheme) para no cambiar nada hasta que se toque a mano. ──
   let _theme = "";
@@ -586,5 +582,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, fmtMoney, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, refLink, track, theme, setTheme, initThemeToggle, icon };
+  return { api, esc, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, refLink, track, theme, setTheme, initThemeToggle, icon };
 })();

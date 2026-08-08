@@ -49,7 +49,10 @@
     // Candados vivos: cualquier botón bloqueado (sorteo/preventa/beneficio/subasta) abre
     // el momento de upsell (explica qué desbloquea + ofrece la vía gratis de socio),
     // en vez de mandar directo a la pasarela de pago sin contexto.
-    view().addEventListener("click", (e) => { const b = e.target.closest("[data-upsell-cta]"); if (b) mostrarUpsell(b.dataset.upsellCta, b.dataset.upsellCtx); });
+    // Socio no se compra (se otorga al validar cédula) — si el candado pide "socio",
+    // el momento correcto es la validación gratis, no un botón de compra que el
+    // backend siempre rechaza con 403.
+    view().addEventListener("click", (e) => { const b = e.target.closest("[data-upsell-cta]"); if (!b) return; if (b.dataset.upsellCta === "socio") validarSocioModal(); else mostrarUpsell(b.dataset.upsellCta, b.dataset.upsellCtx); });
 
     const pago = new URLSearchParams(location.search).get("pago_simulado");
     if (pago) {
@@ -178,7 +181,7 @@
       try { if (navigator.share) await navigator.share({ title: "Olimpistas", text: txt }); else { await navigator.clipboard.writeText(link); toast(T("m_link_copiado")); } } catch (e) {}
     };
     const esc2 = view().querySelector("#iniEscalon");
-    if (esc2) esc2.onclick = () => mostrarUpsell(esc2.dataset.tier, T("m_ini_escalon_p"));
+    if (esc2) esc2.onclick = () => esc2.dataset.tier === "socio" ? validarSocioModal() : mostrarUpsell(esc2.dataset.tier, T("m_ini_escalon_p"));
     const card = view().querySelector(".enc-card");
     if (card && enc) bindEncuesta(card, enc);
   }
@@ -212,10 +215,17 @@
   function escalonCard() {
     if (esSocioValidado()) return ""; // ya validado — no hay nada más que ofrecerle acá
     const tier = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
+    // Socio NO se compra (se otorga al validar la cédula) — para un Plus sin validar,
+    // el "próximo escalón" real es la validación gratis, no un botón de compra que
+    // el backend siempre rechaza con 403.
     const target = tier === "premium" ? "socio" : "premium";
+    const texto = target === "socio"
+      ? `<strong>${T("up_card_h")}</strong> — ${T("up_card_p")}`
+      : `<strong>${T("m_ini_escalon_h")}</strong> — ${T("m_ini_escalon_p")}`;
+    const cta = target === "socio" ? T("ob_validar") : T("m_ini_escalon_cta");
     return `<div class="socio-banner" id="iniEscalon" data-tier="${target}" style="cursor:pointer;margin-top:24px">
-      <span class="sb-txt">${icon("trophy", { size: 16 })} <strong>${T("m_ini_escalon_h")}</strong> — ${T("m_ini_escalon_p")}</span>
-      <button class="btn btn-valor btn-sm">${T("m_ini_escalon_cta")}</button></div>`;
+      <span class="sb-txt">${icon("trophy", { size: 16 })} ${texto}</span>
+      <button class="btn btn-valor btn-sm">${cta}</button></div>`;
   }
 
   // ─── Encuestas (Fan Survey): card en Inicio ───
@@ -612,42 +622,6 @@
     } catch (err) { toast(err.message); }
   }
 
-  // ─── Mi membresía ────────────────────────────────────────────────────────────
-  async function vMembresia() {
-    view().innerHTML = skeleton(3);
-    const { membresia, tier } = await api("/membresia");
-    const { tiers } = await api("/config");
-    const pagos = tiers.filter((t) => t.nivel > 0 && t.comprable !== false);
-    const esGratis = !membresia || tier?.nivel === 0;
-    const social = await socialPais();
-    const upsell = esGratis ? `<h3 style="margin-top:28px">${T("m_subi")}</h3><div class="grid-3">${pagos.map(cardUpsell).join("")}</div>` : "";
-    // Card de validación de socio (incluido): siempre presente hasta validar.
-    const socioCard = !esSocioValidado() ? `<div class="card card-socio"><div class="body">
-        <span class="chip on">${icon("trophy", { size: 14 })} ${T("up_card_chip")}</span>
-        <h4>${T("up_card_h")}</h4><p>${T("up_card_p")}</p>
-        <button class="btn" id="upCardBtn">${T("ob_validar")}</button></div></div>` : "";
-    const s = SESSION.socio;
-    const cd = (await api("/carnet").catch(() => null))?.carnet;
-    const heroCn = cd ? carnetHTML({ tierSlug: cd.tierSlug, tierNombre: cd.tier, nombre: cd.nombre, numero: cd.numero, foto: cd.foto, qr: makeQR(location.origin + "/c/" + encodeURIComponent(cd.numero)), iso: cd.iso }) : "";
-    const ubic = [s.ciudad, s.pais].filter(Boolean).join(", ");
-    const ubicHtml = ubic
-      ? `<p class="ubic-line">${icon("map-pin", { size: 14 })} ${esc(ubic)} · <a class="ed-ubic">${T("m_editar_ubic")}</a></p>`
-      : `<p class="ubic-line ubic-falta">${icon("map-pin", { size: 14 })} <a class="ed-ubic">${T("m_set_ubic")}</a></p>`;
-    view().innerHTML = `
-      <div class="section" style="border:none;padding-top:8px">
-        ${heroCn ? `<div class="cn-hero">${heroCn}</div>` : ""}
-        <h2>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h2>
-        <p class="lead">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : "—"}.</p>
-        ${ubicHtml}
-        ${social}
-        <ul class="benefits" style="max-width:520px">${(tier?.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
-        ${socioCard}
-        ${upsell}
-      </div>`;
-    view().querySelectorAll("[data-upsell]").forEach((b) => b.addEventListener("click", () => upgrade(b.dataset.upsell)));
-    view().querySelector("#upCardBtn")?.addEventListener("click", validarSocioModal);
-    view().querySelector(".ed-ubic")?.addEventListener("click", () => { activar("perfil"); setTimeout(() => focusCampo("pais"), 60); });
-  }
   // "Sos uno de X Olimpistas en [tu país]" — prueba social personalizada.
   async function socialPais() {
     try {
@@ -744,7 +718,7 @@
     let btn;
     if (cerrado) btn = s.ganador_nombre ? `<button class="btn btn-ghost" disabled>${icon("trophy", { size: 14 })} ${s.gano ? T("m_sub_vos") : esc(s.ganador_nombre)}</button>` : `<button class="btn btn-ghost" disabled>${T("m_sub_cerrada")}</button>`;
     else if (s.participando) btn = `<button class="btn btn-ghost" disabled>${T("m_ya_participas")}</button>`;
-    else if (!s.elegible) btn = `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_sorteo"))}">${icon("chevron-right", { size: 14 })} ${T("m_desbloquear")}</button>`;
+    else if (!s.elegible) btn = `<button class="btn btn-ghost" data-upsell-cta="${esc(s.tier_min || "premium")}" data-upsell-ctx="${esc(T("m_up_ctx_sorteo"))}">${icon("chevron-right", { size: 14 })} ${T("m_desbloquear")}</button>`;
     else btn = `<button class="btn" data-sorteo="${s.id}">${T("m_participar")}</button>`;
     return `<div class="card"><div class="thumb">${artSvg(s.id, s.titulo, icon("gift", { size: 30 }))}</div>
       <div class="body"><span class="chip ${cerrado ? "" : (s.elegible ? "on" : "")}">${cerrado ? T("m_sub_cerrada") : T("m_cierra") + " " + s.cierra}</span>
@@ -786,7 +760,7 @@
       ? `<button class="btn btn-ghost" disabled>${T("m_prev_finalizada")}</button>`
       : p.habilitada
       ? `<button class="btn" data-preventa="${p.id}">${T("m_reservar")} (${gs(p.precio_desde)})</button>`
-      : `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_preventa"))}">${icon("chevron-right", { size: 14 })} ${T("m_desbloquear")}</button>`;
+      : `<button class="btn btn-ghost" data-upsell-cta="${esc(p.tier_min || "premium")}" data-upsell-ctx="${esc(T("m_up_ctx_preventa"))}">${icon("chevron-right", { size: 14 })} ${T("m_desbloquear")}</button>`;
     return `<div class="card"><div class="thumb">${artSvg(p.id, p.evento, icon("ticket", { size: 30 }))}</div>
       <div class="body"><span class="chip ${pasada ? "" : (p.habilitada ? "on" : "")}">${pasada ? T("m_prev_finalizada") : p.fecha + " · " + p.sede}</span>
       <h4>${esc(p.evento)}</h4><p>${T("m_desde")} ${gs(p.precio_desde)} · ${p.stock} ${T("m_en_preventa")}</p>${btn}</div></div>`;
@@ -834,7 +808,7 @@
     const local = ciudad && String(b.comercio_ciudad || "").toLowerCase() === ciudad.toLowerCase();
     const cta = b.desbloqueado
       ? '<span class="chip on" style="margin-top:8px;display:inline-block">' + icon("check", { size: 12 }) + ' ' + T("m_ben_activo") + '</span>'
-      : '<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="' + esc(T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")) + '" style="margin-top:8px">' + icon("chevron-right", { size: 14 }) + ' ' + T("m_ben_subi") + ' ' + (TL[b.nivel_min] || "Plus") + '</button>';
+      : '<button class="btn btn-ghost" data-upsell-cta="' + esc(b.nivel_min || "premium") + '" data-upsell-ctx="' + esc(T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")) + '" style="margin-top:8px">' + icon("chevron-right", { size: 14 }) + ' ' + T("m_ben_subi") + ' ' + (TL[b.nivel_min] || "Plus") + '</button>';
     return '<div class="card card-tier' + (b.desbloqueado ? "" : " ben-lock") + '"><div class="body">' +
       '<div class="ben-com">' + icon("store", { size: 14 }) + ' <strong>' + esc(b.comercio_nombre || "") + '</strong>' + (local ? ' <span class="ben-loc">' + icon("map-pin", { size: 10 }) + ' tu ciudad</span>' : "") + '</div>' +
       '<span class="chip on">' + esc(b.valor || "") + '</span>' +
@@ -875,7 +849,7 @@
   function cardSubasta(s) {
     const cd = cdTexto(s.termina), cerrada = s.estado !== "activa" || cd.fin;
     const cta = !s.desbloqueado
-      ? `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">${icon("chevron-right", { size: 14 })} ${T("m_sub_subi")}</button>`
+      ? `<button class="btn btn-ghost" data-upsell-cta="${esc(s.nivel_min || "premium")}" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">${icon("chevron-right", { size: 14 })} ${T("m_sub_subi")}</button>`
       : cerrada
       ? (s.gano
           ? `<button class="btn${s.pago_estado === "pagado" ? "" : " btn-valor"}">${icon("trophy", { size: 14 })} ${s.pago_estado === "pagado" ? T("m_sub_ganaste") : T("m_sub_pagar")}</button>`
@@ -923,7 +897,7 @@
   }
   function accionesHtml(r, cerrada) {
     const s = r.subasta;
-    if (!r.desbloqueado) return `<button class="btn btn-block" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">${icon("chevron-right", { size: 14 })} ${T("m_sub_subi")}</button>`;
+    if (!r.desbloqueado) return `<button class="btn btn-block" data-upsell-cta="${esc(s.nivel_min || "premium")}" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">${icon("chevron-right", { size: 14 })} ${T("m_sub_subi")}</button>`;
     if (cerrada && r.gano && s.pago_estado !== "pagado") return `<div class="sub-cerrada">${icon("trophy", { size: 14 })} ${T("m_sub_ganaste_txt")}</div>
       <button class="btn btn-valor btn-block" id="subPagarBtn" data-sub-pagar="${s.id}">${T("m_sub_pagar")} — ${gs(s.puja_actual)}</button>`;
     if (cerrada && r.gano) return `<div class="sub-cerrada">${icon("check", { size: 14 })} ${T("m_sub_pagado_txt")}</div>
@@ -1045,7 +1019,7 @@
       ]);
       const carnet = carnetR.carnet;
       const membresia = memR.membresia, tier = memR.tier;
-      const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0);
+      const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0 && t.comprable !== false);
       const esGratis = !membresia || (tier && tier.nivel === 0);
       const s = SESSION.socio;
       const qr = makeQR(location.origin + "/c/" + encodeURIComponent(carnet.numero));

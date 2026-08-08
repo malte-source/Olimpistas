@@ -26,9 +26,6 @@
     document.getElementById("heroCta").onclick = () => empezarGratis();
     const navCta = document.getElementById("navCta");
     if (navCta) navCta.onclick = () => empezarGratis();
-    document.querySelectorAll("[data-stub]").forEach((a) =>
-      a.addEventListener("click", (e) => { e.preventDefault(); toast("Próximamente"); })
-    );
     const pago = new URLSearchParams(location.search).get("pago_simulado");
     if (pago) confirmarSimulado(pago);
     // Intención de pujar (viene de /subasta/:id cuando no hay sesión) → abrir registro
