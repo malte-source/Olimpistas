@@ -65,17 +65,9 @@
         <p class="hero-cur-note" id="heroCurNote" hidden></p>
         <p class="hero-social" id="heroSocial" hidden></p>
       </div>
-      <div class="hero-side">
-        <div class="hero-photo">
-          <picture>
-            <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=88" />
-            <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=88" />
-            <source type="image/webp" srcset="/assets/hero-desktop.webp?v=88" />
-            <img src="/assets/hero-desktop.jpg?v=88" alt="" fetchpriority="high" />
-          </picture>
-          <span class="hero-photo-cap" data-i18n="hero_photo_cap">La hinchada del Decano</span>
-        </div>
-        <!-- Destacado dinámico (subasta en vivo / campaña) — lo llena landing.js -->
+      <div class="hero-side" id="heroSide">
+        <!-- Destacado dinámico (subasta en vivo / campaña) — lo llena landing.js.
+             Sin subasta activa, landing.js oculta #heroSide entero (ver renderDestacado). -->
         <div id="destacadoWrap"></div>
       </div>
     </div>

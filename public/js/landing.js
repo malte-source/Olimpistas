@@ -56,7 +56,10 @@
     const host = document.getElementById("destacadoWrap"); if (!host) return;
     let items = [];
     try { ({ items } = await api("/subastas")); } catch (e) { return; }
-    const s = (items || []).find((x) => x.estado === "activa"); if (!s) return;
+    const s = (items || []).find((x) => x.estado === "activa");
+    // Sin subasta en vivo no queda nada para mostrar en la columna del hero — la
+    // ocultamos entera (si no, .hero-side reserva 340-380px vacíos en desktop).
+    if (!s) { const side = document.getElementById("heroSide"); if (side) side.hidden = true; return; }
     host.innerHTML = '<a class="destacado" href="/subasta/' + encodeURIComponent(s.slug || s.id) + '">' +
       '<div class="destacado-media">' + destacadoMedia(s) +
       '<span class="destacado-live"><span class="destacado-dot"></span>' + T("m_sub_envivo") + '</span>' +
