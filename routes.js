@@ -637,7 +637,7 @@ function buildRouter() {
       if (s && s.email && mailer.enviarBienvenidaCompra) {
         const dias = membresia.ciclo === "mes" ? 30 : 365;
         const vencimiento = new Date(new Date(membresia.inicio).getTime() + dias * 86400000);
-        mailer.enviarBienvenidaCompra(s, tier.slug, vencimiento).catch(() => {});
+        mailer.enviarBienvenidaCompra(s, tier.slug, { vencimiento, refExterna: pedido.ref_externa }).catch(() => {});
       }
       log.info({ tier: pedido.tier_slug, socioId: pedido.socio_id }, "pago confirmado → membresía");
       return { membresia };
@@ -662,7 +662,7 @@ function buildRouter() {
       const socio = await store.getSocioById(pedido.socio_id).catch(() => null);
       if (socio && socio.email && s && mailer.enviarSubastaPagoConfirmado) {
         const urlCertificado = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id) + "/certificado";
-        mailer.enviarSubastaPagoConfirmado(socio, { titulo: s.titulo, urlCertificado }).catch(() => {});
+        mailer.enviarSubastaPagoConfirmado(socio, { titulo: s.titulo, urlCertificado, monto: pedido.monto, refExterna: pedido.ref_externa }).catch(() => {});
       }
       if (socio && s) {
         const contacto = socio.whatsapp || socio.telefono || "sin teléfono";
