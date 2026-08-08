@@ -10,8 +10,6 @@
   let intentTier = null; // nivel que se quiso comprar antes de registrarse
   let intentSub = null;  // subasta en la que se quiso pujar antes de registrarse
 
-  const ICONOS = { olimpista: "★", kids: "🎈", premium: "♛" };
-
   // Wireo estático (no depende de la sesión/config): mostrar/ocultar contraseña.
   if (window.OLI.wirePasswordToggles) window.OLI.wirePasswordToggles();
 
@@ -54,7 +52,7 @@
   }
   // Foto real del lote si el admin la subió; si no, el mismo placeholder de gradiente
   // que usa el resto de la app (misma lógica que subastaMedia() en socio.js).
-  function destacadoMedia(s) { return s.imagen ? '<img src="' + esc(s.imagen) + '" alt="" />' : artSvg(s.id, s.titulo, s.emoji || "🔨"); }
+  function destacadoMedia(s) { return s.imagen ? '<img src="' + esc(s.imagen) + '" alt="" />' : artSvg(s.id, s.titulo, s.emoji || OLI.icon("gavel", { size: 34 })); }
   async function renderDestacado() {
     const host = document.getElementById("destacadoWrap"); if (!host) return;
     let items = [];
@@ -63,13 +61,13 @@
     host.innerHTML = '<a class="destacado" href="/subasta/' + encodeURIComponent(s.slug || s.id) + '">' +
       '<div class="destacado-media">' + destacadoMedia(s) +
       '<span class="destacado-live"><span class="destacado-dot"></span>' + T("m_sub_envivo") + '</span>' +
-      '<span class="destacado-clock">⏳ ' + cdCorto(s.termina) + '</span></div>' +
+      '<span class="destacado-clock">' + OLI.icon("hourglass", { size: 14 }) + ' ' + cdCorto(s.termina) + '</span></div>' +
       '<div class="destacado-info">' +
       '<span class="destacado-tag">' + T("tab_subastas") + '</span>' +
       '<h3 class="destacado-titulo">' + esc(s.titulo) + '</h3>' +
       '<div class="destacado-precio-row">' +
       '<div class="destacado-precio"><span class="destacado-precio-lbl">' + T("m_sub_actual") + '</span><strong>' + gs(s.puja_actual) + '</strong></div>' +
-      '<span class="destacado-pujadores">👥 ' + s.pujadores + ' ' + T("m_sub_pujando") + '</span></div>' +
+      '<span class="destacado-pujadores">' + OLI.icon("users", { size: 14 }) + ' ' + s.pujadores + ' ' + T("m_sub_pujando") + '</span></div>' +
       '<span class="destacado-cta">' + T("m_sub_pujar") + ' →</span></div></a>';
   }
 
@@ -89,6 +87,7 @@
   }
 
   async function initIdiomaMoneda() {
+    OLI.initThemeToggle("themeSw");
     const langSw = document.getElementById("langSw");
     if (langSw) {
       if (LANG === "en") { langSw.textContent = "ES"; langSw.href = "/"; }
@@ -299,13 +298,13 @@
       const p = precioTier(t, CONFIG.brand.usdRate);
       const bullets = fld(t, "beneficios").map((b) => `<li>${esc(b)}</li>`).join("");
       const carnetHtml = carnet({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre",
-        numero: "OLI-••••••••", icono: ICONOS[t.slug], qr: previewQR });
+        numero: "OLI-••••••••", qr: previewQR });
       return `
       <div class="tier ${(t.destacado || t.recomendado) ? "tier-destacado" : ""}">
         ${t.recomendado ? `<span class="tier-ribbon">${T("ribbon_rec")}</span>` : (t.destacado ? `<span class="tier-ribbon">${T("ribbon")}</span>` : "")}
         ${carnetHtml}
         <div class="price"><div class="big">${p.big}</div><div class="small">${p.small}</div></div>
-        <button class="btn cta ${(t.nivel === 0 || t.recomendado) ? "" : "btn-ghost"}" data-tier="${t.slug}">${fld(t, "cta")}</button>
+        <button class="btn cta ${t.nivel === 0 ? "" : "btn-valor"}" data-tier="${t.slug}">${fld(t, "cta")}</button>
         <ul class="benefits">${bullets}</ul>
       </div>`;
     }).join("");

@@ -157,6 +157,7 @@ function createMemoryStore({ filePath = null } = {}) {
         email_verificado: false, verif_token: null,
         cedula: cedula || "", fecha_nacimiento: fechaNacimiento || null, es_socio_olimpia: false,
         idioma: idioma === "en" ? "en" : "es",
+        avisos_subastas: true, avisos_sorteos: true, avisos_contenido: true,
         ref_codigo: crypto.createHash("md5").update(id).digest("hex").slice(0, 10),
         referido_por: referidoPor || null,
         creado: nowIso(),
@@ -396,7 +397,7 @@ function createMemoryStore({ filePath = null } = {}) {
     async pujasDeSubasta(subastaId, limit = 8) {
       return (db.pujas || []).filter((p) => p.subasta_id === subastaId)
         .sort((a, b) => (b.monto - a.monto) || String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
-        .map((p) => { const s = (db.socios || []).find((x) => x.id === p.socio_id) || {}; return { ...p, nombre: s.nombre || "Olimpista" }; });
+        .map((p) => { const s = (db.socios || []).find((x) => x.id === p.socio_id) || {}; return { ...p, nombre: s.nombre || "Olimpista", pais_iso: s.pais_iso || null }; });
     },
     async miPujaMax(subastaId, socioId) {
       const ms = (db.pujas || []).filter((p) => p.subasta_id === subastaId && p.socio_id === socioId).map((p) => p.monto);
@@ -599,7 +600,13 @@ function createMemoryStore({ filePath = null } = {}) {
     async getContenido(id) { return db.contenido.find(c => c.id === id) || null; },
 
     // ── Sorteos ──
-    async listSorteos() { return db.sorteos.slice().sort((a, b) => String(a.cierra || "").localeCompare(String(b.cierra || ""))); },
+    async listSorteos() {
+      return db.sorteos.slice().sort((a, b) => String(a.cierra || "").localeCompare(String(b.cierra || ""))).map((s) => {
+        if (!s.ganador_id) return s;
+        const g = (db.socios || []).find((x) => x.id === s.ganador_id);
+        return { ...s, ganador_nombre: g ? g.nombre : null };
+      });
+    },
     async getSorteo(id) { return db.sorteos.find(s => s.id === id) || null; },
     async participarSorteo(sorteoId, socioId) {
       const ya = db.participaciones.find(p => p.sorteo_id === sorteoId && p.socio_id === socioId);
@@ -615,7 +622,7 @@ function createMemoryStore({ filePath = null } = {}) {
     // ── Preventas ──
     async listPreventas() { return db.preventas.slice().sort((a, b) => String(a.fecha || "").localeCompare(String(b.fecha || ""))); },
     // ── CRUD admin (memoria) ──
-    async crearSorteo(d = {}) { const s = { id: "sor_" + Date.now() + db.sorteos.length, titulo: d.titulo || "", descripcion: d.descripcion || null, tier_min: d.tier_min || "olimpista", cierra: d.cierra || null, imagen: d.imagen || null }; db.sorteos.push(s); persist(); return s; },
+    async crearSorteo(d = {}) { const s = { id: "sor_" + Date.now() + db.sorteos.length, titulo: d.titulo || "", descripcion: d.descripcion || null, tier_min: d.tier_min || "olimpista", cierra: d.cierra || null, imagen: d.imagen || null, ganador_id: null }; db.sorteos.push(s); persist(); return s; },
     async updateSorteo(id, patch) { const s = db.sorteos.find((x) => x.id === id); if (!s) return null; Object.assign(s, patch); persist(); return s; },
     async deleteSorteo(id) { const n = db.sorteos.length; db.sorteos = db.sorteos.filter((x) => x.id !== id); persist(); return db.sorteos.length < n; },
     async listParticipantesSorteo(id) { return (db.participaciones || []).filter((p) => p.sorteo_id === id).map((p) => { const s = db.socios.find((x) => x.id === p.socio_id) || {}; return { id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email }; }); },

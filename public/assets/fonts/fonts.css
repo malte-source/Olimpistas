@@ -1,4 +1,7 @@
-/* Fuentes self-hosted (subset latin) — Archivo + Inter · OFL. Generado. */
+/* Fuentes self-hosted (subset latin) — Archivo + Inter + Saira · OFL. Generado.
+   Saira/Saira Condensed: tipografía del Brandbook Olimpistas v1.0 (equivalente web de
+   "Amsi Pro", cuya licencia web está pendiente de definición — ver brandbook, pág. 19).
+   No se linkea fonts.googleapis.com: la CSP del sitio no lo permite (fontSrc 'self' data:). */
 @font-face{font-family:'Archivo';font-style:normal;font-weight:600;font-display:swap;src:url('/assets/fonts/archivo-600.woff2') format('woff2');}
 @font-face{font-family:'Archivo';font-style:normal;font-weight:700;font-display:swap;src:url('/assets/fonts/archivo-700.woff2') format('woff2');}
 @font-face{font-family:'Archivo';font-style:normal;font-weight:800;font-display:swap;src:url('/assets/fonts/archivo-800.woff2') format('woff2');}
@@ -7,3 +10,10 @@
 @font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url('/assets/fonts/inter-600.woff2') format('woff2');}
 @font-face{font-family:'Inter';font-style:normal;font-weight:700;font-display:swap;src:url('/assets/fonts/inter-700.woff2') format('woff2');}
 @font-face{font-family:'Inter';font-style:normal;font-weight:800;font-display:swap;src:url('/assets/fonts/inter-800.woff2') format('woff2');}
+@font-face{font-family:'Saira';font-style:normal;font-weight:400;font-display:swap;src:url('/assets/fonts/saira-400.woff2') format('woff2');}
+@font-face{font-family:'Saira';font-style:normal;font-weight:500;font-display:swap;src:url('/assets/fonts/saira-500.woff2') format('woff2');}
+@font-face{font-family:'Saira';font-style:normal;font-weight:600;font-display:swap;src:url('/assets/fonts/saira-600.woff2') format('woff2');}
+@font-face{font-family:'Saira';font-style:normal;font-weight:700;font-display:swap;src:url('/assets/fonts/saira-700.woff2') format('woff2');}
+@font-face{font-family:'Saira Condensed';font-style:normal;font-weight:700;font-display:swap;src:url('/assets/fonts/saira-condensed-700.woff2') format('woff2');}
+@font-face{font-family:'Saira Condensed';font-style:normal;font-weight:800;font-display:swap;src:url('/assets/fonts/saira-condensed-800.woff2') format('woff2');}
+@font-face{font-family:'Saira Condensed';font-style:normal;font-weight:900;font-display:swap;src:url('/assets/fonts/saira-condensed-900.woff2') format('woff2');}

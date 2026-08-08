@@ -447,6 +447,10 @@ function buildRouter() {
     }
     // Gamificación: "poné tu bandera en tu casa" (mostrar el punto exacto en público).
     if (typeof b.mostrar_exacto === "boolean") patch.mostrar_exacto = b.mostrar_exacto;
+    // Avisos por email, granulares (independientes del opt-out global marketing_baja).
+    for (const key of ["avisos_subastas", "avisos_sorteos", "avisos_contenido"]) {
+      if (typeof b[key] === "boolean") patch[key] = b[key];
+    }
     // Fecha de nacimiento (define el tier por edad). Formato YYYY-MM-DD.
     if (typeof b.fecha_nacimiento === "string" && b.fecha_nacimiento) {
       const f = b.fecha_nacimiento.slice(0, 10);
@@ -605,6 +609,18 @@ function buildRouter() {
     // Guardamos el hash de PAGOPAR en ref_externa → el webhook encuentra este pedido por ahí.
     await store.updatePedidoPago(pedido.id, { ref_externa: pago.hash });
     res.json({ gratis: false, pedido, pago, tier: tier.slug });
+  }));
+
+  // Cancelar membresía paga → vuelve a Olimpista gratis de inmediato. Sin encuesta ni
+  // oferta de retención (regla F2): el cobro es anual único, no hay nada recurrente
+  // que frenar — "cancelar" acá es "dejar de tener el nivel pago desde ahora".
+  r.post("/membresia/cancelar", auth.requireSocio, wrap(async (req, res) => {
+    const membresia = await store.getMembresia(req.socio.id);
+    const tier = membresia ? tierBySlug(membresia.tier_slug) : null;
+    if (!tier || tier.slug === "olimpista") throw httpError(400, "No tenés una membresía paga para cancelar");
+    if (tier.comprable === false) throw httpError(403, "Ese nivel no se cancela desde acá");
+    const nueva = await store.setMembresia(req.socio.id, { tierSlug: "olimpista", ciclo: "anio" });
+    res.json({ ok: true, membresia: nueva });
   }));
 
   // Qué hacer cuando un pedido se confirma pagado, según su tipo (membresía / entrada de
@@ -1155,6 +1171,7 @@ function buildRouter() {
     const parts = store.listParticipantesSorteo ? await store.listParticipantesSorteo(req.params.id) : [];
     if (!parts.length) throw httpError(400, "Este sorteo no tiene participantes");
     const g = parts[Math.floor(Math.random() * parts.length)];
+    await store.updateSorteo(req.params.id, { ganador_id: g.id }); // queda registrado — antes se sorteaba y se perdía
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "sorteo:ganador", targetId: req.params.id, detalle: [g.nombre, g.apellido].filter(Boolean).join(" ") + " <" + (g.email || "") + ">" });
     // Avisar al ganador (best-effort).
     if (g && g.email && mailer.enviarSorteoGanador) {
@@ -1290,15 +1307,19 @@ function buildRouter() {
     const mias = req.socio ? await store.listParticipaciones(req.socio.id) : [];
     const setMios = new Set(mias.map(p => p.sorteo_id));
     const hoy = new Date().toISOString().slice(0, 10);
-    // No mostrar sorteos ya cerrados como si estuvieran activos (rompía la expectativa:
-    // el usuario "participaba" en algo vencido). Solo listamos los vigentes.
-    const items = (await store.listSorteos())
-      .filter((s) => !s.cierra || String(s.cierra).slice(0, 10) >= hoy)
-      .map((s) => ({
+    // Los cerrados quedan (con resultado, si hubo sorteo) como historial en Descubrir —
+    // antes se filtraban del todo y el ganador se perdía sin quedar registrado en ningún lado.
+    const items = (await store.listSorteos()).map((s) => {
+      const abierto = !s.cierra || String(s.cierra).slice(0, 10) >= hoy;
+      return {
         ...s,
+        estado: abierto ? "activa" : "cerrada",
         elegible: access.puedeAcceder(membresia, s.tier_min),
         participando: setMios.has(s.id),
-      }));
+        gano: !abierto && !!(req.socio && s.ganador_id === req.socio.id),
+        ganador_nombre: (!abierto && s.ganador_id && s.ganador_nombre) ? enmascararNombre(s.ganador_nombre) : null,
+      };
+    });
     res.json({ items });
   }));
 
@@ -1476,7 +1497,7 @@ function buildRouter() {
     const abierta = subastaAbierta(s);
     const feed = base.feedRaw.map((p) => {
       const yo = !!(req.socio && p.socio_id === req.socio.id);
-      return { nombre: yo ? (p.nombre || "Olimpista") : enmascararNombre(p.nombre), monto: p.monto, creado: p.creado, yo };
+      return { nombre: yo ? (p.nombre || "Olimpista") : enmascararNombre(p.nombre), monto: p.monto, creado: p.creado, yo, pais_iso: p.pais_iso || null };
     });
     res.json({
       subasta: {

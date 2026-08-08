@@ -35,6 +35,82 @@ window.OLI = (function () {
     if (currency() === "USD") return "US$ " + Math.round(gsAmount / (rate || 7300)).toLocaleString("en-US");
     return "₲ " + Number(gsAmount).toLocaleString("es-PY");
   }
+  // ── Tema (claro/oscuro). Mismo patrón que idioma/moneda: localStorage + toggle manual.
+  // Default oscuro explícito (no prefers-color-scheme) para no cambiar nada hasta que se toque a mano. ──
+  let _theme = "";
+  try { _theme = localStorage.getItem("oli_theme") || ""; } catch (e) {}
+  function theme() { return _theme || "dark"; }
+  function setTheme(t) {
+    _theme = t;
+    try { localStorage.setItem("oli_theme", t); } catch (e) {}
+    document.documentElement.setAttribute("data-theme", t);
+  }
+  function initThemeToggle(btnId) {
+    document.documentElement.setAttribute("data-theme", theme());
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const paint = () => { btn.textContent = theme() === "light" ? "Oscuro" : "Claro"; };
+    paint();
+    btn.addEventListener("click", () => { setTheme(theme() === "light" ? "dark" : "light"); paint(); });
+  }
+
+  // ── Íconos — F1.2 "Iconografía": 40 SVG de línea (grilla 24, trazo 1.5, currentColor) que
+  // reemplazan los emoji del producto. Self-hosteados: la CSP no permite CDNs de íconos.
+  // Familia inspirada en una base geométrica abierta, ajustada al trazo/terminales del sistema.
+  const ICON_PATHS = {
+    // navegación
+    house: '<path d="M3 11 12 4l9 7"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>',
+    "credit-card": '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
+    compass: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6 6-2z"/>',
+    tag: '<path d="M3 3h7l11 11-7 7L3 10V3z"/><circle cx="8" cy="8" r="1.2"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>',
+    bell: '<path d="M6 10a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+    "log-out": '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"/><path d="M15 16l4-4-4-4"/><path d="M19 12H9"/>',
+    // territorios
+    gavel: '<path d="M13 10l6.5-6.5 3 3L16 13z"/><path d="M9 13l4 4"/><path d="M11 15l-8 8"/><path d="M3 21h6"/>',
+    gift: '<rect x="4" y="8" width="16" height="12" rx="1"/><path d="M4 12h16M12 8v12"/><path d="M9 8a2.5 2.5 0 0 1 0-5c1.5 0 3 2 3 5"/><path d="M15 8a2.5 2.5 0 0 0 0-5c-1.5 0-3 2-3 5"/>',
+    ticket: '<path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4V8z"/><path d="M9 5v14"/>',
+    play: '<path d="M6 4l14 8-14 8V4z"/>',
+    store: '<path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+    "shield-check": '<path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/>',
+    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4a2 2 0 0 0 2 4M18 5h2a2 2 0 0 1-2 4"/><path d="M10 14v3M14 14v3M8 20h8"/>',
+    // acciones
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    check: '<path d="M4 12l5 5L20 6"/>',
+    x: '<path d="M5 5l14 14M19 5L5 19"/>',
+    "share-2": '<circle cx="18" cy="5" r="2.2"/><circle cx="6" cy="12" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M8 10.8l8-4.6M8 13.2l8 4.6"/>',
+    link: '<path d="M10 14a4 4 0 0 0 6 0l2-2a4 4 0 0 0-6-6l-1 1"/><path d="M14 10a4 4 0 0 0-6 0l-2 2a4 4 0 0 0 6 6l1-1"/>',
+    download: '<path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M4 19h16"/>',
+    camera: '<path d="M4 8h3l2-2h6l2 2h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
+    pencil: '<path d="M3 21l4-1 11-11-3-3L4 17l-1 4z"/><path d="M14 6l3 3"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.5-4.5"/>',
+    "sliders-horizontal": '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h13M21 18h0"/><circle cx="14" cy="6" r="1.6"/><circle cx="7" cy="12" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
+    "chevron-right": '<path d="M9 5l7 7-7 7"/>',
+    "arrow-left": '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+    eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+    users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.5 3-5.5 6-5.5s6 2 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.3c2.4.4 4.5 2 4.5 5.7"/>',
+    languages: '<path d="M4 5h9M8.5 3v2M4 9a10 10 0 0 0 7 3M11 5a9 9 0 0 1-6 7"/><path d="M14 21l4-9 4 9"/><path d="M15.2 18h5.6"/>',
+    "external-link": '<path d="M10 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4"/><path d="M14 4h6v6"/><path d="M20 4l-9 9"/>',
+    // datos y estados
+    hourglass: '<path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 4 6 5 9-1 3-5 4-5 9M17 3c0 5-4 6-5 9 1 3 5 4 5 9"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    "map-pin": '<path d="M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/>',
+    coins: '<circle cx="9" cy="9" r="6"/><path d="M15.5 10.5a6 6 0 1 1 0 9 6 6 0 0 1-6-6"/>',
+    receipt: '<path d="M6 3h12v18l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3L6 21V3z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+    "qr-code": '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v3M14 20h1M20 20h1"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="8" r="1"/>',
+    "circle-alert": '<circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle cx="12" cy="16.5" r="1"/>',
+  };
+  // icon(name, {size}) → <svg> inline con currentColor, listo para insertar en innerHTML.
+  function icon(name, opts) {
+    const size = (opts && opts.size) || 24;
+    const body = ICON_PATHS[name];
+    if (!body) return "";
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">${body}</svg>`;
+  }
+
   const tt = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
 
   // Precio mostrado por tier (en el idioma y moneda actuales). Cobro anual único.
@@ -71,12 +147,13 @@ window.OLI = (function () {
     (root || document).querySelectorAll(".pw-toggle").forEach((btn) => {
       if (btn._pwWired) return;
       btn._pwWired = true;
+      btn.innerHTML = icon("eye", { size: 18 });
       btn.addEventListener("click", () => {
         const input = btn.previousElementSibling;
         if (!input) return;
         const showing = input.type === "password";
         input.type = showing ? "text" : "password";
-        btn.textContent = showing ? "🙈" : "👁";
+        btn.innerHTML = icon("eye", { size: 18 });
       });
     });
   }
@@ -105,9 +182,11 @@ window.OLI = (function () {
     const nombre = o.nombre || "Tu nombre";
     const nivel = o.tierNombre || "Olimpista";
     const numero = o.numero || "OLI-••••••••";
+    // Mismo carnet en los 4 niveles (Brandbook): el placeholder de foto es un solo
+    // ícono universal, no un glifo distinto por nivel.
     const avatar = o.foto
       ? `<img class="cn-photo" src="${o.foto}" alt="" />`
-      : `<div class="cn-photo cn-photo-ph">${o.icono || "★"}</div>`;
+      : `<div class="cn-photo cn-photo-ph">${o.icono || icon("user", { size: 34 })}</div>`;
     const qr = o.qr
       ? `<div class="cn-qr"><img src="${o.qr}" alt="QR de miembro" /></div>`
       : `<div class="cn-qr cn-qr-empty">Tu QR</div>`;
@@ -142,20 +221,28 @@ window.OLI = (function () {
       const W = 660, H = 940;
       const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
       const x = cv.getContext("2d");
-      const tierCol = ({ olimpista: "#3a3a52", kids: "#e94560", premium: "#c9a227", socio: "#c9a227" })[o.tierSlug || "olimpista"] || "#3a3a52";
+      // Filete por nivel — el único diferenciador de color, igual que en el carnet en pantalla
+      // (.cn::after / --tier-stripe). El resto del carnet es idéntico en los 4 niveles.
+      const tierCol = ({ olimpista: "#c9c7c1", kids: "#55534e", premium: "#e8dcb8", socio: "#b08d2e" })[o.tierSlug || "olimpista"] || "#c9c7c1";
       const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#14141b"); g.addColorStop(1, "#0b0b0f");
       x.fillStyle = g; x.fillRect(0, 0, W, H);
-      const gb = x.createLinearGradient(0, 0, W, 0); gb.addColorStop(0, tierCol); gb.addColorStop(1, "#0b0b0f");
-      x.fillStyle = gb; x.fillRect(0, 0, W, 132); x.fillStyle = "#c9a227"; x.fillRect(0, 132, W, 3);
+      x.fillStyle = "#18181f"; x.fillRect(0, 0, W, 132); x.fillStyle = "rgba(255,255,255,.12)"; x.fillRect(0, 132, W, 2);
       const logo = await _loadImg("/assets/logo-horizontal.svg?v=88");
       if (logo) { const lw = 300, lh = lw * ((logo.height / logo.width) || 0.215); x.drawImage(logo, (W - lw) / 2, 46, lw, lh); }
       const cx = W / 2, cy = 322, r = 110;
       x.save(); x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.closePath(); x.clip();
       const foto = o.foto ? await _loadImg(o.foto) : null;
       if (foto) x.drawImage(foto, cx - r, cy - r, r * 2, r * 2);
-      else { x.fillStyle = "#23232c"; x.fillRect(cx - r, cy - r, r * 2, r * 2); x.fillStyle = "#f0d873"; x.font = "bold 92px Arial"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(o.icono || "★", cx, cy); }
+      else {
+        // Mismo placeholder en los 4 niveles: un ícono de persona dibujado a mano
+        // (canvas no puede pintar el SVG del set — nada de emoji ni glifos tampoco acá).
+        x.fillStyle = "#23232c"; x.fillRect(cx - r, cy - r, r * 2, r * 2);
+        x.fillStyle = "#fff";
+        x.beginPath(); x.arc(cx, cy - r * 0.32, r * 0.26, 0, 6.2832); x.fill();
+        x.beginPath(); x.arc(cx, cy + r * 0.95, r * 0.78, 0, 6.2832); x.fill();
+      }
       x.restore();
-      x.lineWidth = 5; x.strokeStyle = "#c9a227"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
+      x.lineWidth = 5; x.strokeStyle = "rgba(255,255,255,.25)"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
       const iso = (o.iso || "").toLowerCase().trim();
       if (/^[a-z]{2}$/.test(iso)) {
         const fl = await _loadImg("https://flagcdn.com/" + iso + ".svg", true);
@@ -163,7 +250,7 @@ window.OLI = (function () {
       }
       x.textAlign = "center"; x.textBaseline = "alphabetic";
       x.fillStyle = "#fff"; x.font = "800 44px Arial"; x.fillText(o.nombre || "Tu nombre", cx, 484);
-      x.fillStyle = "#f0d873"; x.font = "700 23px Arial"; x.fillText((o.tierNombre || "Olimpista").toUpperCase(), cx, 520);
+      x.fillStyle = "rgba(255,255,255,.85)"; x.font = "700 23px Arial"; x.fillText((o.tierNombre || "Olimpista").toUpperCase(), cx, 520);
       const qs = 230, qx = (W - qs) / 2, qy = 558;
       x.fillStyle = "#fff"; _rr(x, qx - 14, qy - 14, qs + 28, qs + 28, 16); x.fill();
       const qrImg = o.qr ? await _loadImg(o.qr) : null;
@@ -171,7 +258,9 @@ window.OLI = (function () {
       x.fillStyle = "#c6c6d0"; x.font = "600 24px monospace"; x.fillText(o.numero || "OLI-••••••••", cx, qy + qs + 46);
       x.fillStyle = "rgba(255,255,255,.42)"; x.font = "700 15px Arial"; x.fillText("MIEMBRO · OLIMPISTAS", cx, qy + qs + 78);
       // Dirección web (CTA para quien recibe el carnet compartido).
-      x.fillStyle = "#f0d873"; x.font = "800 26px Arial"; x.fillText("www.olimpistas.com", cx, H - 34);
+      x.fillStyle = "#fff"; x.font = "800 26px Arial"; x.fillText("www.olimpistas.com", cx, H - 34);
+      // Filete inferior por nivel — mismo color que .cn::after en pantalla.
+      x.fillStyle = tierCol; x.fillRect(0, H - 8, W, 8);
       return await new Promise((res) => cv.toBlob((b) => res(b), "image/png", 0.92));
     } catch (e) { return null; }
   }
@@ -360,11 +449,11 @@ window.OLI = (function () {
     ov.className = "foto-modal";
     ov.innerHTML = `
       <div class="foto-card">
-        <button class="foto-x" type="button" aria-label="Cerrar">✕</button>
-        <div class="foto-vis"><div class="foto-ph" id="fph">📷</div><video id="fvid" playsinline autoplay muted hidden></video></div>
+        <button class="foto-x" type="button" aria-label="Cerrar">${icon("x", { size: 18 })}</button>
+        <div class="foto-vis"><div class="foto-ph" id="fph">${icon("camera", { size: 56 })}</div><video id="fvid" playsinline autoplay muted hidden></video></div>
         <div class="foto-acts" id="facts">
-          <button class="btn" id="fcam" type="button">📸 Tomar foto</button>
-          <button class="btn btn-ghost" id="fgalb" type="button">🖼️ Galería</button>
+          <button class="btn" id="fcam" type="button">${icon("camera", { size: 18 })} Tomar foto</button>
+          <button class="btn btn-ghost" id="fgalb" type="button">${icon("camera", { size: 18 })} Galería</button>
           <input type="file" id="fgal" accept="image/*" hidden />
         </div>
       </div>`;
@@ -397,7 +486,7 @@ window.OLI = (function () {
     function camaraEnVivo() {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false }).then((s) => {
         stream = s; const v = $("#fvid"); v.srcObject = s; v.hidden = false; $("#fph").hidden = true;
-        $("#facts").innerHTML = `<button class="btn" id="fshoot" type="button">Capturar</button><button class="btn btn-ghost" id="fcancel" type="button">✕</button>`;
+        $("#facts").innerHTML = `<button class="btn" id="fshoot" type="button">Capturar</button><button class="btn btn-ghost" id="fcancel" type="button">${icon("x", { size: 18 })}</button>`;
         $("#fshoot").onclick = capturar; $("#fcancel").onclick = cerrar;
       }).catch(() => camaraNativa());
     }
@@ -497,5 +586,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, fmtMoney, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, refLink, track };
+  return { api, esc, gs, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, fmtMoney, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, refLink, track, theme, setTheme, initThemeToggle, icon };
 })();

@@ -342,6 +342,14 @@ app.get("/subasta/:id/certificado", auth.attachSocio, async (req, res) => {
   const codigo = crypto.createHash("sha256").update(s.id + "|" + s.ganador_id).digest("hex").slice(0, 10).toUpperCase();
   const fecha = new Date(s.termina || Date.now()).toLocaleDateString("es-PY", { year: "numeric", month: "long", day: "numeric" });
   const ganador = [req.socio.nombre, req.socio.apellido].filter(Boolean).join(" ") || req.socio.email;
+  const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+  const certUrl = proto + "://" + (req.headers.host || "www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id) + "/certificado";
+  // Íconos de línea inline (mismo trazo que el sistema de íconos del cliente) — esta
+  // página se genera server-side, sin JS de OLI.icon() disponible.
+  const svgIcon = (body, size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">${body}</svg>`;
+  const icTrophy = svgIcon('<path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M6 5H4a2 2 0 0 0 2 4M18 5h2a2 2 0 0 1-2 4"/><path d="M10 14v3M14 14v3M8 20h8"/>', 56);
+  const icDownload = svgIcon('<path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M4 19h16"/>', 16);
+  const icShield = svgIcon('<path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/>', 13);
   res.setHeader("Cache-Control", "no-store");
   res.type("html").send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Certificado de Autenticidad — ${esc2(s.titulo)}</title>
@@ -350,38 +358,66 @@ app.get("/subasta/:id/certificado", auth.attachSocio, async (req, res) => {
 <style>
 body{background:var(--negro)}
 .cert-wrap{max-width:640px;margin:0 auto;padding:40px 20px 60px}
-.cert{border:1.5px solid var(--oro);border-radius:20px;padding:44px 36px;background:linear-gradient(160deg,rgba(231,198,75,.08),transparent 60%),var(--negro-2);text-align:center}
+.cert{position:relative;border:1.5px solid var(--oro);border-radius:20px;padding:6px;background:var(--negro-2)}
+.cert-inner{border:1px solid rgba(231,198,75,.4);border-radius:15px;padding:38px 34px;text-align:center}
+.cert .unico{position:absolute;top:16px;right:16px;display:flex;align-items:center;gap:5px;font-size:10px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--oro-claro);border:1px solid rgba(231,198,75,.5);border-radius:999px;padding:4px 9px}
 .cert .wm{font-weight:900;letter-spacing:.3em;font-size:13px;color:var(--oro-claro);text-transform:uppercase}
-.cert .stripes{height:5px;width:90px;margin:10px auto 26px;border-radius:3px;background:repeating-linear-gradient(90deg,#fff 0 11px,#000 11px 22px);opacity:.85}
+.cert .filete{height:2px;width:120px;margin:10px auto 26px;background:linear-gradient(90deg,transparent,var(--oro-claro) 20%,var(--oro-claro) 80%,transparent);opacity:.9}
 .cert h1{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--gris);margin:0 0 6px;font-weight:700}
 .cert .lote{font-size:24px;font-weight:700;margin:0 0 22px;color:var(--blanco)}
-.cert .hero{height:180px;border-radius:14px;overflow:hidden;margin-bottom:24px;display:flex;align-items:center;justify-content:center;font-size:72px;background:linear-gradient(140deg,#2a2418,#c9a227)}
+.cert .hero{height:180px;border-radius:14px;overflow:hidden;margin-bottom:24px;display:flex;align-items:center;justify-content:center;color:var(--oro-claro);background:linear-gradient(140deg,#2a2418,#c9a227)}
 .cert .hero img{width:100%;height:100%;object-fit:cover}
 .cert .row{display:flex;justify-content:space-between;padding:12px 0;border-top:1px solid var(--linea);font-size:14px;text-align:left}
 .cert .row .l{color:var(--gris)}.cert .row .v{color:var(--blanco);font-weight:700}
-.cert .codigo{margin-top:22px;font-family:ui-monospace,monospace;font-size:13px;color:var(--oro-claro);letter-spacing:.08em}
-.cert .firma{margin-top:26px;font-size:12.5px;color:var(--gris)}
+.cert .verif{display:flex;align-items:center;gap:16px;margin-top:24px;padding-top:20px;border-top:1px solid var(--linea);text-align:left}
+.cert .verif img{width:64px;height:64px;border-radius:8px;background:#fff;padding:4px;flex:0 0 auto}
+.cert .verif .codigo{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--oro-claro);letter-spacing:.06em;word-break:break-all}
+.cert .verif .txt{font-size:12px;color:var(--gris);margin-top:4px}
+.cert .firmas{display:flex;gap:24px;margin-top:30px}
+.cert .firma{flex:1;border-top:1px solid var(--gris);padding-top:8px;font-size:11.5px;color:var(--gris)}
+.cert .firma b{display:block;color:var(--blanco);font-size:12.5px;margin-bottom:1px}
+.cert .nota{margin-top:22px;font-size:12px;color:var(--gris);line-height:1.5}
 .cert-actions{text-align:center;margin-top:22px}
-.cert-actions button{border:1.5px solid var(--linea);background:transparent;color:var(--blanco);font:inherit;font-weight:700;
+.cert-actions button{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--linea);background:transparent;color:var(--blanco);font:inherit;font-weight:700;
   padding:11px 22px;border-radius:11px;cursor:pointer}
 .cert-actions button:hover{border-color:var(--oro);color:var(--oro-claro)}
 @media print{ body{background:#fff} .cert-actions{display:none} .cert{border-color:#c9a227} }
 </style></head><body>
 <div class="cert-wrap">
   <div class="cert">
-    <div class="wm">Olimpistas</div><div class="stripes"></div>
-    <h1>Certificado de Autenticidad</h1>
-    <p class="lote">${esc2(s.titulo)}</p>
-    <div class="hero">${s.imagen ? '<img src="' + esc2(s.imagen) + '" alt="">' : (esc2(s.emoji) || "🔨")}</div>
-    <div class="row"><span class="l">Adjudicado a</span><span class="v">${esc2(ganador)}</span></div>
-    <div class="row"><span class="l">Monto ganador</span><span class="v">₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")}</span></div>
-    <div class="row"><span class="l">Fecha</span><span class="v">${esc2(fecha)}</span></div>
-    <div class="row"><span class="l">Organiza</span><span class="v">Club Olimpia · Olimpistas</span></div>
-    <p class="codigo">Código de verificación: ${codigo}</p>
-    <p class="firma">Este certificado acredita la autenticidad y la adjudicación del lote descrito, subastado por Olimpistas en nombre de Club Olimpia.</p>
+    <div class="cert-inner">
+      <span class="unico">${icShield} Pieza única</span>
+      <div class="wm">Olimpistas</div><div class="filete"></div>
+      <h1>Certificado de Autenticidad</h1>
+      <p class="lote">${esc2(s.titulo)}</p>
+      <div class="hero">${s.imagen ? '<img src="' + esc2(s.imagen) + '" alt="">' : icTrophy}</div>
+      <div class="row"><span class="l">Adjudicado a</span><span class="v">${esc2(ganador)}</span></div>
+      <div class="row"><span class="l">Monto ganador</span><span class="v">₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")}</span></div>
+      <div class="row"><span class="l">Fecha</span><span class="v">${esc2(fecha)}</span></div>
+      <div class="row"><span class="l">Organiza</span><span class="v">Club Olimpia · Olimpistas</span></div>
+      <div class="verif">
+        <img id="certQr" alt="QR de verificación" />
+        <div><p class="codigo">${codigo}</p><p class="txt">Escaneá para verificar este certificado en olimpistas.com</p></div>
+      </div>
+      <div class="firmas">
+        <div class="firma"><b>Club Olimpia</b>Presidencia</div>
+        <div class="firma"><b>Olimpistas.com</b>Una iniciativa de Club Olimpia</div>
+      </div>
+      <p class="nota">Este certificado acredita la autenticidad y la adjudicación del lote descrito, subastado por Olimpistas en nombre de Club Olimpia.</p>
+    </div>
   </div>
-  <div class="cert-actions"><button onclick="window.print()">🖨️ Guardar como PDF</button></div>
+  <div class="cert-actions"><button onclick="window.print()">${icDownload} Guardar como PDF</button></div>
 </div>
+<script src="/assets/vendor/qrcode.js"></script>
+<script>
+try {
+  var qr = qrcode(0, "M");
+  qr.addData(${JSON.stringify(certUrl)});
+  qr.make();
+  document.getElementById("certQr").src = qr.createDataURL(5, 2);
+} catch (e) {}
+</script>
 </body></html>`);
 });
 

@@ -547,7 +547,9 @@ function createPgStore({ databaseUrl }) {
     },
 
     // ── Sorteos ──
-    async listSorteos() { return cacheado("sorteos", 30000, () => sql`SELECT * FROM sorteos ORDER BY cierra ASC`); },
+    async listSorteos() { return cacheado("sorteos", 30000, () => sql`
+      SELECT sor.*, soc.nombre AS ganador_nombre FROM sorteos sor
+      LEFT JOIN socios soc ON soc.id = sor.ganador_id ORDER BY sor.cierra ASC`); },
     async getSorteo(id) {
       const [s] = await sql`SELECT * FROM sorteos WHERE id = ${id} LIMIT 1`;
       return s || null;
@@ -773,7 +775,7 @@ function createPgStore({ databaseUrl }) {
       return { ok: true, subasta: s, prevGanador, extendida };
     },
     async pujasDeSubasta(subastaId, limit = 8) {
-      return sql`SELECT p.*, s.nombre FROM pujas p LEFT JOIN socios s ON s.id = p.socio_id
+      return sql`SELECT p.*, s.nombre, s.pais_iso FROM pujas p LEFT JOIN socios s ON s.id = p.socio_id
                  WHERE p.subasta_id = ${subastaId} ORDER BY p.monto DESC, p.creado DESC LIMIT ${limit}`;
     },
     async miPujaMax(subastaId, socioId) { const [r] = await sql`SELECT COALESCE(MAX(monto),0)::int AS m FROM pujas WHERE subasta_id = ${subastaId} AND socio_id = ${socioId}`; return r ? r.m : 0; },

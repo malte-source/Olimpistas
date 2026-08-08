@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS socios (
   idioma        TEXT NOT NULL DEFAULT 'es', -- idioma del socio (es|en) para correos bilingües
   marketing_baja BOOLEAN NOT NULL DEFAULT false, -- opt-out de correos de marketing (List-Unsubscribe)
   marketing_baja_en TIMESTAMPTZ,
+  -- Avisos granulares por email (Perfil, F2) — independientes de marketing_baja.
+  avisos_subastas  BOOLEAN NOT NULL DEFAULT true,
+  avisos_sorteos   BOOLEAN NOT NULL DEFAULT true,
+  avisos_contenido BOOLEAN NOT NULL DEFAULT true,
   creado        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- Cédula ÚNICA: una misma cédula no puede usarse en dos cuentas (partial: ignora vacíos).
@@ -133,7 +137,8 @@ CREATE TABLE IF NOT EXISTS sorteos (
   descripcion TEXT,
   tier_min    TEXT NOT NULL DEFAULT 'olimpista',
   cierra      DATE,
-  imagen      TEXT
+  imagen      TEXT,
+  ganador_id  TEXT REFERENCES socios(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS participaciones (

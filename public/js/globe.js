@@ -11,6 +11,8 @@
        → { setData(ciudades), setCountries(paises), pov, stopRotation, raw } */
 window.OLI_GLOBE = (function () {
   const ORO = "#c9a227", ORO_BORDE = "#1a1500";
+  // Cúmulos de ciudad/país: tinta, no oro — "el oro significa dinero, y acá no hay dinero" (F1.7).
+  const CUMULO = "#0a0a0a", CUMULO_BORDE = "rgba(255,255,255,.35)";
   const ESTILO = {
     version: 8,
     projection: { type: "globe" },
@@ -206,9 +208,18 @@ window.OLI_GLOBE = (function () {
         const img = new Image(); img.crossOrigin = "anonymous";
         img.onload = () => {
           const w = 110, h = Math.round(w * ((img.height / img.width) || 0.72));
-          const c = document.createElement("canvas"); c.width = w * 2; c.height = h * 2;
-          c.getContext("2d").drawImage(img, 0, 0, w * 2, h * 2);
-          try { if (!map.hasImage("bandera")) map.addImage("bandera", c.getContext("2d").getImageData(0, 0, w * 2, h * 2), { pixelRatio: 2 }); } catch (e) {}
+          // Aire extra para el contorno + la sombra suave (F1.7): sin esto, la bandera
+          // blanca desaparece sobre el satelital claro.
+          const pad = 6;
+          const c = document.createElement("canvas"); c.width = (w + pad * 2) * 2; c.height = (h + pad * 2) * 2;
+          const cx = c.getContext("2d");
+          cx.save();
+          cx.shadowColor = "rgba(0,0,0,.45)"; cx.shadowBlur = 6; cx.shadowOffsetY = 2;
+          cx.drawImage(img, pad * 2, pad * 2, w * 2, h * 2);
+          cx.restore();
+          cx.strokeStyle = "rgba(10,10,10,.25)"; cx.lineWidth = 2;
+          cx.strokeRect(pad * 2 + 1, pad * 2 + 1, w * 2 - 2, h * 2 - 2);
+          try { if (!map.hasImage("bandera")) map.addImage("bandera", cx.getImageData(0, 0, c.width, c.height), { pixelRatio: 2 }); } catch (e) {}
           res();
         };
         img.onerror = () => res();
@@ -229,7 +240,9 @@ window.OLI_GLOBE = (function () {
       _casasT = setTimeout(() => {
         const b = map.getBounds();
         const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((n) => n.toFixed(4)).join(",");
-        fetch(opts.flagsUrl + "?bbox=" + bbox + "&limit=800", { credentials: "same-origin" })
+        // Máximo 40 marcadores individuales visibles a la vez (F1.7): lo que exceda
+        // queda agrupado en el cúmulo más cercano en vez de saturar el mapa.
+        fetch(opts.flagsUrl + "?bbox=" + bbox + "&limit=40", { credentials: "same-origin" })
           .then((r) => r.json())
           .then((j) => { if (map.getSource("casas")) map.getSource("casas").setData(buildFC(j.flags || [])); })
           .catch(() => {});
@@ -248,7 +261,7 @@ window.OLI_GLOBE = (function () {
       const RADIO_SUM = ["interpolate", ["linear"], ["get", "sum"], 1, 12, 1000, 16, 20000, 24, 200000, 34, 700000, 46];
       const RADIO_CIUDAD = ["interpolate", ["linear"], ["get", "count"], 1, 11, 1000, 15, 20000, 22, 200000, 32];
       const TXT = (size) => ({ "text-font": ["Open Sans Bold"], "text-size": size, "text-allow-overlap": true });
-      const TXT_PAINT = { "text-color": ORO_BORDE };
+      const TXT_PAINT = { "text-color": "#fff" };
       const opa = (...stops) => ["interpolate", ["linear"], ["zoom"], ...stops];
 
       // ── Tier 1: PAÍS (mundo) → medallón mitad Olimpia / mitad país. Fade out ~4.2→5 ──
@@ -264,12 +277,12 @@ window.OLI_GLOBE = (function () {
       map.addLayer({ id: "pais-nombre", type: "symbol", source: "paises",
         layout: { "text-field": ["get", "nombre"], "text-font": ["Open Sans Bold"], "text-size": 12,
           "text-anchor": "top", "text-offset": [0, 1.9], "text-allow-overlap": false, "text-optional": true },
-        paint: { "text-color": "#e7c64b", "text-halo-color": "#000", "text-halo-width": 1.3, "text-opacity": fadePais } });
+        paint: { "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.3, "text-opacity": fadePais } });
 
       // ── Tier 2: CIUDAD agrupada (racimo). Fade in ~4.2→5 ──
       const fadeCluster = opa(4.2, 0, 5, 0.96);
       map.addLayer({ id: "ciudad-cluster", type: "circle", source: "ciudades", filter: ["has", "point_count"],
-        paint: { "circle-color": ORO, "circle-stroke-color": ORO_BORDE, "circle-stroke-width": 2,
+        paint: { "circle-color": CUMULO, "circle-stroke-color": CUMULO_BORDE, "circle-stroke-width": 2,
           "circle-radius": RADIO_SUM, "circle-opacity": fadeCluster, "circle-stroke-opacity": fadeCluster } });
       map.addLayer({ id: "ciudad-cluster-count", type: "symbol", source: "ciudades", filter: ["has", "point_count"],
         layout: { "text-field": fmt("sum"), ...TXT(13) }, paint: { ...TXT_PAINT, "text-opacity": fadeCluster } });
@@ -277,7 +290,7 @@ window.OLI_GLOBE = (function () {
       // ── Tier 2b: CIUDAD suelta como badge. Visible ~5→8.4, luego cede a la bandera ──
       const fadeBadge = opa(4.2, 0, 5, 0.96, 8, 0.96, 8.6, 0);
       map.addLayer({ id: "ciudad-badge", type: "circle", source: "ciudades", filter: ["!", ["has", "point_count"]],
-        paint: { "circle-color": ORO, "circle-stroke-color": ORO_BORDE, "circle-stroke-width": 2,
+        paint: { "circle-color": CUMULO, "circle-stroke-color": CUMULO_BORDE, "circle-stroke-width": 2,
           "circle-radius": RADIO_CIUDAD, "circle-opacity": fadeBadge, "circle-stroke-opacity": fadeBadge } });
       map.addLayer({ id: "ciudad-badge-count", type: "symbol", source: "ciudades", filter: ["!", ["has", "point_count"]],
         layout: { "text-field": fmt("count"), ...TXT(12) }, paint: { ...TXT_PAINT, "text-opacity": fadeBadge } });
@@ -295,15 +308,15 @@ window.OLI_GLOBE = (function () {
       // ── Tier 4: CASAS opt-in (punto exacto). Solo a zoom alto ──
       if (opts.flagsUrl) {
         map.addSource("casas", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        // Sin "text-field": el nombre de pila NO se imprime junto al pin — es un dato
+        // personal expuesto sin necesidad, la bandera sola ya cuenta la historia.
         map.addLayer({ id: "casas", type: "symbol", source: "casas",
           layout: { "icon-image": "bandera", "icon-allow-overlap": true, "icon-anchor": "bottom",
-            "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.2, 15, 0.3, 18, 0.4],
-            "text-field": ["get", "nombre"], "text-font": ["Open Sans Bold"], "text-size": 11,
-            "text-offset": [0, 0.7], "text-anchor": "top", "text-optional": true, "text-allow-overlap": false },
-          paint: { "icon-opacity": opa(11.5, 0, 12.5, 1), "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.3, "text-opacity": opa(12.5, 0, 13.2, 1) } });
+            "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.2, 15, 0.3, 18, 0.4] },
+          paint: { "icon-opacity": opa(11.5, 0, 12.5, 1) } });
         map.on("click", "casas", (e) => {
           const f = e.features[0], p = f.properties;
-          popupEn(f.geometry.coordinates.slice(), `<strong><img class="pop-fl" src="/assets/flag-olimpia.svg" alt="" /> ${esc(p.nombre || "Un Olimpista")}</strong><span>${esc(p.ciudad || "")}</span>`);
+          popupEn(f.geometry.coordinates.slice(), `<strong><img class="pop-fl" src="/assets/flag-olimpia.svg" alt="" /> Olimpista</strong><span>${esc(p.ciudad || "")}</span>`);
         });
         map.on("moveend", refrescarCasas);
         refrescarCasas();

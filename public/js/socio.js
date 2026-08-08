@@ -2,7 +2,7 @@
    preventas, carnet. Bilingüe (OLI_I18N) + UX premium (skeletons, transiciones,
    anillo de progreso). El foco del embudo es completar el perfil. */
 (function () {
-  const { api, esc, gs, artSvg, toast, yo, carnet: carnetHTML, makeQR, fotoModal } = window.OLI;
+  const { api, esc, gs, artSvg, toast, yo, carnet: carnetHTML, makeQR, fotoModal, icon } = window.OLI;
   const T = (k) => (window.OLI_I18N ? window.OLI_I18N.t(k) : k);
   const LANG = window.OLI_I18N ? window.OLI_I18N.lang() : "es";
   const LOC = LANG === "en" ? "en-US" : "es-PY";
@@ -25,7 +25,7 @@
       <div class="sk sk-h"></div><div class="sk sk-line"></div>
       ${c ? `<div class="grid-3">${'<div class="sk sk-card"></div>'.repeat(c)}</div>` : ""}</div>`;
   }
-  const vacio = (txt) => `<div class="empty"><div class="empty-ic">🗓️</div><p>${txt}</p></div>`;
+  const vacio = (txt) => `<div class="empty"><div class="empty-ic">${icon("calendar", { size: 36 })}</div><p>${txt}</p></div>`;
 
   async function init() {
     SESSION = await yo();
@@ -34,6 +34,7 @@
     perfilPunto = { lat: SESSION.socio.lat ?? null, lng: SESSION.socio.lng ?? null };
     renderHeader();
     document.getElementById("logoutBtn").onclick = logout;
+    OLI.initThemeToggle("themeSw");
     // Selector de idioma in-app: muestra el idioma DESTINO y recarga para reaplicar i18n.
     const langSw = document.getElementById("langSw");
     if (langSw && window.OLI_I18N) {
@@ -110,7 +111,8 @@
   async function logout() { try { await api("/auth/logout", { method: "POST" }); } finally { location.href = "/"; } }
   async function refrescar() { SESSION = await yo(); renderProgreso(); renderHeader(); renderBannerSocio(); }
 
-  // ─── Inicio (home): saludo + subasta en vivo + accesos rápidos + novedades ───
+  // ─── Inicio (home): orden fijo — saludo → urgente → mis cosas → contenido del
+  // club → próximo escalón. Bloques vacíos desaparecen, el orden nunca cambia. ──
   async function vInicio() {
     const s = SESSION.socio;
     const nombre = esc((String(s.nombre || s.email || "").trim().split(" ")[0]) || "Olimpista");
@@ -122,57 +124,103 @@
       api("/encuestas").catch(() => ({ items: [] })),
     ]);
     const subaViva = (subsR.items || []).find((x) => x.estado === "activa");
+    const sorteosActivos = (sorteosR.items || []).filter((sor) => sor.estado === "activa");
+
+    // ── Urgente: subasta o sorteo activo, el que cierre antes (hoy solo se miraba
+    // la subasta — un sorteo activo se promueve acá si su cierre es más próximo). ──
+    const candidatos = [];
+    if (subaViva) candidatos.push({ tipo: "subasta", data: subaViva, cierre: new Date(subaViva.termina).getTime() });
+    sorteosActivos.forEach((sor) => { if (sor.cierra) candidatos.push({ tipo: "sorteo", data: sor, cierre: new Date(sor.cierra + "T23:59:59").getTime() }); });
+    candidatos.sort((a, b) => a.cierre - b.cierre);
+    const urgente = candidatos[0] || null;
+    const urgenteSorteo = urgente && urgente.tipo === "sorteo" ? urgente.data : null;
+    const destacado = !urgente ? "" : urgente.tipo === "subasta" ? destacadoSubasta(urgente.data) : destacadoSorteo(urgente.data);
+
+    // ── Mis cosas: filas, no grid de íconos — sorteos en los que ya participo,
+    // el estado de mi perfil, mi carnet, invitar a un amigo. ──
+    const misSorteos = sorteosActivos.filter((sor) => sor.participando && sor !== urgenteSorteo);
+    const cosas = [];
+    cosas.push(...misSorteos.map((sor) => iniNov(icon("gift", { size: 22 }), T("tab_sorteos"), sor.titulo, "sorteos")));
+    cosas.push(iniNov(icon("credit-card", { size: 22 }), T("tab_carnet"), T("why_carnet_d"), "", "carnet"));
+    cosas.push(iniNovAccion(icon("share-2", { size: 22 }), T("m_ini_invitar_h"), T("m_ini_invitar_p"), "iniInvitar"));
+
+    // ── Contenido del club: encuesta abierta + novedades (sorteo/preventa que no
+    // estén ya cubiertos arriba) + media, siempre. ──
     const enc = (encsR.items || []).find((x) => !x.respondida) || null;
-    const sorteo = (sorteosR.items || [])[0], preventa = (preventasR.items || [])[0];
-    // Misma tarjeta de producto que el banner de la landing (mismas clases .destacado*):
-    // antes esta vivía como un componente aparte ("ini-live") con el diseño viejo, y
-    // nunca se actualizó cuando se rediseñó el banner público — quedaban distintos.
-    const destacado = subaViva ? `
-      <div class="destacado" data-goto="descubrir" data-seg="subastas" style="cursor:pointer">
-        <div class="destacado-media">${subastaMedia(subaViva)}
-          <span class="destacado-live"><span class="destacado-dot"></span>${T("m_sub_envivo")}</span>
-          <span class="destacado-clock">⏳ ${cdTexto(subaViva.termina).txt}</span></div>
-        <div class="destacado-info">
-          <span class="destacado-tag">${T("tab_subastas")}</span>
-          <h3 class="destacado-titulo">${esc(subaViva.titulo)}</h3>
-          <div class="destacado-precio-row">
-            <div class="destacado-precio"><span class="destacado-precio-lbl">${T("m_sub_actual")}</span><strong>${gs(subaViva.puja_actual)}</strong></div>
-            <span class="destacado-pujadores">👥 ${subaViva.pujadores} ${T("m_sub_pujando")}</span></div>
-          <span class="destacado-cta">${T("m_sub_pujar")} →</span>
-        </div>
-      </div>` : "";
-    const nov = [];
-    if (sorteo) nov.push(iniNov("🎁", T("tab_sorteos"), sorteo.titulo, "sorteos"));
-    if (preventa) nov.push(iniNov("🎟", T("tab_preventas"), preventa.evento, "preventas"));
-    nov.push(iniNov("🎬", T("tab_media"), T("m_media_h"), "media"));
+    const sorteoNovedad = sorteosActivos.find((sor) => !sor.participando && sor !== urgenteSorteo) || null;
+    const hoyIso = new Date().toISOString().slice(0, 10);
+    const preventa = (preventasR.items || []).find((p) => !p.fecha || p.fecha >= hoyIso) || null;
+    const club = [];
+    if (sorteoNovedad) club.push(iniNov(icon("gift", { size: 22 }), T("tab_sorteos"), sorteoNovedad.titulo, "sorteos"));
+    if (preventa) club.push(iniNov(icon("ticket", { size: 22 }), T("tab_preventas"), preventa.evento, "preventas"));
+    club.push(iniNov(icon("play", { size: 22 }), T("tab_media"), T("m_media_h"), "media"));
+
+    // ── Próximo escalón: solo para quien todavía no validó su condición de socio
+    // (nunca a un Socio ya validado) — invita a ver lo que se suma al subir. ──
+    const escalon = escalonCard();
+
     view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      <h2 class="ini-hi">${T("m_hola")}, ${nombre} 🤍🖤</h2>
+      <h2 class="ini-hi">${T("m_hola")}, ${nombre}</h2>
       <p class="lead">${T("m_ini_p")}</p>
       ${destacado}
+      <p class="eyebrow-ini">${T("m_ini_mis_cosas")}</p>
+      <div class="ini-feed"><div id="progreso"></div>${cosas.join("")}</div>
+      <p class="eyebrow-ini">${T("m_ini_club")}</p>
       ${enc ? encuestaCard(enc) : ""}
-      <p class="eyebrow-ini">${T("m_ini_accesos")}</p>
-      <div class="ini-qa">
-        <button data-goto="carnet"><span>🪪</span>${T("tab_carnet")}</button>
-        <button data-goto="beneficios"><span>🎁</span>${T("tab_beneficios")}</button>
-        <button data-goto="descubrir" data-seg="subastas"><span>🔨</span>${T("tab_subastas")}</button>
-        <button id="iniShare"><span>📲</span>${T("m_compartir")}</button>
-      </div>
-      <p class="eyebrow-ini">${T("m_ini_novedades")}</p>
-      <div class="ini-feed">${nov.join("")}</div>
+      <div class="ini-feed">${club.join("")}</div>
+      ${escalon}
     </div>`;
     view().querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => { if (el.dataset.seg) descSeg = el.dataset.seg; activar(el.dataset.goto); }));
-    const sh = view().querySelector("#iniShare");
-    if (sh) sh.onclick = async () => {
+    renderProgreso();
+    const inv = view().querySelector("#iniInvitar");
+    if (inv) inv.onclick = async () => {
       const link = OLI.refLink(SESSION.socio && SESSION.socio.ref_codigo), txt = T("m_compartir_txt") + " " + link;
       try { if (navigator.share) await navigator.share({ title: "Olimpistas", text: txt }); else { await navigator.clipboard.writeText(link); toast(T("m_link_copiado")); } } catch (e) {}
     };
+    const esc2 = view().querySelector("#iniEscalon");
+    if (esc2) esc2.onclick = () => mostrarUpsell(esc2.dataset.tier, T("m_ini_escalon_p"));
     const card = view().querySelector(".enc-card");
     if (card && enc) bindEncuesta(card, enc);
+  }
+  // Misma tarjeta de producto que el banner de la landing (mismas clases .destacado*).
+  function destacadoSubasta(subaViva) {
+    return `<div class="destacado" data-goto="descubrir" data-seg="subastas" style="cursor:pointer">
+      <div class="destacado-media">${subastaMedia(subaViva)}
+        <span class="destacado-live"><span class="destacado-dot"></span>${T("m_sub_envivo")}</span>
+        <span class="destacado-clock">${icon("hourglass", { size: 14 })} ${cdTexto(subaViva.termina).txt}</span></div>
+      <div class="destacado-info">
+        <span class="destacado-tag">${T("tab_subastas")}</span>
+        <h3 class="destacado-titulo">${esc(subaViva.titulo)}</h3>
+        <div class="destacado-precio-row">
+          <div class="destacado-precio"><span class="destacado-precio-lbl">${T("m_sub_actual")}</span><strong>${gs(subaViva.puja_actual)}</strong></div>
+          <span class="destacado-pujadores">${icon("users", { size: 14 })} ${subaViva.pujadores} ${T("m_sub_pujando")}</span></div>
+        <span class="destacado-cta">${T("m_sub_pujar")} →</span>
+      </div>
+    </div>`;
+  }
+  function destacadoSorteo(sor) {
+    return `<div class="destacado" data-goto="descubrir" data-seg="sorteos" style="cursor:pointer">
+      <div class="destacado-media">${artSvg(sor.id, sor.titulo, icon("gift", { size: 34 }))}
+        <span class="destacado-clock">${icon("hourglass", { size: 14 })} ${T("m_cierra")} ${sor.cierra}</span></div>
+      <div class="destacado-info">
+        <span class="destacado-tag">${T("tab_sorteos")}</span>
+        <h3 class="destacado-titulo">${esc(sor.titulo)}</h3>
+        <span class="destacado-cta">${sor.participando ? T("m_ya_participas") : T("m_participar")} →</span>
+      </div>
+    </div>`;
+  }
+  function escalonCard() {
+    if (esSocioValidado()) return ""; // ya validado — no hay nada más que ofrecerle acá
+    const tier = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
+    const target = tier === "premium" ? "socio" : "premium";
+    return `<div class="socio-banner" id="iniEscalon" data-tier="${target}" style="cursor:pointer;margin-top:24px">
+      <span class="sb-txt">${icon("trophy", { size: 16 })} <strong>${T("m_ini_escalon_h")}</strong> — ${T("m_ini_escalon_p")}</span>
+      <button class="btn btn-valor btn-sm">${T("m_ini_escalon_cta")}</button></div>`;
   }
 
   // ─── Encuestas (Fan Survey): card en Inicio ───
   function encuestaCard(e) {
-    return `<div class="enc-card"><span class="enc-eyebrow">📊 ${T("m_enc_eyebrow")}</span>
+    return `<div class="enc-card"><span class="enc-eyebrow">${icon("info", { size: 12 })} ${T("m_enc_eyebrow")}</span>
       <strong class="enc-q">${esc(e.pregunta)}</strong>
       <div class="enc-body">${e.respondida ? encuestaResultados(e.resultados, e.mi_opcion) : encuestaInputs(e)}</div></div>`;
   }
@@ -183,12 +231,12 @@
   }
   function encuestaResultados(r, miOp) {
     if (!r) return `<p class="enc-gracias">${T("m_enc_gracias")}</p>`;
-    if (r.tipo === "texto") return `<p class="enc-gracias">✓ ${T("m_enc_gracias")}</p>`;
+    if (r.tipo === "texto") return `<p class="enc-gracias">${icon("check", { size: 14 })} ${T("m_enc_gracias")}</p>`;
     const total = r.total || 0;
     const rows = (r.conteo || []).map((c) => {
       const pct = total ? Math.round((c.n / total) * 100) : 0;
       return `<div class="enc-res${c.i === Number(miOp) ? " mine" : ""}"><div class="enc-res-bar" style="width:${pct}%"></div>
-        <span class="enc-res-l">${esc(c.opcion)}${c.i === Number(miOp) ? " ✓" : ""}</span><span class="enc-res-p">${pct}%</span></div>`;
+        <span class="enc-res-l">${esc(c.opcion)}${c.i === Number(miOp) ? " " + icon("check", { size: 12 }) : ""}</span><span class="enc-res-p">${pct}%</span></div>`;
     }).join("");
     return `<div class="enc-results">${rows}</div><p class="enc-total">${total} ${T("m_enc_votos")} · ${T("m_enc_gracias")}</p>`;
   }
@@ -213,8 +261,15 @@
       catch (err) { toast(err.message); send.disabled = false; }
     });
   }
-  function iniNov(ic, tag, titulo, seg) {
-    return `<div class="ini-nov" data-goto="descubrir" data-seg="${seg}">
+  function iniNov(ic, tag, titulo, seg, goto) {
+    return `<div class="ini-nov" data-goto="${goto || "descubrir"}" data-seg="${seg || ""}">
+      <span class="ini-nov-ic">${ic}</span>
+      <div class="ini-nov-tx"><span class="ini-nov-tag">${tag}</span><strong>${esc(titulo || "")}</strong></div>
+      <span class="ini-nov-go">›</span></div>`;
+  }
+  // Fila con acción propia (no navega a un tab) — ej. compartir/invitar.
+  function iniNovAccion(ic, tag, titulo, id) {
+    return `<div class="ini-nov" id="${id}" style="cursor:pointer">
       <span class="ini-nov-ic">${ic}</span>
       <div class="ini-nov-tx"><span class="ini-nov-tag">${tag}</span><strong>${esc(titulo || "")}</strong></div>
       <span class="ini-nov-go">›</span></div>`;
@@ -224,7 +279,7 @@
   let descSeg = "subastas", _deepSub = null;
   function vDescubrir() {
     stopSub();
-    const segs = [["subastas", "🔨 " + T("tab_subastas")], ["sorteos", "🎁 " + T("tab_sorteos")], ["preventas", "🎟 " + T("tab_preventas")], ["media", "▶ " + T("tab_media")]];
+    const segs = [["subastas", T("tab_subastas")], ["sorteos", T("tab_sorteos")], ["preventas", T("tab_preventas")], ["media", T("tab_media")]];
     view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
       <h2>${T("m_desc_h")}</h2><p class="lead">${T("m_desc_p")}</p>
       <div class="seg-nav" id="descSegNav">${segs.map(([id, l]) => `<button class="seg-b${id === descSeg ? " on" : ""}" data-seg="${id}">${l}</button>`).join("")}</div>
@@ -247,8 +302,8 @@
     let host = document.getElementById("socioBanner");
     if (!host) {
       host = document.createElement("div"); host.id = "socioBanner";
-      const prog = document.getElementById("progreso");
-      if (prog && prog.parentNode) prog.parentNode.insertBefore(host, prog);
+      const tabs = document.getElementById("tabs");
+      if (tabs && tabs.parentNode) tabs.parentNode.insertBefore(host, tabs);
     }
     // Prioridad 1: ganaste una subasta y falta pagar. Es la única alerta con plata real
     // de por medio — se ve en CUALQUIER pestaña, no solo si entrás a Subastas a mirar.
@@ -257,8 +312,8 @@
       const pendiente = (items || []).find((x) => x.gano && x.pago_estado !== "pagado");
       if (pendiente) {
         host.innerHTML = `<div class="socio-banner socio-banner-pago">
-          <span class="sb-txt">🏆 ${T("m_sub_banner_pago")} <b>${esc(pendiente.titulo)}</b></span>
-          <button class="btn btn-sm" id="pagoBannerBtn">${T("m_sub_pagar")}</button></div>`;
+          <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("m_sub_banner_pago")} <b>${esc(pendiente.titulo)}</b></span>
+          <button class="btn btn-valor btn-sm" id="pagoBannerBtn">${T("m_sub_pagar")}</button></div>`;
         host.querySelector("#pagoBannerBtn").onclick = () => { descSeg = "subastas"; activar("descubrir"); };
         return;
       }
@@ -266,9 +321,9 @@
     let off = false; try { off = sessionStorage.getItem("oli_socio_banner") === "1"; } catch (e) {}
     if (esSocioValidado() || off) { host.innerHTML = ""; return; }
     host.innerHTML = `<div class="socio-banner">
-      <span class="sb-txt">🥇 ${T("up_banner")}</span>
+      <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("up_banner")}</span>
       <button class="btn btn-sm" id="upBannerBtn">${T("up_cta")}</button>
-      <button class="up-x" id="upBannerX" aria-label="Cerrar">✕</button></div>`;
+      <button class="up-x" id="upBannerX" aria-label="Cerrar">${icon("x", { size: 16 })}</button></div>`;
     host.querySelector("#upBannerBtn").onclick = validarSocioModal;
     host.querySelector("#upBannerX").onclick = () => { try { sessionStorage.setItem("oli_socio_banner", "1"); } catch (e) {} host.innerHTML = ""; };
   }
@@ -321,8 +376,9 @@
 
   // ─── Anillo de progreso (persistente, animado) ───────────────────────────────
   function renderProgreso() {
-    const p = SESSION.progreso;
     const cont = document.getElementById("progreso");
+    if (!cont) return; // solo existe montado dentro de "mis cosas" en Inicio
+    const p = SESSION.progreso;
     if (!p) { cont.innerHTML = ""; return; }
     const completo = p.pct >= 100;
     const chips = completo ? "" : (p.faltantes || []).map((f) => `<button data-falta="${f.key}">+ ${f.label}</button>`).join("");
@@ -345,44 +401,54 @@
     );
   }
   function focusCampo(key) {
-    const el = document.getElementById("f_" + key) || (key === "foto" && document.getElementById("fotoInput"));
-    if (el) { el.focus?.(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+    const el = document.getElementById("f_" + key);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => el.click(), 250); // deja terminar el scroll antes de abrir edición/modal
   }
 
   // ─── Mi perfil ───────────────────────────────────────────────────────────────
+  // Campos editables en línea (F2): cada uno se toca, se edita y se guarda solo —
+  // nada de formulario grande con un botón "Guardar" al final.
+  function nombrePais(iso) { return ((CONFIG && CONFIG.paises) || []).find((p) => p.iso === iso)?.nombre || ""; }
   function vPerfil() {
     const s = SESSION.socio;
-    const avatar = s.foto ? `<img class="avatar" id="avatar" src="${s.foto}" alt="" />` : `<div class="avatar" id="avatar">📷</div>`;
-    const paises = CONFIG.paises || [];
-    const opts = `<option value="">${T("m_elegi_pais")}</option>` +
-      paises.map((p) => `<option value="${p.iso}" ${p.iso === s.pais_iso ? "selected" : ""}>${p.nombre}</option>`).join("");
+    const avatar = s.foto ? `<img class="avatar" id="avatar" src="${s.foto}" alt="" />` : `<div class="avatar" id="avatar">${icon("camera", { size: 40 })}</div>`;
     const tienePunto = perfilPunto.lat != null;
+    const campos = [
+      { key: "nombre", label: T("m_nombre"), type: "text", value: s.nombre },
+      { key: "apellido", label: T("m_apellido"), type: "text", value: s.apellido },
+      { key: "whatsapp", label: T("m_whatsapp"), type: "text", value: s.whatsapp, placeholder: "+595 9xx xxx xxx" },
+      { key: "pais_iso", label: T("m_pais"), type: "select", value: s.pais_iso, display: nombrePais(s.pais_iso) },
+      { key: "ciudad", label: T("m_ciudad"), type: "text", value: s.ciudad },
+      { key: "fecha_nacimiento", label: T("ob_fechanac"), type: "date", value: String(s.fecha_nacimiento || "").slice(0, 10), display: s.fecha_nacimiento ? fecha(s.fecha_nacimiento) : "" },
+    ];
+    const filaCampo = (c) => `<div class="pf-campo" data-key="${c.key}">
+      <span class="pf-lbl">${c.label}</span>
+      <button type="button" class="pf-val" id="f_${c.key}"><span>${esc(String((c.display != null ? c.display : c.value) || "—"))}</span>${icon("pencil", { size: 13 })}</button>
+    </div>`;
+    const avisos = [
+      { key: "avisos_subastas", label: T("m_avisos_subastas"), on: s.avisos_subastas !== false },
+      { key: "avisos_sorteos", label: T("m_avisos_sorteos"), on: s.avisos_sorteos !== false },
+      { key: "avisos_contenido", label: T("m_avisos_contenido"), on: s.avisos_contenido !== false },
+    ];
+    const tierSlug = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
+    const tierInfo = ((CONFIG && CONFIG.tiers) || []).find((t) => t.slug === tierSlug);
+    const puedeCancelar = tierSlug !== "olimpista" && tierInfo && tierInfo.comprable !== false;
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
         <h2>${T("m_perfil_h")}</h2>
         <p class="lead">${T("m_perfil_p")}</p>
         <div class="perfil-grid">
           <div class="perfil-datos">
-            <div class="perfil">
-              <div class="foto-up">
-                ${avatar}
-                <button type="button" class="foto-btn" id="cambiarFoto">📷 ${T("m_foto_cambiar")}</button>
-              </div>
-              <div>
-                <div class="row-2">
-                  <div class="field"><label>${T("m_nombre")}</label><input id="f_nombre" value="${attr(s.nombre)}" /></div>
-                  <div class="field"><label>${T("m_apellido")}</label><input id="f_apellido" value="${attr(s.apellido)}" /></div>
-                </div>
-                <div class="field"><label>${T("m_whatsapp")}</label><input id="f_whatsapp" value="${attr(s.whatsapp)}" placeholder="+595 9xx xxx xxx" /></div>
-                <div class="row-2">
-                  <div class="field"><label>${T("m_pais")}</label><select id="f_pais">${opts}</select></div>
-                  <div class="field"><label>${T("m_ciudad")}</label><input id="f_ciudad" value="${attr(s.ciudad)}" /></div>
-                </div>
-                <div class="field"><label>${T("ob_fechanac")}</label><input id="f_fechanac" type="date" max="${new Date().toISOString().slice(0,10)}" value="${attr(String(s.fecha_nacimiento || "").slice(0, 10))}" /></div>
-                <div class="field"><label>${T("m_email")}</label><input value="${attr(s.email)}" disabled /></div>
-              </div>
+            <div class="foto-up">
+              ${avatar}
+              <button type="button" class="foto-btn" id="f_foto">${icon("camera", { size: 14 })} ${T("m_foto_cambiar")}</button>
             </div>
-            <button class="btn btn-block" id="guardarPerfil" style="margin-top:18px">${T("m_guardar")}</button>
+            <div class="pf-list">
+              ${campos.map(filaCampo).join("")}
+              <div class="pf-campo pf-readonly"><span class="pf-lbl">${T("m_email")}</span><span class="pf-val">${esc(s.email)}</span></div>
+            </div>
           </div>
 
           <div class="perfil-casa">
@@ -396,25 +462,95 @@
               <button class="btn btn-ghost" id="btnGeo" type="button">${T("m_geo")}</button>
               <span id="ubicEstado" class="muted">${tienePunto ? T("m_fijado") : T("m_sin_fijar")}</span>
             </div>
-            <div id="perfilMapa" class="ob-mapa"><div class="ob-mapa-pin">🚩</div></div>
+            <div id="perfilMapa" class="ob-mapa"><div class="ob-mapa-pin">${icon("map-pin", { size: 28 })}</div></div>
             <p class="ob-mapa-hint">${T("m_casa_toca")}</p>
           </div>
         </div>
+
+        <div class="perfil-avisos">
+          <h3 style="margin:0 0 4px">${T("m_avisos_h")}</h3>
+          <p class="lead" style="margin-bottom:12px">${T("m_avisos_p")}</p>
+          ${avisos.map((a) => `<label class="casa-toggle" for="${a.key}">
+            <input type="checkbox" id="${a.key}" ${a.on ? "checked" : ""} />
+            <span><strong>${a.label}</strong></span>
+          </label>`).join("")}
+        </div>
+
+        ${puedeCancelar ? `<div class="perfil-cancelar"><button type="button" class="pf-cancel-link" id="btnCancelarMembresia">${T("m_cancelar_membresia")}</button></div>` : ""}
       </div>`;
-    document.getElementById("guardarPerfil").onclick = guardarPerfil;
-    document.getElementById("cambiarFoto").onclick = () => fotoModal(subirFoto);
+    document.getElementById("f_foto").onclick = () => fotoModal(subirFoto);
     document.getElementById("btnGeo").onclick = usarUbicacion;
+    campos.forEach((c) => { document.getElementById("f_" + c.key).onclick = () => entrarEdicionPerfil(c); });
+    avisos.forEach((a) => { document.getElementById(a.key).onchange = (e) => guardarAviso(a.key, e.target.checked); });
+    const cancelBtn = document.getElementById("btnCancelarMembresia");
+    if (cancelBtn) cancelBtn.onclick = () => confirmarCancelarMembresia(cancelBtn);
+    document.getElementById("f_exacto").onchange = (e) => guardarCampoPerfil({ mostrar_exacto: e.target.checked }, T("m_casa_ok"));
     initPerfilMapa();
     if (!s.pais_iso) prefillPaisPorIP();
   }
+  function entrarEdicionPerfil(c) {
+    const btn = document.getElementById("f_" + c.key);
+    const wrap = btn.closest(".pf-campo");
+    let inputHtml;
+    if (c.type === "select") {
+      const opts = `<option value="">${T("m_elegi_pais")}</option>` +
+        (CONFIG.paises || []).map((p) => `<option value="${p.iso}" ${p.iso === c.value ? "selected" : ""}>${esc(p.nombre)}</option>`).join("");
+      inputHtml = `<select id="pfInput">${opts}</select>`;
+    } else if (c.type === "date") {
+      inputHtml = `<input id="pfInput" type="date" max="${new Date().toISOString().slice(0, 10)}" value="${attr(c.value)}" />`;
+    } else {
+      inputHtml = `<input id="pfInput" type="text" value="${attr(c.value)}" placeholder="${attr(c.placeholder || "")}" />`;
+    }
+    wrap.innerHTML = `<span class="pf-lbl">${c.label}</span>
+      <div class="pf-edit">${inputHtml}<button type="button" class="btn btn-sm" id="pfOk">${icon("check", { size: 14 })}</button></div>`;
+    const input = document.getElementById("pfInput");
+    input.focus();
+    const commit = () => {
+      const apiKey = c.key === "pais_iso" ? "pais" : c.key;
+      guardarCampoPerfil({ [apiKey]: input.value }, T("m_perfil_ok"));
+    };
+    document.getElementById("pfOk").onclick = commit;
+    if (c.type === "select") input.addEventListener("change", commit);
+    else input.addEventListener("keydown", (e) => { if (e.key === "Enter") commit(); else if (e.key === "Escape") vPerfil(); });
+  }
+  async function guardarCampoPerfil(body, msgOk) {
+    try {
+      const r = await api("/perfil", { method: "PATCH", body });
+      SESSION.socio = r.socio; SESSION.progreso = r.progreso;
+      renderHeader();
+      toast(msgOk);
+    } catch (e) { toast(e.message); }
+    finally { vPerfil(); } // re-render completo: simple y evita que el DOM y SESSION diverjan
+  }
+  async function guardarAviso(key, checked) {
+    try { const r = await api("/perfil", { method: "PATCH", body: { [key]: checked } }); SESSION.socio = r.socio; }
+    catch (e) { toast(e.message); vPerfil(); }
+  }
+  // Cancelación en 2 toques (F2): un primer toque pide confirmación en el momento
+  // (sin encuesta, sin oferta de retención); el segundo la ejecuta. No hay nada
+  // recurrente que frenar (el cobro es anual único) — cancelar = volver a Olimpista ya.
+  function confirmarCancelarMembresia(btn) {
+    const wrap = btn.parentElement;
+    wrap.innerHTML = `<p class="pf-cancel-confirm">${T("m_cancelar_confirm")}</p>
+      <div class="pf-cancel-acts">
+        <button type="button" class="btn btn-ghost btn-sm" id="cancelarNo">${T("m_cancelar_no")}</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="cancelarSi">${T("m_cancelar_si")}</button>
+      </div>`;
+    document.getElementById("cancelarNo").onclick = () => vPerfil();
+    document.getElementById("cancelarSi").onclick = async () => {
+      try { await api("/membresia/cancelar", { method: "POST" }); await refrescar(); toast(T("m_cancelar_ok")); vPerfil(); }
+      catch (e) { toast(e.message); }
+    };
+  }
 
+  // Solo encuadra el mapa cerca de su país detectado — ya no pre-llena el campo país
+  // (con edición inline no hay un "Guardar" global que revise antes de persistir; el
+  // socio lo toca y lo confirma él mismo si quiere setearlo).
   async function prefillPaisPorIP() {
     try {
       const { pais } = await api("/geo");
-      if (pais && pais.iso) {
-        const sel = document.getElementById("f_pais");
-        if (sel && !sel.value) sel.value = pais.iso;
-        if (perfilPunto.lat == null && pais.lat != null && perfilGlobo) perfilGlobo.flyTo({ center: [pais.lng, pais.lat], zoom: 6 });
+      if (pais && pais.iso && perfilPunto.lat == null && pais.lat != null && perfilGlobo) {
+        perfilGlobo.flyTo({ center: [pais.lng, pais.lat], zoom: 6 });
       }
     } catch { /* sin geo */ }
   }
@@ -438,8 +574,9 @@
         zoom: tiene ? 15 : 11, attributionControl: false,
       });
       perfilGlobo.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), "top-right");
-      // El pin vive fijo al centro (CSS). Al soltar el mapa, el centro = tu punto.
-      perfilGlobo.on("moveend", () => { const c = perfilGlobo.getCenter(); perfilPunto = { lat: c.lat, lng: c.lng }; marcarFijado(); });
+      // El pin vive fijo al centro (CSS). Al soltar el mapa, el centro = tu punto —
+      // se guarda solo (edición inline: sin botón "Guardar" global que lo bundlee).
+      perfilGlobo.on("moveend", () => { const c = perfilGlobo.getCenter(); perfilPunto = { lat: c.lat, lng: c.lng }; marcarFijado(); guardarUbicacionExacta(); });
     };
     if (window.maplibregl) arranque();
     else { let n = 0; const t = setInterval(() => { if (window.maplibregl) { clearInterval(t); arranque(); } else if (++n > 80) clearInterval(t); }, 100); }
@@ -451,28 +588,18 @@
     const e = document.getElementById("ubicEstado");
     if (e) e.textContent = T("m_buscando");
     navigator.geolocation.getCurrentPosition(
-      (pos) => { const { latitude, longitude } = pos.coords; perfilPunto = { lat: latitude, lng: longitude }; if (perfilGlobo) perfilGlobo.flyTo({ center: [longitude, latitude], zoom: 16 }); marcarFijado(); },
+      (pos) => { const { latitude, longitude } = pos.coords; perfilPunto = { lat: latitude, lng: longitude }; if (perfilGlobo) perfilGlobo.flyTo({ center: [longitude, latitude], zoom: 16 }); marcarFijado(); guardarUbicacionExacta(); },
       () => { if (e) e.textContent = T("m_geo_err"); },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   }
 
-  async function guardarPerfil() {
-    const body = { nombre: val("f_nombre"), apellido: val("f_apellido"), whatsapp: val("f_whatsapp"), pais: document.getElementById("f_pais").value, ciudad: val("f_ciudad") };
-    const fn = val("f_fechanac"); if (fn) body.fecha_nacimiento = fn;
-    if (perfilPunto.lat != null) { body.lat = perfilPunto.lat; body.lng = perfilPunto.lng; }
-    const exacto = document.getElementById("f_exacto");
-    if (exacto) body.mostrar_exacto = exacto.checked;
-    const btn = document.getElementById("guardarPerfil");
-    const txt0 = btn ? btn.textContent : "";
-    if (btn) { btn.disabled = true; btn.textContent = T("m_guardando"); } // evita doble envío en redes lentas
+  async function guardarUbicacionExacta() {
+    if (perfilPunto.lat == null) return;
     try {
-      const r = await api("/perfil", { method: "PATCH", body });
+      const r = await api("/perfil", { method: "PATCH", body: { lat: perfilPunto.lat, lng: perfilPunto.lng } });
       SESSION.socio = r.socio; SESSION.progreso = r.progreso;
-      renderHeader(); renderProgreso();
-      toast(body.mostrar_exacto && perfilPunto.lat != null ? T("m_casa_ok") : T("m_perfil_ok"));
     } catch (e) { toast(e.message); }
-    finally { if (btn) { btn.disabled = false; btn.textContent = txt0; } }
   }
 
   async function subirFoto(dataUrl) {
@@ -496,7 +623,7 @@
     const upsell = esGratis ? `<h3 style="margin-top:28px">${T("m_subi")}</h3><div class="grid-3">${pagos.map(cardUpsell).join("")}</div>` : "";
     // Card de validación de socio (incluido): siempre presente hasta validar.
     const socioCard = !esSocioValidado() ? `<div class="card card-socio"><div class="body">
-        <span class="chip on">🥇 ${T("up_card_chip")}</span>
+        <span class="chip on">${icon("trophy", { size: 14 })} ${T("up_card_chip")}</span>
         <h4>${T("up_card_h")}</h4><p>${T("up_card_p")}</p>
         <button class="btn" id="upCardBtn">${T("ob_validar")}</button></div></div>` : "";
     const s = SESSION.socio;
@@ -504,8 +631,8 @@
     const heroCn = cd ? carnetHTML({ tierSlug: cd.tierSlug, tierNombre: cd.tier, nombre: cd.nombre, numero: cd.numero, foto: cd.foto, qr: makeQR(location.origin + "/c/" + encodeURIComponent(cd.numero)), iso: cd.iso }) : "";
     const ubic = [s.ciudad, s.pais].filter(Boolean).join(", ");
     const ubicHtml = ubic
-      ? `<p class="ubic-line">📍 ${esc(ubic)} · <a class="ed-ubic">${T("m_editar_ubic")}</a></p>`
-      : `<p class="ubic-line ubic-falta">📍 <a class="ed-ubic">${T("m_set_ubic")}</a></p>`;
+      ? `<p class="ubic-line">${icon("map-pin", { size: 14 })} ${esc(ubic)} · <a class="ed-ubic">${T("m_editar_ubic")}</a></p>`
+      : `<p class="ubic-line ubic-falta">${icon("map-pin", { size: 14 })} <a class="ed-ubic">${T("m_set_ubic")}</a></p>`;
     view().innerHTML = `
       <div class="section" style="border:none;padding-top:8px">
         ${heroCn ? `<div class="cn-hero">${heroCn}</div>` : ""}
@@ -527,18 +654,17 @@
       const iso = SESSION.socio.pais_iso; if (!iso) return "";
       const { porPais } = await api("/stats");
       const p = (porPais || []).find((x) => x.iso === iso); if (!p) return "";
-      return `<p class="social-pais">🌎 ${T("m_social_pre")} <strong>${Number(p.count).toLocaleString(LOC)}</strong> ${T("m_social_in")} ${p.nombre}</p>`;
+      return `<p class="social-pais">${icon("globe", { size: 14 })} ${T("m_social_pre")} <strong>${Number(p.count).toLocaleString(LOC)}</strong> ${T("m_social_in")} ${p.nombre}</p>`;
     } catch { return ""; }
   }
-  const ICONOS = { olimpista: "★", kids: "🎈", premium: "♛", socio: "⚜" };
   function cardUpsell(t) {
     const precio = t.precioAnio > 0 ? `${gs(t.precioAnio)} / ${T("m_anio")}` : T("price_gratis");
-    const cn = carnetHTML({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre", numero: "OLI-••••••••", icono: ICONOS[t.slug], qr: _previewQR, iso: SESSION.socio.pais_iso });
+    const cn = carnetHTML({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre", numero: "OLI-••••••••", qr: _previewQR, iso: SESSION.socio.pais_iso });
     return `<div class="card card-tier">
       <div class="cn-mini">${cn}</div>
       <div class="body"><span class="chip on">${precio}</span><h4>${esc(t.nombre)}</h4>
       <p>${esc(t.beneficios.slice(1, 3).join(" · "))}</p>
-      <button class="btn" data-upsell="${t.slug}">${t.cta}</button></div></div>`;
+      <button class="btn${t.precioAnio > 0 ? " btn-valor" : ""}" data-upsell="${t.slug}">${t.cta}</button></div></div>`;
   }
   async function upgrade(slug, cedula) {
     try {
@@ -561,16 +687,21 @@
     const tier = ((CONFIG && CONFIG.tiers) || []).find((t) => t.slug === slug) || ((CONFIG && CONFIG.tiers) || []).find((t) => t.slug === "premium");
     if (!tier) { upgrade(slug); return; } // fallback defensivo si no hay catálogo cargado
     const precio = tier.precioAnio > 0 ? `${gs(tier.precioAnio)} / ${T("m_anio")}` : T("price_gratis");
+    // El primer beneficio de cada tier de pago es siempre "Todo lo de <nivel anterior>,
+    // incluido" (ver config.js) — acá NO lo repetimos: la hoja de nivel muestra solo lo
+    // que se SUMA respecto al nivel actual, nunca la tabla completa de beneficios.
+    const suma = (tier.beneficios && tier.beneficios.length > 1) ? tier.beneficios.slice(1) : (tier.beneficios || []);
     const { root, close } = OLI.modal(`
       <div style="text-align:center">
-        <div style="font-size:38px;line-height:1;margin-bottom:8px">${ICONOS[tier.slug] || "♛"}</div>
+        <div style="display:flex;justify-content:center;margin-bottom:8px">${icon("trophy", { size: 34 })}</div>
         <h3>${esc(contexto || T("m_up_generico"))}</h3>
         <span class="chip on" style="margin:10px 0 16px;display:inline-block">${esc(tier.nombre)} · ${precio}</span>
       </div>
-      <ul class="benefits" style="margin:0 0 20px">${(tier.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
-      <button class="btn btn-block" id="upsGo">${esc(tier.cta || T("m_subi"))}</button>
+      <p class="muted" style="font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px">${T("m_up_suma")}</p>
+      <ul class="benefits" style="margin:0 0 20px">${suma.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+      <button class="btn btn-valor btn-block" id="upsGo">${esc(tier.cta || T("m_subi"))}</button>
       ${!esSocioValidado() ? `<div class="up-socio-alt"><p class="muted" style="font-size:13px;margin:14px 0 8px;text-align:center">${T("m_up_ya_socio")}</p>
-        <button class="btn btn-ghost btn-block" id="upsSocio">🥇 ${T("m_up_ya_socio_p")}</button></div>` : ""}
+        <button class="btn btn-ghost btn-block" id="upsSocio">${icon("trophy", { size: 14 })} ${T("m_up_ya_socio_p")}</button></div>` : ""}
     `);
     root.querySelector("#upsGo").onclick = () => { close(); upgrade(tier.slug); };
     const socioBtn = root.querySelector("#upsSocio");
@@ -584,11 +715,11 @@
     cv().innerHTML = skeleton(3);
     const { items } = await api("/contenido");
     cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      <div class="enc-eyebrow" style="margin-bottom:8px">▶ Olimpia Media+ · ${T("m_media_pronto")}</div>
+      <div class="enc-eyebrow" style="margin-bottom:8px">${icon("play", { size: 12 })} Olimpia Media+ · ${T("m_media_pronto")}</div>
       ${items.length ? `<div class="grid-3">${items.map(cardContenido).join("")}</div>` : vacio(T("m_vacio_media"))}</div>`;
   }
   function cardContenido(c) {
-    return `<div class="card"><div class="thumb">${artSvg(c.id, c.titulo, "▶")}</div>
+    return `<div class="card"><div class="thumb">${artSvg(c.id, c.titulo, icon("play", { size: 30 }))}</div>
       <div class="body"><span class="chip">${esc(c.tipo)} · ${esc(c.duracion || "")}</span>
       <h4>${esc(c.titulo)}</h4><p>${esc(c.descripcion)}</p>
       <button class="btn btn-ghost" disabled>${T("m_media_pronto")}</button></div></div>`;
@@ -598,17 +729,25 @@
   async function vSorteos() {
     cv().innerHTML = skeleton(3);
     const { items } = await api("/sorteos");
+    // Igual que subastas: "en vivo" arriba (accionable), historial de cerrados con
+    // resultado abajo (prueba social — este ya se sorteó, esta persona lo ganó).
+    const activos = items.filter((x) => x.estado === "activa");
+    const cerrados = items.filter((x) => x.estado === "cerrada");
     cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      ${items.length ? `<div class="grid-3">${items.map(cardSorteo).join("")}</div>` : vacio(T("m_vacio_sorteos"))}</div>`;
+      ${activos.length ? `<div class="grid-3">${activos.map(cardSorteo).join("")}</div>` : (cerrados.length ? "" : vacio(T("m_vacio_sorteos")))}
+      ${cerrados.length ? `<h3 class="sub-historial-h">${T("m_sor_historial")}</h3><div class="grid-3">${cerrados.map(cardSorteo).join("")}</div>` : ""}
+      </div>`;
     cv().querySelectorAll("[data-sorteo]").forEach((el) => el.addEventListener("click", () => participar(el.dataset.sorteo)));
   }
   function cardSorteo(s) {
+    const cerrado = s.estado === "cerrada";
     let btn;
-    if (s.participando) btn = `<button class="btn btn-ghost" disabled>${T("m_ya_participas")}</button>`;
-    else if (!s.elegible) btn = `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_sorteo"))}">🔓 ${T("m_desbloquear")}</button>`;
+    if (cerrado) btn = s.ganador_nombre ? `<button class="btn btn-ghost" disabled>${icon("trophy", { size: 14 })} ${s.gano ? T("m_sub_vos") : esc(s.ganador_nombre)}</button>` : `<button class="btn btn-ghost" disabled>${T("m_sub_cerrada")}</button>`;
+    else if (s.participando) btn = `<button class="btn btn-ghost" disabled>${T("m_ya_participas")}</button>`;
+    else if (!s.elegible) btn = `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_sorteo"))}">${icon("chevron-right", { size: 14 })} ${T("m_desbloquear")}</button>`;
     else btn = `<button class="btn" data-sorteo="${s.id}">${T("m_participar")}</button>`;
-    return `<div class="card"><div class="thumb">${artSvg(s.id, s.titulo, "🎁")}</div>
-      <div class="body"><span class="chip ${s.elegible ? "on" : ""}">${T("m_cierra")} ${s.cierra}</span>
+    return `<div class="card"><div class="thumb">${artSvg(s.id, s.titulo, icon("gift", { size: 30 }))}</div>
+      <div class="body"><span class="chip ${cerrado ? "" : (s.elegible ? "on" : "")}">${cerrado ? T("m_sub_cerrada") : T("m_cierra") + " " + s.cierra}</span>
       <h4>${esc(s.titulo)}</h4><p>${esc(s.descripcion)}</p>${btn}</div></div>`;
   }
   async function participar(id) {
@@ -624,23 +763,32 @@
     if (!items.length) {
       cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
         <div class="ben-pronto">
-          <div class="ben-pronto-ic">🎟️</div>
+          <div class="ben-pronto-ic">${icon("ticket", { size: 44 })}</div>
           <span class="chip on" style="align-self:center">${T("proximamente")}</span>
           <h2>${T("m_prev_pronto_h")}</h2>
           <p class="lead" style="text-align:center;margin:0 auto">${T("m_prev_pronto_p")}</p>
         </div></div>`;
       return;
     }
+    const hoy = new Date().toISOString().slice(0, 10);
+    const activas = items.filter((p) => !p.fecha || p.fecha >= hoy);
+    const pasadas = items.filter((p) => p.fecha && p.fecha < hoy);
     cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      <div class="grid-3">${items.map(cardPreventa).join("")}</div></div>`;
+      ${activas.length ? `<div class="grid-3">${activas.map(cardPreventa).join("")}</div>` : (pasadas.length ? "" : vacio(T("m_vacio_sorteos")))}
+      ${pasadas.length ? `<h3 class="sub-historial-h">${T("m_prev_historial")}</h3><div class="grid-3">${pasadas.map(cardPreventa).join("")}</div>` : ""}
+      </div>`;
     cv().querySelectorAll("[data-preventa]").forEach((el) => el.addEventListener("click", () => reservar(el.dataset.preventa)));
   }
   function cardPreventa(p) {
-    const btn = p.habilitada
+    const hoy = new Date().toISOString().slice(0, 10);
+    const pasada = !!(p.fecha && p.fecha < hoy);
+    const btn = pasada
+      ? `<button class="btn btn-ghost" disabled>${T("m_prev_finalizada")}</button>`
+      : p.habilitada
       ? `<button class="btn" data-preventa="${p.id}">${T("m_reservar")} (${gs(p.precio_desde)})</button>`
-      : `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_preventa"))}">🔓 ${T("m_desbloquear")}</button>`;
-    return `<div class="card"><div class="thumb">${artSvg(p.id, p.evento, "🎟")}</div>
-      <div class="body"><span class="chip ${p.habilitada ? "on" : ""}">${p.fecha} · ${p.sede}</span>
+      : `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_preventa"))}">${icon("chevron-right", { size: 14 })} ${T("m_desbloquear")}</button>`;
+    return `<div class="card"><div class="thumb">${artSvg(p.id, p.evento, icon("ticket", { size: 30 }))}</div>
+      <div class="body"><span class="chip ${pasada ? "" : (p.habilitada ? "on" : "")}">${pasada ? T("m_prev_finalizada") : p.fecha + " · " + p.sede}</span>
       <h4>${esc(p.evento)}</h4><p>${T("m_desde")} ${gs(p.precio_desde)} · ${p.stock} ${T("m_en_preventa")}</p>${btn}</div></div>`;
   }
   async function reservar(id) {
@@ -656,7 +804,7 @@
   function benProximamente() {
     return `<div class="section" style="border:none;padding-top:8px">
       <div class="ben-pronto">
-        <div class="ben-pronto-ic">🎁</div>
+        <div class="ben-pronto-ic">${icon("gift", { size: 44 })}</div>
         <span class="chip on" style="align-self:center">${T("proximamente")}</span>
         <h2>${T("m_ben_pronto_h")}</h2>
         <p class="lead" style="text-align:center;margin:0 auto">${T("m_ben_pronto_p")}</p>
@@ -669,8 +817,8 @@
     const items = (r && r.items) || [];
     if (!items.length) { view().innerHTML = benProximamente(); return; } // aún no lanzada → teaser
     const ah = r.ahorro || { mes: 0, total: 0 }, ciudad = r.ciudad || "";
-    const paga = r.tier === "premium" ? '<div class="ba-paga">Tu Plus rinde — mirá cuánto te ahorra 🤍🖤</div>'
-      : r.tier === "socio" ? '<div class="ba-paga">El mejor ahorro, por ser Socio del Decano 🖤</div>' : "";
+    const paga = r.tier === "premium" ? '<div class="ba-paga">Tu Plus rinde — mirá cuánto te ahorra</div>'
+      : r.tier === "socio" ? '<div class="ba-paga">El mejor ahorro, por ser Socio del Decano</div>' : "";
     const ahorroCard = '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_ahorro_mes") + '</div>' +
       '<div class="ba-monto">' + gs(ah.mes) + '</div>' +
       '<div class="ba-nota">' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
@@ -685,10 +833,10 @@
     const TL = { olimpista: "Olimpista", kids: "Junior", premium: "Plus", socio: "Socio" };
     const local = ciudad && String(b.comercio_ciudad || "").toLowerCase() === ciudad.toLowerCase();
     const cta = b.desbloqueado
-      ? '<span class="chip on" style="margin-top:8px;display:inline-block">✓ ' + T("m_ben_activo") + '</span>'
-      : '<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="' + esc(T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")) + '" style="margin-top:8px">🔓 ' + T("m_ben_subi") + ' ' + (TL[b.nivel_min] || "Plus") + '</button>';
+      ? '<span class="chip on" style="margin-top:8px;display:inline-block">' + icon("check", { size: 12 }) + ' ' + T("m_ben_activo") + '</span>'
+      : '<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="' + esc(T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")) + '" style="margin-top:8px">' + icon("chevron-right", { size: 14 }) + ' ' + T("m_ben_subi") + ' ' + (TL[b.nivel_min] || "Plus") + '</button>';
     return '<div class="card card-tier' + (b.desbloqueado ? "" : " ben-lock") + '"><div class="body">' +
-      '<div class="ben-com">🏪 <strong>' + esc(b.comercio_nombre || "") + '</strong>' + (local ? ' <span class="ben-loc">📍 tu ciudad</span>' : "") + '</div>' +
+      '<div class="ben-com">' + icon("store", { size: 14 }) + ' <strong>' + esc(b.comercio_nombre || "") + '</strong>' + (local ? ' <span class="ben-loc">' + icon("map-pin", { size: 10 }) + ' tu ciudad</span>' : "") + '</div>' +
       '<span class="chip on">' + esc(b.valor || "") + '</span>' +
       '<h4>' + esc(b.titulo || "") + '</h4><p>' + esc(b.descripcion || "") + '</p>' +
       '<div class="ben-rubro">' + esc(b.comercio_rubro || "") + (b.comercio_ciudad ? " · " + esc(b.comercio_ciudad) : "") + '</div>' + cta + '</div></div>';
@@ -723,24 +871,25 @@
   }
   // Miniatura/hero de una subasta: la foto real subida en el admin si hay, si no el
   // ícono generado (antes SIEMPRE se ignoraba `s.imagen` acá, la imagen subida nunca se veía).
-  function subastaMedia(s) { return s.imagen ? `<img src="${esc(s.imagen)}" alt="" />` : artSvg(s.id, s.titulo, s.emoji || "🔨"); }
+  function subastaMedia(s) { return s.imagen ? `<img src="${esc(s.imagen)}" alt="" />` : artSvg(s.id, s.titulo, s.emoji || icon("gavel", { size: 34 })); }
   function cardSubasta(s) {
     const cd = cdTexto(s.termina), cerrada = s.estado !== "activa" || cd.fin;
     const cta = !s.desbloqueado
-      ? `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">🔓 ${T("m_sub_subi")}</button>`
+      ? `<button class="btn btn-ghost" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">${icon("chevron-right", { size: 14 })} ${T("m_sub_subi")}</button>`
       : cerrada
       ? (s.gano
-          ? `<button class="btn">🏆 ${s.pago_estado === "pagado" ? T("m_sub_ganaste") : T("m_sub_pagar")}</button>`
+          ? `<button class="btn${s.pago_estado === "pagado" ? "" : " btn-valor"}">${icon("trophy", { size: 14 })} ${s.pago_estado === "pagado" ? T("m_sub_ganaste") : T("m_sub_pagar")}</button>`
           : `<button class="btn btn-ghost" disabled>${T("m_sub_cerrada")}</button>`)
-      : `<button class="btn">${T("m_sub_pujar")} ›</button>`;
+      : `<button class="btn btn-valor">${T("m_sub_pujar")} ›</button>`;
     return `<div class="card card-sub${s.desbloqueado ? "" : " ben-lock"}"${s.desbloqueado && (!cerrada || s.gano) ? ` data-sub="${s.id}" style="cursor:pointer"` : ""}>
       <div class="thumb sub-thumb">${subastaMedia(s)}
-        <span class="sub-cd${cd.urg ? " urg" : ""}">${cerrada ? T("m_sub_cerrada") : "⏳ " + cd.txt}</span></div>
-      <div class="body"><span class="chip ${cerrada ? "" : "on"}">${cerrada ? T("m_sub_finalizada") : "🔴 " + T("m_sub_envivo")}</span>
+        <span class="sub-unico">${icon("shield-check", { size: 11 })} ${T("m_sub_unico")}</span>
+        <span class="sub-cd${cd.urg ? " urg" : ""}">${cerrada ? T("m_sub_cerrada") : icon("hourglass", { size: 12 }) + " " + cd.txt}</span></div>
+      <div class="body"><span class="chip ${cerrada ? "" : "on"}">${cerrada ? T("m_sub_finalizada") : T("m_sub_envivo")}</span>
         <h4>${esc(s.titulo)}</h4>
         <p class="sub-actual">${T("m_sub_actual")}<br><strong>${gs(s.puja_actual)}</strong></p>
-        <p class="muted" style="font-size:12px;margin:0">👥 ${s.pujadores} ${T("m_sub_pujando")}</p>
-        ${cerrada && s.ganador_nombre ? `<p class="muted" style="font-size:12px;margin:2px 0 0">🏆 ${s.gano ? T("m_sub_vos") : esc(s.ganador_nombre)}</p>` : ""}
+        <p class="muted" style="font-size:12px;margin:0">${icon("users", { size: 14 })} ${s.pujadores} ${T("m_sub_pujando")}</p>
+        ${cerrada && s.ganador_nombre ? `<p class="muted" style="font-size:12px;margin:2px 0 0">${icon("trophy", { size: 12 })} ${s.gano ? T("m_sub_vos") : esc(s.ganador_nombre)}</p>` : ""}
         ${cta}</div></div>`;
   }
 
@@ -757,27 +906,31 @@
   }
   function estadoHtml(r, cerrada) {
     if (!r.desbloqueado || cerrada) return "";
-    if (r.voyGanando) return `<span class="sub-state win">🏆 ${T("m_sub_ganando")}</span>`;
-    if (r.miPuja > 0) return `<span class="sub-state out">⚠️ ${T("m_sub_superado")}</span>`;
+    if (r.voyGanando) return `<span class="sub-state win">${icon("trophy", { size: 14 })} ${T("m_sub_ganando")}</span>`;
+    if (r.miPuja > 0) return `<span class="sub-state out">${icon("circle-alert", { size: 14 })} ${T("m_sub_superado")}</span>`;
     return "";
   }
   function feedHtml(feed) {
     if (!feed || !feed.length) return `<p class="muted">${T("m_sub_primero")}</p>`;
-    return feed.map((f) => `<div class="sub-fitem${f.yo ? " yo" : ""}">
-      <span class="sub-fav">${(f.nombre || "?").charAt(0).toUpperCase()}</span>
+    return feed.map((f) => {
+      const iso = String(f.pais_iso || "").toLowerCase().trim();
+      const flag = /^[a-z]{2}$/.test(iso) ? `<img class="sub-fflag" src="https://flagcdn.com/${iso}.svg" alt="" loading="lazy" />` : "";
+      return `<div class="sub-fitem${f.yo ? " yo" : ""}">
+      <span class="sub-fav-wrap"><span class="sub-fav">${(f.nombre || "?").charAt(0).toUpperCase()}</span>${flag}</span>
       <span class="sub-fnm">${f.yo ? "Vos" : esc(f.nombre)}</span>
-      <span class="sub-fam">${gs(f.monto)}</span></div>`).join("");
+      <span class="sub-fam">${gs(f.monto)}</span></div>`;
+    }).join("");
   }
   function accionesHtml(r, cerrada) {
     const s = r.subasta;
-    if (!r.desbloqueado) return `<button class="btn btn-block" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">🔓 ${T("m_sub_subi")}</button>`;
-    if (cerrada && r.gano && s.pago_estado !== "pagado") return `<div class="sub-cerrada">🏆 ${T("m_sub_ganaste_txt")}</div>
-      <button class="btn btn-block" id="subPagarBtn" data-sub-pagar="${s.id}">${T("m_sub_pagar")} — ${gs(s.puja_actual)}</button>`;
-    if (cerrada && r.gano) return `<div class="sub-cerrada">✅ ${T("m_sub_pagado_txt")}</div>
-      <a class="btn btn-ghost btn-block" href="/subasta/${esc(s.slug || s.id)}/certificado" target="_blank" rel="noopener">🏅 ${T("m_sub_certificado")}</a>`;
+    if (!r.desbloqueado) return `<button class="btn btn-block" data-upsell-cta="premium" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">${icon("chevron-right", { size: 14 })} ${T("m_sub_subi")}</button>`;
+    if (cerrada && r.gano && s.pago_estado !== "pagado") return `<div class="sub-cerrada">${icon("trophy", { size: 14 })} ${T("m_sub_ganaste_txt")}</div>
+      <button class="btn btn-valor btn-block" id="subPagarBtn" data-sub-pagar="${s.id}">${T("m_sub_pagar")} — ${gs(s.puja_actual)}</button>`;
+    if (cerrada && r.gano) return `<div class="sub-cerrada">${icon("check", { size: 14 })} ${T("m_sub_pagado_txt")}</div>
+      <a class="btn btn-ghost btn-block" href="/subasta/${esc(s.slug || s.id)}/certificado" target="_blank" rel="noopener">${icon("trophy", { size: 14 })} ${T("m_sub_certificado")}</a>`;
     if (cerrada) return `<div class="sub-cerrada">${T("m_sub_cerrada_txt")}</div>`;
     const next = s.puja_actual + s.incremento;
-    return `<button class="btn btn-block sub-puja" data-monto="${next}">${T("m_sub_pujar")} ${gs(next)}</button>
+    return `<button class="btn btn-valor btn-block sub-puja" data-monto="${next}">${T("m_sub_pujar")} ${gs(next)}</button>
       <div class="sub-quick">
         <button class="chip-btn sub-puja" data-monto="${s.puja_actual + s.incremento * 2}">+${gsK(s.incremento * 2)}</button>
         <button class="chip-btn sub-puja" data-monto="${s.puja_actual + s.incremento * 5}">+${gsK(s.incremento * 5)}</button>
@@ -786,7 +939,7 @@
       <a class="sub-custom-toggle" id="subCustomToggle">${T("m_sub_monto_libre")}</a>
       <div class="sub-custom-form" id="subCustomForm" hidden>
         <input type="number" id="subCustomInput" inputmode="numeric" min="${next}" step="${s.incremento}" placeholder="${T("m_sub_monto_desde")} ${gs(next)}" />
-        <button class="btn btn-sm" id="subCustomBtn" data-monto-min="${next}">${T("m_sub_pujar")}</button>
+        <button class="btn btn-valor btn-sm" id="subCustomBtn" data-monto-min="${next}">${T("m_sub_pujar")}</button>
       </div>`;
   }
   function renderDetalle(r) {
@@ -794,7 +947,7 @@
     _subData = { id: s.id, termina: s.termina, celebrado: false };
     cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
       <a class="sub-back">‹ ${T("m_sub_volver")}</a>
-      <div class="sub-hero">${subastaMedia(s)}</div>
+      <div class="sub-hero">${subastaMedia(s)}<span class="sub-unico">${icon("shield-check", { size: 11 })} ${T("m_sub_unico")}</span></div>
       <h2>${esc(s.titulo)}</h2><p class="lead">${esc(s.descripcion || "")}</p>
       <div class="sub-box">
         <div class="sub-lbl">${T("m_sub_actual")}</div>
@@ -802,10 +955,10 @@
         <div id="subState">${estadoHtml(r, cerrada)}</div>
         <div class="sub-clock${cd.urg ? " urg" : ""}" id="subClock"><span>${T("m_sub_cierra")}</span> <b id="subCd">${cerrada ? T("m_sub_cerrada") : cd.txt}</b></div>
       </div>
-      <p class="sub-meta">👥 <b id="subPuj">${r.pujadores}</b> ${T("m_sub_pujando")} · ${T("m_sub_tupuja")}: <b id="subMia">${r.miPuja ? gs(r.miPuja) : "—"}</b></p>
+      <p class="sub-meta">${icon("users", { size: 14 })} <b id="subPuj">${r.pujadores}</b> ${T("m_sub_pujando")} · ${T("m_sub_tupuja")}: <b id="subMia">${r.miPuja ? gs(r.miPuja) : "—"}</b></p>
       <p class="sub-antisnipe" id="subAntisnipe"${cerrada ? ' style="display:none"' : ""}>${T("m_sub_antisnipe")}</p>
       <div id="subAcciones">${accionesHtml(r, cerrada)}</div>
-      <h3 style="margin-top:24px">🔴 ${T("m_sub_feed")}</h3>
+      <h3 style="margin-top:24px">${T("m_sub_feed")}</h3>
       <div class="sub-feed" id="subFeed">${feedHtml(r.feed)}</div>
     </div>`;
     cv().querySelector(".sub-back").onclick = () => { stopSub(); descSeg = "subastas"; vSubastas(); };
@@ -862,7 +1015,7 @@
     if (cerrada) {
       stopSub();
       document.getElementById("subCd").textContent = T("m_sub_cerrada");
-      if (r.gano && _subData && !_subData.celebrado) { _subData.celebrado = true; try { OLI.confetti && OLI.confetti(); } catch (e) {} toast("🎉 " + T("m_sub_ganaste_txt")); }
+      if (r.gano && _subData && !_subData.celebrado) { _subData.celebrado = true; try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("m_sub_ganaste_txt")); }
     }
   }
   function tickCd() {
@@ -874,7 +1027,7 @@
   async function pujar(id, monto) {
     try {
       const r = await api("/subastas/" + id + "/pujar", { method: "POST", body: { monto } });
-      toast(r.extendida ? "⏱️ " + T("m_sub_extendido") : "🏆 " + T("m_sub_vas_ganando"));
+      toast(r.extendida ? T("m_sub_extendido") : T("m_sub_vas_ganando"));
       try { window.OLI.track && window.OLI.track("Puja", null, { value: monto }); } catch (e) {}
     } catch (e) { toast(e.message); }
     try { const d = await api("/subastas/" + id); actualizarDetalle(d); } catch (e) {}
@@ -899,10 +1052,10 @@
       const social = await socialPais();
       const ubic = [s.ciudad, s.pais].filter(Boolean).join(", ");
       const ubicHtml = ubic
-        ? `<p class="ubic-line">📍 ${esc(ubic)} · <a class="ed-ubic">${T("m_editar_ubic")}</a></p>`
-        : `<p class="ubic-line ubic-falta">📍 <a class="ed-ubic">${T("m_set_ubic")}</a></p>`;
+        ? `<p class="ubic-line">${icon("map-pin", { size: 14 })} ${esc(ubic)} · <a class="ed-ubic">${T("m_editar_ubic")}</a></p>`
+        : `<p class="ubic-line ubic-falta">${icon("map-pin", { size: 14 })} <a class="ed-ubic">${T("m_set_ubic")}</a></p>`;
       const socioCard = !esSocioValidado() ? `<div class="card card-socio"><div class="body">
-          <span class="chip on">🥇 ${T("up_card_chip")}</span>
+          <span class="chip on">${icon("trophy", { size: 14 })} ${T("up_card_chip")}</span>
           <h4>${T("up_card_h")}</h4><p>${T("up_card_p")}</p>
           <button class="btn" id="upCardBtn">${T("ob_validar")}</button></div></div>` : "";
       const upsell = esGratis ? `<h3 style="margin-top:30px">${T("m_subi")}</h3><div class="grid-3">${pagos.map(cardUpsell).join("")}</div>` : "";
@@ -914,11 +1067,11 @@
             ${carnetHTML({ tierSlug: carnet.tierSlug, tierNombre: carnet.tier, nombre: carnet.nombre, numero: carnet.numero, foto: carnet.foto, qr, iso: carnet.iso })}
           </div>
           <div class="carnet-acts">
-            <button class="btn" id="compartir">📲 ${T("m_compartir")}</button>
-            <button class="btn btn-ig" id="compartirIG">📸 ${T("ig_compartir")}</button>
+            <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
+            <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
           </div>
           <div class="card" style="max-width:520px;margin:18px auto 0;text-align:center"><div class="body">
-            <h3 style="margin:0 0 6px">🔥 ${T("m_hinchada_h")}</h3>
+            <h3 style="margin:0 0 6px">${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
             <p class="muted" style="margin:0 0 12px">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
             <button class="btn" id="copiarRef">${T("m_copiar_ref")}</button>
           </div></div>
@@ -953,7 +1106,7 @@
             // Sin share de archivos → descargar la imagen del carnet.
             const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "mi-carnet-olimpista.png"; a.click();
             setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-            toast(T("m_carnet_descargado") || "Carnet descargado 📲");
+            toast(T("m_carnet_descargado") || "Carnet descargado");
             return;
           }
           // 2) Fallback: compartir/copiar el texto (que ya incluye la dirección).
@@ -988,7 +1141,6 @@
     }
   }
 
-  const val = (id) => (document.getElementById(id)?.value || "").trim();
   const attr = (s) => String(s || "").replace(/"/g, "&quot;");
 
   init().catch((e) => { view().innerHTML = '<p class="error">' + e.message + "</p>"; });
