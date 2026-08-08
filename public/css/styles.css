@@ -51,7 +51,7 @@
   --blanco: var(--text-primary);
   --gris: var(--text-secondary);
   --gris-2: var(--text-tertiary);
-  --oro: #c9a227;
+  --oro: var(--oro-500);
   --oro-claro: #e7c64b;
   --linea: var(--border-default);
   --radio: 16px;

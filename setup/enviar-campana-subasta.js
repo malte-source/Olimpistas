@@ -42,7 +42,7 @@ async function getJSON(path) { const r = await fetch(BASE + path); if (!r.ok) th
 
   if (previewTo) {
     const socio = { nombre: "Vos", email: previewTo };
-    await mailer.enviarSubastaInvitacion(socio, { titulo: subasta.titulo, urlSubasta, momento });
+    await mailer.enviarSubastaInvitacion(socio, { titulo: subasta.titulo, urlSubasta, momento, pujaActual: subasta.puja_actual, cierre: subasta.termina });
     await mailer.enviarSubastaUpsell(socio, { titulo: subasta.titulo, urlSubasta, momento });
     console.log("✅ Preview enviado a " + previewTo + " (las dos variantes: invitación + upsell).");
     return; // sin process.exit(): evita el crash de libuv por sockets de fetch aún abiertos
@@ -66,7 +66,7 @@ async function getJSON(path) { const r = await fetch(BASE + path); if (!r.ok) th
 
   let ok = 0, fail = 0;
   for (const r of elegibles) {
-    const res = await mailer.enviarSubastaInvitacion(r, { titulo: subasta.titulo, urlSubasta, momento });
+    const res = await mailer.enviarSubastaInvitacion(r, { titulo: subasta.titulo, urlSubasta, momento, pujaActual: subasta.puja_actual, cierre: subasta.termina });
     if (res && res.ok) ok++; else fail++;
     await new Promise((s) => setTimeout(s, 350)); // ~3/s, bajo el límite Resend (5/s)
   }

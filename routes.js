@@ -342,7 +342,9 @@ function buildRouter() {
       store.getSocioById(socio.referido_por).then(async (ref) => {
         if (ref && ref.email && mailer.enviarReferidoSumado) {
           const total = store.contarReferidos ? await store.contarReferidos(ref.id).catch(() => 0) : 0;
-          mailer.enviarReferidoSumado(ref, { invitado: nombre || socio.email, total }).catch(() => {});
+          // Privacidad: solo nombre + inicial del apellido (nunca el email ni el apellido completo).
+          const invitado = nombre ? (nombre + (apellido ? " " + apellido[0].toUpperCase() + "." : "")) : null;
+          mailer.enviarReferidoSumado(ref, { invitado, total }).catch(() => {});
         }
       }).catch(() => {});
     }
@@ -632,7 +634,11 @@ function buildRouter() {
       if (!tier) return null;
       const membresia = await store.setMembresia(pedido.socio_id, { tierSlug: tier.slug, ciclo: pedido.ciclo || "anio", pagoRef: pedido.id });
       const s = await store.getSocioById(pedido.socio_id).catch(() => null);
-      if (s && s.email && mailer.enviarBienvenidaCompra) mailer.enviarBienvenidaCompra(s, tier.slug).catch(() => {});
+      if (s && s.email && mailer.enviarBienvenidaCompra) {
+        const dias = membresia.ciclo === "mes" ? 30 : 365;
+        const vencimiento = new Date(new Date(membresia.inicio).getTime() + dias * 86400000);
+        mailer.enviarBienvenidaCompra(s, tier.slug, vencimiento).catch(() => {});
+      }
       log.info({ tier: pedido.tier_slug, socioId: pedido.socio_id }, "pago confirmado → membresía");
       return { membresia };
     }
@@ -1397,7 +1403,10 @@ function buildRouter() {
         try {
           const ganador = await store.getSocioById(s.ganador_id);
           const urlSubasta = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id);
-          if (ganador && mailer.enviarSubastaGanador) await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta }).catch(() => {});
+          if (ganador && mailer.enviarSubastaGanador) {
+            const limitePago = new Date(Date.now() + 7 * 86400000); // plazo de pago: 7 días
+            await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago }).catch(() => {});
+          }
           // Avisar AL EQUIPO (no solo al ganador): así saben que hay un ganador, aunque
           // recién escriban por WhatsApp cuando el pago esté confirmado (ver
           // cumplirPedidoPagado → alerta "subasta:pago:").
@@ -1535,7 +1544,7 @@ function buildRouter() {
     // Avisar por email al líder anterior que lo superaron (best-effort, no rompe la puja).
     if (out.prevGanador) {
       store.getSocioById(out.prevGanador).then((prev) => {
-        if (prev && mailer.enviarSubastaSuperado) mailer.enviarSubastaSuperado(prev, { titulo: s.titulo, monto: out.subasta.puja_actual }).catch(() => {});
+        if (prev && mailer.enviarSubastaSuperado) mailer.enviarSubastaSuperado(prev, { titulo: s.titulo, monto: out.subasta.puja_actual, minimo: out.subasta.puja_actual + out.subasta.incremento, cierre: out.subasta.termina }).catch(() => {});
       }).catch(() => {});
     }
     res.json({ ok: true, puja_actual: out.subasta.puja_actual, termina: out.subasta.termina, extendida: out.extendida });
