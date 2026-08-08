@@ -57,7 +57,7 @@
   --radio: 16px;
   --sombra: 0 20px 60px rgba(0, 0, 0, 0.45);
   --glow: 0 10px 30px rgba(201, 162, 39, 0.35);
-  --display: "Archivo", "Inter", system-ui, sans-serif;
+  --display: "Saira", system-ui, sans-serif;
   --max: 1180px;
   font-synthesis: none;
 }
@@ -90,7 +90,7 @@ html, body {
   margin: 0;
   background: var(--negro);
   color: var(--blanco);
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Saira", "Segoe UI", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
