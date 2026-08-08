@@ -314,7 +314,7 @@ app.get("/subasta/:id", async (req, res) => {
 <main class="wrap" style="max-width:640px;padding-top:36px;padding-bottom:60px">
   <a class="sub-back" href="/">← Volver a Olimpistas.com</a>
   <div class="sub-hero">
-    ${s.imagen && /^https?:/.test(s.imagen) ? '<img src="' + esc2(s.imagen) + '" alt="">' : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#2a2418,#c9a227);color:#f5efdd">${icGavel}</div>`}
+    ${s.imagen ? '<img src="' + esc2(s.imagen) + '" alt="">' : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#2a2418,#c9a227);color:#f5efdd">${icGavel}</div>`}
     <span class="sub-unico">${icShield} Pieza única</span>
   </div>
   <span class="chip on" id="estadoChip">En vivo</span>
