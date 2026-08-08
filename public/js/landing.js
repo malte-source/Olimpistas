@@ -126,8 +126,6 @@
     try { stats = await api("/stats"); } catch { return; }
     animarContador(stats.total);
     document.getElementById("contadorPaises").textContent = stats.paises;
-    const heroMundoNum = document.getElementById("heroMundoNum");
-    if (heroMundoNum && stats.total > 0) heroMundoNum.textContent = stats.total.toLocaleString(LANG === "en" ? "en-US" : "es-PY");
     const heroStatOli = document.getElementById("heroStatOli"), heroStatPaises = document.getElementById("heroStatPaises");
     if (heroStatOli && stats.total > 0) heroStatOli.textContent = stats.total.toLocaleString(LANG === "en" ? "en-US" : "es-PY");
     if (heroStatPaises && stats.paises) heroStatPaises.textContent = stats.paises;
@@ -185,7 +183,6 @@
         mostrado = Math.min(meta, mostrado + paso);
         if (numEl) numEl.textContent = mostrado.toLocaleString(loc);
         if (paisesEl && paisesMeta) paisesEl.textContent = paisesMeta;
-        if (heroMundoNum) heroMundoNum.textContent = mostrado.toLocaleString(loc);
         if (heroStatOli) heroStatOli.textContent = mostrado.toLocaleString(loc);
         if (heroStatPaises && paisesMeta) heroStatPaises.textContent = paisesMeta;
         if (heroEl && !heroEl.hidden) {

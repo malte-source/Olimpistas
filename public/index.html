@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="/css/styles.css?v=88" />
 </head>
 <body>
-  <header class="nav">
+  <header class="nav" data-nav-solid="1">
     <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" /></a>
     <nav class="nav-links">
       <a href="#planes" data-i18n="planes_eyebrow">Niveles</a>
@@ -47,17 +47,9 @@
   </header>
 
   <section class="hero">
-    <div class="hero-bg">
-      <picture>
-        <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=88" />
-        <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=88" />
-        <source type="image/webp" srcset="/assets/hero-desktop.webp?v=88" />
-        <img src="/assets/hero-desktop.jpg?v=88" alt="" fetchpriority="high" />
-      </picture>
-    </div>
     <div class="hero-inner wrap">
       <div class="hero-text">
-        <span class="pill" data-i18n="hero_pill">El Rey de Copas · El Decano</span>
+        <span class="eyebrow" data-i18n="hero_pill">El Rey de Copas · El Decano</span>
         <h1 id="heroTitle">OLIMPISTAS.COM</h1>
         <p class="sub" id="heroSub">Cargando…</p>
         <div class="hero-ctas">
@@ -74,11 +66,14 @@
         <p class="hero-social" id="heroSocial" hidden></p>
       </div>
       <div class="hero-side">
-        <a class="hero-mundo-card" href="#mundo" id="heroMundoCard">
-          <span class="hmc-eyebrow" data-i18n="mundo_eyebrow">El mundo del Decano</span>
-          <span class="hmc-num" id="heroMundoNum">—</span>
-          <span class="hmc-lbl" data-i18n="hero_mundo_cta">Poner mi bandera →</span>
-        </a>
+        <div class="hero-photo">
+          <picture>
+            <source media="(max-width: 640px)" type="image/webp" srcset="/assets/hero-mobile.webp?v=88" />
+            <source media="(max-width: 640px)" srcset="/assets/hero-mobile.jpg?v=88" />
+            <source type="image/webp" srcset="/assets/hero-desktop.webp?v=88" />
+            <img src="/assets/hero-desktop.jpg?v=88" alt="" fetchpriority="high" />
+          </picture>
+        </div>
         <!-- Destacado dinámico (subasta en vivo / campaña) — lo llena landing.js -->
         <div id="destacadoWrap"></div>
       </div>
