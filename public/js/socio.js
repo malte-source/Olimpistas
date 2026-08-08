@@ -89,6 +89,7 @@
   }
 
   function activar(tab) {
+    window.scrollTo(0, 0); // si venías scrolleado, el título de la pestaña nueva no debe quedar tapado por el header fijo
     if (typeof stopSub === "function") stopSub();   // corta polling de subastas al cambiar de tab
     _contentHost = null;                            // fuera de Descubrir el contenido ocupa todo #view
     document.querySelectorAll(".tab").forEach((t) => {
@@ -298,6 +299,7 @@
     renderDescSeg();
   }
   function renderDescSeg() {
+    window.scrollTo(0, 0); // cambiar de segmento (Subastas/Sorteos/...) también debe volver arriba
     stopSub();
     _contentHost = document.getElementById("descHost");
     const nav = document.getElementById("descSegNav");
@@ -868,6 +870,7 @@
   }
 
   async function vSubastaDetalle(id) {
+    window.scrollTo(0, 0); // entrar al detalle de un lote es "otra pantalla" — no debe heredar el scroll del listado
     stopSub();
     cv().innerHTML = skeleton(0);
     let r;
@@ -935,7 +938,7 @@
       <h3 style="margin-top:24px">${T("m_sub_feed")}</h3>
       <div class="sub-feed" id="subFeed">${feedHtml(r.feed)}</div>
     </div>`;
-    cv().querySelector(".sub-back").onclick = () => { stopSub(); descSeg = "subastas"; vSubastas(); };
+    cv().querySelector(".sub-back").onclick = () => { window.scrollTo(0, 0); stopSub(); descSeg = "subastas"; vSubastas(); };
     bindPujas(s.id);
   }
   function bindPujas(id) {
