@@ -277,6 +277,13 @@ app.get("/subasta/:id", async (req, res) => {
   // entrado — así WhatsApp/redes muestran siempre la misma URL prolija.
   const urlPublica = base + "/subasta/" + esc2(s.slug || s.id);
   res.setHeader("Cache-Control", "public, max-age=30");
+  // Íconos de línea inline (mismo trazo que el sistema de íconos del cliente) — esta
+  // página se genera server-side, sin JS de OLI.icon() disponible.
+  const svgIcon = (body, size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">${body}</svg>`;
+  const icGavel = svgIcon('<path d="M13 10l6.5-6.5 3 3L16 13z"/><path d="M9 13l4 4"/><path d="M11 15l-8 8"/><path d="M3 21h6"/>', 48);
+  const icHourglass = svgIcon('<path d="M6 3h12M6 21h12"/><path d="M7 3c0 5 4 6 5 9-1 3-5 4-5 9M17 3c0 5-4 6-5 9 1 3 5 4 5 9"/>', 14);
+  const icUsers = svgIcon('<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.5 3-5.5 6-5.5s6 2 6 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.3c2.4.4 4.5 2 4.5 5.7"/>', 14);
+  const icShield = svgIcon('<path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/>', 11);
   res.type("html").send(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${titulo}</title><meta name="description" content="${desc}">
@@ -287,37 +294,42 @@ app.get("/subasta/:id", async (req, res) => {
 <meta name="twitter:title" content="${titulo}"><meta name="twitter:image" content="${og}">
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg"><meta name="theme-color" content="#0b0b0f">
 <link rel="stylesheet" href="/assets/fonts/fonts.css"><link rel="stylesheet" href="/css/styles.css?v=${BUILD_ID}">
-<style>body{background:var(--negro);min-height:100vh}.sp{max-width:560px;margin:0 auto;padding:26px 20px 60px;text-align:center}
-.sp .wm{font-weight:900;letter-spacing:.3em;font-size:13px;color:var(--oro-claro);text-transform:uppercase}
-.sp .stripes{height:5px;width:100px;margin:10px auto 22px;border-radius:3px;background:repeating-linear-gradient(90deg,#fff 0 11px,#000 11px 22px);opacity:.85}
-.sp-hero{height:200px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:96px;margin-bottom:18px;overflow:hidden;background:linear-gradient(140deg,#2a2418,#c9a227)}
-.sp-hero img{width:100%;height:100%;object-fit:cover}
-.sp .tag{display:inline-block;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;padding:5px 12px;border-radius:999px;background:rgba(233,69,96,.18);color:#ffb3c1;border:1px solid rgba(233,69,96,.4);margin-bottom:12px}
-.sp h1{font-size:26px;margin:0 0 8px;line-height:1.1}.sp p.d{color:var(--gris);font-size:15px;margin:0 0 20px}
-.sp-box{background:linear-gradient(135deg,rgba(231,198,75,.14),rgba(201,162,39,.04));border:1px solid var(--oro);border-radius:16px;padding:20px}
-.sp-box .l{text-transform:uppercase;letter-spacing:.14em;font-size:11px;font-weight:800;color:var(--oro-claro)}
-.sp-box .bid{font-weight:900;font-size:40px;letter-spacing:-1px;margin:4px 0 2px}
-.sp-box .meta{font-size:14px;color:var(--gris)}.sp-box .meta b{color:var(--blanco);font-family:ui-monospace,monospace}
-.sp-cta{margin-top:18px;width:100%;border:0;font-family:inherit;font-weight:900;font-size:17px;padding:16px;border-radius:13px;cursor:pointer;background:linear-gradient(135deg,var(--oro-claro),var(--oro));color:#1a1500}
-.sp-cta.off{background:#2a2a33;color:var(--gris);cursor:default}
-.sp .note{font-size:13px;color:#6b7280;margin-top:12px}.sp .home{display:inline-block;margin-top:22px;color:var(--oro);text-decoration:underline;text-underline-offset:3px}</style>
-</head><body><div class="sp">
-<a href="/"><div class="wm">Olimpistas</div></a><div class="stripes"></div>
-<div class="sp-hero">${s.imagen && /^https?:/.test(s.imagen) ? '<img src="' + esc2(s.imagen) + '" alt="">' : (esc2(s.emoji) || "🔨")}</div>
-<span class="tag" id="estado">🔴 En vivo</span>
-<h1>${esc2(s.titulo)}</h1><p class="d">${esc2(s.descripcion || "")}</p>
-<div class="sp-box"><div class="l">Puja actual</div><div class="bid" id="bid">₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")}</div>
-<div class="meta">⏳ Cierra en <b id="cd">—</b> · 👥 <span id="puj">—</span></div>
-<button class="sp-cta" id="cta">Pujar</button></div>
-<p class="note">Pujar es para Olimpistas ${gate}. Si no tenés cuenta, te registrás gratis en 30s.</p>
-<a class="home" href="/">← Volver a Olimpistas.com</a></div>
+</head><body>
+<header class="nav scrolled">
+  <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=${BUILD_ID}" alt="Olimpistas" /></a>
+  <div class="nav-right">
+    <button class="nav-sw" id="themeSw" type="button">Claro</button>
+    <button class="btn btn-ghost" id="accederBtn">Ingresar</button>
+  </div>
+</header>
+<main class="wrap" style="max-width:640px;padding-top:36px;padding-bottom:60px">
+  <a class="sub-back" href="/">← Volver a Olimpistas.com</a>
+  <div class="sub-hero">
+    ${s.imagen && /^https?:/.test(s.imagen) ? '<img src="' + esc2(s.imagen) + '" alt="">' : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#2a2418,#c9a227);color:#f5efdd">${icGavel}</div>`}
+    <span class="sub-unico">${icShield} Pieza única</span>
+  </div>
+  <span class="chip on" id="estadoChip">En vivo</span>
+  <h1 style="margin:10px 0 6px">${esc2(s.titulo)}</h1>
+  <p class="lead" style="margin:0 0 20px">${esc2(s.descripcion || "")}</p>
+  <div class="sub-box">
+    <div class="sub-lbl">Puja actual</div>
+    <div class="sub-amt" id="bid">₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")}</div>
+    <div class="sub-clock"><span>Cierra en</span> <b id="cd">—</b></div>
+  </div>
+  <p class="sub-meta">${icUsers} <b id="puj">—</b> pujando</p>
+  <button class="btn btn-valor btn-block" id="cta" style="margin-top:4px">Pujar →</button>
+  <p style="font-size:13px;color:var(--gris);margin-top:14px">Pujar es para Olimpistas ${gate}. Si no tenés cuenta, te registrás gratis en 30s.</p>
+</main>
+<script src="/js/common.js?v=${BUILD_ID}"></script>
 <script>(function(){var id=${JSON.stringify(id)};
+OLI.initThemeToggle("themeSw");
+OLI.yo().then(function(y){var b=document.getElementById("accederBtn");if(y&&y.socio){b.textContent="Mi cuenta";b.onclick=function(){location.href="/miembro";};}else{b.textContent="Ingresar";b.onclick=function(){location.href="/?intent=pujar&sub="+encodeURIComponent(id);};}}).catch(function(){});
 function gs(n){return "₲ "+Number(n||0).toLocaleString("es-PY");}
 function cd(t){var ms=new Date(t).getTime()-Date.now();if(ms<=0)return "Cerrada";var s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),ss=s%60;return d>0?d+"d "+h+"h":h>0?h+"h "+m+"m":(m<10?"0":"")+m+":"+(ss<10?"0":"")+ss;}
 var $=function(x){return document.getElementById(x);};
-async function load(){try{var res=await fetch("/api/subastas/"+id);if(!res.ok)return;var r=await res.json();var su=r.subasta;$("bid").textContent=gs(su.puja_actual);$("cd").textContent=cd(su.termina);$("puj").textContent=r.pujadores+" pujando";if(su.estado==="cerrada"){$("estado").textContent="🏁 Cerrada";$("cta").textContent="Subasta cerrada";$("cta").className="sp-cta off";}}catch(e){}}
+async function load(){try{var res=await fetch("/api/subastas/"+id);if(!res.ok)return;var r=await res.json();var su=r.subasta;$("bid").textContent=gs(su.puja_actual);$("cd").textContent=cd(su.termina);$("puj").textContent=r.pujadores;if(su.estado==="cerrada"){$("estadoChip").textContent="Cerrada";$("estadoChip").className="chip";$("cta").textContent="Subasta cerrada";$("cta").disabled=true;$("cta").className="btn btn-ghost btn-block";}}catch(e){}}
 load();setInterval(load,5000);
-$("cta").addEventListener("click",async function(){if(this.className.indexOf("off")>-1)return;var yo=null;try{var r=await fetch("/api/auth/yo");if(r.ok)yo=await r.json();}catch(e){}if(yo&&yo.socio)location.href="/miembro?sub="+id;else location.href="/?intent=pujar&sub="+encodeURIComponent(id);});
+$("cta").addEventListener("click",async function(){if(this.disabled)return;var yo=null;try{var r=await fetch("/api/auth/yo");if(r.ok)yo=await r.json();}catch(e){}if(yo&&yo.socio)location.href="/miembro?sub="+id;else location.href="/?intent=pujar&sub="+encodeURIComponent(id);});
 })();</script></body></html>`);
 });
 
