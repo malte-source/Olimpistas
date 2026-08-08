@@ -301,11 +301,13 @@
         numero: "OLI-••••••••", qr: previewQR });
       return `
       <div class="tier ${(t.destacado || t.recomendado) ? "tier-destacado" : ""}">
-        ${t.recomendado ? `<span class="tier-ribbon">${T("ribbon_rec")}</span>` : (t.destacado ? `<span class="tier-ribbon">${T("ribbon")}</span>` : "")}
+        ${t.recomendado ? `<span class="tier-ribbon oro">${T("ribbon_rec")}</span>` : (t.destacado ? `<span class="tier-ribbon">${T("ribbon")}</span>` : "")}
         ${carnetHtml}
-        <div class="price"><div class="big">${p.big}</div><div class="small">${p.small}</div></div>
-        <button class="btn cta ${t.nivel === 0 ? "" : "btn-valor"}" data-tier="${t.slug}">${fld(t, "cta")}</button>
-        <ul class="benefits">${bullets}</ul>
+        <div class="tier-body${t.recomendado ? " tier-body-oro" : ""}">
+          <div class="price"><div class="big">${p.big}</div><div class="small">${p.small}</div></div>
+          <button class="btn cta ${t.recomendado ? "btn-valor" : (t.nivel === 0 ? "" : "btn-ghost")}" data-tier="${t.slug}">${fld(t, "cta")}</button>
+          <ul class="benefits">${bullets}</ul>
+        </div>
       </div>`;
     }).join("");
     cont.querySelectorAll("button[data-tier]").forEach((b) =>

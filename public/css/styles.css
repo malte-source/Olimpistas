@@ -166,13 +166,19 @@ button { font-family: inherit; cursor: pointer; }
   color: #fff; font-size: 13px; font-weight: 700; border: 1px solid rgba(255,255,255,.3);
   text-shadow: 0 1px 3px rgba(0,0,0,.6); }
 
-/* ─── Selector de moneda (en la sección de niveles) ───────────────────────── */
-.cur-sel { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 6px; }
+/* ─── Cabecera de "Niveles": título a la izquierda, selector de moneda a la
+   derecha, misma fila (mockup F2 2.1bis) ──────────────────────────────────── */
+.planes-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+/* ─── Selector de moneda ───────────────────────────────────────────────────── */
+.cur-sel { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .cur-sel-lbl { color: var(--gris); font-size: 13px; font-weight: 600; }
-.cur-sel-opts { display: inline-flex; background: var(--overlay-soft); border: 1px solid var(--linea); border-radius: 999px; padding: 4px; }
-.cur-opt { background: transparent; border: none; color: var(--blanco); font: inherit; font-size: 13px; font-weight: 700; padding: 7px 16px; border-radius: 999px; cursor: pointer; transition: background .15s, color .15s; }
+.cur-sel-opts { display: inline-flex; background: var(--overlay-medium); border-radius: 999px; padding: 4px; }
+.cur-opt { background: transparent; border: none; color: var(--gris); font: inherit; font-size: 13px; font-weight: 700; padding: 7px 16px; border-radius: 999px; cursor: pointer; transition: background .15s, color .15s; }
 .cur-opt:hover { color: var(--blanco); }
-.cur-opt.on { background: var(--blanco); color: var(--action-primary-text); }
+.cur-opt.on { background: var(--surface-card); color: var(--blanco); }
+/* Nota de confianza bajo las tarjetas de nivel */
+.planes-nota { display: flex; align-items: flex-start; gap: 8px; margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--linea); color: var(--gris); font-size: 12.5px; line-height: 1.5; max-width: 760px; }
+.planes-nota svg { margin-top: 2px; }
 
 /* ─── Mapa "poné tu bandera" — ahora solo vive en Perfil, no en el registro ─── */
 .ob-mapa { position: relative; height: 220px; border-radius: 14px; overflow: hidden; border: 1px solid var(--linea); background: var(--surface-input); }
@@ -714,7 +720,19 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   background: var(--blanco); color: var(--action-primary-text); font-family: var(--display);
   font-weight: 800; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 5px 14px;
   border-radius: 999px; }
+/* "Recomendado" es el único badge en oro (regla F2: el oro se usa una sola vez
+   por pantalla) — "Empezá acá" del nivel gratis se queda en tinta. */
+.tier-ribbon.oro { background: var(--action-value-bg); color: #fff; }
 .tier-destacado .cn { box-shadow: 0 0 0 2px rgba(255,255,255,.4), 0 26px 60px rgba(0,0,0,.55); }
+/* Cuerpo (precio + CTA + beneficios) de cada nivel — el de Plus lleva el único
+   fondo dorado de la sección (mockup F2 2.1bis: "el oro, una vez"). */
+.tier-body { padding: 14px; border: 1px solid var(--linea); border-radius: 10px; background: var(--surface-card); }
+/* Fondo sólido fijo (como .tier-chip--premium) — no invierte con el tema, así que
+   su texto tampoco: fijo en tinta, nunca en el alias --blanco. */
+.tier-body-oro { background: var(--oro-50); border-color: var(--oro-200); }
+.tier-body-oro .price .big, .tier-body-oro .benefits li { color: #1a1500; }
+.tier-body-oro .price .small { color: #7A5F14; }
+.tier-body-oro .benefits li::before { color: #7A5F14; }
 
 /* Consentimiento en el registro */
 .consent { display: flex; align-items: flex-start; gap: 9px; margin: 4px 0 12px; font-size: 13px; color: var(--gris); cursor: pointer; }
