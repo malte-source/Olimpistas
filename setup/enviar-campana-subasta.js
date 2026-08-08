@@ -14,6 +14,8 @@
  *
  * --momento: "inicio" (Fase 2, recién arrancó) o "final" (Fase 4, últimas horas). Cambia
  * solo el copy (urgencia); la segmentación de audiencia es la misma en ambos momentos.
+ * --imagen <url>: banner promocional opcional (URL pública, ej. subido a public/assets/campanas/)
+ * que se muestra arriba del cuerpo del correo, en las dos variantes.
  */
 const postgres = require("postgres");
 const mailer = require("../lib/email");
@@ -25,6 +27,7 @@ const arg = (flag) => { const i = process.argv.indexOf(flag); return i > -1 ? pr
 const subastaId = arg("--subasta");
 const momento = arg("--momento") === "final" ? "final" : "inicio";
 const previewTo = arg("--preview");
+const imagen = arg("--imagen");
 
 async function getJSON(path) { const r = await fetch(BASE + path); if (!r.ok) throw new Error(path + " → " + r.status); return r.json(); }
 
@@ -42,8 +45,8 @@ async function getJSON(path) { const r = await fetch(BASE + path); if (!r.ok) th
 
   if (previewTo) {
     const socio = { nombre: "Vos", email: previewTo };
-    await mailer.enviarSubastaInvitacion(socio, { titulo: subasta.titulo, urlSubasta, momento, pujaActual: subasta.puja_actual, cierre: subasta.termina, descripcion: subasta.descripcion });
-    await mailer.enviarSubastaUpsell(socio, { titulo: subasta.titulo, urlSubasta, momento });
+    await mailer.enviarSubastaInvitacion(socio, { titulo: subasta.titulo, urlSubasta, momento, pujaActual: subasta.puja_actual, cierre: subasta.termina, descripcion: subasta.descripcion, imagen });
+    await mailer.enviarSubastaUpsell(socio, { titulo: subasta.titulo, urlSubasta, momento, imagen });
     console.log("✅ Preview enviado a " + previewTo + " (las dos variantes: invitación + upsell).");
     return; // sin process.exit(): evita el crash de libuv por sockets de fetch aún abiertos
   }
@@ -66,12 +69,12 @@ async function getJSON(path) { const r = await fetch(BASE + path); if (!r.ok) th
 
   let ok = 0, fail = 0;
   for (const r of elegibles) {
-    const res = await mailer.enviarSubastaInvitacion(r, { titulo: subasta.titulo, urlSubasta, momento, pujaActual: subasta.puja_actual, cierre: subasta.termina, descripcion: subasta.descripcion });
+    const res = await mailer.enviarSubastaInvitacion(r, { titulo: subasta.titulo, urlSubasta, momento, pujaActual: subasta.puja_actual, cierre: subasta.termina, descripcion: subasta.descripcion, imagen });
     if (res && res.ok) ok++; else fail++;
     await new Promise((s) => setTimeout(s, 350)); // ~3/s, bajo el límite Resend (5/s)
   }
   for (const r of noElegibles) {
-    const res = await mailer.enviarSubastaUpsell(r, { titulo: subasta.titulo, urlSubasta, momento });
+    const res = await mailer.enviarSubastaUpsell(r, { titulo: subasta.titulo, urlSubasta, momento, imagen });
     if (res && res.ok) ok++; else fail++;
     await new Promise((s) => setTimeout(s, 350));
   }
