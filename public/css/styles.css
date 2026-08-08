@@ -780,13 +780,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tier-destacado .cn { box-shadow: 0 0 0 2px rgba(255,255,255,.4), 0 26px 60px rgba(0,0,0,.55); }
 /* Cuerpo (precio + CTA + beneficios) de cada nivel — el de Plus lleva el único
    fondo dorado de la sección (mockup F2 2.1bis: "el oro, una vez"). */
-.tier-body { padding: 14px; border: 1px solid var(--linea); border-radius: 10px; background: var(--surface-card); }
+.tier-body { padding: 14px; border: 1px solid var(--linea); border-radius: var(--radio); background: var(--surface-card); }
 /* Fondo sólido fijo (como .tier-chip--premium) — no invierte con el tema, así que
    su texto tampoco: fijo en tinta, nunca en el alias --blanco. */
 .tier-body-oro { background: var(--oro-50); border-color: var(--oro-200); }
 .tier-body-oro .price .big, .tier-body-oro .benefits li { color: #1a1500; }
-.tier-body-oro .price .small { color: #7A5F14; }
-.tier-body-oro .benefits li::before { color: #7A5F14; }
+.tier-body-oro .price .small { color: var(--oro-700); }
+.tier-body-oro .benefits li::before { color: var(--oro-700); }
 
 /* Consentimiento en el registro */
 .consent { display: flex; align-items: flex-start; gap: 9px; margin: 4px 0 12px; font-size: 13px; color: var(--gris); cursor: pointer; }
@@ -799,7 +799,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   padding: 12px 16px; display: flex; align-items: center; gap: 14px; box-shadow: var(--sombra); }
 .cookie-bar span { font-size: 13px; color: #cfcfd6; flex: 1; }
 .cookie-bar a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
-.cookie-bar .btn { padding: 8px 16px; font-size: 13px; flex: 0 0 auto; }
+.cookie-bar .btn { padding: 9px 16px; font-size: 13px; flex: 0 0 auto; } /* mismo tamaño que .btn-sm, no un one-off */
 @media (max-width: 560px) { .cookie-bar { flex-direction: column; align-items: stretch; text-align: center; } }
 
 /* ─── Responsive (al final: deben ganar por orden a las reglas base) ──────── */
@@ -852,7 +852,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .tab.active .tab-ic { width: 33px; height: 33px; }
   .wrap { padding-bottom: 88px; } /* deja lugar para la barra inferior */
   .topbar { gap: 10px; }
-  .topbar #hola { display: none; }
+  /* #hola era el nombre viejo de este elemento (renombrado a .me/#me) — la regla
+     quedó apuntando a un selector muerto y el saludo (130px) volvió a mostrarse
+     en mobile, desbordando la topbar junto con EN/tema/Salir (~340px > 375px viewport). */
+  .topbar #me { display: none; }
   .modal { padding: 22px; }
   .mundo-h { font-size: 24px; }
   .contador-num { font-size: 50px; }
