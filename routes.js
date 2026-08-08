@@ -1508,9 +1508,17 @@ function buildRouter() {
       const yo = !!(req.socio && p.socio_id === req.socio.id);
       return { nombre: yo ? (p.nombre || "Olimpista") : enmascararNombre(p.nombre), monto: p.monto, creado: p.creado, yo, pais_iso: p.pais_iso || null };
     });
+    // ?liviano=1: el polling en vivo (cada 4-5s, por cada mirador) nunca pinta la foto
+    // ni la descripción de nuevo — solo precio/cierre/feed. Bajo un pico de tráfico real
+    // (campaña + redes) reenviar la imagen base64 (100KB+) en cada tick satura CPU/ancho
+    // de banda del proceso y termina afectando a TODOS los endpoints, no solo este.
+    const liviano = req.query.liviano === "1";
     res.json({
       subasta: {
-        id: s.id, slug: s.slug, titulo: s.titulo, descripcion: s.descripcion, imagen: s.imagen, emoji: s.emoji,
+        id: s.id, slug: s.slug, titulo: s.titulo,
+        descripcion: liviano ? undefined : s.descripcion,
+        imagen: liviano ? undefined : s.imagen,
+        emoji: s.emoji,
         nivel_min: s.nivel_min, precio_inicial: s.precio_inicial, incremento: s.incremento,
         puja_actual: s.puja_actual, termina: s.termina, estado: abierta ? "activa" : "cerrada",
         pago_estado: s.pago_estado || null,

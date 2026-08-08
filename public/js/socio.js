@@ -922,7 +922,7 @@
     renderDetalle(r);
     _subTick = setInterval(tickCd, 1000);
     _subPoll = setInterval(async () => {
-      try { const d = await api("/subastas/" + id); actualizarDetalle(d); } catch (e) {}
+      try { const d = await api("/subastas/" + id + "?liviano=1"); actualizarDetalle(d); } catch (e) {}
     }, 4000);
   }
   function estadoHtml(r, cerrada) {
@@ -1053,7 +1053,7 @@
       toast(r.extendida ? T("m_sub_extendido") : T("m_sub_vas_ganando"));
       try { window.OLI.track && window.OLI.track("Puja", null, { value: monto }); } catch (e) {}
     } catch (e) { toast(e.message); }
-    try { const d = await api("/subastas/" + id); actualizarDetalle(d); } catch (e) {}
+    try { const d = await api("/subastas/" + id + "?liviano=1"); actualizarDetalle(d); } catch (e) {}
   }
 
   // ─── Carnet digital (mismo componente que la landing, color por nivel) ───────
