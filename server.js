@@ -220,6 +220,9 @@ const sendPage = (file, lang) => (req, res) => {
 app.get("/", sendPage("index.html", "es"));
 app.get("/en", sendPage("index.html", "en"));        // landing en inglés (SEO: /en + hreflang)
 app.get("/miembro", sendPage("socio.html"));         // app: idioma desde localStorage
+// Router real del lado del cliente (tabs/segmentos/detalle de subasta con pushState) —
+// F5 en cualquier /miembro/<lo-que-sea> debe servir la misma SPA, no un 404.
+app.get("/miembro/*", sendPage("socio.html"));
 app.get("/legal", sendPage("legal.html"));
 app.get("/reset", sendPage("reset.html"));           // página para crear nueva contraseña
 app.get("/admin", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "admin.html")); });

@@ -8,6 +8,29 @@
   const LOC = LANG === "en" ? "en-US" : "es-PY";
   let SESSION = null; // { socio, membresia, progreso }
   let CONFIG = null;  // { paises: [{iso,nombre}], ... }
+  // ─── Router real (pushState/popstate): F5, atrás/adelante y compartir un link
+  // deben reflejar la vista actual. Esquema: /miembro, /miembro/carnet,
+  // /miembro/beneficios, /miembro/perfil, /miembro/descubrir(/<segmento>)(/subastas/<id>).
+  let curTab = "inicio", curSubId = null;
+  const TABS_RUTA = ["inicio", "carnet", "beneficios", "perfil", "descubrir"];
+  const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media"];
+  function parseRuta(pathname) {
+    const parts = pathname.replace(/^\/miembro\/?/, "").split("/").filter(Boolean);
+    if (!parts.length || !TABS_RUTA.includes(parts[0])) return { tab: "inicio" };
+    if (parts[0] !== "descubrir") return { tab: parts[0] };
+    const seg = SEGS_RUTA.includes(parts[1]) ? parts[1] : "subastas";
+    return { tab: "descubrir", seg, subId: seg === "subastas" && parts[2] ? parts[2] : null };
+  }
+  function rutaActual() {
+    if (curTab !== "descubrir") return curTab === "inicio" ? "/miembro" : "/miembro/" + curTab;
+    if (descSeg === "subastas") return curSubId ? "/miembro/descubrir/subastas/" + curSubId : "/miembro/descubrir";
+    return "/miembro/descubrir/" + descSeg;
+  }
+  function syncUrl(replace) {
+    const p = rutaActual();
+    if (location.pathname === p) return; // ya refleja el estado, no ensuciar el historial
+    history[replace ? "replaceState" : "pushState"]({}, "", p);
+  }
   let perfilPunto = { lat: null, lng: null }; // ubicación exacta elegida
   let perfilGlobo = null;
   const view = () => document.getElementById("view");
@@ -77,21 +100,35 @@
     }
     renderProgreso();
     renderBannerSocio();
-    // Deep-link: /miembro?sub=<id> (viene del landing/página de subasta) → abre esa subasta.
+    // Deep-link por query param (viene de fuera: página de subasta, email, /?intent=pujar):
+    // gana sobre la ruta del path porque expresa una intención explícita y puntual.
+    // Se normaliza a la URL canónica del router (/miembro/descubrir/subastas/<id>).
     const subDeep = new URLSearchParams(location.search).get("sub");
     if (subDeep) {
-      history.replaceState({}, "", "/miembro");
-      _deepSub = subDeep; descSeg = "subastas";
-      activar("descubrir");   // abre Descubrir → segmento Subastas → detalle (vía _deepSub)
+      descSeg = "subastas"; _deepSub = subDeep;
+      activar("descubrir", { fromRoute: true }); // syncUrl() abajo normaliza a la URL canónica
     } else {
-      activar("inicio");
+      // Sin query param: la ruta actual manda (carga directa, F5, o link compartido).
+      const ruta = parseRuta(location.pathname);
+      if (ruta.tab === "descubrir") { descSeg = ruta.seg; if (ruta.subId) _deepSub = ruta.subId; }
+      activar(ruta.tab, { fromRoute: true });
     }
+    window.addEventListener("popstate", () => {
+      const ruta = parseRuta(location.pathname);
+      if (ruta.tab === "descubrir") { descSeg = ruta.seg; if (ruta.subId) _deepSub = ruta.subId; }
+      activar(ruta.tab, { fromRoute: true });
+    });
   }
 
-  function activar(tab) {
+  function activar(tab, opts) {
+    opts = opts || {};
     window.scrollTo(0, 0); // si venías scrolleado, el título de la pestaña nueva no debe quedar tapado por el header fijo
     if (typeof stopSub === "function") stopSub();   // corta polling de subastas al cambiar de tab
     _contentHost = null;                            // fuera de Descubrir el contenido ocupa todo #view
+    curTab = tab; curSubId = null;
+    // fromRoute (init/popstate): normaliza con replace si hiciera falta, sin nueva entrada.
+    // Navegación desde la UI (click): agrega una entrada de historial nueva.
+    syncUrl(!!opts.fromRoute);
     document.querySelectorAll(".tab").forEach((t) => {
       const on = t.dataset.tab === tab;
       t.classList.toggle("active", on);
@@ -295,7 +332,7 @@
       <h2>${T("m_desc_h")}</h2><p class="lead">${T("m_desc_p")}</p>
       <div class="seg-nav" id="descSegNav">${segs.map(([id, l]) => `<button class="seg-b${id === descSeg ? " on" : ""}" data-seg="${id}">${l}</button>`).join("")}</div>
       <div id="descHost"></div></div>`;
-    view().querySelector("#descSegNav").addEventListener("click", (e) => { const b = e.target.closest("[data-seg]"); if (!b) return; descSeg = b.dataset.seg; renderDescSeg(); });
+    view().querySelector("#descSegNav").addEventListener("click", (e) => { const b = e.target.closest("[data-seg]"); if (!b) return; descSeg = b.dataset.seg; curSubId = null; syncUrl(); renderDescSeg(); });
     renderDescSeg();
   }
   function renderDescSeg() {
@@ -304,7 +341,7 @@
     _contentHost = document.getElementById("descHost");
     const nav = document.getElementById("descSegNav");
     if (nav) nav.querySelectorAll("[data-seg]").forEach((b) => b.classList.toggle("on", b.dataset.seg === descSeg));
-    if (descSeg === "subastas" && _deepSub) { const id = _deepSub; _deepSub = null; return vSubastaDetalle(id); }
+    if (descSeg === "subastas" && _deepSub) { const id = _deepSub; _deepSub = null; curSubId = id; syncUrl(true); return vSubastaDetalle(id); }
     ({ subastas: vSubastas, sorteos: vSorteos, preventas: vPreventas, media: vContenido }[descSeg] || vSubastas)();
   }
 
@@ -843,7 +880,7 @@
       ${activas.length ? `<div class="grid-3">${activas.map(cardSubasta).join("")}</div>` : (cerradas.length ? "" : vacio(T("m_sub_vacio")))}
       ${cerradas.length ? `<h3 class="sub-historial-h">${T("m_sub_historial")}</h3><div class="grid-3">${cerradas.map(cardSubasta).join("")}</div>` : ""}
       </div>`;
-    cv().querySelectorAll("[data-sub]").forEach((el) => el.addEventListener("click", () => vSubastaDetalle(el.dataset.sub)));
+    cv().querySelectorAll("[data-sub]").forEach((el) => el.addEventListener("click", () => { curSubId = el.dataset.sub; syncUrl(); vSubastaDetalle(el.dataset.sub); }));
   }
   // Miniatura/hero de una subasta: la foto real subida en el admin si hay, si no el
   // ícono generado (antes SIEMPRE se ignoraba `s.imagen` acá, la imagen subida nunca se veía).
@@ -938,7 +975,7 @@
       <h3 style="margin-top:24px">${T("m_sub_feed")}</h3>
       <div class="sub-feed" id="subFeed">${feedHtml(r.feed)}</div>
     </div>`;
-    cv().querySelector(".sub-back").onclick = () => { window.scrollTo(0, 0); stopSub(); descSeg = "subastas"; vSubastas(); };
+    cv().querySelector(".sub-back").onclick = () => { window.scrollTo(0, 0); stopSub(); descSeg = "subastas"; curSubId = null; syncUrl(); vSubastas(); };
     bindPujas(s.id);
   }
   function bindPujas(id) {
