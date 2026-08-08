@@ -285,7 +285,10 @@ app.get("/subasta/:id", async (req, res) => {
   // Canonical/OG siempre con el link "lindo" (slug), sin importar con cuál se haya
   // entrado — así WhatsApp/redes muestran siempre la misma URL prolija.
   const urlPublica = base + "/subasta/" + esc2(s.slug || s.id);
-  res.setHeader("Cache-Control", "public, max-age=30");
+  // no-store (antes public,max-age=30): esta página muestra precio/estado en vivo
+  // de la subasta y referencia CSS versionado por deploy — mismo motivo que
+  // sendPage() más abajo, no vale la pena arriesgar el mismo bug de cache viejo.
+  res.setHeader("Cache-Control", "no-store");
   // Íconos de línea inline (mismo trazo que el sistema de íconos del cliente) — esta
   // página se genera server-side, sin JS de OLI.icon() disponible.
   const svgIcon = (body, size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">${body}</svg>`;
