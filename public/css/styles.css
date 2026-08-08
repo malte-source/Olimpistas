@@ -123,6 +123,12 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex; align-items: center; justify-content: center; min-height: 40px; }
 .nav-sw:hover { border-color: #fff; color: #fff; }
 @media (max-width: 640px) { .nav-sw { padding: 6px 10px; font-size: 11px; min-height: 44px; min-width: 44px; } }
+/* "Ingresar"/"Mi cuenta" (#accederBtn) usa .btn-ghost, cuyo color de texto invierte
+   con el tema — pero acá vive sobre el .nav, siempre oscuro (foto o vidrio fijo).
+   En claro el texto se volvía negro sobre fondo oscuro = invisible. Fijo, como
+   .nav-sw de al lado. */
+.nav .btn-ghost, .topbar .btn-ghost { color: #fff; border-color: rgba(255,255,255,.4); }
+.nav .btn-ghost:hover, .topbar .btn-ghost:hover { border-color: #fff; background: rgba(255,255,255,.1); }
 .lang { background: transparent; border: none; color: #fff; font-size: 14px; opacity: 0.9; display: flex; align-items: center; gap: 6px; }
 .btn {
   border: none; border-radius: 11px; padding: 12px 24px; font-weight: 700; font-size: 14px;
