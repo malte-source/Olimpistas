@@ -193,7 +193,13 @@ const sendPage = (file, lang) => (req, res) => {
   if ((req.headers.host || "") === "olimpistas.com") {
     return res.redirect(301, "https://www.olimpistas.com" + (req.originalUrl || req.url || "/"));
   }
-  res.setHeader("Cache-Control", "public, max-age=60");
+  // no-store (antes public,max-age=60): el shell HTML es lo que decide qué versión
+  // de JS/CSS pedir (vía ?v=BUILD_ID) — si ESTO queda cacheado en el medio (CDN de
+  // borde, proxy del operador móvil, "ahorro de datos" de Chrome Android), ningún
+  // deploy nuevo le llega al usuario hasta que fuerce un hard-refresh. Pasó 3 veces
+  // esta sesión. El render es barato (_pageCache en memoria), no hace falta cachear
+  // en el cliente para que sea rápido.
+  res.setHeader("Cache-Control", "no-store");
   const key = file + "|" + (lang || "es");
   if (!_pageCache[key]) {
     let html = fs.readFileSync(path.join(PUBLIC, file), "utf8");
