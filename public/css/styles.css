@@ -107,10 +107,16 @@ button { font-family: inherit; cursor: pointer; }
    claro en los dos temas, no invierte con el resto del sitio. */
 .nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 50;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: flex-start;
   padding: 18px 32px; color: #fff;
   transition: background .25s ease, backdrop-filter .25s ease, padding .25s ease, box-shadow .25s ease;
 }
+/* Links secundarios (Niveles/Subastas/Sorteos/Beneficios) — solo en desktop ancho,
+   junto al logo; en tablet/mobile el header ya está lleno con logo+idioma+CTAs. */
+.nav-links { display: flex; gap: 28px; align-items: center; margin-left: 36px; }
+.nav-links a { color: rgba(255,255,255,.85); font-size: 14px; font-weight: 600; text-decoration: none; }
+.nav-links a:hover { color: #fff; }
+@media (max-width: 1024px) { .nav-links { display: none; } }
 /* Al hacer scroll, la nav se vuelve "glass" y persistente (CTA siempre visible). */
 .nav.scrolled {
   background: rgba(11,11,15,.82); backdrop-filter: blur(12px);
@@ -120,7 +126,7 @@ button { font-family: inherit; cursor: pointer; }
 .brand img { width: 38px; height: 38px; }
 /* Logo horizontal (escudo + wordmark "OLIMPISTAS"): alto fijo, ancho proporcional. */
 .brand img.brand-h { width: auto; height: 30px; }
-.nav-right { display: flex; align-items: center; gap: 14px; }
+.nav-right { display: flex; align-items: center; gap: 14px; margin-left: auto; }
 /* Toggles de idioma y moneda */
 .nav-sw { background: transparent; border: 1px solid rgba(255,255,255,.3); color: #fff; font-size: 12px; font-weight: 700;
   padding: 6px 10px; border-radius: 8px; cursor: pointer; letter-spacing: .3px; text-decoration: none; line-height: 1;
@@ -187,6 +193,7 @@ button { font-family: inherit; cursor: pointer; }
   .hero-text h1 { font-size: 46px; }
   .hero-text .sub { margin-left: 0; margin-right: 0; }
   .hero-text .hero-ctas { justify-content: flex-start; }
+  .hero-text .hero-stats { justify-content: flex-start; }
   .hero-text .hero-social { margin-left: 0; }
   .hero-side { flex: 0 0 340px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 }
@@ -498,6 +505,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .hero-note { font-size: 13px; color: rgba(255,255,255,.82); margin: 12px 0 0; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
 .hero-cur-note { font-size: 12.5px; color: #fff; margin: 8px 0 0; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
 .hero-cur-note a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
+/* Franja de prueba social bajo los CTA del hero: Olimpistas / países / niveles. */
+.hero-stats { display: flex; justify-content: center; gap: 44px; padding-top: 22px; margin-top: 6px; border-top: 1px solid rgba(255,255,255,.18); }
+.hero-stat { display: flex; flex-direction: column; gap: 3px; }
+.hero-stat-num { font-size: 28px; font-weight: 800; letter-spacing: -.02em; color: #fff; font-variant-numeric: tabular-nums; }
+.hero-stat-lbl { font-size: 12.5px; color: rgba(255,255,255,.72); }
 .why { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 8px; }
 .why-item { background: var(--negro-2); border: 1px solid var(--linea); border-radius: var(--radio); padding: 22px; }
 .why-item span { font-size: 28px; }
@@ -513,9 +525,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
    oscuro). El footer SÍ invierte con el tema — en claro queda blanco sobre blanco,
    así que acá lo invertimos a tinta. */
 :root[data-theme="light"] .footer .brand img.brand-h { filter: invert(1); }
-.footer-links { display: flex; flex-direction: column; gap: 8px; }
-.footer-links a { color: var(--gris); font-size: 14px; }
-.footer-links a:hover { color: var(--blanco); }
+.footer-brand { max-width: 320px; }
+.footer-cols { display: flex; gap: 48px; }
+.footer-col { display: flex; flex-direction: column; gap: 9px; }
+.footer-col-h { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--gris); margin-bottom: 2px; }
+.footer-col a { color: var(--gris); font-size: 14px; text-decoration: none; }
+.footer-col a:hover { color: var(--blanco); }
 
 /* ─── Barra de progreso de perfil ─────────────────────────────────────────── */
 .faltantes { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -823,6 +838,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .tiers { grid-template-columns: 1fr; max-width: 420px; }
   .why { grid-template-columns: 1fr 1fr; }
   .footer-inner { flex-direction: column; gap: 22px; }
+  .footer-cols { flex-direction: column; gap: 20px; }
+  .hero-stats { gap: 28px; }
+  .hero-stat-num { font-size: 22px; }
   .perfil { grid-template-columns: 1fr; gap: 14px; }
   .row-2 { grid-template-columns: 1fr; }
   /* Foto compacta arriba: avatar chico + botón al lado (no domina la pantalla). */

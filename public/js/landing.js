@@ -20,6 +20,8 @@
     document.getElementById("heroTitle").textContent = fld(CONFIG.brand, "lema");
     document.getElementById("heroSub").textContent = fld(CONFIG.brand, "bajada");
     document.getElementById("heroCta").textContent = fld(CONFIG.brand, "ctaPrincipal");
+    const heroStatNiveles = document.getElementById("heroStatNiveles");
+    if (heroStatNiveles) heroStatNiveles.textContent = CONFIG.tiers.length;
     renderTiers();
     renderNav();
     wireModal();
@@ -126,6 +128,9 @@
     document.getElementById("contadorPaises").textContent = stats.paises;
     const heroMundoNum = document.getElementById("heroMundoNum");
     if (heroMundoNum && stats.total > 0) heroMundoNum.textContent = stats.total.toLocaleString(LANG === "en" ? "en-US" : "es-PY");
+    const heroStatOli = document.getElementById("heroStatOli"), heroStatPaises = document.getElementById("heroStatPaises");
+    if (heroStatOli && stats.total > 0) heroStatOli.textContent = stats.total.toLocaleString(LANG === "en" ? "en-US" : "es-PY");
+    if (heroStatPaises && stats.paises) heroStatPaises.textContent = stats.paises;
     renderTopPaises(stats.porPais);
     // Prueba social en el hero
     if (stats.total > 0) {
@@ -181,6 +186,8 @@
         if (numEl) numEl.textContent = mostrado.toLocaleString(loc);
         if (paisesEl && paisesMeta) paisesEl.textContent = paisesMeta;
         if (heroMundoNum) heroMundoNum.textContent = mostrado.toLocaleString(loc);
+        if (heroStatOli) heroStatOli.textContent = mostrado.toLocaleString(loc);
+        if (heroStatPaises && paisesMeta) heroStatPaises.textContent = paisesMeta;
         if (heroEl && !heroEl.hidden) {
           heroEl.textContent = `${T("social_pre")} ${mostrado.toLocaleString(loc)} ${T("social_in")} ${paisesMeta} ${paisesMeta === 1 ? T("pais") : T("paises")}`;
         }
@@ -282,6 +289,19 @@
     else { btn.textContent = T("nav_ingresar"); btn.onclick = () => openModal("login"); }
     const navCta = document.getElementById("navCta");
     if (navCta) navCta.style.display = SESSION ? "none" : "";
+    // Nav/footer "Subastas"/"Sorteos": con sesión van directo a esa pestaña de Descubrir
+    // (ya tiene URL propia gracias al router); sin sesión, el href por defecto ancla
+    // al destacado en el hero (lo único que hay para mostrar sin haberse registrado).
+    [["navSubastas", "subastas"], ["navSorteos", "sorteos"], ["footerSubastas", "subastas"], ["footerSorteos", "sorteos"]]
+      .forEach(([id, seg]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener("click", (e) => {
+          if (!SESSION) return; // sin sesión: dejar el href normal (ancla al destacado)
+          e.preventDefault();
+          location.href = "/miembro/descubrir/" + seg;
+        });
+      });
   }
 
   function empezarGratis() {

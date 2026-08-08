@@ -32,6 +32,12 @@
 <body>
   <header class="nav">
     <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" /></a>
+    <nav class="nav-links">
+      <a href="#planes" data-i18n="planes_eyebrow">Niveles</a>
+      <a href="#destacadoWrap" id="navSubastas" data-i18n="tab_subastas">Subastas</a>
+      <a href="#destacadoWrap" id="navSorteos" data-i18n="tab_sorteos">Sorteos</a>
+      <a href="#beneficios" data-i18n="tab_beneficios">Beneficios</a>
+    </nav>
     <div class="nav-right">
       <a class="nav-sw" id="langSw" href="/en">EN</a>
       <button class="nav-sw" id="themeSw" type="button">Claro</button>
@@ -59,6 +65,11 @@
           <a class="btn btn-ghost btn-hero" href="#planes" data-i18n="hero_vermas_btn">Ver niveles</a>
         </div>
         <p class="hero-note" data-i18n="hero_note">Gratis y en 30 segundos. Sin tarjeta.</p>
+        <div class="hero-stats" id="heroStats">
+          <div class="hero-stat"><span class="hero-stat-num" id="heroStatOli">—</span><span class="hero-stat-lbl" data-i18n="hero_stat_oli">Olimpistas</span></div>
+          <div class="hero-stat"><span class="hero-stat-num" id="heroStatPaises">—</span><span class="hero-stat-lbl" data-i18n="hero_stat_paises">países</span></div>
+          <div class="hero-stat"><span class="hero-stat-num" id="heroStatNiveles">—</span><span class="hero-stat-lbl" data-i18n="hero_stat_niveles">niveles</span></div>
+        </div>
         <p class="hero-cur-note" id="heroCurNote" hidden></p>
         <p class="hero-social" id="heroSocial" hidden></p>
       </div>
@@ -131,17 +142,29 @@
 
   <footer class="footer">
     <div class="wrap footer-inner">
-      <div>
+      <div class="footer-brand">
         <div class="brand"><img class="brand-h" src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" /></div>
         <p class="muted" data-i18n="footer_tagline">Una iniciativa de Club Olimpia para su comunidad mundial de hinchas.</p>
       </div>
-      <nav class="footer-links">
-        <a href="https://store.clubolimpia.com.py/" target="_blank" rel="noopener" data-i18n="footer_tienda">Tienda oficial</a>
-        <a href="https://www.clubolimpia.com.py/" target="_blank" rel="noopener" data-i18n="footer_web">Web de Olimpia</a>
-        <a href="/legal#terminos" data-i18n="footer_terminos">Términos y condiciones</a>
-        <a href="/legal#privacidad" data-i18n="footer_privacidad">Política de privacidad</a>
-        <a href="/legal#sorteos" data-i18n="footer_sorteos">Bases de sorteos</a>
-      </nav>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <span class="footer-col-h" data-i18n="footer_plataforma">Plataforma</span>
+          <a href="#planes" data-i18n="planes_eyebrow">Niveles</a>
+          <a href="#destacadoWrap" id="footerSubastas" data-i18n="tab_subastas">Subastas</a>
+          <a href="#destacadoWrap" id="footerSorteos" data-i18n="tab_sorteos">Sorteos</a>
+        </div>
+        <div class="footer-col">
+          <span class="footer-col-h" data-i18n="footer_club">Club</span>
+          <a href="https://www.clubolimpia.com.py/" target="_blank" rel="noopener" data-i18n="footer_web">Web de Olimpia</a>
+          <a href="https://store.clubolimpia.com.py/" target="_blank" rel="noopener" data-i18n="footer_tienda">Tienda oficial</a>
+        </div>
+        <div class="footer-col">
+          <span class="footer-col-h" data-i18n="footer_legal">Legal</span>
+          <a href="/legal#terminos" data-i18n="footer_terminos">Términos y condiciones</a>
+          <a href="/legal#privacidad" data-i18n="footer_privacidad">Política de privacidad</a>
+          <a href="/legal#sorteos" data-i18n="footer_sorteos">Bases de sorteos</a>
+        </div>
+      </div>
     </div>
   </footer>
 
