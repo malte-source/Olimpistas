@@ -69,6 +69,9 @@
     const bar = document.querySelector(".topbar");
     if (bar) { const onScroll = () => bar.classList.toggle("scrolled", window.scrollY > 6); window.addEventListener("scroll", onScroll, { passive: true }); onScroll(); }
     window.addEventListener("resize", moveTabInd, { passive: true });
+    // Si la tipografía todavía no había cargado cuando se posicionó la pastilla la
+    // primera vez, el ancho de cada pestaña cambia al entrar la fuente — recalcular.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(moveTabInd).catch(() => {});
     // Candados vivos: cualquier botón bloqueado (sorteo/preventa/beneficio/subasta) abre
     // el momento de upsell (explica qué desbloquea + ofrece la vía gratis de socio),
     // en vez de mandar directo a la pasarela de pago sin contexto.
@@ -139,14 +142,18 @@
   }
 
   // Pulido PRO: pill deslizante bajo el tab activo (solo mobile) + borde glass al hacer scroll.
+  // requestAnimationFrame (no setTimeout(0)): garantiza que el layout ya se recalculó
+  // (cambio de clase .active, contenido nuevo) antes de medir posiciones — con
+  // setTimeout(0) a veces medía ANTES de que el navegador terminara de acomodar
+  // todo, y la pastilla quedaba en la posición de la pestaña anterior.
   function moveTabInd() {
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       const bar = document.getElementById("tabs"), ind = document.getElementById("tabInd");
       const act = bar && bar.querySelector(".tab.active");
       if (!bar || !ind || !act) return;
       const br = bar.getBoundingClientRect(), ar = act.getBoundingClientRect();
       ind.style.transform = "translateX(" + Math.round(ar.left - br.left + ar.width / 2 - 26) + "px)";
-    }, 0);
+    });
   }
 
   async function logout() { try { await api("/auth/logout", { method: "POST" }); } finally { location.href = "/"; } }

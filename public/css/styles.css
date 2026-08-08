@@ -1021,7 +1021,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tab:active { transform: scale(.94); }
 .tab-ind { display: none; }
 @media (max-width: 640px) {
-  .tab-ind { display: block; position: absolute; top: 8px; height: 40px; width: 52px; border-radius: 14px;
+  .tab-ind { display: block; position: absolute; top: 8px; left: 0; height: 40px; width: 52px; border-radius: 14px;
     background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
     transition: transform .28s cubic-bezier(.34,1.4,.5,1); pointer-events: none; z-index: 0; }
   .tabs .tab { position: relative; z-index: 1; }
