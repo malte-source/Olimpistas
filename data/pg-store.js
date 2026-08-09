@@ -41,7 +41,47 @@ function createPgStore({ databaseUrl }) {
   // ssl:'require'  → Supabase exige TLS. max:6 por instancia: 6 × max-instances(50) = 300,
   // bien por debajo del "max client connections" del pooler tras el upgrade a MEDIUM.
   // connect_timeout:10 → si el pooler está saturado, falla rápido en vez de colgar el request.
-  const sql = postgres(databaseUrl, { max: 6, idle_timeout: 20, connect_timeout: 10, prepare: false, ssl: "require" });
+  const sqlRaw = postgres(databaseUrl, { max: 6, idle_timeout: 20, connect_timeout: 10, prepare: false, ssl: "require" });
+
+  // ── Plazo máximo por consulta (caída del 2026-08-09) ───────────────────────
+  // `connect_timeout` sólo cubre el momento de conectar: una vez conectada, una consulta
+  // no tenía límite. Si el socket muere sin avisar (medio abierto), la consulta queda
+  // colgada para siempre y se lleva una de las 6 conexiones del pool. A la sexta, la
+  // instancia deja de responder TODO lo que toque la base (los 504 de esa noche).
+  // El pooler de Supabase IGNORA `statement_timeout` como parámetro de arranque (probado:
+  // informa "2min", el default del server), así que el corte tiene que ser del lado del
+  // cliente. `query.cancel()` devuelve la conexión al pool — sin eso el plazo no arregla
+  // nada, porque la conexión seguiría ocupada.
+  const DB_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS || 15000);
+  const esPlantilla = (a) => Array.isArray(a) && Object.prototype.hasOwnProperty.call(a, "raw");
+  function conPlazo(query) {
+    let t;
+    const limite = new Promise((_, rechazar) => {
+      t = setTimeout(() => {
+        try { query.cancel(); } catch (e) { /* la conexión ya no existe */ }
+        rechazar(new Error("db_timeout"));
+      }, DB_TIMEOUT_MS);
+    });
+    return Promise.race([query, limite]).finally(() => clearTimeout(t));
+  }
+  const sql = new Proxy(sqlRaw, {
+    apply(target, thisArg, args) {
+      const out = Reflect.apply(target, thisArg, args);
+      // Sólo las consultas de verdad (plantilla etiquetada) llevan plazo. `sql(obj, ...cols)`
+      // arma fragmentos de INSERT/UPDATE, no es una consulta y no se toca.
+      if (esPlantilla(args[0]) && out && typeof out.then === "function" && typeof out.cancel === "function") {
+        return conPlazo(out);
+      }
+      return out;
+    },
+    // begin/end/unsafe se atan al objeto real: si los llamáramos con el proxy como `this`,
+    // postgres.js podría no encontrar su estado interno. Dentro de una transacción se usa
+    // el `tx` propio (sin plazo), que es lo correcto: cancelar a la mitad la dejaría abierta.
+    get(target, prop, receiver) {
+      const v = Reflect.get(target, prop, receiver);
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  });
 
   // Cache en memoria para listas públicas que cambian poco (sorteos/contenido/preventas):
   // bajo carga de lanzamiento le sacan presión al pool del DB. TTL corto + bust en escritura.
