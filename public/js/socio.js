@@ -864,7 +864,7 @@
 
   // ─── Subastas (puja en vivo por polling; Plus y Socio) ───────────────────────
   let _subPoll = null, _subTick = null, _subData = null;
-  function stopSub() { if (_subPoll) clearInterval(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
+  function stopSub() { if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
   const gsK = (n) => "₲" + Math.round((Number(n) || 0) / 1000) + "k";
   function cdTexto(termina) {
     const ms = new Date(termina).getTime() - Date.now();
@@ -921,9 +921,16 @@
     try { r = await api("/subastas/" + id); } catch (e) { cv().innerHTML = vacio(T("m_error_generico")); return; }
     renderDetalle(r);
     _subTick = setInterval(tickCd, 1000);
-    _subPoll = setInterval(async () => {
+    // setTimeout que se reprograma solo, con jitter (±500ms), en vez de setInterval fijo:
+    // un setInterval de 4000ms exacto hace que todas las pestañas abiertas en el mismo
+    // momento (ej: justo después de un mailing o un repost) terminen pujando en el
+    // mismo segundo para siempre — picos periódicos sincronizados en vez de carga pareja
+    // (se vieron en los logs de la caída del 2026-08-09: ráfagas de 300+ req en 1 minuto).
+    const pollTick = async () => {
       try { const d = await api("/subastas/" + id + "?liviano=1"); actualizarDetalle(d); } catch (e) {}
-    }, 4000);
+      _subPoll = setTimeout(pollTick, 3500 + Math.random() * 1000);
+    };
+    _subPoll = setTimeout(pollTick, 3500 + Math.random() * 1000);
   }
   function estadoHtml(r, cerrada) {
     if (!r.desbloqueado || cerrada) return "";

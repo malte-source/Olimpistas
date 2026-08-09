@@ -1484,18 +1484,30 @@ function buildRouter() {
   // Absorbe el polling en vivo: con N miradores, la DB recibe ~1 lectura cada 2s por
   // instancia, no N. Se invalida al pujar. Lo per-usuario (mi puja, voy-ganando) se
   // calcula aparte, barato. Clave para aguantar un pico de tráfico.
+  //
+  // stale-while-error (caída del 2026-08-09): si la base está momentáneamente saturada
+  // o el query se corta por plazo, esto ANTES tiraba el error para arriba y el visitante
+  // veía la página caerse. Ahora, mientras haya un valor previo (aunque tenga más de 2s),
+  // se sirve ese en vez de fallar — un precio con unos segundos de atraso es un precio
+  // desactualizado; un 504 es la página rota. Solo falla de verdad si nunca hubo un valor
+  // bueno para esa subasta.
   const _subCache = new Map();
   async function detalleBase(id) {
     const c = _subCache.get(id);
     if (c && Date.now() - c.t < 2000) return c.data;
-    const s = await store.getSubasta(id);
-    if (!s) return null;
-    // OJO: usar s.id (el id real resuelto), no el "id" del parámetro — si vino por slug,
-    // pujasDeSubasta/contarPujadores con el slug no matchean nada en la tabla de pujas.
-    const [feedRaw, pujadores] = await Promise.all([store.pujasDeSubasta(s.id, 8), store.contarPujadores(s.id)]);
-    const data = { s, feedRaw, pujadores };
-    _subCache.set(id, { t: Date.now(), data });
-    return data;
+    try {
+      const s = await store.getSubasta(id);
+      if (!s) return null;
+      // OJO: usar s.id (el id real resuelto), no el "id" del parámetro — si vino por slug,
+      // pujasDeSubasta/contarPujadores con el slug no matchean nada en la tabla de pujas.
+      const [feedRaw, pujadores] = await Promise.all([store.pujasDeSubasta(s.id, 8), store.contarPujadores(s.id)]);
+      const data = { s, feedRaw, pujadores };
+      _subCache.set(id, { t: Date.now(), data });
+      return data;
+    } catch (e) {
+      if (c) { log.warn({ id, err: e.message }, "subasta: sirviendo último valor conocido (la base no respondió a tiempo)"); return c.data; }
+      throw e;
+    }
   }
   r.get("/subastas/:id", auth.attachSocio, wrap(async (req, res) => {
     const base = await detalleBase(req.params.id);
