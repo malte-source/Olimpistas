@@ -43,11 +43,15 @@ function createPgStore({ databaseUrl }) {
   //
   // PRESUPUESTO DE CONEXIONES (importante al tocar la escala): el techo real es
   // `pool × max-instances`, y tiene que quedar por debajo del "max client connections"
-  // del pooler de Supabase — sostenido en ~300 desde el upgrade a MEDIUM. O sea:
-  //   50 instancias → pool 6      100 instancias → pool 3
-  // Subir max-instances SIN bajar el pool es lo que rompe el pooler justo cuando más
-  // tráfico hay (escala al máximo = pico). Por eso es env var: se ajusta junto con la
-  // escala, sin tocar código.
+  // del pooler de Supabase — sostenido en ~300 desde el upgrade a MEDIUM.
+  //
+  // OJO (aprendido el 2026-08-09): bajar el pool para "hacer lugar" a más max-instances
+  // fue un error — Cloud Run autoescala por concurrencia real, no por el techo, así que
+  // en tráfico normal siguen sirviendo un puñado de instancias (~11 ese día, con
+  // max-instances=100). Bajar el pool ahí SÍ achica la capacidad real de cada una de esas
+  // pocas instancias, sin beneficio, porque el escenario de escalar al máximo nunca pasó.
+  // Regla: el pool se mueve para PROTEGER el presupuesto cuando max-instances sube en
+  // serio (viral confirmado, no "por las dudas"); si no, se deja en 6 con max-instances=50.
   const DB_POOL_MAX = Number(process.env.DB_POOL_MAX || 6);
   const sqlRaw = postgres(databaseUrl, { max: DB_POOL_MAX, idle_timeout: 20, connect_timeout: 10, prepare: false, ssl: "require" });
 
@@ -60,7 +64,11 @@ function createPgStore({ databaseUrl }) {
   // informa "2min", el default del server), así que el corte tiene que ser del lado del
   // cliente. `query.cancel()` devuelve la conexión al pool — sin eso el plazo no arregla
   // nada, porque la conexión seguiría ocupada.
-  const DB_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS || 15000);
+  // 8s (no 15s): bajo ráfaga de polling con el pool ocupado, cada conexión trabada
+  // tarda esto en soltarse — más corto = la cola se drena más rápido cuando hay
+  // contención real (caída del 2026-08-09 09:30-13:51: no fue una conexión colgada
+  // para siempre, fue degradación en cascada por conexiones tardando su plazo entero).
+  const DB_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS || 8000);
   const esPlantilla = (a) => Array.isArray(a) && Object.prototype.hasOwnProperty.call(a, "raw");
   function conPlazo(query) {
     let t;
