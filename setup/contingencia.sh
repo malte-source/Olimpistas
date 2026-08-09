@@ -12,6 +12,12 @@
 # REGLA DE ORO — presupuesto de conexiones: pool × max-instances ≤ 300.
 #   50 instancias → DB_POOL_MAX=6      100 instancias → DB_POOL_MAX=3
 # Subir instancias sin bajar el pool revienta el pooler de Supabase justo en el pico.
+#
+# OJO (aprendido el 2026-08-09): "escalar" achica el pool por instancia a propósito.
+# Usarlo SOLO con una ola de tráfico ya confirmada en los números (`estado` mostrando
+# cientos de req/min sostenidas) — no "por las dudas". Bajar el pool sin que la ola
+# sea real achica la capacidad de las pocas instancias que sí están sirviendo, sin
+# ninguna ganancia a cambio. Volvé a `normal` apenas pase el pico.
 # ─────────────────────────────────────────────────────────────────────────────
 set -u
 P="--project olimpistas --region southamerica-east1"
