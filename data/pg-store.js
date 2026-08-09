@@ -38,10 +38,18 @@ function _enc(row) {
 
 function createPgStore({ databaseUrl }) {
   // prepare:false → requerido por el pooler de Supabase en modo transacción (PgBouncer).
-  // ssl:'require'  → Supabase exige TLS. max:6 por instancia: 6 × max-instances(50) = 300,
-  // bien por debajo del "max client connections" del pooler tras el upgrade a MEDIUM.
+  // ssl:'require'  → Supabase exige TLS.
   // connect_timeout:10 → si el pooler está saturado, falla rápido en vez de colgar el request.
-  const sqlRaw = postgres(databaseUrl, { max: 6, idle_timeout: 20, connect_timeout: 10, prepare: false, ssl: "require" });
+  //
+  // PRESUPUESTO DE CONEXIONES (importante al tocar la escala): el techo real es
+  // `pool × max-instances`, y tiene que quedar por debajo del "max client connections"
+  // del pooler de Supabase — sostenido en ~300 desde el upgrade a MEDIUM. O sea:
+  //   50 instancias → pool 6      100 instancias → pool 3
+  // Subir max-instances SIN bajar el pool es lo que rompe el pooler justo cuando más
+  // tráfico hay (escala al máximo = pico). Por eso es env var: se ajusta junto con la
+  // escala, sin tocar código.
+  const DB_POOL_MAX = Number(process.env.DB_POOL_MAX || 6);
+  const sqlRaw = postgres(databaseUrl, { max: DB_POOL_MAX, idle_timeout: 20, connect_timeout: 10, prepare: false, ssl: "require" });
 
   // ── Plazo máximo por consulta (caída del 2026-08-09) ───────────────────────
   // `connect_timeout` sólo cubre el momento de conectar: una vez conectada, una consulta
