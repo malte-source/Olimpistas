@@ -70,15 +70,20 @@ function createPgStore({ databaseUrl }) {
   // para siempre, fue degradación en cascada por conexiones tardando su plazo entero).
   const DB_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS || 8000);
   const esPlantilla = (a) => Array.isArray(a) && Object.prototype.hasOwnProperty.call(a, "raw");
+  // BUG del primer intento (2026-08-09, tarde): envolver con Promise.race devuelve una
+  // promesa NUEVA. postgres.js reconoce los fragmentos SQL anidados (`sql\`...${sql\`WHERE
+  // x=${y}\`}\``, usados en varias partes de este archivo) chequeando `instanceof Query`
+  // (ver node_modules/postgres/cjs/src/types.js) — una promesa distinta ya no pasa ese
+  // chequeo, y el fragmento se pierde: el SQL final queda mal armado ("syntax error at or
+  // near WHERE"). Arreglo: cancelar en segundo plano SIN reemplazar el objeto — `query` es
+  // la MISMA instancia de Query siempre (se la devuelve tal cual), así que sigue sirviendo
+  // como fragmento cuando así se usa. Si nunca se ejecuta sola (porque era un fragmento),
+  // cancelarla no hace nada dañino: `cancel()` es un no-op una vez que el canceller ya se
+  // usó o nunca se necesitó.
   function conPlazo(query) {
-    let t;
-    const limite = new Promise((_, rechazar) => {
-      t = setTimeout(() => {
-        try { query.cancel(); } catch (e) { /* la conexión ya no existe */ }
-        rechazar(new Error("db_timeout"));
-      }, DB_TIMEOUT_MS);
-    });
-    return Promise.race([query, limite]).finally(() => clearTimeout(t));
+    const t = setTimeout(() => { try { query.cancel(); } catch (e) { /* la conexión ya no existe */ } }, DB_TIMEOUT_MS);
+    query.then(() => clearTimeout(t), () => clearTimeout(t));
+    return query;
   }
   const sql = new Proxy(sqlRaw, {
     apply(target, thisArg, args) {
