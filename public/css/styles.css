@@ -199,6 +199,9 @@ button { font-family: inherit; cursor: pointer; }
 /* Forzamos el layout apilado (media arriba, info abajo) incluso en desktop —
    la barra lateral del hero es angosta (~340-380px), muy poco para la fila
    260px+info que usa .destacado en Descubrir a partir de 640px. */
+/* Con 2+ subastas activas a la vez, renderDestacado() mete una tarjeta por cada una
+   dentro de este wrap — sin este gap quedaban pegadas entre sí (sin separación). */
+#destacadoWrap { display: flex; flex-direction: column; gap: 14px; }
 .hero-side .destacado { margin: 0; background: var(--surface-value); border-color: var(--oro);
   grid-template-columns: none !important; grid-template-areas: "media" "info" !important; }
 .hero-side .destacado-media { aspect-ratio: 16/9; height: auto; }

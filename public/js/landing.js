@@ -52,15 +52,8 @@
   // Foto real del lote si el admin la subió; si no, el mismo placeholder de gradiente
   // que usa el resto de la app (misma lógica que subastaMedia() en socio.js).
   function destacadoMedia(s) { return s.imagen ? '<img src="' + esc(s.imagen) + '" alt="" />' : artSvg(s.id, s.titulo, s.emoji || OLI.icon("gavel", { size: 34 })); }
-  async function renderDestacado() {
-    const host = document.getElementById("destacadoWrap"); if (!host) return;
-    let items = [];
-    try { ({ items } = await api("/subastas")); } catch (e) { return; }
-    const s = (items || []).find((x) => x.estado === "activa");
-    // Sin subasta en vivo no queda nada para mostrar en la columna del hero — la
-    // ocultamos entera (si no, .hero-side reserva 340-380px vacíos en desktop).
-    if (!s) { const side = document.getElementById("heroSide"); if (side) side.hidden = true; return; }
-    host.innerHTML = '<a class="destacado" href="/subasta/' + encodeURIComponent(s.slug || s.id) + '">' +
+  function destacadoCard(s) {
+    return '<a class="destacado" href="/subasta/' + encodeURIComponent(s.slug || s.id) + '">' +
       '<div class="destacado-media">' + destacadoMedia(s) +
       '<span class="destacado-live"><span class="destacado-dot"></span>' + T("m_sub_envivo") + '</span>' +
       '<span class="destacado-clock">' + OLI.icon("hourglass", { size: 14 }) + ' ' + cdCorto(s.termina) + '</span></div>' +
@@ -71,6 +64,19 @@
       '<div class="destacado-precio"><span class="destacado-precio-lbl">' + T("m_sub_actual") + '</span><strong>' + gs(s.puja_actual) + '</strong><span class="precio-usd">' + gsUsdRef(s.puja_actual) + '</span></div>' +
       '<span class="destacado-pujadores">' + OLI.icon("users", { size: 14 }) + ' ' + s.pujadores + ' ' + T("m_sub_pujando") + '</span></div>' +
       '<span class="destacado-cta">' + T("m_sub_pujar") + ' →</span></div></a>';
+  }
+  async function renderDestacado() {
+    const host = document.getElementById("destacadoWrap"); if (!host) return;
+    let items = [];
+    try { ({ items } = await api("/subastas")); } catch (e) { return; }
+    // Todas las activas, no solo la primera — con 2+ subastas en vivo a la vez (ej. las
+    // dos del Clásico Ida 2026) antes se mostraba una sola y la otra quedaba invisible
+    // en el home (seguía viéndose en Descubrir, pero nada la anunciaba acá).
+    const activas = (items || []).filter((x) => x.estado === "activa");
+    // Sin subasta en vivo no queda nada para mostrar en la columna del hero — la
+    // ocultamos entera (si no, .hero-side reserva 340-380px vacíos en desktop).
+    if (!activas.length) { const side = document.getElementById("heroSide"); if (side) side.hidden = true; return; }
+    host.innerHTML = activas.map(destacadoCard).join("");
   }
 
   // Carga diferida de assets (devuelve Promise). Para el mapa pesado (MapLibre).
