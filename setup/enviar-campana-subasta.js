@@ -31,6 +31,19 @@ const imagen = arg("--imagen");
 
 async function getJSON(path) { const r = await fetch(BASE + path); if (!r.ok) throw new Error(path + " → " + r.status); return r.json(); }
 
+// Reintento con backoff (envío real, 2026-08-09 con Tim Payne): en un envío largo
+// (miles de correos, más de una hora corrida) Resend/la red tienen cortes transitorios
+// — "fetch failed", algún 500/502 — que sin reintento se pierden para siempre. 3 intentos
+// con pausa creciente resuelve la enorme mayoría sin intervención manual después.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function conReintento(fn, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    try { const r = await fn(); if (r && r.ok) return r; } catch (e) { /* cae al reintento */ }
+    if (i < tries - 1) await sleep(1500 * (i + 1));
+  }
+  return { ok: false };
+}
+
 (async () => {
   if (!subastaId) { console.error("Falta --subasta <id>. Ej: node setup/enviar-campana-subasta.js --subasta sub_xxx --momento inicio"); process.exitCode = 1; return; }
 
@@ -68,16 +81,20 @@ async function getJSON(path) { const r = await fetch(BASE + path); if (!r.ok) th
   if (!apply) { console.log("\n(dry-run) — agregá --apply (con RESEND_API_KEY) para enviar."); await sql.end(); return; }
 
   let ok = 0, fail = 0;
+  const fallidos = [];
   for (const r of elegibles) {
-    const res = await mailer.enviarSubastaInvitacion(r, { titulo: subasta.titulo, urlSubasta, momento, pujaActual: subasta.puja_actual, cierre: subasta.termina, descripcion: subasta.descripcion, imagen });
-    if (res && res.ok) ok++; else fail++;
-    await new Promise((s) => setTimeout(s, 350)); // ~3/s, bajo el límite Resend (5/s)
+    const res = await conReintento(() => mailer.enviarSubastaInvitacion(r, { titulo: subasta.titulo, urlSubasta, momento, pujaActual: subasta.puja_actual, cierre: subasta.termina, descripcion: subasta.descripcion, imagen }));
+    if (res.ok) ok++; else { fail++; fallidos.push({ email: r.email, tipo: "invitacion" }); }
+    if ((ok + fail) % 200 === 0) console.log(`  elegibles: ${ok + fail}/${elegibles.length} (ok:${ok} fail:${fail})`);
+    await sleep(350); // ~3/s, bajo el límite Resend (5/s)
   }
   for (const r of noElegibles) {
-    const res = await mailer.enviarSubastaUpsell(r, { titulo: subasta.titulo, urlSubasta, momento, imagen });
-    if (res && res.ok) ok++; else fail++;
-    await new Promise((s) => setTimeout(s, 350));
+    const res = await conReintento(() => mailer.enviarSubastaUpsell(r, { titulo: subasta.titulo, urlSubasta, momento, imagen }));
+    if (res.ok) ok++; else { fail++; fallidos.push({ email: r.email, tipo: "upsell" }); }
+    if ((ok + fail) % 200 === 0) console.log(`  no elegibles: ${ok + fail - elegibles.length}/${noElegibles.length} (ok:${ok} fail:${fail})`);
+    await sleep(350);
   }
   console.log(`\nENVIADO: ${ok} ok, ${fail} fallidos, de ${rows.length}.`);
+  if (fallidos.length) console.log("Fallidos (sin resolver tras 3 intentos):", JSON.stringify(fallidos));
   await sql.end();
 })().catch((e) => { console.error(e.message); process.exitCode = 1; });
