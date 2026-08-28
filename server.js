@@ -279,8 +279,24 @@ app.get("/subasta/:id", async (req, res) => {
   const base = proto + "://" + (req.headers.host || "www.olimpistas.com");
   const esc2 = (x) => String(x == null ? "" : x).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const og = s.imagen && /^https?:/.test(s.imagen) ? s.imagen : base + "/assets/og.jpg";
-  const titulo = esc2(s.titulo + " — Subasta · Olimpistas");
-  const desc = esc2("Pujá por " + s.titulo + " en Olimpistas.com. Puja actual ₲" + Number(s.puja_actual || 0).toLocaleString("es-PY") + ". Exclusivo para hinchas del Decano.");
+  // Cerrada = queda pública como histórico, con el MISMO link — es la garantía de que
+  // la subasta se terminó de verdad (2026-08-28). Antes esta página quedaba mostrando
+  // "En vivo"/"Pujar →" hasta que el JS del cliente la corregía después de cargar —
+  // mal para OG/redes (el texto compartido no se corrige nunca) y para cualquiera que
+  // la abra sin JS. Ahora el estado correcto sale server-side desde el primer byte.
+  const cerrada = s.estado === "cerrada";
+  const enmascarar = (n) => {
+    const t = String(n || "").trim();
+    if (t.length <= 1) return "Pujador";
+    if (t.length === 2) return t[0] + "*";
+    return t[0] + "*".repeat(t.length - 2) + t[t.length - 1];
+  };
+  const ganadorTxt = cerrada && s.ganador_id ? enmascarar(s.ganador_nombre) : null;
+  const fechaCierre = new Date(s.termina || Date.now()).toLocaleDateString("es-PY", { year: "numeric", month: "long", day: "numeric" });
+  const titulo = esc2(s.titulo + (cerrada ? " — Subasta rematada · Olimpistas" : " — Subasta · Olimpistas"));
+  const desc = esc2(cerrada
+    ? `Subasta rematada en Olimpistas.com por ₲${Number(s.puja_actual || 0).toLocaleString("es-PY")}${ganadorTxt ? ` (ganó ${ganadorTxt})` : ""}. Cerrada el ${fechaCierre}.`
+    : "Pujá por " + s.titulo + " en Olimpistas.com. Puja actual ₲" + Number(s.puja_actual || 0).toLocaleString("es-PY") + ". Exclusivo para hinchas del Decano.");
   const gate = (s.nivel_min === "premium" || s.nivel_min === "socio") ? "Plus y Socio" : "registrados";
   // Canonical/OG siempre con el link "lindo" (slug), sin importar con cuál se haya
   // entrado — así WhatsApp/redes muestran siempre la misma URL prolija.
@@ -320,30 +336,36 @@ app.get("/subasta/:id", async (req, res) => {
     ${s.imagen ? '<img src="' + esc2(s.imagen) + '" alt="">' : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#2a2418,#c9a227);color:#f5efdd">${icGavel}</div>`}
     <span class="sub-unico">${icShield} Pieza única</span>
   </div>
-  <span class="chip on" id="estadoChip">En vivo</span>
+  <span class="chip${cerrada ? "" : " on"}" id="estadoChip">${cerrada ? "Cerrada" : "En vivo"}</span>
   <h1 style="margin:10px 0 6px">${esc2(s.titulo)}</h1>
   <p class="lead" style="margin:0 0 20px">${esc2(s.descripcion || "")}</p>
   <div class="sub-box">
-    <div class="sub-lbl">Puja actual</div>
+    <div class="sub-lbl">${cerrada ? "Precio final" : "Puja actual"}</div>
     <div class="sub-amt" id="bid">₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")}</div>
     <div class="precio-usd" id="bidUsd">≈ US$ ${Math.round(Number(s.puja_actual || 0) / 6500).toLocaleString("en-US")}</div>
-    <div class="sub-clock"><span>Cierra en</span> <b id="cd">—</b></div>
+    <div class="sub-clock"><span>${cerrada ? "Cerrada el" : "Cierra en"}</span> <b id="cd">${cerrada ? esc2(fechaCierre) : "—"}</b></div>
   </div>
-  <p class="sub-meta">${icUsers} <b id="puj">—</b> pujando</p>
-  <button class="btn btn-valor btn-block" id="cta" style="margin-top:4px">Pujar →</button>
-  <p style="font-size:13px;color:var(--gris);margin-top:14px">Pujar es para Olimpistas ${gate}. Si no tenés cuenta, te registrás gratis en 30s.</p>
+  ${cerrada
+    ? `<p class="sub-meta">${icUsers} ${ganadorTxt ? "Ganó " + esc2(ganadorTxt) : "Sin ganador"} · pieza adjudicada</p>`
+    : `<p class="sub-meta">${icUsers} <b id="puj">—</b> pujando</p>`}
+  <button class="btn ${cerrada ? "btn-ghost" : "btn-valor"} btn-block" id="cta" style="margin-top:4px"${cerrada ? " disabled" : ""}>${cerrada ? "Subasta cerrada" : "Pujar →"}</button>
+  <p style="font-size:13px;color:var(--gris);margin-top:14px">${cerrada
+    ? "Esta pieza ya fue adjudicada. Mirá las subastas en vivo en la home de Olimpistas."
+    : `Pujar es para Olimpistas ${gate}. Si no tenés cuenta, te registrás gratis en 30s.`}</p>
 </main>
 <script src="/js/common.js?v=${BUILD_ID}"></script>
-<script>(function(){var id=${JSON.stringify(id)};
+<script>(function(){var id=${JSON.stringify(id)};var cerrada=${JSON.stringify(cerrada)};
 OLI.initThemeToggle("themeSw");
-OLI.yo().then(function(y){var b=document.getElementById("accederBtn");if(y&&y.socio){b.textContent="Mi cuenta";b.onclick=function(){location.href="/miembro";};}else{b.textContent="Ingresar";b.onclick=function(){location.href="/?intent=pujar&sub="+encodeURIComponent(id);};}}).catch(function(){});
+OLI.yo().then(function(y){var b=document.getElementById("accederBtn");if(y&&y.socio){b.textContent="Mi cuenta";b.onclick=function(){location.href="/miembro";};}else{b.textContent="Ingresar";b.onclick=function(){location.href=cerrada?"/":"/?intent=pujar&sub="+encodeURIComponent(id);};}}).catch(function(){});
 function gs(n){return "₲ "+Number(n||0).toLocaleString("es-PY");}
 function gsUsd(n){return "≈ US$ "+Math.round(Number(n||0)/6500).toLocaleString("en-US");}
 function cd(t){var ms=new Date(t).getTime()-Date.now();if(ms<=0)return "Cerrada";var s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),ss=s%60;return d>0?d+"d "+h+"h":h>0?h+"h "+m+"m":(m<10?"0":"")+m+":"+(ss<10?"0":"")+ss;}
 var $=function(x){return document.getElementById(x);};
-async function load(){try{var res=await fetch("/api/subastas/"+id+"?liviano=1");if(!res.ok)return;var r=await res.json();var su=r.subasta;$("bid").textContent=gs(su.puja_actual);$("bidUsd").textContent=gsUsd(su.puja_actual);$("cd").textContent=cd(su.termina);$("puj").textContent=r.pujadores;if(su.estado==="cerrada"){$("estadoChip").textContent="Cerrada";$("estadoChip").className="chip";$("cta").textContent="Subasta cerrada";$("cta").disabled=true;$("cta").className="btn btn-ghost btn-block";}}catch(e){}}
+async function load(){try{var res=await fetch("/api/subastas/"+id+"?liviano=1");if(!res.ok)return;var r=await res.json();var su=r.subasta;$("bid").textContent=gs(su.puja_actual);$("bidUsd").textContent=gsUsd(su.puja_actual);if(su.estado==="cerrada"){$("estadoChip").textContent="Cerrada";$("estadoChip").className="chip";$("cd").textContent="Cerrada";$("cta").textContent="Subasta cerrada";$("cta").disabled=true;$("cta").className="btn btn-ghost btn-block";}else{$("cd").textContent=cd(su.termina);$("puj").textContent=r.pujadores;}}catch(e){}}
 function scheduleLoad(){setTimeout(function(){load().finally(scheduleLoad);},4500+Math.random()*1000);}
-load();scheduleLoad();
+// Ya cerrada: el estado no va a cambiar más — no tiene sentido seguir pollando cada
+// 4-5s para siempre en una página que puede quedar abierta como "certificado" público.
+if(!cerrada){load();scheduleLoad();}
 $("cta").addEventListener("click",async function(){if(this.disabled)return;var yo=null;try{var r=await fetch("/api/auth/yo");if(r.ok)yo=await r.json();}catch(e){}if(yo&&yo.socio)location.href="/miembro?sub="+id;else location.href="/?intent=pujar&sub="+encodeURIComponent(id);});
 })();</script></body></html>`);
 });

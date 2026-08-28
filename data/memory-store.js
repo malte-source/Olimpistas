@@ -366,7 +366,12 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     // Acepta el id interno O el slug (link público) — así cualquier ruta que reciba
     // "lo que sea que vino en la URL" sigue funcionando sin tener que saber cuál es.
-    async getSubasta(idOrSlug) { return (db.subastas || []).find((x) => x.id === idOrSlug || x.slug === idOrSlug) || null; },
+    async getSubasta(idOrSlug) {
+      const s = (db.subastas || []).find((x) => x.id === idOrSlug || x.slug === idOrSlug);
+      if (!s || !s.ganador_id) return s || null;
+      const g = (db.socios || []).find((x) => x.id === s.ganador_id);
+      return { ...s, ganador_nombre: g ? g.nombre : null };
+    },
     async crearSubasta(d = {}) {
       const id = uid("sub");
       const s = { id, titulo: d.titulo || "", descripcion: d.descripcion || "", imagen: d.imagen || null, emoji: d.emoji || "🔨",

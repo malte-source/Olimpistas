@@ -806,7 +806,14 @@ function createPgStore({ databaseUrl }) {
     },
     // Acepta el id interno O el slug (link público) — así cualquier ruta que reciba
     // "lo que sea que vino en la URL" sigue funcionando sin tener que saber cuál es.
-    async getSubasta(idOrSlug) { const [s] = await sql`SELECT * FROM subastas WHERE id = ${idOrSlug} OR slug = ${idOrSlug} LIMIT 1`; return s || null; },
+    // Mismo LEFT JOIN que listSubastas (nombre del ganador) — la página pública de una
+    // subasta cerrada lo necesita para mostrarse como histórico ("Ganó fulano, ₲X"),
+    // no solo "Cerrada" a secas.
+    async getSubasta(idOrSlug) {
+      const [s] = await sql`SELECT sub.*, soc.nombre AS ganador_nombre FROM subastas sub
+        LEFT JOIN socios soc ON soc.id = sub.ganador_id WHERE sub.id = ${idOrSlug} OR sub.slug = ${idOrSlug} LIMIT 1`;
+      return s || null;
+    },
     async crearSubasta(d = {}) {
       const id = uid("sub");
       const [s] = await sql`INSERT INTO subastas ${sql({
