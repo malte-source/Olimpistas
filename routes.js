@@ -23,6 +23,7 @@ const resend = require("./lib/resend");
 const { alertar } = require("./lib/alert");
 const bcrypt = require("bcrypt");
 const geo = require("./lib/geo");
+const tutiApi = require("./lib/tuti");
 const { listaPaises, paisNombre, paisCentroide, PAISES } = require("./data/paises");
 const { BRAND, TIERS, PERFIL_CAMPOS, tierBySlug } = require("./config");
 const { edadDesde } = require("./lib/edad");
@@ -498,19 +499,30 @@ function buildRouter() {
     try { await store.updateSocio(req.socio.id, { cedula }); }
     catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta de Olimpistas"); }
 
-    // Match contra el padrón (todo el padrón se considera AL DÍA).
+    // Estado EN VIVO en el club (API de socios, ITI/Tuti) + padrón estático como respaldo.
+    //  · 200 = autoritativo (sólo trae titulares): al día → socio; mora/baja → NO, aunque
+    //    el padrón viejo lo tenga (ej. quien se dio de baja después del export de agosto).
+    //  · 404 / timeout / error = no concluyente: la API no conoce a los ADHERENTES de un
+    //    plan familiar (probado 2026-10-05) — caer al padrón, donde sí están.
+    const vivo = tutiApi.habilitado() ? await tutiApi.consultarSocio(cedula) : null;
+    const enClub = vivo && vivo.ok && vivo.encontrado ? vivo.socio : null;
+    const noAlDia = !!(enClub && !enClub.alDia);
+
+    // Match contra el padrón (foto de agosto: todo el padrón se tomó como AL DÍA).
     let fila = null, validado = false;
-    if (store.buscarPadron) fila = await store.buscarPadron({ cedula });
-    if (fila) {
-      // Reclamo atómico de la fila del padrón.
+    if (store.buscarPadron && !noAlDia) fila = await store.buscarPadron({ cedula });
+    if (fila || (enClub && enClub.alDia)) {
+      // Reclamo atómico de la fila del padrón (si matcheó por padrón).
       let gano = true;
-      if (store.marcarPadronReclamado) {
+      if (fila && store.marcarPadronReclamado) {
         gano = await store.marcarPadronReclamado(fila.id, req.socio.id);
         if (!gano && fila.socio_id && fila.socio_id !== req.socio.id)
           throw httpError(409, "Ese socio ya fue validado en otra cuenta");
       }
-      // Entrega AUTOMÁTICA del nivel Socio (otorgado, no comprable). pagoRef "socio:" = marcador de socio del club.
-      await store.setMembresia(req.socio.id, { tierSlug: tier, ciclo: "anio", pagoRef: "socio:" + fila.id });
+      // Entrega AUTOMÁTICA del nivel Socio (otorgado, no comprable). pagoRef "socio:" = marcador
+      // de socio del club (id de padrón, o "tuti-<nº de socio>" si vino sólo de la API en vivo).
+      const marca = fila ? fila.id : "tuti-" + (enClub.numeroSocio || cedula);
+      await store.setMembresia(req.socio.id, { tierSlug: tier, ciclo: "anio", pagoRef: "socio:" + marca });
       await store.updateSocio(req.socio.id, { es_socio_olimpia: true });
       validado = true;
       mailer.enviarReconocido && mailer.enviarReconocido({ ...socioFull, cedula }, tier).catch(() => {});
@@ -523,13 +535,17 @@ function buildRouter() {
         cedula, pais: socioFull.pais, ciudad: socioFull.ciudad, fechaNacimiento: socioFull.fecha_nacimiento,
         tieneSelfie: !!socioFull.foto, tierPretendido: tier, matchPadronId: fila ? fila.id : null,
         estado: validado ? "validado_auto" : "a_revisar",
-        notas: validado ? "Match padrón, carnet entregado automático" : "Cédula sin match en padrón — revisar manual",
+        notas: validado
+          ? (enClub ? `API de socios: ${enClub.status} (${enClub.plan}) nº ${enClub.numeroSocio}, carnet entregado automático` : "Match padrón, carnet entregado automático")
+          : noAlDia
+            ? `API de socios: estado ${enClub.status}${enClub.deudor ? ` (deuda ₲${enClub.deuda})` : ""} — NO está al día, revisar manual`
+            : "Cédula sin match en padrón ni en la API de socios — revisar manual",
       }).catch(() => {});
     }
     if (!validado) {
       mailer.enviarEnRevision && mailer.enviarEnRevision(socioFull).catch(() => {});
     }
-    res.json({ validado, tier, estado: validado ? "validado_auto" : "a_revisar" });
+    res.json({ validado, tier, estado: validado ? "validado_auto" : "a_revisar", ...(noAlDia ? { motivo: "no_al_dia" } : {}) });
   }));
 
   // ─── Membresía ──────────────────────────────────────────────────────────────
