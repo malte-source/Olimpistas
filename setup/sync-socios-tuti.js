@@ -5,7 +5,9 @@
  * Revisa a cada cuenta con nivel "Socio" activo y cédula cargada, y la clasifica según
  * lo que dice la API HOY (no la foto del padrón de agosto):
  *   al_dia        ACTIVE / LIFETIME
- *   no_al_dia     DEBT / INACTIVE / UNSUBSCRIBED  ← candidatos a perder el nivel Socio
+ *   pago_pendiente DEBT — SIGUE siendo socio (debtor + deuda > 0, a menudo paga a mano
+ *                 sin débito automático); no es una baja
+ *   baja          INACTIVE / UNSUBSCRIBED  ← los únicos candidatos a perder el nivel Socio
  *   sin_dato      404 — NO es motivo de baja: la API no conoce a los ADHERENTES de un plan
  *                 familiar (probado 2026-10-05); esos siguen validados por el padrón
  *   error         timeout / red / credenciales — se reintenta corriendo de nuevo
@@ -53,7 +55,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       let clase, status = "";
       if (!q.ok) clase = "error:" + q.motivo;
       else if (!q.encontrado) clase = "sin_dato";
-      else { status = q.socio.status; clase = q.socio.alDia ? "al_dia" : "no_al_dia"; }
+      else { status = q.socio.status; clase = !q.socio.alDia ? "baja" : status === "DEBT" ? "pago_pendiente" : "al_dia"; }
       out.push({ id: r.id, cedula: r.cedula, clase, status });
       if (++hechas % 200 === 0) console.log(`  ${hechas}/${rows.length}`);
       await sleep(150);

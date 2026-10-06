@@ -18,9 +18,9 @@ const socio200 = (extra = {}) => resp(200, {
   status: "ACTIVE", debtor: false, totalDebt: 0, ...extra,
 });
 
-test("esAlDia: ACTIVE y LIFETIME sí; mora y bajas no", () => {
-  for (const s of ["ACTIVE", "LIFETIME", "active"]) assert.strictEqual(tuti.esAlDia(s), true, s);
-  for (const s of ["DEBT", "INACTIVE", "UNSUBSCRIBED", "", undefined, null]) assert.strictEqual(tuti.esAlDia(s), false, String(s));
+test("sigue siendo socio: ACTIVE, LIFETIME y DEBT (pago pendiente ≠ baja); INACTIVE/UNSUBSCRIBED no", () => {
+  for (const s of ["ACTIVE", "LIFETIME", "DEBT", "active", "debt"]) assert.strictEqual(tuti.esAlDia(s), true, s);
+  for (const s of ["INACTIVE", "UNSUBSCRIBED", "", undefined, null]) assert.strictEqual(tuti.esAlDia(s), false, String(s));
 });
 
 test("200: normaliza el socio y manda las dos credenciales", async () => {
@@ -36,12 +36,18 @@ test("200: normaliza el socio y manda las dos credenciales", async () => {
   assert.strictEqual(visto.opts.headers["X-Merchant-Key"], "test-merchant-key");
 });
 
-test("200 con DEBT: encontrado pero NO al día", async () => {
-  const r = await tuti.consultarSocio("1234567", { fetchImpl: async () => socio200({ status: "DEBT", debtor: true, totalDebt: 90000 }) });
+test("200 con DEBT: sigue siendo socio, con el pago pendiente a la vista", async () => {
+  const r = await tuti.consultarSocio("1234567", { fetchImpl: async () => socio200({ status: "DEBT", debtor: true, totalDebt: 90000, autoDebitEnabled: false }) });
   assert.strictEqual(r.encontrado, true);
-  assert.strictEqual(r.socio.alDia, false);
+  assert.strictEqual(r.socio.alDia, true, "DEBT no es una baja");
   assert.strictEqual(r.socio.deudor, true);
   assert.strictEqual(r.socio.deuda, 90000);
+});
+
+test("200 con UNSUBSCRIBED: ya no es socio, aunque deba plata", async () => {
+  const r = await tuti.consultarSocio("1234567", { fetchImpl: async () => socio200({ status: "UNSUBSCRIBED", debtor: true, totalDebt: 50000 }) });
+  assert.strictEqual(r.encontrado, true);
+  assert.strictEqual(r.socio.alDia, false);
 });
 
 test("404: no concluyente (puede ser adherente) — no es un error", async () => {
