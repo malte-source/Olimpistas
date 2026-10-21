@@ -856,6 +856,7 @@ function createPgStore({ databaseUrl }) {
       return sql`SELECT sub.id, sub.slug, sub.titulo, sub.descripcion, sub.emoji, sub.nivel_min,
           sub.precio_inicial, sub.incremento, sub.puja_actual, sub.ganador_id, sub.inicia, sub.termina,
           sub.estado, sub.notificado, sub.creado, sub.duracion_horas, sub.pausada_en, sub.pago_estado,
+          sub.pago_vence, sub.adjudicado_a, sub.ronda,
           (sub.imagen IS NOT NULL AND sub.imagen <> '') AS tiene_imagen,
           left(md5(coalesce(sub.imagen, '')), 10) AS imagen_v,
           soc.nombre AS ganador_nombre
@@ -917,7 +918,71 @@ function createPgStore({ databaseUrl }) {
     },
     async miPujaMax(subastaId, socioId) { const [r] = await sql`SELECT COALESCE(MAX(monto),0)::int AS m FROM pujas WHERE subasta_id = ${subastaId} AND socio_id = ${socioId}`; return r ? r.m : 0; },
     async contarPujadores(subastaId) { const [r] = await sql`SELECT COUNT(DISTINCT socio_id)::int AS n FROM pujas WHERE subasta_id = ${subastaId}`; return r ? r.n : 0; },
-    async cerrarSubastasVencidas() { return sql`UPDATE subastas SET estado = 'cerrada' WHERE estado = 'activa' AND termina <= now() RETURNING *`; },
+    // ── Plazo de pago, ronda 2 y decisiones del club (migración 0003) ──
+    // Al cerrar queda adjudicado al líder y empieza a correr su plazo de pago (sin ganador → sin plazo).
+    async cerrarSubastasVencidas({ plazoHoras = 72 } = {}) {
+      return sql`UPDATE subastas SET estado = 'cerrada', adjudicado_a = ganador_id, ronda = 1,
+          pago_vence = CASE WHEN ganador_id IS NOT NULL THEN now() + make_interval(hours => ${plazoHoras}) END
+        WHERE estado = 'activa' AND termina <= now() RETURNING *`;
+    },
+    // Cierre manual desde el admin. Devuelve null si el lote ya estaba cerrado (no reinicia el plazo).
+    async cerrarSubasta(id, { plazoHoras = 72 } = {}) {
+      const [s] = await sql`UPDATE subastas SET estado = 'cerrada', termina = now(), adjudicado_a = ganador_id, ronda = 1,
+          pago_vence = CASE WHEN ganador_id IS NOT NULL THEN now() + make_interval(hours => ${plazoHoras}) END
+        WHERE id = ${id} AND estado <> 'cerrada' RETURNING *`;
+      return s || null;
+    },
+    async subastasPlazoVencido() {
+      return sql`SELECT * FROM subastas WHERE estado = 'cerrada' AND pago_vence IS NOT NULL AND pago_vence < now()
+        AND pago_estado IS DISTINCT FROM 'pagado' ORDER BY pago_vence LIMIT 50`;
+    },
+    async subastasPagoPorVencer({ horas = 24 } = {}) {
+      return sql`SELECT * FROM subastas WHERE estado = 'cerrada' AND pago_vence IS NOT NULL AND pago_vence > now()
+        AND pago_vence <= now() + make_interval(hours => ${horas}) AND pago_estado IS DISTINCT FROM 'pagado'`;
+    },
+    // Vence el plazo de pago (o el admin fuerza el paso al segundo postor), TODO en una transacción
+    // con el lote bloqueado: cancela el pedido abierto, suspende al que no pagó (solo en ronda 1) y
+    // adjudica al segundo postor a SU última oferta, o devuelve el lote a borrador si no hay otro.
+    // Devuelve null si no corresponde (ya pagado, no venció, otra instancia ya lo resolvió).
+    async vencerPlazoSubasta(id, { plazoRonda2Horas = 48, bloqueoDias = 90, forzar = false } = {}) {
+      return sql.begin(async (tx) => {
+        const [s] = await tx`SELECT *, (pago_vence IS NOT NULL AND pago_vence < now()) AS vencido FROM subastas WHERE id = ${id} FOR UPDATE`;
+        if (!s || s.estado !== "cerrada" || s.pago_estado === "pagado" || !s.adjudicado_a) return null;
+        if (!forzar && !s.vencido) return null;
+        if (forzar && s.ronda >= 2) return null;
+        const anterior = s.adjudicado_a;
+        await tx`UPDATE pedidos_pago SET estado = 'cancelado' WHERE subasta_id = ${id} AND estado = 'pendiente'`;
+        let bloqueadoHasta = null;
+        if (s.ronda === 1) {
+          const [b] = await tx`UPDATE socios SET subastas_bloqueo_hasta = now() + make_interval(days => ${bloqueoDias}) WHERE id = ${anterior} RETURNING subastas_bloqueo_hasta`;
+          bloqueadoHasta = b ? b.subastas_bloqueo_hasta : null;
+          const [seg] = await tx`SELECT p.socio_id, MAX(p.monto)::int AS monto FROM pujas p JOIN socios so ON so.id = p.socio_id
+            WHERE p.subasta_id = ${id} AND p.socio_id <> ${anterior} AND p.creado >= ${s.inicia}
+              AND (so.subastas_bloqueo_hasta IS NULL OR so.subastas_bloqueo_hasta < now())
+            GROUP BY p.socio_id ORDER BY monto DESC LIMIT 1`;
+          if (seg) {
+            const [n] = await tx`UPDATE subastas SET ganador_id = ${seg.socio_id}, adjudicado_a = ${seg.socio_id}, puja_actual = ${seg.monto},
+                ronda = 2, pago_vence = now() + make_interval(hours => ${plazoRonda2Horas}), notificado = true WHERE id = ${id} RETURNING *`;
+            return { accion: "ronda2", anterior, bloqueadoHasta, subasta: n, segundo: seg.socio_id, monto: seg.monto };
+          }
+        }
+        const [n] = await tx`UPDATE subastas SET estado = 'borrador', ganador_id = NULL, adjudicado_a = NULL, ronda = 1, pago_vence = NULL,
+            pago_estado = NULL, termina = NULL, puja_actual = precio_inicial, notificado = false WHERE id = ${id} RETURNING *`;
+        return { accion: "borrador", anterior, bloqueadoHasta, subasta: n };
+      });
+    },
+    // pago_vence += horas (si ya venció o no tenía plazo, cuenta desde ahora).
+    async extenderPlazoSubasta(id, horas) {
+      const [s] = await sql`UPDATE subastas SET pago_vence = GREATEST(pago_vence, now()) + make_interval(hours => ${horas})
+        WHERE id = ${id} AND estado = 'cerrada' AND adjudicado_a IS NOT NULL AND pago_estado IS DISTINCT FROM 'pagado' RETURNING *`;
+      return s || null;
+    },
+    async listDecisiones() { return sql`SELECT clave, valor, decidido_por, decidido_en FROM decisiones_club`; },
+    async setDecision(clave, valor, por) {
+      const [d] = await sql`INSERT INTO decisiones_club (clave, valor, decidido_por) VALUES (${clave}, ${valor}, ${por})
+        ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor, decidido_por = EXCLUDED.decidido_por, decidido_en = now() RETURNING *`;
+      return d;
+    },
     async abrirProgramadas() { return sql`UPDATE subastas SET estado = 'activa', termina = COALESCE(termina, inicia + make_interval(hours => COALESCE(duracion_horas, 48))) WHERE estado = 'programada' AND inicia IS NOT NULL AND inicia <= now() RETURNING *`; },
     async marcarSubastaNotificada(id) { await sql`UPDATE subastas SET notificado = true WHERE id = ${id}`; return true; },
     async subastasSinNotificar() { return sql`SELECT * FROM subastas WHERE estado = 'cerrada' AND ganador_id IS NOT NULL AND notificado = false`; },

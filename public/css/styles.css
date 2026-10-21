@@ -950,6 +950,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .sub-custom-form input::-webkit-outer-spin-button, .sub-custom-form input::-webkit-inner-spin-button { margin: 0; }
 .sub-cerrada { background: var(--negro-2); border: 1px solid var(--linea); border-radius: 12px;
   padding: 14px; font-weight: 700; text-align: center; color: var(--gris-2); }
+/* Plazo de pago del lote adjudicado (el oro queda para el botón de pagar). */
+.sub-plazo-box { display: flex; flex-direction: column; gap: 4px; text-align: center; margin: 10px 0; font-size: 13px; color: var(--gris-2); }
+.sub-plazo b { color: var(--blanco); }
+.sub-plazo.urg { color: var(--blanco); font-weight: 700; }
+.sub-plazo.urg b { text-decoration: underline; text-underline-offset: 2px; }
+.sub-plazo-r2 { font-size: 12px; color: var(--gris); }
+.socio-banner-pago .sub-plazo { font-size: 12px; }
 .sub-back { display: inline-block; color: var(--blanco); cursor: pointer; font-weight: 700; margin-bottom: 10px; text-decoration: underline; text-underline-offset: 2px; }
 .sub-fitem { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--linea); }
 .sub-fitem:last-child { border-bottom: 0; }

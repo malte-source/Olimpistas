@@ -39,6 +39,13 @@
   let _contentHost = null;
   const cv = () => _contentHost || view();
   const fecha = (d) => new Date(d).toLocaleDateString(LOC, { year: "numeric", month: "long", day: "numeric" });
+  // "Pagá antes del 24 de octubre, 15:30" — y si falta menos de 24 h se marca como último día.
+  const fechaHoraCorta = (d) => new Date(d).toLocaleString(LOC, { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  const plazoPagoHtml = (vence, ronda) => {
+    if (!vence) return "";
+    const urgente = new Date(vence).getTime() - Date.now() < 24 * 3600000;
+    return `<span class="sub-plazo${urgente ? " urg" : ""}">${urgente ? T("m_sub_plazo_ult") + " " : ""}${T("m_sub_vence")} <b>${fechaHoraCorta(vence)}</b></span>${ronda === 2 ? `<span class="sub-plazo-r2">${T("m_sub_ronda2_txt")}</span>` : ""}`;
+  };
   const _previewQR = (() => { try { return makeQR("https://www.olimpistas.com"); } catch (e) { return ""; } })();
 
   // Skeleton de carga (en vez de "Cargando…").
@@ -368,7 +375,7 @@
       const pendiente = (items || []).find((x) => x.gano && x.pago_estado !== "pagado");
       if (pendiente) {
         host.innerHTML = `<div class="socio-banner socio-banner-pago">
-          <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("m_sub_banner_pago")} <b>${esc(pendiente.titulo)}</b></span>
+          <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("m_sub_banner_pago")} <b>${esc(pendiente.titulo)}</b>${pendiente.pago_vence ? `<br>${plazoPagoHtml(pendiente.pago_vence, pendiente.ronda)}` : ""}</span>
           <button class="btn btn-valor btn-sm" id="pagoBannerBtn">${T("m_sub_pagar")}</button></div>`;
         host.querySelector("#pagoBannerBtn").onclick = () => { descSeg = "subastas"; activar("descubrir"); };
         return;
@@ -962,6 +969,7 @@
     const s = r.subasta;
     if (!r.desbloqueado) return `<button class="btn btn-block" data-upsell-cta="${esc(s.nivel_min || "premium")}" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">${icon("chevron-right", { size: 14 })} ${T("m_sub_subi")}</button>`;
     if (cerrada && r.gano && s.pago_estado !== "pagado") return `<div class="sub-cerrada">${icon("trophy", { size: 14 })} ${T("m_sub_ganaste_txt")}</div>
+      ${r.pago_vence ? `<div class="sub-plazo-box">${plazoPagoHtml(r.pago_vence, r.ronda)}</div>` : ""}
       <button class="btn btn-valor btn-block" id="subPagarBtn" data-sub-pagar="${s.id}">${T("m_sub_pagar")} — ${gs(s.puja_actual)}</button>`;
     if (cerrada && r.gano) return `<div class="sub-cerrada">${icon("check", { size: 14 })} ${T("m_sub_pagado_txt")}</div>
       <a class="btn btn-ghost btn-block" href="/subasta/${esc(s.slug || s.id)}/certificado" target="_blank" rel="noopener">${icon("trophy", { size: 14 })} ${T("m_sub_certificado")}</a>`;

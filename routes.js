@@ -681,8 +681,15 @@ function buildRouter() {
     if (pedido.subasta_id) {
       // El pago ONLINE confirma el lote; la entrega se coordina por privado (WhatsApp)
       // recién ahora — antes de esto no hace falta que el equipo escriba a nadie.
+      const actual = await store.getSubasta(pedido.subasta_id).catch(() => null);
+      if (!actual || actual.estado !== "cerrada" || (actual.adjudicado_a || actual.ganador_id) !== pedido.socio_id) {
+        log.error({ pedidoId: pedido.id, subastaId: pedido.subasta_id, socioId: pedido.socio_id }, "pago recibido por un lote que ya no está adjudicado a ese socio");
+        alertar("subasta:pago-huerfano:" + pedido.id, "Pago recibido por un lote que ya no es de esa persona — REEMBOLSAR",
+          "Pedido " + pedido.id + " · ₲ " + Number(pedido.monto || 0).toLocaleString("es-PY") + " · el plazo venció y el lote pasó a otro postor o volvió a borrador. Reembolsar por Pagopar.");
+        return null;
+      }
       if (store.marcarSubastaPagada) await store.marcarSubastaPagada(pedido.subasta_id);
-      const s = await store.getSubasta(pedido.subasta_id).catch(() => null);
+      const s = actual;
       const socio = await store.getSocioById(pedido.socio_id).catch(() => null);
       if (socio && socio.email && s && mailer.enviarSubastaPagoConfirmado) {
         const urlCertificado = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id) + "/certificado";
@@ -819,6 +826,16 @@ function buildRouter() {
   // ─── Cron diario (Cloud Scheduler): cumpleaños + renovaciones. Gateado por CRON_SECRET. ──
   // Configurar en Cloud Scheduler: POST https://www.olimpistas.com/api/cron/diario con header
   // x-cron-token = CRON_SECRET, frecuencia diaria. Reemplaza correr los scripts a mano.
+  // Tarea horaria (Cloud Scheduler): vence plazos de pago de subastas + conciliación de pagos.
+  r.post("/cron/horario", wrap(async (req, res) => {
+    const tok = process.env.CRON_SECRET;
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
+    const out = {};
+    try { await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron horario: cierre"); }
+    try { out.subastas = await procesarPlazosSubastas(); } catch (e) { out.subastas = { error: true }; log.error({ err: e.message }, "cron horario: plazos"); }
+    try { out.pagos = await conciliarPagos(); } catch (e) { out.pagos = { error: true }; log.error({ err: e.message }, "cron horario: pagos"); }
+    res.json(out);
+  }));
   r.post("/cron/conciliar-pagos", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
     if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
@@ -835,6 +852,7 @@ function buildRouter() {
     const puede = store.reservarNotificacion ? (clave) => store.reservarNotificacion(clave) : async () => true;
     try { out.subastas = await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron subastas"); }
     try { out.pagos = await conciliarPagos(); } catch (e) { log.error({ err: e.message }, "cron conciliación de pagos"); }
+    try { out.plazosSubastas = await procesarPlazosSubastas(); } catch (e) { log.error({ err: e.message }, "cron plazos de subastas"); }
     try {
       const cumples = store.cumplenHoy ? await store.cumplenHoy() : [];
       for (const s of cumples) {
@@ -1466,6 +1484,54 @@ function buildRouter() {
   // ─── Subastas ─────────────────────────────────────────────────────────────
   // Puja Plus y Socio (nivel_min = "premium"). Gateo en el server. El líder actual
   // = subasta.ganador_id. Anti-sniping y guard de monto viven en store.pujar (atómico).
+  // ── Decisiones de la Comisión Directiva (tabla decisiones_club; sin fila = valor por defecto) ──
+  // La plataforma las lee en cada uso (caché de 30 s) — ver docs del handoff, 08-decisiones.
+  const DECISIONES = {
+    deuda: { def: "no_bloquear", opciones: ["no_bloquear", "mas_2_cuotas", "cualquier"], texto: "¿Con qué deuda se bloquea una puja?" },
+    plazo: { def: "72_48", opciones: ["72_48", "48_24"], texto: "Plazo de pago de subastas (horas ronda 1 + ronda 2)" },
+    base: { def: "por_nivel", opciones: ["por_nivel", "por_plan", "ambos"], texto: "¿Beneficios por nivel o por plan del club?" },
+    pct: { def: "10", opciones: ["10", "15"], texto: "Fondo de las peñas (%)" },
+    venc: { def: "12_meses", opciones: ["12_meses", "no_vencen"], texto: "Vencimiento de puntos" },
+    oro: { def: "no_publicar", opciones: ["no_publicar", "habilita_futbol"], texto: "Experiencias Oro" },
+  };
+  let _decCache = null;
+  async function decisiones() {
+    if (_decCache && Date.now() - _decCache.t < 30000) return _decCache.v;
+    const filas = store.listDecisiones ? await store.listDecisiones() : [];
+    const v = {};
+    for (const [k, d] of Object.entries(DECISIONES)) v[k] = d.def;
+    for (const f of filas) if (DECISIONES[f.clave] && DECISIONES[f.clave].opciones.includes(f.valor)) v[f.clave] = f.valor;
+    _decCache = { t: Date.now(), v };
+    return v;
+  }
+  const decision = async (clave) => (await decisiones())[clave];
+  // Horas de plazo de pago: ronda 1 (ganador) y ronda 2 (segundo postor).
+  async function plazosHoras() { return (await decision("plazo")) === "48_24" ? { r1: 48, r2: 24 } : { r1: 72, r2: 48 }; }
+  const BLOQUEO_SUBASTAS_DIAS = 90;
+  const fechaCorta = (d) => new Date(d).toLocaleDateString("es-PY", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Asuncion" });
+
+  // Regla de deuda para pujar (decisión `deuda`). Por defecto NO se bloquea a ningún socio.
+  // Si el club decide bloquear, se consulta el estado EN VIVO a Tuti; si Tuti no responde se deja
+  // pujar (nunca se castiga a un hincha por una caída del proveedor). Jamás se usa `DEBT` solo:
+  // es "tiene un pago pendiente", no mora (ver lib/tuti.js).
+  async function chequearDeudaPuja(socio) {
+    const regla = await decision("deuda");
+    if (regla === "no_bloquear") return;
+    const cedula = soloDigitos(socio && socio.cedula);
+    if (!cedula || !tutiApi.habilitado()) return;
+    const r = await tutiApi.consultarSocio(cedula);
+    if (!r.ok || !r.encontrado) return;
+    const deuda = Number(r.socio.deuda) || 0;
+    let bloquea = false;
+    if (regla === "cualquier") bloquea = !!r.socio.deudor && deuda > 0;
+    else if (regla === "mas_2_cuotas") {
+      const cuota = Number(process.env.CUOTA_SOCIO_GS) || 0; // valor de una cuota del club
+      if (cuota > 0) bloquea = deuda > 2 * cuota;
+      else log.warn("decisión deuda=mas_2_cuotas pero falta CUOTA_SOCIO_GS: no se bloquea a nadie");
+    }
+    if (bloquea) throw httpError(403, "Tenés una deuda pendiente con el club. Regularizala para poder pujar.");
+  }
+
   function subastaAbierta(s) { return s.estado === "activa" && new Date(s.termina).getTime() > Date.now(); }
   // Notifica a los ganadores de subastas recién cerradas (email + alerta al EQUIPO para
   // coordinar WhatsApp). Idempotente (flag `notificado`). La query que arma la lista es
@@ -1476,10 +1542,11 @@ function buildRouter() {
       for (const s of pend) {
         try {
           const ganador = await store.getSocioById(s.ganador_id);
-          const urlSubasta = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id);
+          const urlSubasta = urlLote(s);
           if (ganador && mailer.enviarSubastaGanador) {
-            const limitePago = new Date(Date.now() + 7 * 86400000); // plazo de pago: 7 días
-            await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago }).catch(() => {});
+            const limitePago = s.pago_vence || null; // fijado al cerrar, según la decisión del club (72 h por defecto)
+            const horas = limitePago ? Math.max(1, Math.round((new Date(limitePago).getTime() - Date.now()) / 3600000)) : undefined;
+            await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago, horas }).catch(() => {});
           }
           // Avisar AL EQUIPO (no solo al ganador): así saben que hay un ganador, aunque
           // recién escriban por WhatsApp cuando el pago esté confirmado (ver
@@ -1503,7 +1570,7 @@ function buildRouter() {
   async function cerrarYnotificarSubastas() {
     try {
       if (store.abrirProgramadas) await store.abrirProgramadas();
-      if (store.cerrarSubastasVencidas) await store.cerrarSubastasVencidas();
+      await cerrarVencidas();
       return await notificarGanadoresPendientes();
     } catch (e) { log.error({ err: e.message }, "subastas cierre"); return 0; }
   }
@@ -1517,11 +1584,69 @@ function buildRouter() {
     _barridoSubT = Date.now();
     try {
       if (store.abrirProgramadas) await store.abrirProgramadas();
-      if (store.cerrarSubastasVencidas) await store.cerrarSubastasVencidas();
+      await cerrarVencidas();
       await notificarGanadoresPendientes();
     }
     catch (e) { log.error({ err: e.message }, "subastas barrido"); }
   }
+  // Cierra las vencidas con el plazo de pago vigente (decisión `plazo`).
+  async function cerrarVencidas() {
+    if (!store.cerrarSubastasVencidas) return;
+    await store.cerrarSubastasVencidas({ plazoHoras: (await plazosHoras()).r1 });
+  }
+  const urlLote = (s) => baseUrl() + "/subasta/" + encodeURIComponent(s.slug || s.id);
+
+  // Resuelve el vencimiento de UN lote (por plazo, o forzado desde el admin). Atómico en la base:
+  // si dos instancias lo intentan a la vez, una sola lo resuelve y la otra recibe null.
+  async function resolverVencimientoSubasta(id, { forzar = false, por = "sistema" } = {}) {
+    const pl = await plazosHoras();
+    const r = await store.vencerPlazoSubasta(id, { plazoRonda2Horas: pl.r2, bloqueoDias: BLOQUEO_SUBASTAS_DIAS, forzar });
+    if (!r) return null;
+    _subCache.delete(id); _listaSub = null;
+    const s = r.subasta;
+    const [anterior, segundo] = await Promise.all([
+      store.getSocioById(r.anterior).catch(() => null),
+      r.segundo ? store.getSocioById(r.segundo).catch(() => null) : null,
+    ]);
+    if (anterior && mailer.enviarSubastaCancelada)
+      mailer.enviarSubastaCancelada(anterior, { titulo: s.titulo, bloqueadoHasta: r.bloqueadoHasta }).catch(() => {});
+    if (segundo && mailer.enviarSubastaSegundaOportunidad)
+      mailer.enviarSubastaSegundaOportunidad(segundo, { titulo: s.titulo, monto: r.monto, urlSubasta: urlLote(s), limitePago: s.pago_vence, horas: pl.r2 }).catch(() => {});
+    const quien = (x) => (x ? (x.nombre || x.email) : "?");
+    alertar("subasta:vencida:" + id + ":" + (r.accion === "ronda2" ? 1 : 2),
+      r.accion === "ronda2" ? "Subasta: venció el plazo, pasa al segundo postor" : "Subasta: venció el plazo, el lote vuelve a borrador",
+      `"${s.titulo}" · no pagó: ${quien(anterior)}${r.bloqueadoHasta ? " (suspendido hasta " + fechaCorta(r.bloqueadoHasta) + ")" : ""}` +
+      (r.accion === "ronda2" ? ` · ahora: ${quien(segundo)} a ₲ ${Number(r.monto).toLocaleString("es-PY")}` : " · no había otro postor elegible"));
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:vencimiento", targetId: id, detalle: r.accion + (forzar ? " (forzado)" : ""), por });
+    log.info({ subastaId: id, accion: r.accion, forzado: forzar }, "subasta: plazo de pago resuelto");
+    return r;
+  }
+
+  // Tarea horaria (y respaldo del cron diario): vence los plazos y avisa 24 h antes. Idempotente:
+  // el vencimiento es atómico y el recordatorio se reserva una vez por lote y ronda.
+  async function procesarPlazosSubastas() {
+    const out = { vencidos: 0, ronda2: 0, borrador: 0, recordatorios: 0 };
+    if (!store.subastasPlazoVencido) return out;
+    for (const s of await store.subastasPlazoVencido()) {
+      try {
+        const r = await resolverVencimientoSubasta(s.id);
+        if (r) { out.vencidos++; out[r.accion === "ronda2" ? "ronda2" : "borrador"]++; }
+      } catch (e) { log.error({ subastaId: s.id, err: e.message }, "subasta: no se pudo vencer el plazo"); }
+    }
+    const reservar = store.reservarNotificacion ? (k) => store.reservarNotificacion(k) : async () => true;
+    for (const s of await store.subastasPagoPorVencer({ horas: 24 })) {
+      try {
+        if (!(await reservar("subasta:porvencer:" + s.id + ":" + (s.ronda || 1)))) continue;
+        const socio = await store.getSocioById(s.adjudicado_a);
+        if (socio && mailer.enviarSubastaPagoPorVencer) {
+          await mailer.enviarSubastaPagoPorVencer(socio, { titulo: s.titulo, monto: s.puja_actual, urlSubasta: urlLote(s), vence: s.pago_vence }).catch(() => {});
+          out.recordatorios++;
+        }
+      } catch (e) { log.error({ subastaId: s.id, err: e.message }, "subasta: recordatorio de pago"); }
+    }
+    return out;
+  }
+
   // Cache corto (3s) del listado base (subastas visibles + pujadores). Absorbe el polling:
   // ~1 lectura cada 3s por instancia en vez de (lista + N counts) por cada mirador.
   let _listaSub = null;
@@ -1546,6 +1671,9 @@ function buildRouter() {
         desbloqueado: access.puedeAcceder(membresia, s.nivel_min),
         pujadores,
         gano: !abierta && !!(req.socio && s.ganador_id === req.socio.id),
+        // Solo el adjudicado ve su plazo de pago (y mientras no haya pagado).
+        pago_vence: (!abierta && req.socio && s.ganador_id === req.socio.id && s.pago_estado !== "pagado") ? (s.pago_vence || null) : null,
+        ronda: (!abierta && req.socio && s.ganador_id === req.socio.id) ? (s.ronda || 1) : undefined,
         // Nombre del ganador SOLO si ya cerró (mientras está activa, ganador_id es apenas
         // el líder actual — mostrarlo sería el mismo leak de privacidad que ya arreglamos
         // en el feed de pujas). Enmascarado igual que ahí.
@@ -1614,6 +1742,8 @@ function buildRouter() {
       voyGanando: !!(req.socio && s.ganador_id === req.socio.id),
       miPuja: req.socio ? await store.miPujaMax(s.id, req.socio.id) : 0,
       gano: !abierta && !!(req.socio && s.ganador_id === req.socio.id),
+      pago_vence: (!abierta && req.socio && s.ganador_id === req.socio.id && s.pago_estado !== "pagado") ? (s.pago_vence || null) : null,
+      ronda: (!abierta && req.socio && s.ganador_id === req.socio.id) ? (s.ronda || 1) : undefined,
       feed,
     });
   }));
@@ -1623,6 +1753,9 @@ function buildRouter() {
     const membresia = await store.getMembresia(req.socio.id);
     if (!access.puedeAcceder(membresia, s.nivel_min))
       throw httpError(403, "Las subastas son para Olimpistas Plus y Socio");
+    if (req.socio.subastas_bloqueo_hasta && new Date(req.socio.subastas_bloqueo_hasta).getTime() > Date.now())
+      throw httpError(403, "Estás suspendido de las subastas hasta el " + fechaCorta(req.socio.subastas_bloqueo_hasta) + " por no haber pagado un lote a tiempo.");
+    await chequearDeudaPuja(req.socio);
     const monto = Math.round(Number(req.body && req.body.monto) || 0);
     if (!monto) throw httpError(400, "Monto inválido");
     const out = await store.pujar({ subastaId: s.id, socioId: req.socio.id, monto });
@@ -1650,8 +1783,10 @@ function buildRouter() {
   r.post("/subastas/:id/pagar", auth.requireSocio, wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
-    if (s.estado !== "cerrada" || s.ganador_id !== req.socio.id) throw httpError(403, "No ganaste esta subasta");
+    if (s.estado !== "cerrada" || (s.adjudicado_a || s.ganador_id) !== req.socio.id) throw httpError(403, "Este lote no está adjudicado a vos");
     if (s.pago_estado === "pagado") return res.json({ ya_pagado: true });
+    // Sin pago_vence = lote anterior a esta función: sin plazo (se resuelve a mano desde el admin).
+    if (s.pago_vence && new Date(s.pago_vence).getTime() < Date.now()) throw httpError(409, "El plazo de pago de este lote venció.");
 
     const sFull = await store.getSocioById(req.socio.id).catch(() => null);
     let documento = soloDigitos((sFull && sFull.cedula) || "");
@@ -1670,7 +1805,7 @@ function buildRouter() {
     // Reusar el pedido pendiente si el ganador ya había iniciado el pago antes (evita
     // duplicar pedidos en PAGOPAR si reintenta o vuelve a entrar a la página).
     const existente = store.getPedidoPorSubasta ? await store.getPedidoPorSubasta(s.id) : null;
-    const pedido = (existente && existente.estado === "pendiente")
+    const pedido = (existente && existente.estado === "pendiente" && existente.socio_id === req.socio.id)
       ? existente
       : await store.createPedidoPago({ socioId: req.socio.id, concepto: `Subasta: ${s.titulo}`, monto: s.puja_actual, moneda: BRAND.monedaCod, subastaId: s.id });
 
@@ -1694,7 +1829,7 @@ function buildRouter() {
     const horas = Number(s.duracion_horas) || Number(req.body && req.body.horas) || 48;
     const inicia = new Date().toISOString();
     const termina = new Date(Date.now() + horas * 3600 * 1000).toISOString();
-    const item = await store.updateSubasta(s.id, { estado: "activa", inicia, termina, ganador_id: null, puja_actual: s.precio_inicial, notificado: false });
+    const item = await store.updateSubasta(s.id, { estado: "activa", inicia, termina, ganador_id: null, adjudicado_a: null, ronda: 1, pago_vence: null, pago_estado: null, puja_actual: s.precio_inicial, notificado: false });
     _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:publicar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
@@ -1703,7 +1838,7 @@ function buildRouter() {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado === "cerrada") throw httpError(409, "La subasta ya cerró; no se puede volver a borrador");
-    const item = await store.updateSubasta(s.id, { estado: "borrador", ganador_id: null, termina: null, notificado: false });
+    const item = await store.updateSubasta(s.id, { estado: "borrador", ganador_id: null, adjudicado_a: null, ronda: 1, pago_vence: null, termina: null, notificado: false });
     _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:despublicar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
@@ -1737,7 +1872,7 @@ function buildRouter() {
     if (!s.titulo || !(s.precio_inicial > 0)) throw httpError(400, "Faltan datos: título y precio inicial");
     const t = new Date((req.body && req.body.inicia) || "");
     if (isNaN(t.getTime()) || t.getTime() <= Date.now()) throw httpError(400, "La fecha de inicio debe ser válida y futura");
-    const item = await store.updateSubasta(s.id, { estado: "programada", inicia: t.toISOString(), termina: null, ganador_id: null, notificado: false });
+    const item = await store.updateSubasta(s.id, { estado: "programada", inicia: t.toISOString(), termina: null, ganador_id: null, adjudicado_a: null, ronda: 1, pago_vence: null, pago_estado: null, notificado: false });
     _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:programar", targetId: s.id, detalle: t.toISOString(), por: req.adminUser });
     res.json({ ok: true, item });
@@ -1745,11 +1880,50 @@ function buildRouter() {
   r.post("/admin/subastas/:id/cerrar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
-    const item = await store.updateSubasta(s.id, { estado: "cerrada", termina: new Date().toISOString() });
+    const item = (await store.cerrarSubasta(s.id, { plazoHoras: (await plazosHoras()).r1 })) || s;
     _subCache.delete(s.id); _listaSub = null;
     await cerrarYnotificarSubastas(); // avisa al ganador al toque
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:cerrar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
+  }));
+  // Extender el plazo de pago (horas, 1 a 168). Si ya había vencido o el lote no tenía plazo, cuenta desde ahora.
+  r.post("/admin/subastas/:id/extender", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const horas = Math.round(Number(req.body && req.body.horas) || 24);
+    if (!(horas >= 1 && horas <= 168)) throw httpError(400, "Las horas deben estar entre 1 y 168");
+    const s = await store.getSubasta(req.params.id);
+    if (!s) throw httpError(404, "Subasta no encontrada");
+    const item = await store.extenderPlazoSubasta(s.id, horas);
+    if (!item) throw httpError(409, "Solo se extiende el plazo de un lote cerrado, adjudicado y sin pagar");
+    _subCache.delete(s.id); _listaSub = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:extender", targetId: s.id, detalle: "+" + horas + " h", por: req.adminUser });
+    res.json({ ok: true, item: { id: item.id, pago_vence: item.pago_vence, ronda: item.ronda } });
+  }));
+  // Pasar al segundo postor ahora (sin esperar el vencimiento). Suspende al primero igual que un vencimiento.
+  r.post("/admin/subastas/:id/segundo", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const s = await store.getSubasta(req.params.id);
+    if (!s) throw httpError(404, "Subasta no encontrada");
+    const r0 = await resolverVencimientoSubasta(s.id, { forzar: true, por: req.adminUser });
+    if (!r0) throw httpError(409, "Solo se pasa al segundo un lote cerrado, adjudicado, sin pagar y en la primera ronda");
+    res.json({ ok: true, accion: r0.accion, segundo: r0.segundo || null, monto: r0.monto || null });
+  }));
+  // Decisiones de la Comisión Directiva. Leer: cualquier admin. Registrar: solo quien tenga decisiones.write (owner).
+  r.get("/admin/decisiones", requireAdmin, wrap(async (_req, res) => {
+    const vig = await decisiones();
+    const filas = store.listDecisiones ? await store.listDecisiones() : [];
+    res.json({ items: Object.entries(DECISIONES).map(([clave, d]) => {
+      const f = filas.find((x) => x.clave === clave);
+      return { clave, pregunta: d.texto, opciones: d.opciones, defecto: d.def, valor: vig[clave], decidido: !!f, decidido_por: f ? f.decidido_por : null, decidido_en: f ? f.decidido_en : null };
+    }) });
+  }));
+  r.put("/admin/decisiones/:clave", requireAdmin, requirePerm("decisiones.write"), wrap(async (req, res) => {
+    const d = DECISIONES[req.params.clave];
+    if (!d) throw httpError(404, "Decisión desconocida");
+    const valor = String(req.body && req.body.valor);
+    if (!d.opciones.includes(valor)) throw httpError(400, "Valor inválido. Opciones: " + d.opciones.join(", "));
+    const out = await store.setDecision(req.params.clave, valor, req.adminUser || "admin");
+    _decCache = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "decisiones:registrar", targetId: req.params.clave, detalle: valor, por: req.adminUser });
+    res.json({ ok: true, clave: req.params.clave, valor: out.valor });
   }));
   r.get("/admin/subastas/:id/pujas", requireAdmin, wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
@@ -1757,7 +1931,7 @@ function buildRouter() {
     let ganador = null;
     if (s.ganador_id) { const g = await store.getSocioById(s.ganador_id); if (g) ganador = { nombre: g.nombre, email: g.email, whatsapp: g.whatsapp || g.telefono || "" }; }
     res.json({
-      subasta: { titulo: s.titulo, estado: s.estado, puja_actual: s.puja_actual, termina: s.termina },
+      subasta: { titulo: s.titulo, estado: s.estado, puja_actual: s.puja_actual, termina: s.termina, pago_vence: s.pago_vence || null, ronda: s.ronda || 1, pago_estado: s.pago_estado || null },
       pujadores: await store.contarPujadores(s.id), ganador, pujas: await store.pujasDeSubasta(s.id, 50),
     });
   }));

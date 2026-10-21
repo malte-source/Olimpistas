@@ -55,3 +55,13 @@ Archivos `migraciones/NNNN_nombre.sql`, en orden. Cada una corre una vez y queda
 ## Conciliación de pagos
 
 `POST /api/cron/conciliar-pagos` (header `x-cron-token`) pregunta a Pagopar por pedidos pendientes con más de 10 minutos y completa entregas que quedaron a medias. También corre dentro de `/api/cron/diario`. Para que sea una red de seguridad real conviene un Scheduler horario (pendiente de crear en producción tras el deploy).
+
+## Subastas: plazo de pago y segundo postor (Sprint 1)
+
+- Al cerrar, el lote queda **adjudicado** al líder con **72 h** para pagar (decisión `plazo`: `72_48` por defecto o `48_24`).
+- Si no paga, la tarea horaria (`POST /api/cron/horario`, también respaldada por el cron diario): cancela su pedido, lo **suspende 90 días** de pujar y adjudica al **segundo postor a su mejor oferta** con 48 h. Si no hay otro postor elegible (o el segundo tampoco paga) el lote vuelve a **borrador**. A los 24 h del vencimiento sale **un** recordatorio.
+- Los lotes **anteriores** a esta función se adjudican a su ganador **sin plazo** (`pago_vence` NULL): el cron nunca los vence ni suspende a nadie. Se resuelven a mano con "Extender plazo" desde el admin.
+- Un pago que llegue de alguien que ya perdió el lote **no** lo marca pagado: queda cerrado y se avisa al equipo para **reembolsar**.
+- Admin: `POST /api/admin/subastas/:id/extender {horas}` y `/segundo`; decisiones en `GET/PUT /api/admin/decisiones` (registrar exige `decisiones.write`, hoy solo `owner`).
+- Regla de deuda (decisión `deuda`): por defecto **no se bloquea a nadie**. `cualquier` bloquea con deuda en Tuti; `mas_2_cuotas` necesita la variable `CUOTA_SOCIO_GS`. Si Tuti no responde se deja pujar.
+- Scheduler horario: `gcloud scheduler jobs create http <nombre> --schedule="0 * * * *" --uri=<URL>/api/cron/horario --http-method=POST --headers="x-cron-token=<CRON_SECRET>" --location=southamerica-east1`.

@@ -786,6 +786,13 @@
               sub += '<button class="btn btn-sm btn-ok" data-reanudar="' + esc(x.id) + '">▶ Reanudar</button>';
               sub += '<button class="btn btn-sm btn-no" data-cerrar="' + esc(x.id) + '">⏹ Cerrar</button>';
             }
+            if (x.estado === "cerrada" && x.adjudicado_a && x.pago_estado !== "pagado") {
+              var vence = x.pago_vence ? new Date(x.pago_vence) : null, vencido = vence && vence.getTime() < Date.now();
+              sub += '<span class="muted" style="font-size:12px;align-self:center">' + (x.ronda === 2 ? "2.ª ronda · " : "") +
+                (vence ? (vencido ? "plazo vencido " : "paga antes del ") + vence.toLocaleString("es-PY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "sin plazo (lote anterior)") + '</span>';
+              sub += '<button class="btn btn-sm btn-ghost" data-extender="' + esc(x.id) + '">⏳ Extender 24 h</button>';
+              if (x.ronda !== 2) sub += '<button class="btn btn-sm btn-no" data-segundo="' + esc(x.id) + '">⏭ Pasar al segundo ahora</button>';
+            }
             sub += '<button class="btn btn-sm btn-ghost" data-pujas="' + esc(x.id) + '">👁 Pujas</button>';
             // Disponible en CUALQUIER estado (incluso Borrador): sirve para preparar la
             // comunicación con el link definitivo ANTES de poner la subasta en vivo.
@@ -934,6 +941,14 @@
     async function cerrarSubasta(id) {
       if (!(await confirmar("¿Cerrar la subasta ahora? Gana la puja más alta y se le avisa al ganador.", { titulo: "Cerrar subasta", ok: "Cerrar", danger: true })).ok) return;
       try { await api("/admin/subastas/" + encodeURIComponent(id) + "/cerrar", { method: "POST" }); toast("Subasta cerrada"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function extenderPlazoSubasta(id) {
+      if (!(await confirmar("¿Darle 24 horas más para pagar? Si el plazo ya había vencido, las 24 h cuentan desde ahora.", { titulo: "Extender plazo de pago", ok: "Extender 24 h" })).ok) return;
+      try { await api("/admin/subastas/" + encodeURIComponent(id) + "/extender", { method: "POST", body: { horas: 24 } }); toast("⏳ Plazo extendido 24 h"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function pasarAlSegundo(id) {
+      if (!(await confirmar("¿Pasar el lote al segundo postor ahora? Se cancela el pedido del primero, queda suspendido 90 días de las subastas y el lote se adjudica al segundo, a su última oferta, con su propio plazo. No se puede deshacer.", { titulo: "Pasar al segundo postor", ok: "Pasar al segundo", danger: true })).ok) return;
+      try { var r = await api("/admin/subastas/" + encodeURIComponent(id) + "/segundo", { method: "POST" }); toast(r.accion === "ronda2" ? "⏭ Adjudicado al segundo postor" : "↩ No había otro postor: vuelve a borrador"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
     }
     async function despublicarSubasta(id) {
       if (!(await confirmar("¿Volver a borrador? Deja de estar visible para los socios; podés reconfigurarla y volver a publicarla.", { titulo: "Volver a borrador", ok: "Volver a borrador" })).ok) return;
@@ -1365,6 +1380,8 @@
       else if (b.dataset.pausar) pausarSubasta(b.dataset.pausar);
       else if (b.dataset.reanudar) reanudarSubasta(b.dataset.reanudar);
       else if (b.dataset.cerrar) cerrarSubasta(b.dataset.cerrar);
+      else if (b.dataset.extender) extenderPlazoSubasta(b.dataset.extender);
+      else if (b.dataset.segundo) pasarAlSegundo(b.dataset.segundo);
       else if (b.dataset.pujas) verPujasSubasta(b.dataset.pujas);
       else if (b.dataset.link) verLinkSubasta(b.dataset.link);
       else if (b.dataset.encact) cambiarEstadoEncuesta(b.dataset.encact, "activa");

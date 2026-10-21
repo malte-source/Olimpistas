@@ -391,7 +391,7 @@ function createMemoryStore({ filePath = null } = {}) {
         puja_actual: Math.round(d.precio_inicial || 0), ganador_id: null,
         duracion_horas: d.duracion_horas != null ? Math.round(d.duracion_horas) : 48,
         inicia: d.inicia || nowIso(), termina: d.termina || null, estado: d.estado || "borrador", notificado: false, creado: nowIso(),
-        pago_estado: null, pausada_en: null, // mismas columnas que la tabla (contrato con pg-store)
+        pago_estado: null, pausada_en: null, pago_vence: null, adjudicado_a: null, ronda: 1, // mismas columnas que la tabla (contrato con pg-store)
         slug: slugify(d.titulo, id) };
       (db.subastas = db.subastas || []).push(s); persist(); return s;
     },
@@ -422,10 +422,78 @@ function createMemoryStore({ filePath = null } = {}) {
       return ms.length ? Math.max.apply(null, ms) : 0;
     },
     async contarPujadores(subastaId) { return new Set((db.pujas || []).filter((p) => p.subasta_id === subastaId).map((p) => p.socio_id)).size; },
-    async cerrarSubastasVencidas() {
+    // ── Plazo de pago, ronda 2 y decisiones del club (mismo contrato que pg-store) ──
+    async cerrarSubastasVencidas({ plazoHoras = 72 } = {}) {
       const now = Date.now(), cerradas = [];
-      (db.subastas || []).forEach((s) => { if (s.estado === "activa" && new Date(s.termina).getTime() <= now) { s.estado = "cerrada"; cerradas.push(s); } });
+      (db.subastas || []).forEach((s) => {
+        if (s.estado === "activa" && new Date(s.termina).getTime() <= now) {
+          s.estado = "cerrada"; s.adjudicado_a = s.ganador_id || null; s.ronda = 1;
+          s.pago_vence = s.ganador_id ? new Date(now + plazoHoras * 3600000).toISOString() : null;
+          cerradas.push(s);
+        }
+      });
       if (cerradas.length) persist(); return cerradas;
+    },
+    async cerrarSubasta(id, { plazoHoras = 72 } = {}) {
+      const s = (db.subastas || []).find((x) => x.id === id);
+      if (!s || s.estado === "cerrada") return null;
+      s.estado = "cerrada"; s.termina = nowIso(); s.adjudicado_a = s.ganador_id || null; s.ronda = 1;
+      s.pago_vence = s.ganador_id ? new Date(Date.now() + plazoHoras * 3600000).toISOString() : null;
+      persist(); return s;
+    },
+    async subastasPlazoVencido() {
+      const now = Date.now();
+      return (db.subastas || []).filter((s) => s.estado === "cerrada" && s.pago_vence && new Date(s.pago_vence).getTime() < now && s.pago_estado !== "pagado")
+        .sort((a, b) => String(a.pago_vence).localeCompare(String(b.pago_vence))).slice(0, 50);
+    },
+    async subastasPagoPorVencer({ horas = 24 } = {}) {
+      const now = Date.now(), tope = now + horas * 3600000;
+      return (db.subastas || []).filter((s) => s.estado === "cerrada" && s.pago_vence && new Date(s.pago_vence).getTime() > now && new Date(s.pago_vence).getTime() <= tope && s.pago_estado !== "pagado");
+    },
+    async vencerPlazoSubasta(id, { plazoRonda2Horas = 48, bloqueoDias = 90, forzar = false } = {}) {
+      const s = (db.subastas || []).find((x) => x.id === id);
+      if (!s || s.estado !== "cerrada" || s.pago_estado === "pagado" || !s.adjudicado_a) return null;
+      const vencido = !!(s.pago_vence && new Date(s.pago_vence).getTime() < Date.now());
+      if (!forzar && !vencido) return null;
+      if (forzar && (s.ronda || 1) >= 2) return null;
+      const anterior = s.adjudicado_a;
+      (db.pedidos || []).forEach((p) => { if (p.subasta_id === id && p.estado === "pendiente") p.estado = "cancelado"; });
+      let bloqueadoHasta = null;
+      if ((s.ronda || 1) === 1) {
+        const ant = (db.socios || []).find((x) => x.id === anterior);
+        if (ant) { bloqueadoHasta = new Date(Date.now() + bloqueoDias * 86400000).toISOString(); ant.subastas_bloqueo_hasta = bloqueadoHasta; }
+        const mejores = new Map();
+        for (const p of (db.pujas || [])) {
+          if (p.subasta_id !== id || p.socio_id === anterior || String(p.creado) < String(new Date(s.inicia).toISOString())) continue;
+          const so = (db.socios || []).find((x) => x.id === p.socio_id);
+          if (so && so.subastas_bloqueo_hasta && new Date(so.subastas_bloqueo_hasta).getTime() > Date.now()) continue;
+          mejores.set(p.socio_id, Math.max(mejores.get(p.socio_id) || 0, p.monto));
+        }
+        const seg = [...mejores.entries()].sort((a, b) => b[1] - a[1])[0];
+        if (seg) {
+          Object.assign(s, { ganador_id: seg[0], adjudicado_a: seg[0], puja_actual: seg[1], ronda: 2, notificado: true,
+            pago_vence: new Date(Date.now() + plazoRonda2Horas * 3600000).toISOString() });
+          persist();
+          return { accion: "ronda2", anterior, bloqueadoHasta, subasta: s, segundo: seg[0], monto: seg[1] };
+        }
+      }
+      Object.assign(s, { estado: "borrador", ganador_id: null, adjudicado_a: null, ronda: 1, pago_vence: null, pago_estado: null, termina: null, puja_actual: s.precio_inicial, notificado: false });
+      persist();
+      return { accion: "borrador", anterior, bloqueadoHasta, subasta: s };
+    },
+    async extenderPlazoSubasta(id, horas) {
+      const s = (db.subastas || []).find((x) => x.id === id);
+      if (!s || s.estado !== "cerrada" || !s.adjudicado_a || s.pago_estado === "pagado") return null;
+      const base = Math.max(Date.now(), s.pago_vence ? new Date(s.pago_vence).getTime() : 0);
+      s.pago_vence = new Date(base + horas * 3600000).toISOString(); persist(); return s;
+    },
+    async listDecisiones() { return (db.decisiones || []).slice(); },
+    async setDecision(clave, valor, por) {
+      db.decisiones = db.decisiones || [];
+      let d = db.decisiones.find((x) => x.clave === clave);
+      if (!d) { d = { clave }; db.decisiones.push(d); }
+      Object.assign(d, { valor, decidido_por: por, decidido_en: nowIso() });
+      persist(); return d;
     },
     async abrirProgramadas() {
       const now = Date.now(), abiertas = [];
