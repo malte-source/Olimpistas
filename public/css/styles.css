@@ -955,6 +955,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .sub-cerrada { background: var(--negro-2); border: 1px solid var(--linea); border-radius: 12px;
   padding: 14px; font-weight: 700; text-align: center; color: var(--gris-2); }
 /* Plazo de pago del lote adjudicado (el oro queda para el botón de pagar). */
+/* QR rotativo del carnet */
+.qr-ben { max-width: 520px; margin: 18px auto 0; text-align: center; }
+.qr-caja { position: relative; width: 236px; height: 236px; margin: 0 auto; background: #fff; border-radius: 18px; padding: 12px; display: grid; place-items: center; }
+.qr-caja img { width: 212px; height: 212px; image-rendering: pixelated; }
+.qr-vel { position: absolute; inset: 0; background: rgba(255,255,255,.92); border-radius: 18px; display: grid; place-items: center; padding: 16px; color: #111; font-weight: 700; font-size: 14px; }
+.qr-meta { display: flex; justify-content: space-between; align-items: center; max-width: 236px; margin: 10px auto 6px; }
+.qr-cod { font: 800 20px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .18em; font-variant-numeric: tabular-nums; }
+.qr-barra { max-width: 236px; height: 5px; border-radius: 3px; background: var(--linea); margin: 0 auto; overflow: hidden; }
+.qr-barra span { display: block; height: 100%; width: 100%; background: var(--blanco); transition: width 1s linear; }
 /* Puntos */
 .pts-head { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
 .pts-anillo { --p: 0deg; width: 84px; height: 84px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center;

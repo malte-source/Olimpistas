@@ -315,7 +315,7 @@ function createMemoryStore({ filePath = null } = {}) {
 
     async listBeneficios() { const cm = {}; (db.comercios || []).forEach((c) => (cm[c.id] = c)); return (db.beneficios || []).slice().sort((a, b) => String(b.creado).localeCompare(String(a.creado))).map((b) => ({ ...b, comercio_nombre: (cm[b.comercio_id] || {}).nombre })); },
     async getBeneficio(id) { return (db.beneficios || []).find((b) => b.id === id) || null; },
-    async crearBeneficio(d = {}) { const num = (v) => (v != null && v !== "" ? Number(v) : null); const b = { id: uid("ben"), comercio_id: d.comercio_id, titulo: d.titulo || "", descripcion: d.descripcion || "", tipo: d.tipo || "descuento", valor: d.valor || "", niveles: d.niveles || "todos", pct: num(d.pct), ahorro_estimado: num(d.ahorro_estimado), vigencia_desde: d.vigencia_desde || null, vigencia_hasta: d.vigencia_hasta || null, limite_dias: num(d.limite_dias), activo: d.activo !== false, creado: nowIso() }; (db.beneficios = db.beneficios || []).push(b); persist(); return b; },
+    async crearBeneficio(d = {}) { const num = (v) => (v != null && v !== "" ? Number(v) : null); const b = { id: uid("ben"), comercio_id: d.comercio_id, titulo: d.titulo || "", descripcion: d.descripcion || "", tipo: d.tipo || "descuento", valor: d.valor || "", niveles: d.niveles || "todos", pct: num(d.pct), ahorro_estimado: num(d.ahorro_estimado), vigencia_desde: d.vigencia_desde || null, vigencia_hasta: d.vigencia_hasta || null, limite_dias: num(d.limite_dias), activo: d.activo !== false, estado: "aprobado", origen: "club", stock: null, motivo_rechazo: null, creado: nowIso() }; (db.beneficios = db.beneficios || []).push(b); persist(); return b; },
     async updateBeneficio(id, patch) { const b = (db.beneficios || []).find((x) => x.id === id); if (!b) return null; Object.assign(b, patch); persist(); return b; },
     async deleteBeneficio(id) { db.beneficios = (db.beneficios || []).filter((b) => b.id !== id); persist(); return true; },
 
@@ -325,7 +325,7 @@ function createMemoryStore({ filePath = null } = {}) {
       const cm = {}; (db.comercios || []).forEach((c) => (cm[c.id] = c));
       return (db.beneficios || []).filter((b) => {
         const c = cm[b.comercio_id];
-        if (!b.activo || !c || c.estado !== "activo") return false;
+        if (!b.activo || (b.estado || "aprobado") !== "aprobado" || !c || c.estado !== "activo") return false;
         if (b.vigencia_desde && String(b.vigencia_desde).slice(0, 10) > hoy) return false;
         if (b.vigencia_hasta && String(b.vigencia_hasta).slice(0, 10) < hoy) return false;
         return true;
@@ -342,6 +342,78 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     async registrarCanje({ beneficioId, socioId, comercioId, validadoPor, monto, ahorro } = {}) { const c = { id: uid("cnj"), beneficio_id: beneficioId, socio_id: socioId || null, comercio_id: comercioId || null, validado_por: validadoPor || "", monto: monto != null ? Math.round(monto) : null, ahorro: ahorro != null ? Math.round(ahorro) : null, creado: nowIso() }; (db.canjes = db.canjes || []).push(c); persist(); return c; },
     async ultimoCanje(socioId, beneficioId) { return (db.canjes || []).filter((c) => c.socio_id === socioId && c.beneficio_id === beneficioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null; },
+    // ── Carnet con QR rotativo y comercio autogestionado (mismo contrato que pg-store) ──
+    async asegurarCarnetSecreto(socioId) {
+      const s = (db.socios || []).find((x) => x.id === socioId); if (!s) return null;
+      if (!s.carnet_secreto) { s.carnet_secreto = require("crypto").randomBytes(32).toString("hex"); persist(); }
+      return s.carnet_secreto;
+    },
+    async getCarnetSecreto(socioId) { const s = (db.socios || []).find((x) => x.id === socioId); return s ? s.carnet_secreto || null : null; },
+    async canjearBeneficio({ beneficioId, socioId, comercioId, validadoPor, monto, ahorro, tierSlug, ventana }) {
+      const b = (db.beneficios || []).find((x) => x.id === beneficioId);
+      const estado = b ? b.estado || "aprobado" : null;
+      if (!b || b.activo === false || estado !== "aprobado" || b.comercio_id !== comercioId) return { ok: false, motivo: "beneficio_invalido" };
+      const stock = b.stock == null ? null : b.stock;
+      if (stock !== null && stock <= 0) return { ok: false, motivo: "agotado" };
+      if (b.limite_dias) {
+        const u = (db.canjes || []).filter((c) => c.socio_id === socioId && c.beneficio_id === beneficioId).sort((x, y) => String(y.creado).localeCompare(String(x.creado)))[0];
+        if (u && (Date.now() - new Date(u.creado).getTime()) / 86400000 < Number(b.limite_dias)) return { ok: false, motivo: "limite" };
+      }
+      if (ventana != null) {
+        db.carnet_usos = db.carnet_usos || [];
+        if (db.carnet_usos.some((x) => x.socio_id === socioId && x.ventana === ventana)) return { ok: false, motivo: "qr_usado" };
+        db.carnet_usos.push({ socio_id: socioId, ventana, comercio_id: comercioId, creado: nowIso() });
+      }
+      if (stock !== null) b.stock = stock - 1;
+      const c = { id: uid("cnj"), beneficio_id: beneficioId, socio_id: socioId, comercio_id: comercioId, validado_por: validadoPor || "", monto: monto != null ? Math.round(monto) : null, ahorro: ahorro != null ? Math.round(ahorro) : null, tier_slug: tierSlug || null, creado: nowIso() };
+      (db.canjes = db.canjes || []).push(c); persist();
+      return { ok: true, canje: c, stock: stock === null ? null : stock - 1 };
+    },
+    async crearBeneficioComercio({ comercioId, titulo, descripcion, valor, niveles, pct, ahorro_estimado, stock, vigencia_hasta }) {
+      const b = { id: uid("ben"), comercio_id: comercioId, titulo, descripcion: descripcion || "", tipo: "descuento", valor: valor || "", niveles: niveles || "todos",
+        pct: pct == null ? null : pct, ahorro_estimado: ahorro_estimado == null ? null : ahorro_estimado, vigencia_desde: null, vigencia_hasta: vigencia_hasta || null,
+        limite_dias: null, activo: true, estado: "borrador", origen: "comercio", stock: stock == null ? null : stock, motivo_rechazo: null, creado: nowIso() };
+      (db.beneficios = db.beneficios || []).push(b); persist(); return b;
+    },
+    async updateBeneficioComercio(id, comercioId, patch) {
+      const b = (db.beneficios || []).find((x) => x.id === id && x.comercio_id === comercioId); if (!b) return null;
+      Object.assign(b, patch); persist(); return b;
+    },
+    async ofertasDeComercio(comercioId) {
+      return (db.beneficios || []).filter((b) => b.comercio_id === comercioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).map((b) => ({ estado: "aprobado", origen: "club", stock: null, motivo_rechazo: null, ...b }));
+    },
+    async resolverOferta(id, { estado, motivo }) {
+      const b = (db.beneficios || []).find((x) => x.id === id); if (!b) return null;
+      b.estado = estado; b.motivo_rechazo = estado === "rechazado" ? (motivo || "") : null;
+      if (estado === "aprobado") b.activo = true;
+      persist(); return b;
+    },
+    async estadisticasComercio({ comercioId, desde, hasta }) {
+      const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
+      const filas = (db.canjes || []).filter((c) => c.comercio_id === comercioId && new Date(c.creado).getTime() >= d && new Date(c.creado).getTime() < h);
+      const conMonto = filas.filter((c) => c.monto != null);
+      const ventas = filas.reduce((a, c) => a + (c.monto || 0), 0);
+      const mix = new Map(); filas.forEach((c) => mix.set(c.tier_slug || "sin_dato", (mix.get(c.tier_slug || "sin_dato") || 0) + 1));
+      return { canjes: filas.length, ahorro: filas.reduce((a, c) => a + (c.ahorro || 0), 0), ventas, ticket_promedio: conMonto.length ? Math.round(ventas / conMonto.length) : 0,
+        mix: [...mix.entries()].map(([nivel, canjes]) => ({ nivel, canjes })).sort((a, b) => b.canjes - a.canjes) };
+    },
+    async canjesDeComercio({ comercioId, desde, hasta, limit = 5000 }) {
+      const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
+      return (db.canjes || []).filter((c) => c.comercio_id === comercioId && new Date(c.creado).getTime() >= d && new Date(c.creado).getTime() < h)
+        .sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
+        .map((c) => { const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}; return { creado: c.creado, beneficio: b.titulo || null, nivel: c.tier_slug || "", monto: c.monto, ahorro: c.ahorro }; });
+    },
+    async estadisticasPorComercio({ desde, hasta }) {
+      const d = new Date(desde).getTime(), h = new Date(hasta).getTime(), por = new Map();
+      for (const c of (db.canjes || [])) {
+        const t = new Date(c.creado).getTime(); if (t < d || t >= h) continue;
+        const co = (db.comercios || []).find((x) => x.id === c.comercio_id); if (!co) continue;
+        const k = co.nombre + "|" + (co.ciudad || "") + "|" + (c.tier_slug || "sin_dato");
+        const e = por.get(k) || { comercio: co.nombre, ciudad: co.ciudad || "", nivel: c.tier_slug || "sin_dato", canjes: 0, ahorro: 0, ventas: 0 };
+        e.canjes++; e.ahorro += c.ahorro || 0; e.ventas += c.monto || 0; por.set(k, e);
+      }
+      return [...por.values()].sort((a, b) => a.comercio.localeCompare(b.comercio) || a.nivel.localeCompare(b.nivel));
+    },
     // ── Billetera de ahorro, Ficha 360 y segmentos (mismo contrato que pg-store) ──
     async resumenAhorroSocio(socioId) {
       // Mes y año calendario en hora de Paraguay (UTC-3 fijo desde 2024).
@@ -393,7 +465,7 @@ function createMemoryStore({ filePath = null } = {}) {
       if (!c || c.estado !== "activo") return null;
       return { token: s.token, expira: s.expira, comercio_id: c.id, nombre: c.nombre, estado: c.estado };
     },
-    async beneficiosDeComercio(comercioId) { return (db.beneficios || []).filter((b) => b.comercio_id === comercioId && b.activo).sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
+    async beneficiosDeComercio(comercioId) { return (db.beneficios || []).filter((b) => b.comercio_id === comercioId && b.activo && (b.estado || "aprobado") === "aprobado").sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
 
     // ── Subastas ──
     async listSubastas() {

@@ -27,6 +27,8 @@ const tutiApi = require("./lib/tuti");
 const { baseUrl } = require("./lib/url");
 const { urlImagen } = require("./lib/imagen-subasta");
 const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib/puntos");
+const carnetLib = require("./lib/carnet");
+const { periodo } = require("./lib/periodo");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
   const h = (x) => require("crypto").createHash("sha256").update(String(x == null ? "" : x)).digest();
@@ -1395,6 +1397,29 @@ function buildRouter() {
   crudEntidad("contenido", { list: () => store.listContenido(), crear: (d) => store.crearContenido(d), update: (id, d) => store.updateContenido(id, d), del: (id) => store.deleteContenido(id), campos: { titulo: "text", tipo: "text", tier_min: "text", duracion: "text", descripcion: "text", thumb: "text", publicado: "date" } });
   // Red de Beneficios (admin). comercio_id enlaza el beneficio; niveles = "todos" o CSV "premium,socio".
   crudEntidad("comercios", { list: () => store.listComercios(), crear: (d) => store.crearComercio(d), update: (id, d) => store.updateComercio(id, d), del: (id) => store.deleteComercio(id), campos: { nombre: "text", rubro: "text", ciudad: "text", direccion: "text", contacto: "text", logo: "text", estado: "text" } });
+  // ── Admin: aprobar o rechazar ofertas de comercios, y el reporte para sponsors ──
+  // Se registra ANTES del CRUD genérico: con `estado` en el cuerpo resuelve la oferta; sin él, cede el paso al CRUD.
+  r.patch("/admin/beneficios/:id", requireAdmin, requirePerm("contenido.write"), (req, res, next) => (!req.body || req.body.estado === undefined) ? next("route") : next(), wrap(async (req, res) => {
+    const estado = String(req.body.estado);
+    if (!["aprobado", "rechazado"].includes(estado)) throw httpError(400, "Estado inválido (aprobado | rechazado)");
+    const motivo = String(req.body.motivo || "").replace(/[<>]/g, "").trim().slice(0, 200);
+    if (estado === "rechazado" && motivo.length < 3) throw httpError(400, "Contale al comercio por qué se rechaza (mínimo 3 caracteres)");
+    const b = await store.resolverOferta(req.params.id, { estado, motivo });
+    if (!b) throw httpError(404, "Oferta no encontrada");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "beneficios:" + estado, targetId: b.id, detalle: b.titulo + (motivo ? " · " + motivo : ""), por: req.adminUser });
+    if (estado === "aprobado" && mailer.enviarOfertaAprobada && store.getComercio) {
+      const co = await store.getComercio(b.comercio_id).catch(() => null);
+      if (co && emailOk(co.contacto)) mailer.enviarOfertaAprobada({ email: co.contacto }, { comercio: co.nombre, titulo: b.titulo }).catch(() => {});
+    }
+    res.json({ ok: true, oferta: ofertaOut(b) });
+  }));
+  r.get("/admin/comercios/estadisticas.csv", requireAdmin, requirePerm("export"), wrap(async (req, res) => {
+    const p = periodo({ desde: req.query.desde, hasta: req.query.hasta });
+    const filas = await store.estadisticasPorComercio({ desde: p.desde, hasta: p.hasta });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "export:sponsors", detalle: p.etiqueta, por: req.adminUser });
+    enviarCsv(res, "sponsors-" + p.etiqueta.replace(/ a /, "_") + ".csv", ["comercio", "ciudad", "nivel", "canjes", "ahorro", "ventas"], filas.map((f) => [f.comercio, f.ciudad, f.nivel, f.canjes, Number(f.ahorro), Number(f.ventas)]));
+  }));
+
   crudEntidad("beneficios", { list: () => store.listBeneficios(), crear: (d) => store.crearBeneficio(d), update: (id, d) => store.updateBeneficio(id, d), del: (id) => store.deleteBeneficio(id), campos: { comercio_id: "text", titulo: "text", descripcion: "text", tipo: "text", valor: "text", niveles: "text", pct: "int", ahorro_estimado: "int", vigencia_desde: "date", vigencia_hasta: "date", limite_dias: "int" } });
   // Subastas (admin). Se crean como BORRADOR; se publican con /publicar (setea termina = now + duracion_horas).
   crudEntidad("subastas", {
@@ -2605,6 +2630,7 @@ function buildRouter() {
     items = items.slice().sort((a, b) => ((b.desbloqueado ? 1 : 0) - (a.desbloqueado ? 1 : 0)) || (esLocal(b) - esLocal(a)));
     const ahorro = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id).catch(() => ({ mes: 0, anio: 0, total: 0 })) : { mes: 0, anio: 0, total: 0 };
     const codigo = (sFull && sFull.ref_codigo) || "";
+    items = items.map((b) => ({ ...b, agotado: b.stock != null && Number(b.stock) <= 0 }));
     res.json({ tier, ciudad: (sFull && sFull.ciudad) || "", codigo, items, ahorro });
   }));
 
@@ -2643,31 +2669,122 @@ function buildRouter() {
       next();
     } catch (e) { res.status(401).json({ error: "no autorizado" }); }
   }
-  // Beneficios del comercio (para elegir cuál validar).
+  // Beneficios del comercio: `items` = lo publicado (para elegir cuál validar en caja), `ofertas` = todo lo suyo con su estado.
   r.get("/comercio/beneficios", requireComercio, wrap(async (req, res) => {
-    res.json({ comercio: req.comercio, items: store.beneficiosDeComercio ? await store.beneficiosDeComercio(req.comercio.id) : [] });
+    const ofertas = store.ofertasDeComercio ? await store.ofertasDeComercio(req.comercio.id) : [];
+    res.json({ comercio: req.comercio, items: store.beneficiosDeComercio ? await store.beneficiosDeComercio(req.comercio.id) : [],
+      ofertas: ofertas.map(ofertaOut) });
   }));
-  // Validar un canje: código de socio + beneficio + monto → registra canje y calcula ahorro.
+  const ofertaOut = (b) => ({ id: b.id, titulo: b.titulo, descripcion: b.descripcion, valor: b.valor, niveles: b.niveles, pct: b.pct, ahorro_estimado: b.ahorro_estimado,
+    stock: b.stock == null ? null : b.stock, activo: b.activo, estado: b.estado || "aprobado", origen: b.origen || "club", motivo_rechazo: b.motivo_rechazo || null, vigencia_hasta: b.vigencia_hasta || null });
+
+  // ── Ofertas que carga el propio comercio: nacen en BORRADOR y el club las aprueba antes de publicarse ──
+  const NIVELES_OFERTA = { todos: "todos", plus: "premium,socio", socio: "socio" };
+  function limpiarOferta(b, parcial) {
+    const o = {};
+    const txt = (k, min, max, msg) => { if (b[k] !== undefined) { const v = String(b[k]).replace(/[<>]/g, "").replace(/\s+/g, " ").trim(); if (v.length < min || v.length > max) throw httpError(400, msg); o[k] = v; } };
+    txt("titulo", 3, 100, "El título va de 3 a 100 caracteres");
+    txt("valor", 1, 30, "Poné el beneficio en pocas palabras (ej. 10%, 2x1)");
+    if (b.descripcion !== undefined) o.descripcion = String(b.descripcion).replace(/[<>]/g, "").trim().slice(0, 300);
+    if (b.para !== undefined) { if (!NIVELES_OFERTA[b.para]) throw httpError(400, "Elegí para quién es: todos, plus o socio"); o.niveles = NIVELES_OFERTA[b.para]; }
+    if (o.valor !== undefined || b.valor !== undefined) { const m = /^(\d{1,3})\s*%$/.exec(o.valor || ""); if (m && Number(m[1]) >= 1 && Number(m[1]) <= 100) o.pct = Number(m[1]); else if (o.valor !== undefined) o.pct = null; }
+    if (b.ahorro_estimado !== undefined) {
+      if (b.ahorro_estimado === null || b.ahorro_estimado === "") o.ahorro_estimado = null;
+      else { const n = Math.round(Number(b.ahorro_estimado)); if (!(n >= 0 && n <= 10000000)) throw httpError(400, "El ahorro estimado va de 0 a ₲ 10.000.000"); o.ahorro_estimado = n; }
+    }
+    if (b.stock !== undefined) {
+      if (b.stock === null || b.stock === "") o.stock = null;
+      else { const n = Math.round(Number(b.stock)); if (!(n >= 0 && n <= 100000)) throw httpError(400, "El cupo va de 0 a 100.000"); o.stock = n; }
+    }
+    if (b.vigencia_hasta !== undefined) {
+      if (b.vigencia_hasta === null || b.vigencia_hasta === "") o.vigencia_hasta = null;
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(String(b.vigencia_hasta)) && !isNaN(new Date(b.vigencia_hasta).getTime())) o.vigencia_hasta = String(b.vigencia_hasta);
+      else throw httpError(400, "Fecha de vigencia inválida (AAAA-MM-DD)");
+    }
+    if (typeof b.activo === "boolean") o.activo = b.activo;
+    if (!parcial && (!o.titulo || !o.valor)) throw httpError(400, "Poné el título y el beneficio");
+    return o;
+  }
+  r.post("/comercio/beneficios", requireComercio, wrap(async (req, res) => {
+    const o = limpiarOferta(req.body || {}, false);
+    const abiertas = (await store.ofertasDeComercio(req.comercio.id)).filter((x) => (x.estado || "aprobado") === "borrador").length;
+    if (abiertas >= 10) throw httpError(409, "Ya tenés 10 ofertas esperando aprobación. Esperá a que el club las revise.");
+    const b = await store.crearBeneficioComercio({ comercioId: req.comercio.id, titulo: o.titulo, descripcion: o.descripcion, valor: o.valor, niveles: o.niveles || "todos",
+      pct: o.pct == null ? null : o.pct, ahorro_estimado: o.ahorro_estimado == null ? null : o.ahorro_estimado, stock: o.stock == null ? null : o.stock, vigencia_hasta: o.vigencia_hasta || null });
+    alertar("oferta:nueva:" + b.id, "Oferta nueva de un comercio para aprobar", `${req.comercio.nombre}: "${b.titulo}" (${b.valor})`);
+    res.status(201).json({ ok: true, oferta: ofertaOut(b) });
+  }));
+  // Editar una oferta PROPIA. Cambiar lo que ve el hincha (título, beneficio, para quién, ahorro, vigencia) de una oferta ya
+  // aprobada o rechazada la devuelve a "espera aprobación"; pausarla o ajustar el cupo no.
+  r.patch("/comercio/beneficios/:id", requireComercio, wrap(async (req, res) => {
+    const actual = (await store.ofertasDeComercio(req.comercio.id)).find((x) => x.id === req.params.id);
+    if (!actual) throw httpError(404, "Oferta no encontrada");
+    const patch = limpiarOferta(req.body || {}, true);
+    delete patch.para;
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const CAMBIOS_VISIBLES = ["titulo", "valor", "descripcion", "niveles", "pct", "ahorro_estimado", "vigencia_hasta"];
+    const cambioVisible = CAMBIOS_VISIBLES.some((k) => patch[k] !== undefined && String(patch[k] == null ? "" : patch[k]) !== String(actual[k] == null ? "" : actual[k]));
+    if (cambioVisible && (actual.estado || "aprobado") !== "borrador") { patch.estado = "borrador"; patch.motivo_rechazo = null; }
+    const b = await store.updateBeneficioComercio(actual.id, req.comercio.id, patch);
+    if (cambioVisible && patch.estado === "borrador") alertar("oferta:editada:" + b.id + ":" + Date.now(), "Un comercio editó una oferta: vuelve a aprobación", `${req.comercio.nombre}: "${b.titulo}"`);
+    res.json({ ok: true, oferta: ofertaOut(b), vuelve_a_aprobacion: !!(cambioVisible && patch.estado === "borrador") });
+  }));
+
+  // ── Estadísticas del comercio: canjes, ahorro entregado, ventas, ticket promedio y mix por nivel ──
+  const csvCelda = (v) => { let s = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; }; // sin inyección de fórmulas en Excel
+  const enviarCsv = (res, nombre, cabecera, filas) => {
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${nombre}"`);
+    res.send("﻿" + [cabecera.map(csvCelda).join(","), ...filas.map((f) => f.map(csvCelda).join(","))].join("\n"));
+  };
+  r.get("/comercio/estadisticas", requireComercio, wrap(async (req, res) => {
+    const p = periodo({ desde: req.query.desde, hasta: req.query.hasta });
+    if (req.query.format === "csv") {
+      const filas = await store.canjesDeComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta });
+      return enviarCsv(res, "canjes-" + p.etiqueta.replace(/ a /, "_") + ".csv", ["fecha", "beneficio", "nivel", "monto", "ahorro"],
+        filas.map((f) => [new Date(f.creado).toISOString(), f.beneficio, f.nivel, f.monto, f.ahorro]));
+    }
+    res.json({ periodo: p.etiqueta, ...(await store.estadisticasComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta })) });
+  }));
+
+  // Validar un canje en caja: QR del carnet (rota cada 60 s) o código fijo del socio, + beneficio + monto.
+  // Con QR: se verifica la firma y la ventana (±1) y cada QR sirve UNA vez. El registro (stock, límite de días, QR usado y canje)
+  // es una sola transacción: dos cajas escaneando a la vez no duplican el canje ni pasan el cupo.
   r.post("/comercio/validar", requireComercio, wrap(async (req, res) => {
-    const codigo = String(req.body?.codigo || "").trim().toLowerCase();
     const monto = Math.max(0, Number(req.body?.monto) || 0);
-    const socio = codigo && store.getSocioByRefCodigo ? await store.getSocioByRefCodigo(codigo) : null;
+    const tokenQr = String(req.body?.token || "").trim();
+    let socio = null, ventana = null, via = "codigo";
+    if (tokenQr) {
+      const v = await carnetLib.verificarToken(tokenQr, (id) => store.getCarnetSecreto(id));
+      if (!v.ok) return res.json({ ok: false, motivo: v.motivo === "vencido" ? "qr_vencido" : "qr_invalido" });
+      socio = await store.getSocioById(v.socioId); ventana = v.ventana; via = "qr";
+    } else {
+      const codigo = String(req.body?.codigo || "").trim().toLowerCase();
+      socio = codigo && store.getSocioByRefCodigo ? await store.getSocioByRefCodigo(codigo) : null;
+    }
     if (!socio) return res.json({ ok: false, motivo: "socio_no_encontrado" });
     const ben = store.getBeneficio ? await store.getBeneficio(req.body?.beneficioId) : null;
-    if (!ben || ben.comercio_id !== req.comercio.id || ben.activo === false) return res.json({ ok: false, motivo: "beneficio_invalido" });
+    if (!ben || ben.comercio_id !== req.comercio.id || ben.activo === false || (ben.estado || "aprobado") !== "aprobado") return res.json({ ok: false, motivo: "beneficio_invalido" });
     const m = await store.getMembresia(socio.id);
     const tier = (m && m.tier_slug) || "olimpista";
     const nivs = ben.niveles === "todos" ? "todos" : String(ben.niveles).split(",").map((x) => x.trim());
     const socioOut = { nombre: [socio.nombre, socio.apellido].filter(Boolean).join(" ") || socio.email, tier };
     if (!(nivs === "todos" || nivs.indexOf(tier) > -1)) return res.json({ ok: false, motivo: "nivel_no_aplica", socio: socioOut, requiere: (nivs === "todos" ? "olimpista" : nivs[0]) });
-    if (ben.limite_dias && store.ultimoCanje) {
-      const u = await store.ultimoCanje(socio.id, ben.id);
-      if (u && (Date.now() - new Date(u.creado).getTime()) / 86400000 < Number(ben.limite_dias)) return res.json({ ok: false, motivo: "limite", socio: socioOut });
-    }
     const ahorro = ben.pct ? Math.round(monto * Number(ben.pct) / 100) : (Number(ben.ahorro_estimado) || 0);
-    await store.registrarCanje({ beneficioId: ben.id, socioId: socio.id, comercioId: req.comercio.id, validadoPor: req.comercio.nombre, monto: monto || null, ahorro: ahorro || null });
-    res.json({ ok: true, socio: socioOut, beneficio: ben.titulo, ahorro: ahorro });
+    const out = await store.canjearBeneficio({ beneficioId: ben.id, socioId: socio.id, comercioId: req.comercio.id, validadoPor: req.comercio.nombre, monto: monto || null, ahorro: ahorro || null, tierSlug: tier, ventana });
+    if (!out.ok) return res.json({ ok: false, motivo: out.motivo, socio: socioOut });
+    res.json({ ok: true, socio: socioOut, beneficio: ben.titulo, ahorro, via, stock: out.stock });
   }));
+
+  // QR rotativo del carnet: el hincha lo pide cada minuto y lo muestra en caja.
+  r.get("/carnet/token", auth.requireSocio, wrap(async (req, res) => {
+    const secreto = await store.asegurarCarnetSecreto(req.socio.id);
+    if (!secreto) throw httpError(404, "Cuenta no encontrada");
+    const t = carnetLib.generarToken(req.socio.id, secreto);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ token: t.token, codigo: t.codigo, vence_en: t.vence_en, ventana_s: carnetLib.VENTANA_S });
+  }));
+
 
   // ─── Carnet digital ─────────────────────────────────────────────────────────
   r.get("/carnet", auth.requireSocio, wrap(async (req, res) => {

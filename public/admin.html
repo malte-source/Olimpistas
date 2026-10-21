@@ -324,6 +324,11 @@
           <p class="hint">Solicitudes para <b>verificar</b>, ranking y canjes del fondo que esperan tu aprobación.</p>
           <div id="penasWrap"><p class="loading">Cargando…</p></div>
 
+          <h2>Ofertas de comercios</h2>
+          <p class="hint">Las ofertas que cargan los comercios esperan acá: <b>aprobá y publicá</b> o <b>rechazá</b> con el motivo (lo ve el comercio). El reporte para sponsors cruza canjes, ahorro y ventas por comercio, ciudad y nivel.</p>
+          <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">⬇ Reporte para sponsors (mes en curso)</button></div>
+          <div id="ofertasWrap"><p class="loading">Cargando…</p></div>
+
           <h2>Puntos</h2>
           <p class="hint">Reglas de acumulación, catálogo de canje, misión semanal y canjes por entregar. Los puntos vencen tras 12 meses sin actividad (decisión del club).</p>
           <div id="puntosWrap"><p class="loading">Cargando…</p></div>
@@ -510,7 +515,7 @@
       socios: [],                                 // búsqueda/segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
       campanas: [cargarEmailMetricas, cargarCampanas, cargarGhl],
-      contenido: [cargarCrud, cargarActualizaciones, cargarPenasAdmin, cargarPuntosAdmin],
+      contenido: [cargarCrud, cargarActualizaciones, cargarOfertasAdmin, cargarPenasAdmin, cargarPuntosAdmin],
       sistema: [cargarUsuarios, cargarSelfies, cargarAcciones],
     };
     var areaLoaded = {};
@@ -1291,6 +1296,25 @@
         cargar360(id);
       } catch (e) { $("fichaBox").innerHTML = '<button class="close" data-cerrar>×</button><p class="err">' + esc(e.message) + '</p>'; }
     }
+    // Ofertas de comercios por aprobar.
+    async function cargarOfertasAdmin() {
+      var box = $("ofertasWrap"); if (!box) return;
+      try {
+        var d = await api("/admin/beneficios"), w = puede("contenido.write");
+        var pend = d.items.filter(function (b) { return b.estado === "borrador"; });
+        var rech = d.items.filter(function (b) { return b.estado === "rechazado"; }).slice(0, 5);
+        var PARA = { todos: "Todos", "premium,socio": "Plus y Socio", socio: "Solo socios" };
+        var fila = function (b, acciones) {
+          return '<div class="card-row" style="border:1px solid var(--linea);border-radius:10px;padding:10px;margin:8px 0"><b>' + esc(b.comercio_nombre || "") + '</b> — ' + esc(b.titulo) +
+            ' <span class="pill">' + esc(b.valor || "") + '</span><div class="muted" style="font-size:13px">Para: ' + esc(PARA[b.niveles] || b.niveles) + (b.stock != null ? ' · cupo ' + b.stock : '') + (b.descripcion ? ' · ' + esc(b.descripcion) : '') +
+            (b.motivo_rechazo ? ' · <span class="err">Rechazada: ' + esc(b.motivo_rechazo) + '</span>' : '') + '</div>' + (w && acciones ? '<div class="row-actions" style="margin-top:8px">' + acciones + '</div>' : '') + '</div>';
+        };
+        box.innerHTML = (pend.length ? pend.map(function (b) {
+          return fila(b, '<button class="btn btn-sm btn-ok" data-ofapr="' + esc(b.id) + '">Aprobar y publicar</button><button class="btn btn-sm btn-no" data-ofrec="' + esc(b.id) + '">Rechazar</button>');
+        }).join("") : '<p class="empty">No hay ofertas esperando aprobación.</p>') +
+          (rech.length ? '<div class="mini">Rechazadas recientes</div>' + rech.map(function (b) { return fila(b, '<button class="btn btn-sm btn-ghost" data-ofapr="' + esc(b.id) + '">Aprobar igual</button>'); }).join("") : "");
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
     // Puntos: reglas (stepper), pasivo, canjes por entregar, catálogo y misiones.
     async function cargarPuntosAdmin() {
       var box = $("puntosWrap"); if (!box) return;
@@ -1485,6 +1509,29 @@
     $("segBtn").addEventListener("click", cargarSegmento);
     $("segExport").addEventListener("click", exportarSocios);
     $("crudSel").addEventListener("change", cargarCrud);
+    $("ofertasWrap").addEventListener("click", async function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      try {
+        if (b.dataset.ofapr) {
+          if (!(await confirmar("Se publica en la app de los hinchas y el comercio puede validarla en caja. Le avisamos por correo.", { titulo: "Aprobar oferta", ok: "Aprobar y publicar" })).ok) return;
+          await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofapr), { method: "PATCH", body: { estado: "aprobado" } }); toast("Oferta publicada");
+        } else if (b.dataset.ofrec) {
+          var r = await confirmar("El comercio va a ver este motivo en su panel.", { titulo: "Rechazar oferta", ok: "Rechazar", danger: true, input: true, placeholder: "Motivo (ej. el 90% no es sostenible)" });
+          if (!r.ok) return;
+          await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofrec), { method: "PATCH", body: { estado: "rechazado", motivo: r.val } }); toast("Oferta rechazada");
+        } else return;
+        cargarOfertasAdmin();
+      } catch (err) { toast(err.message, "err"); }
+    });
+    $("sponsorsCsv").addEventListener("click", async function () {
+      try {
+        var res = await fetch("/api/admin/comercios/estadisticas.csv", { headers: { "x-admin-token": getToken(), "x-admin-key": getKey() } });
+        if (!res.ok) { var j = await res.json().catch(function () { return {}; }); throw new Error(j.error || "No se pudo descargar el reporte"); }
+        var blob = await res.blob(), a = document.createElement("a");
+        a.href = URL.createObjectURL(blob); a.download = "reporte-sponsors.csv"; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+        toast("Reporte descargado");
+      } catch (err) { toast(err.message, "err"); }
+    });
     $("puntosWrap").addEventListener("click", async function (e) {
       var b = e.target.closest("button"); if (!b) return;
       try {

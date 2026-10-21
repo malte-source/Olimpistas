@@ -134,6 +134,7 @@
     opts = opts || {};
     window.scrollTo(0, 0); // si venías scrolleado, el título de la pestaña nueva no debe quedar tapado por el header fijo
     if (typeof stopSub === "function") stopSub();   // corta polling de subastas al cambiar de tab
+    detenerQrBeneficios();                          // y el QR rotativo del carnet
     _contentHost = null;                            // fuera de Descubrir el contenido ocupa todo #view
     curTab = tab; curSubId = null;
     // fromRoute (init/popstate): normaliza con replace si hiciera falta, sin nueva entrada.
@@ -1196,6 +1197,43 @@
 
   // ─── Carnet digital (mismo componente que la landing, color por nivel) ───────
   // Vista UNIFICADA: carnet + nivel + beneficios + social + compartir + upsell.
+  // ─── QR rotativo para usar los beneficios en caja: se renueva cada 60 s con un token firmado por el servidor ───
+  let _qrTimer = null, _qrVence = 0, _qrCargando = false;
+  function detenerQrBeneficios() { if (_qrTimer) clearInterval(_qrTimer); _qrTimer = null; _qrCargando = false; }
+  async function refrescarQr() {
+    if (_qrCargando) return;
+    _qrCargando = true;
+    try {
+      const d = await api("/carnet/token");
+      const img = document.getElementById("qrBenImg"); if (!img) return detenerQrBeneficios();
+      const src = makeQR(d.token);
+      // La librería del QR se carga diferida: si todavía no está, se reintenta enseguida en vez de dejar el cuadro en blanco.
+      if (!src) { _qrVence = Date.now() + 700; return; }
+      img.src = src;
+      document.getElementById("qrBenCod").textContent = d.codigo;
+      _qrVence = Date.now() + d.vence_en * 1000;
+      const v = document.getElementById("qrBenVel"); if (v) v.hidden = true;
+    } catch (e) {
+      const v = document.getElementById("qrBenVel"); if (v) { v.hidden = false; v.textContent = T("m_qr_error"); }
+      _qrVence = Date.now() + 5000; // reintenta pronto
+    } finally { _qrCargando = false; }
+  }
+  function iniciarQrBeneficios() {
+    detenerQrBeneficios();
+    if (!document.getElementById("qrBen")) return;
+    refrescarQr();
+    _qrTimer = setInterval(() => {
+      if (!document.getElementById("qrBenImg")) return detenerQrBeneficios();
+      if (document.hidden) return;                       // pestaña en segundo plano: no se pide nada
+      const resta = Math.max(0, Math.ceil((_qrVence - Date.now()) / 1000));
+      const seg = document.getElementById("qrBenSeg"), barra = document.getElementById("qrBenBarra");
+      if (seg) seg.textContent = T("m_qr_cambia") + " " + resta + " s";
+      if (barra) barra.style.width = Math.min(100, (resta / 60) * 100) + "%";
+      if (resta <= 0) refrescarQr();
+    }, 1000);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && _qrTimer) refrescarQr(); }); // al volver, token nuevo ya
+
   async function vCarnet() {
     view().innerHTML = skeleton(0);
     try {
@@ -1231,6 +1269,13 @@
             <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
             <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
           </div>
+          <div class="card qr-ben" id="qrBen"><div class="body">
+            <h3 style="margin:0 0 4px">${icon("qr-code", { size: 16 })} ${T("m_qr_h")}</h3>
+            <p class="muted" style="margin:0 0 12px;font-size:13px">${T("m_qr_p")}</p>
+            <div class="qr-caja"><img id="qrBenImg" alt="${T("m_qr_alt")}" width="212" height="212" /><div class="qr-vel" id="qrBenVel"></div></div>
+            <div class="qr-meta"><span class="qr-cod" id="qrBenCod">······</span><span class="muted" id="qrBenSeg"></span></div>
+            <div class="qr-barra"><span id="qrBenBarra"></span></div>
+          </div></div>
           <div class="card" style="max-width:520px;margin:18px auto 0;text-align:center"><div class="body">
             <h3 style="margin:0 0 6px">${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
             <p class="muted" style="margin:0 0 12px">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
@@ -1247,6 +1292,7 @@
           ${upsell}
         </div>`;
       view().querySelectorAll("[data-upsell]").forEach((b) => b.addEventListener("click", () => upgrade(b.dataset.upsell)));
+      iniciarQrBeneficios();
       view().querySelector("#upCardBtn")?.addEventListener("click", validarSocioModal);
       view().querySelector(".ed-ubic")?.addEventListener("click", () => { activar("perfil"); setTimeout(() => focusCampo("pais"), 60); });
       view().querySelector("#compartir").onclick = async () => {

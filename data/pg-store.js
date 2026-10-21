@@ -408,7 +408,7 @@ function createPgStore({ databaseUrl, debug }) {
     async beneficiosParaNivel(tier) {
       const rows = await sql`SELECT b.*, c.nombre AS comercio_nombre, c.rubro AS comercio_rubro, c.logo AS comercio_logo, c.ciudad AS comercio_ciudad
         FROM beneficios b JOIN comercios c ON c.id = b.comercio_id
-        WHERE b.activo = true AND c.estado = 'activo'
+        WHERE b.activo = true AND b.estado = 'aprobado' AND c.estado = 'activo'
           AND (b.vigencia_desde IS NULL OR b.vigencia_desde <= now()::date)
           AND (b.vigencia_hasta IS NULL OR b.vigencia_hasta >= now()::date)
         ORDER BY c.nombre`;
@@ -431,6 +431,74 @@ function createPgStore({ databaseUrl, debug }) {
       return c;
     },
     async ultimoCanje(socioId, beneficioId) { const [c] = await sql`SELECT * FROM canjes WHERE socio_id = ${socioId} AND beneficio_id = ${beneficioId} ORDER BY creado DESC LIMIT 1`; return c || null; },
+    // ── Carnet con QR rotativo y comercio autogestionado (migración 0007) ──
+    // El secreto del hincha se crea la primera vez que pide su QR (atómico: dos pedidos a la vez no lo pisan).
+    async asegurarCarnetSecreto(socioId) {
+      const nuevo = require("crypto").randomBytes(32).toString("hex");
+      const [r] = await sql`UPDATE socios SET carnet_secreto = COALESCE(carnet_secreto, ${nuevo}) WHERE id = ${socioId} RETURNING carnet_secreto`;
+      return r ? r.carnet_secreto : null;
+    },
+    async getCarnetSecreto(socioId) { const [r] = await sql`SELECT carnet_secreto FROM socios WHERE id = ${socioId} LIMIT 1`; return r ? r.carnet_secreto : null; },
+    // Canje ATÓMICO: con la oferta bloqueada comprueba que siga publicada, el stock y el límite de días, consume la ventana
+    // del QR (un QR sirve una sola vez) y recién entonces descuenta stock y registra el canje. Si algo falla no se escribe nada.
+    async canjearBeneficio({ beneficioId, socioId, comercioId, validadoPor, monto, ahorro, tierSlug, ventana }) {
+      return sql.begin(async (tx) => {
+        const [b] = await tx`SELECT * FROM beneficios WHERE id = ${beneficioId} FOR UPDATE`;
+        if (!b || !b.activo || b.estado !== "aprobado" || b.comercio_id !== comercioId) return { ok: false, motivo: "beneficio_invalido" };
+        if (b.stock !== null && b.stock <= 0) return { ok: false, motivo: "agotado" };
+        if (b.limite_dias) {
+          const [u] = await tx`SELECT 1 AS x FROM canjes WHERE socio_id = ${socioId} AND beneficio_id = ${beneficioId} AND creado > now() - make_interval(days => ${Number(b.limite_dias)}) LIMIT 1`;
+          if (u) return { ok: false, motivo: "limite" };
+        }
+        if (ventana != null) {
+          const [v] = await tx`INSERT INTO carnet_usos (socio_id, ventana, comercio_id) VALUES (${socioId}, ${ventana}, ${comercioId}) ON CONFLICT DO NOTHING RETURNING 1 AS x`;
+          if (!v) return { ok: false, motivo: "qr_usado" };
+        }
+        if (b.stock !== null) await tx`UPDATE beneficios SET stock = stock - 1 WHERE id = ${beneficioId}`;
+        const [c] = await tx`INSERT INTO canjes (id, beneficio_id, socio_id, comercio_id, validado_por, monto, ahorro, tier_slug)
+          VALUES (${uid("cnj")}, ${beneficioId}, ${socioId}, ${comercioId}, ${validadoPor || ""}, ${monto != null ? Math.round(monto) : null}, ${ahorro != null ? Math.round(ahorro) : null}, ${tierSlug || null}) RETURNING *`;
+        return { ok: true, canje: c, stock: b.stock === null ? null : b.stock - 1 };
+      });
+    },
+    // Ofertas que carga el comercio: nacen en BORRADOR (esperan al club) y con origen "comercio".
+    async crearBeneficioComercio({ comercioId, titulo, descripcion, valor, niveles, pct, ahorro_estimado, stock, vigencia_hasta }) {
+      const [b] = await sql`INSERT INTO beneficios (id, comercio_id, titulo, descripcion, valor, niveles, pct, ahorro_estimado, stock, vigencia_hasta, activo, estado, origen)
+        VALUES (${uid("ben")}, ${comercioId}, ${titulo}, ${descripcion || ""}, ${valor || ""}, ${niveles || "todos"}, ${pct == null ? null : pct}, ${ahorro_estimado == null ? null : ahorro_estimado},
+                ${stock == null ? null : stock}, ${vigencia_hasta || null}, true, 'borrador', 'comercio') RETURNING *`;
+      return b;
+    },
+    // Solo toca ofertas de ESE comercio. Si ya estaba aprobada y cambia lo que ve el hincha, vuelve a borrador (hay que re-aprobarla).
+    async updateBeneficioComercio(id, comercioId, patch) {
+      const [b] = await sql`UPDATE beneficios SET ${sql(patch)} WHERE id = ${id} AND comercio_id = ${comercioId} RETURNING *`;
+      return b || null;
+    },
+    async ofertasDeComercio(comercioId) { return sql`SELECT * FROM beneficios WHERE comercio_id = ${comercioId} ORDER BY creado DESC`; },
+    // Aprobar o rechazar una oferta (club). Devuelve la fila, o null si no existe.
+    async resolverOferta(id, { estado, motivo }) {
+      const [b] = estado === "aprobado"
+        ? await sql`UPDATE beneficios SET estado = 'aprobado', motivo_rechazo = NULL, activo = true WHERE id = ${id} RETURNING *`
+        : await sql`UPDATE beneficios SET estado = 'rechazado', motivo_rechazo = ${motivo || ""} WHERE id = ${id} RETURNING *`;
+      return b || null;
+    },
+    // Estadísticas del comercio en un período [desde, hasta): canjes, ahorro entregado, ventas, ticket promedio y mix por nivel.
+    async estadisticasComercio({ comercioId, desde, hasta }) {
+      const [t] = await sql`SELECT COUNT(*)::int AS canjes, COALESCE(SUM(ahorro), 0)::bigint AS ahorro, COALESCE(SUM(monto), 0)::bigint AS ventas, COUNT(monto)::int AS con_monto
+        FROM canjes WHERE comercio_id = ${comercioId} AND creado >= ${desde} AND creado < ${hasta}`;
+      const mix = await sql`SELECT COALESCE(tier_slug, 'sin_dato') AS nivel, COUNT(*)::int AS canjes FROM canjes
+        WHERE comercio_id = ${comercioId} AND creado >= ${desde} AND creado < ${hasta} GROUP BY 1 ORDER BY 2 DESC`;
+      return { canjes: t.canjes, ahorro: Number(t.ahorro), ventas: Number(t.ventas), ticket_promedio: t.con_monto ? Math.round(Number(t.ventas) / t.con_monto) : 0, mix: mix.map((m) => ({ nivel: m.nivel, canjes: m.canjes })) };
+    },
+    async canjesDeComercio({ comercioId, desde, hasta, limit = 5000 }) {
+      return sql`SELECT c.creado, b.titulo AS beneficio, COALESCE(c.tier_slug, '') AS nivel, c.monto, c.ahorro FROM canjes c LEFT JOIN beneficios b ON b.id = c.beneficio_id
+        WHERE c.comercio_id = ${comercioId} AND c.creado >= ${desde} AND c.creado < ${hasta} ORDER BY c.creado DESC LIMIT ${limit}`;
+    },
+    // Reporte para sponsors: por comercio, ciudad y nivel.
+    async estadisticasPorComercio({ desde, hasta }) {
+      return sql`SELECT co.nombre AS comercio, COALESCE(co.ciudad, '') AS ciudad, COALESCE(c.tier_slug, 'sin_dato') AS nivel,
+          COUNT(*)::int AS canjes, COALESCE(SUM(c.ahorro), 0)::bigint AS ahorro, COALESCE(SUM(c.monto), 0)::bigint AS ventas
+        FROM canjes c JOIN comercios co ON co.id = c.comercio_id WHERE c.creado >= ${desde} AND c.creado < ${hasta}
+        GROUP BY co.nombre, co.ciudad, 3 ORDER BY co.nombre, 3`;
+    },
     // ── Billetera de ahorro, Ficha 360 y segmentos (migración 0004) ──
     // Mes y año CALENDARIO en hora de Paraguay (antes se usaba el mes UTC: lo gastado entre las
     // 21:00 y la medianoche del último día del mes contaba en el mes siguiente).
@@ -896,7 +964,7 @@ function createPgStore({ databaseUrl, debug }) {
         WHERE s.token = ${token} AND s.expira > now() AND c.estado = 'activo' LIMIT 1`;
       return row || null;
     },
-    async beneficiosDeComercio(comercioId) { return sql`SELECT * FROM beneficios WHERE comercio_id = ${comercioId} AND activo = true ORDER BY creado DESC`; },
+    async beneficiosDeComercio(comercioId) { return sql`SELECT * FROM beneficios WHERE comercio_id = ${comercioId} AND activo = true AND estado = 'aprobado' ORDER BY creado DESC`; },
 
     // ── Subastas ── (sin cache: la puja actual tiene que estar fresca para el vivo)
     // LEFT JOIN trae el nombre del ganador en la misma consulta (para el historial de

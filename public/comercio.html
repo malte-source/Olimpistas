@@ -8,26 +8,31 @@
   <meta name="theme-color" content="#0b0b0f" />
   <style>
     :root{--negro:#0a0a0e;--panel:#14141c;--panel2:#1b1b25;--linea:rgba(201,162,39,.16);
-      --oro:#c9a227;--oro2:#e7c64b;--blanco:#f3efe4;--gris:#8f8f9b;--verde:#37b26b;--rojo:#e94560;
+      --oro:#c9a227;--oro2:#e7c64b;--blanco:#f3efe4;--gris:#8f8f9b;--verde:#37b26b;--rojo:#e94560;--ambar:#e0a23b;
       --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
     *{box-sizing:border-box} body{margin:0;background:var(--negro);color:var(--blanco);font-family:var(--sans);line-height:1.5}
-    .wrap{max-width:440px;margin:0 auto;padding:22px 16px 60px}
+    .wrap{max-width:520px;margin:0 auto;padding:22px 16px 60px}
     header{text-align:center;padding:16px 0 22px}
     .wm{font-weight:900;letter-spacing:.3em;font-size:14px;color:var(--oro2);text-transform:uppercase}
     .stripes{height:5px;width:100px;margin:10px auto;border-radius:3px;background:repeating-linear-gradient(90deg,#fff 0 10px,#000 10px 20px);opacity:.85}
     h1{font-size:20px;font-weight:900;margin:6px 0 2px}
+    h2{font-size:15px;margin:22px 0 10px}
     .muted{color:var(--gris);font-size:14px}
     .card{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:18px}
     label{display:block;font-size:12px;color:var(--gris);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px}
     input,select{width:100%;font-family:inherit;font-size:16px;padding:13px;border-radius:11px;background:var(--panel2);color:var(--blanco);border:1px solid var(--linea)}
-    input.cod{font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase}
+    input.cod{font-family:var(--mono);letter-spacing:.06em}
     .btn{width:100%;border:0;font-family:inherit;font-weight:900;font-size:16px;padding:15px;border-radius:12px;cursor:pointer;margin-top:16px;
       background:linear-gradient(135deg,var(--oro2),var(--oro));color:#1a1500;text-transform:uppercase;letter-spacing:.03em}
     .btn:active{transform:translateY(1px)} .btn:disabled{opacity:.55}
     .btn.ghost{background:transparent;border:1px solid var(--linea);color:var(--blanco);font-weight:700;text-transform:none;letter-spacing:0}
-    .err{color:#ffa8b6;font-size:13px;margin-top:10px;min-height:16px}
+    .btn.sm{width:auto;padding:8px 14px;font-size:13px;margin:0}
+    .err{color:#ffa8b6;font-size:13px;margin-top:10px;min-height:16px} .ok{color:#7fe3a6;font-size:13px;margin-top:10px}
     .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
     .topbar .n{font-weight:800}
+    .seg{display:flex;gap:6px;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:4px;margin-bottom:14px}
+    .seg button{flex:1;border:0;background:transparent;color:var(--gris);font:inherit;font-weight:800;padding:10px;border-radius:9px;cursor:pointer}
+    .seg button.on{background:var(--panel2);color:var(--blanco)}
     .res{margin-top:16px;border-radius:14px;padding:16px;text-align:center;animation:pop .2s ease}
     @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
     .res.ok{background:rgba(55,178,107,.12);border:1px solid rgba(55,178,107,.5)}
@@ -36,8 +41,21 @@
     .res.ok .big{color:#7fe3a6} .res.no .big{color:#ffa8b6}
     .res small{color:var(--gris);font-size:13px}
     .res .ah{font-size:22px;font-weight:900;color:var(--oro2);margin-top:8px}
-    .badge{display:inline-block;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;padding:3px 10px;border-radius:999px;background:#0a0a0e;color:var(--oro2);border:1px solid var(--oro)}
-    .hide{display:none}
+    .badge{display:inline-block;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;padding:3px 10px;border-radius:999px;background:#0a0a0e;color:var(--oro2);border:1px solid var(--linea)}
+    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .kpi{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:14px}
+    .kpi b{display:block;font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums} .kpi span{font-size:12px;color:var(--gris)}
+    .mix{display:flex;flex-direction:column;gap:8px}
+    .mix div{display:grid;grid-template-columns:90px 1fr 34px;gap:8px;align-items:center;font-size:13px}
+    .mix i{display:block;height:8px;border-radius:4px;background:var(--oro2)}
+    .oferta{border:1px solid var(--linea);border-radius:12px;padding:12px;margin-top:8px}
+    .oferta .t{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+    .pill{font-size:10.5px;font-weight:900;letter-spacing:.05em;border-radius:999px;padding:3px 9px;white-space:nowrap}
+    .pill.pend{background:rgba(224,162,59,.15);color:var(--ambar)} .pill.pub{background:rgba(55,178,107,.15);color:#7fe3a6} .pill.rech{background:rgba(233,69,96,.15);color:#ffa8b6} .pill.paus{background:var(--panel2);color:var(--gris)}
+    .visor{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
+    .visor video{flex:1;object-fit:cover;width:100%}
+    .hide{display:none !important} /* al final y con !important: .visor (display:flex) no puede pisarlo */
+    .visor .barra{padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:#000;text-align:center;color:#fff}
   </style>
 </head>
 <body>
@@ -60,28 +78,62 @@
 
     <!-- PANEL -->
     <div id="panel" class="hide">
-      <div class="topbar"><span class="n" id="comNombre"></span><button class="btn ghost" id="salir" style="width:auto;padding:8px 14px;margin:0">Salir</button></div>
-      <div class="card">
-        <label>Beneficio a canjear</label>
-        <select id="benSel"></select>
-        <label>Código de socio</label>
-        <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" />
-        <label>Monto de la compra (opcional)</label>
-        <input id="monto" type="number" inputmode="numeric" placeholder="₲ 0" />
-        <button class="btn" id="validarBtn">Validar canje</button>
-        <div class="err" id="valErr"></div>
-        <div id="res"></div>
+      <div class="topbar"><span class="n" id="comNombre"></span><button class="btn ghost sm" id="salir">Salir</button></div>
+      <div class="seg"><button class="on" data-vista="validar">Validar</button><button data-vista="mi">Mi comercio</button></div>
+
+      <!-- VALIDAR -->
+      <div id="vValidar">
+        <div class="card">
+          <label>Beneficio a canjear</label>
+          <select id="benSel"></select>
+          <label>Monto de la compra (opcional)</label>
+          <input id="monto" type="number" inputmode="numeric" placeholder="₲ 0" />
+          <button class="btn" id="escanearBtn">Escanear carnet</button>
+          <p class="muted" style="margin:12px 0 0;font-size:13px">Pedile al hincha que abra su carnet en la app: el QR cambia cada minuto.</p>
+          <label>Código del socio o texto del QR (si no se puede escanear)</label>
+          <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" autocomplete="off" />
+          <button class="btn ghost" id="validarBtn" style="margin-top:12px">Validar canje</button>
+          <div class="err" id="valErr"></div>
+          <div id="res"></div>
+        </div>
+      </div>
+
+      <!-- MI COMERCIO -->
+      <div id="vMi" class="hide">
+        <p class="muted" id="periodo" style="margin:0 0 10px"></p>
+        <div class="kpis" id="kpis"></div>
+        <h2>Canjes por nivel</h2>
+        <div class="card"><div class="mix" id="mix"></div></div>
+        <div style="margin-top:12px"><button class="btn ghost sm" id="csvBtn">Descargar canjes (CSV)</button></div>
+
+        <h2>Cargar una oferta nueva</h2>
+        <div class="card">
+          <p class="muted" style="margin:0 0 4px;font-size:13px">El club la revisa antes de publicarla.</p>
+          <label>Título</label><input id="ofTitulo" maxlength="100" placeholder="Ej. 10% en protectores solares" />
+          <label>Beneficio</label><input id="ofValor" maxlength="30" placeholder="10%  ·  2x1  ·  Gratis el envío" />
+          <label>Para quién</label>
+          <select id="ofPara"><option value="todos">Todos los Olimpistas</option><option value="plus">Plus y Socio</option><option value="socio">Solo socios</option></select>
+          <label>Ahorro estimado en ₲ (si no es un %)</label><input id="ofAhorro" type="number" inputmode="numeric" min="0" placeholder="Opcional" />
+          <label>Cupo (cantidad de canjes)</label><input id="ofStock" type="number" inputmode="numeric" min="0" placeholder="Opcional: sin tope" />
+          <button class="btn" id="ofEnviar">Enviar para aprobación</button>
+          <div class="err" id="ofMsg"></div>
+        </div>
+        <h2>Mis ofertas</h2>
+        <div id="ofertas"></div>
       </div>
     </div>
   </div>
+
+  <div class="visor hide" id="visor"><video id="video" playsinline muted></video><div class="barra"><div id="visorMsg" style="margin-bottom:10px">Apuntá al QR del carnet</div><button class="btn ghost sm" id="visorCerrar">Cancelar</button></div></div>
 
   <script>
   (function(){
     var TK = "oli_comercio_token";
     var $ = function(id){ return document.getElementById(id); };
-    var LBL = {olimpista:"Olimpista", kids:"Junior", premium:"Plus", socio:"Socio"};
+    var LBL = {olimpista:"Olimpista", kids:"Junior", premium:"Plus", socio:"Socio", sin_dato:"Sin dato"};
     function gs(n){ return "₲ " + Number(n||0).toLocaleString("es-PY"); }
     function tok(){ try{ return localStorage.getItem(TK) || ""; }catch(e){ return ""; } }
+    function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 
     async function api(path, opts){
       opts = opts || {};
@@ -101,8 +153,17 @@
         entrarPanel();
       }catch(e){ $("loginErr").textContent = e.message; }
     });
-
+    $("password").addEventListener("keydown", function(e){ if(e.key === "Enter") $("loginBtn").click(); });
     $("salir").addEventListener("click", function(){ try{ localStorage.removeItem(TK); }catch(e){} location.reload(); });
+
+    // ── Vistas ──
+    document.querySelector(".seg").addEventListener("click", function(e){
+      var b = e.target.closest("button[data-vista]"); if(!b) return;
+      document.querySelectorAll(".seg button").forEach(function(x){ x.classList.toggle("on", x === b); });
+      $("vValidar").classList.toggle("hide", b.dataset.vista !== "validar");
+      $("vMi").classList.toggle("hide", b.dataset.vista !== "mi");
+      if(b.dataset.vista === "mi") cargarMiComercio();
+    });
 
     async function entrarPanel(){
       try{
@@ -110,36 +171,122 @@
         $("comNombre").textContent = (j.comercio && j.comercio.nombre) || "Comercio";
         var items = j.items || [];
         $("benSel").innerHTML = items.length
-          ? items.map(function(b){ return '<option value="'+b.id+'">'+esc(b.titulo)+' ('+esc(b.valor||"")+')</option>'; }).join("")
-          : '<option value="">Sin beneficios cargados</option>';
+          ? items.map(function(b){ return '<option value="'+esc(b.id)+'">'+esc(b.titulo)+' ('+esc(b.valor||"")+')</option>'; }).join("")
+          : '<option value="">Sin beneficios publicados</option>';
         $("loginCard").classList.add("hide");
         $("panel").classList.remove("hide");
       }catch(e){ /* token inválido → seguir en login */ }
     }
-    function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
 
-    $("validarBtn").addEventListener("click", async function(){
+    // ── Validar ──
+    var MOTIVOS = {socio_no_encontrado:"No encontramos ese código de socio.", beneficio_invalido:"Beneficio inválido o no publicado.",
+      limite:"Ya usó este beneficio hace poco (límite).", nivel_no_aplica:"Su nivel no incluye este beneficio.", agotado:"Se agotó el cupo de este beneficio.",
+      qr_vencido:"El QR venció. Pedile que espere a que cambie y lo muestre de nuevo.", qr_invalido:"QR no válido. Pedile que abra el carnet en la app.",
+      qr_usado:"Ese QR ya se usó. Pedile que espere al siguiente (cambia cada minuto)."};
+    async function validar(valor){
       $("valErr").textContent = ""; $("res").innerHTML = "";
-      var btn = this; btn.disabled = true;
+      var btn = $("validarBtn"); btn.disabled = true;
+      var v = String(valor == null ? $("codigo").value : valor).trim();
+      var esQr = /^OLI1\./.test(v);
       try{
         var j = await api("/comercio/validar", { method:"POST", body:{
-          codigo: $("codigo").value.trim(), beneficioId: $("benSel").value, monto: Number($("monto").value)||0
+          token: esQr ? v : undefined, codigo: esQr ? undefined : v, beneficioId: $("benSel").value, monto: Number($("monto").value)||0
         }});
         if(j.ok){
           var ah = j.ahorro ? '<div class="ah">El socio ahorró '+gs(j.ahorro)+'</div>' : "";
+          var cupo = (j.stock != null) ? '<small> · Quedan '+j.stock+' en el cupo.</small>' : "";
           $("res").innerHTML = '<div class="res ok"><span class="big">✓ Canje aprobado</span>'+
-            '<div><b>'+esc(j.socio.nombre)+'</b> <span class="badge">'+ (LBL[j.socio.tier]||j.socio.tier) +'</span></div>'+
-            '<small>"'+esc(j.beneficio)+'" registrado.</small>'+ah+'</div>';
+            '<div><b>'+esc(j.socio.nombre)+'</b> <span class="badge">'+ (LBL[j.socio.tier]||esc(j.socio.tier)) +'</span></div>'+
+            '<small>"'+esc(j.beneficio)+'" registrado.</small>'+cupo+ah+'</div>';
           $("codigo").value = ""; $("monto").value = "";
         }else{
-          var msg = {socio_no_encontrado:"No encontramos ese código de socio.",beneficio_invalido:"Beneficio inválido.",
-            limite:"Ya usó este beneficio hace poco (límite).",nivel_no_aplica:"Su nivel no incluye este beneficio."}[j.motivo] || "No se pudo validar.";
-          var extra = (j.motivo==="nivel_no_aplica" && j.requiere) ? ' Invitalo a subir a '+(LBL[j.requiere]||j.requiere)+'.' : "";
-          var who = j.socio ? '<div><b>'+esc(j.socio.nombre)+'</b> <span class="badge">'+(LBL[j.socio.tier]||j.socio.tier)+'</span></div>' : "";
+          var msg = MOTIVOS[j.motivo] || "No se pudo validar.";
+          var extra = (j.motivo==="nivel_no_aplica" && j.requiere) ? ' Invitalo a subir a '+(LBL[j.requiere]||esc(j.requiere))+'.' : "";
+          var who = j.socio ? '<div><b>'+esc(j.socio.nombre)+'</b> <span class="badge">'+(LBL[j.socio.tier]||esc(j.socio.tier))+'</span></div>' : "";
           $("res").innerHTML = '<div class="res no"><span class="big">✗ No aplica</span>'+who+'<small>'+msg+extra+'</small></div>';
         }
-      }catch(e){ $("valErr").textContent = e.message; if(/inv|401/.test(e.message)){} }
+      }catch(e){ $("valErr").textContent = e.message; }
       btn.disabled = false;
+    }
+    $("validarBtn").addEventListener("click", function(){ validar(); });
+
+    // ── Escanear el QR del carnet con la cámara (BarcodeDetector; si el navegador no lo trae, se pega el texto) ──
+    var stream = null, escaneando = false;
+    function cerrarVisor(){
+      escaneando = false;
+      if(stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
+      $("visor").classList.add("hide"); $("video").srcObject = null;
+    }
+    $("visorCerrar").addEventListener("click", cerrarVisor);
+    $("escanearBtn").addEventListener("click", async function(){
+      $("valErr").textContent = "";
+      if(!$("benSel").value){ $("valErr").textContent = "Primero elegí el beneficio a canjear."; return; }
+      if(!("BarcodeDetector" in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        $("valErr").textContent = "Este navegador no puede escanear. Abrí el panel en Chrome o pegá abajo el texto del QR."; return;
+      }
+      try{
+        var det = new BarcodeDetector({ formats:["qr_code"] });
+        stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" }, audio:false });
+        var v = $("video"); v.srcObject = stream; await v.play();
+        $("visor").classList.remove("hide"); escaneando = true;
+        (async function bucle(){
+          while(escaneando){
+            try{
+              var cs = await det.detect(v);
+              var hit = cs.find(function(c){ return /^OLI1\./.test(c.rawValue || ""); });
+              if(hit){ cerrarVisor(); $("codigo").value = hit.rawValue; validar(hit.rawValue); return; }
+            }catch(e){}
+            await new Promise(function(r){ setTimeout(r, 250); });
+          }
+        })();
+      }catch(e){ cerrarVisor(); $("valErr").textContent = "No pudimos abrir la cámara. Revisá el permiso o pegá el texto del QR."; }
+    });
+
+    // ── Mi comercio ──
+    async function cargarMiComercio(){
+      try{
+        var r = await Promise.all([api("/comercio/estadisticas"), api("/comercio/beneficios")]);
+        var e = r[0], ofertas = r[1].ofertas || [];
+        $("periodo").textContent = "Período: " + e.periodo;
+        $("kpis").innerHTML = [["Canjes", e.canjes], ["Ahorro entregado", gs(e.ahorro)], ["Ventas con carnet", gs(e.ventas)], ["Ticket promedio", gs(e.ticket_promedio)]]
+          .map(function(k){ return '<div class="kpi"><b>'+esc(k[1])+'</b><span>'+esc(k[0])+'</span></div>'; }).join("");
+        var max = Math.max.apply(null, [1].concat((e.mix||[]).map(function(m){ return m.canjes; })));
+        $("mix").innerHTML = (e.mix||[]).length ? e.mix.map(function(m){
+          return '<div><span>'+esc(LBL[m.nivel]||m.nivel)+'</span><i style="width:'+Math.round(m.canjes/max*100)+'%"></i><b>'+m.canjes+'</b></div>';
+        }).join("") : '<span class="muted">Todavía no hay canjes este mes.</span>';
+        $("ofertas").innerHTML = ofertas.length ? ofertas.map(function(o){
+          var est = o.estado === "borrador" ? '<span class="pill pend">ESPERA APROBACIÓN</span>' : o.estado === "rechazado" ? '<span class="pill rech">RECHAZADA</span>' : (o.activo ? '<span class="pill pub">PUBLICADA</span>' : '<span class="pill paus">EN PAUSA</span>');
+          var cupo = o.stock != null ? ' · cupo: '+o.stock : "";
+          var motivo = (o.estado === "rechazado" && o.motivo_rechazo) ? '<div class="err" style="margin:6px 0 0">Motivo: '+esc(o.motivo_rechazo)+'</div>' : "";
+          var acc = o.estado === "aprobado" ? '<button class="btn ghost sm" style="margin-top:8px" data-pausa="'+esc(o.id)+'" data-a="'+(o.activo?0:1)+'">'+(o.activo?"Pausar":"Reanudar")+'</button>' : "";
+          return '<div class="oferta"><div class="t"><b>'+esc(o.titulo)+'</b>'+est+'</div><div class="muted" style="font-size:13px">'+esc(o.valor)+cupo+'</div>'+motivo+acc+'</div>';
+        }).join("") : '<p class="muted">Todavía no cargaste ofertas.</p>';
+      }catch(err){ $("kpis").innerHTML = '<div class="err">'+esc(err.message)+'</div>'; }
+    }
+    $("ofertas").addEventListener("click", async function(e){
+      var b = e.target.closest("button[data-pausa]"); if(!b) return;
+      try{ await api("/comercio/beneficios/"+encodeURIComponent(b.dataset.pausa), { method:"PATCH", body:{ activo: b.dataset.a === "1" } }); cargarMiComercio(); entrarPanel(); }
+      catch(err){ $("ofMsg").className = "err"; $("ofMsg").textContent = err.message; }
+    });
+    $("ofEnviar").addEventListener("click", async function(){
+      var m = $("ofMsg"); m.className = "err"; m.textContent = "";
+      var body = { titulo:$("ofTitulo").value, valor:$("ofValor").value, para:$("ofPara").value };
+      if($("ofAhorro").value !== "") body.ahorro_estimado = Number($("ofAhorro").value);
+      if($("ofStock").value !== "") body.stock = Number($("ofStock").value);
+      try{
+        await api("/comercio/beneficios", { method:"POST", body:body });
+        ["ofTitulo","ofValor","ofAhorro","ofStock"].forEach(function(id){ $(id).value = ""; });
+        m.className = "ok"; m.textContent = "Listo: el club la revisa y te avisamos por correo cuando se publique.";
+        cargarMiComercio();
+      }catch(err){ m.textContent = err.message; }
+    });
+    $("csvBtn").addEventListener("click", async function(){
+      try{
+        var r = await fetch("/api/comercio/estadisticas?format=csv", { headers:{ "x-comercio-token": tok() } });
+        if(!r.ok) throw new Error("No se pudo descargar");
+        var blob = await r.blob(), a = document.createElement("a");
+        a.href = URL.createObjectURL(blob); a.download = "canjes.csv"; a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 3000);
+      }catch(err){ alert(err.message); }
     });
 
     // Arranque: si ya hay token, ir directo al panel.
