@@ -863,8 +863,11 @@
   }
 
   // ─── Subastas (puja en vivo por polling; Plus y Socio) ───────────────────────
-  let _subPoll = null, _subTick = null, _subData = null;
-  function stopSub() { if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
+  let _subPoll = null, _subTick = null, _subData = null, _subGen = 0;
+  // _subGen invalida a un pollTick que ya salió a la red: sin esto, si el usuario salía del lote
+  // mientras la respuesta estaba en vuelo, ese tick se reprogramaba solo y quedaba un poller
+  // "zombie" golpeando la API para siempre (uno más por cada lote que se abría y cerraba).
+  function stopSub() { _subGen++; if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
   const gsK = (n) => "₲" + Math.round((Number(n) || 0) / 1000) + "k";
   function cdTexto(termina) {
     const ms = new Date(termina).getTime() - Date.now();
@@ -891,7 +894,7 @@
   }
   // Miniatura/hero de una subasta: la foto real subida en el admin si hay, si no el
   // ícono generado (antes SIEMPRE se ignoraba `s.imagen` acá, la imagen subida nunca se veía).
-  function subastaMedia(s) { return s.imagen ? `<img src="${esc(s.imagen)}" alt="" />` : artSvg(s.id, s.titulo, s.emoji || icon("gavel", { size: 34 })); }
+  function subastaMedia(s) { return (s.imagen_url || s.imagen) ? `<img src="${esc(s.imagen_url || s.imagen)}" alt="" decoding="async" />` : artSvg(s.id, s.titulo, s.emoji || icon("gavel", { size: 34 })); }
   function cardSubasta(s) {
     const cd = cdTexto(s.termina), cerrada = s.estado !== "activa" || cd.fin;
     const cta = !s.desbloqueado
@@ -926,9 +929,15 @@
     // momento (ej: justo después de un mailing o un repost) terminen pujando en el
     // mismo segundo para siempre — picos periódicos sincronizados en vez de carga pareja
     // (se vieron en los logs de la caída del 2026-08-09: ráfagas de 300+ req en 1 minuto).
+    const gen = _subGen;
     const pollTick = async () => {
-      try { const d = await api("/subastas/" + id + "?liviano=1"); actualizarDetalle(d); } catch (e) {}
-      _subPoll = setTimeout(pollTick, 3500 + Math.random() * 1000);
+      if (gen !== _subGen) return;
+      // Pestaña en segundo plano: no se consulta (nadie lo ve) y se vuelve a mirar más tarde.
+      if (!document.hidden) {
+        try { const d = await api("/subastas/" + id + "?liviano=1"); if (gen !== _subGen) return; actualizarDetalle(d); } catch (e) {}
+      }
+      if (gen !== _subGen) return;
+      _subPoll = setTimeout(pollTick, document.hidden ? 8000 : 3500 + Math.random() * 1000);
     };
     _subPoll = setTimeout(pollTick, 3500 + Math.random() * 1000);
   }

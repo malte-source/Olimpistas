@@ -804,6 +804,25 @@ function createPgStore({ databaseUrl }) {
       return sql`SELECT sub.*, soc.nombre AS ganador_nombre FROM subastas sub
         LEFT JOIN socios soc ON soc.id = sub.ganador_id ORDER BY sub.termina ASC`;
     },
+    // Listado PÚBLICO de subastas SIN la foto. La foto vive en la columna `imagen` como data URL
+    // base64 (116–156 KB por lote): meterla en cada listado hacía pesar /api/subastas 297 KB
+    // comprimidos en CADA visita a la home (67 % de la carga) y la bajaba de la DB en cada
+    // refresco de caché. Acá se trae solo un hash corto (`imagen_v`) para versionar la URL de la
+    // foto, que se sirve aparte (GET /api/subastas/:id/imagen) con caché inmutable.
+    async listSubastasPublicas() {
+      return sql`SELECT sub.id, sub.slug, sub.titulo, sub.descripcion, sub.emoji, sub.nivel_min,
+          sub.precio_inicial, sub.incremento, sub.puja_actual, sub.ganador_id, sub.inicia, sub.termina,
+          sub.estado, sub.notificado, sub.creado, sub.duracion_horas, sub.pausada_en, sub.pago_estado,
+          (sub.imagen IS NOT NULL AND sub.imagen <> '') AS tiene_imagen,
+          left(md5(coalesce(sub.imagen, '')), 10) AS imagen_v,
+          soc.nombre AS ganador_nombre
+        FROM subastas sub LEFT JOIN socios soc ON soc.id = sub.ganador_id ORDER BY sub.termina ASC`;
+    },
+    // Solo la foto de un lote (para el endpoint de imagen cacheable).
+    async imagenSubasta(idOrSlug) {
+      const [r] = await sql`SELECT id, imagen FROM subastas WHERE id = ${idOrSlug} OR slug = ${idOrSlug} LIMIT 1`;
+      return r || null;
+    },
     // Acepta el id interno O el slug (link público) — así cualquier ruta que reciba
     // "lo que sea que vino en la URL" sigue funcionando sin tener que saber cuál es.
     // Mismo LEFT JOIN que listSubastas (nombre del ganador) — la página pública de una

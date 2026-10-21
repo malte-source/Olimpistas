@@ -24,6 +24,13 @@ const { alertar } = require("./lib/alert");
 const bcrypt = require("bcrypt");
 const geo = require("./lib/geo");
 const tutiApi = require("./lib/tuti");
+const { baseUrl } = require("./lib/url");
+const { urlImagen } = require("./lib/imagen-subasta");
+// Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
+const igualesSeguro = (a, b) => {
+  const h = (x) => require("crypto").createHash("sha256").update(String(x == null ? "" : x)).digest();
+  return require("crypto").timingSafeEqual(h(a), h(b));
+};
 const { listaPaises, paisNombre, paisCentroide, PAISES } = require("./data/paises");
 const { BRAND, TIERS, PERFIL_CAMPOS, tierBySlug } = require("./config");
 const { edadDesde } = require("./lib/edad");
@@ -333,8 +340,7 @@ function buildRouter() {
       try {
         const vtoken = crypto.randomBytes(24).toString("base64url");
         await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false });
-        const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
-        const link = `${proto}://${req.headers.host}/api/auth/verificar?token=${vtoken}`;
+        const link = `${baseUrl()}/api/auth/verificar?token=${vtoken}`;
         mailer.enviarVerificacion(socio, link).catch(() => {});
       } catch (e) { log.error({ err: e.message }, "verificación de email no disponible"); }
     }
@@ -372,8 +378,7 @@ function buildRouter() {
   r.post("/auth/recuperar", wrap(async (req, res) => {
     const r0 = await auth.solicitarReset({ email: (req.body || {}).email });
     if (r0.token && mailer.enviarReset) {
-      const proto = req.headers["x-forwarded-proto"] || "https";
-      const link = `${proto}://${req.headers.host}/reset?token=${r0.token}`;
+      const link = `${baseUrl()}/reset?token=${r0.token}`;
       mailer.enviarReset(r0.socio, link).catch(() => {});
     }
     res.json({ ok: true });
@@ -470,7 +475,7 @@ function buildRouter() {
 
   r.post("/perfil/foto", auth.requireSocio, wrap(async (req, res) => {
     const { foto } = req.body || {};
-    if (typeof foto !== "string" || !/^data:image\/(png|jpe?g|webp);base64,/.test(foto))
+    if (typeof foto !== "string" || !/^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(foto))
       throw httpError(400, "Imagen inválida (se espera un data URL de imagen)");
     if (foto.length > 800_000) throw httpError(413, "La imagen es muy grande (máx ~600KB)");
     const socio = auth.sanitize(await store.updateSocio(req.socio.id, { foto }));
@@ -545,7 +550,10 @@ function buildRouter() {
     if (!validado) {
       mailer.enviarEnRevision && mailer.enviarEnRevision(socioFull).catch(() => {});
     }
-    res.json({ validado, tier, estado: validado ? "validado_auto" : "a_revisar", ...(noAlDia ? { motivo: "no_al_dia" } : {}) });
+    // Misma respuesta para "no encontrado" y "no está al día": el motivo queda solo en la
+    // actualización interna (para revisión). Si no, cualquiera podía averiguar el estado de
+    // pago de un socio probando su cédula.
+    res.json({ validado, tier, estado: validado ? "validado_auto" : "a_revisar" });
   }));
 
   // ─── Membresía ──────────────────────────────────────────────────────────────
@@ -768,7 +776,7 @@ function buildRouter() {
   // x-cron-token = CRON_SECRET, frecuencia diaria. Reemplaza correr los scripts a mano.
   r.post("/cron/diario", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
-    if (!tok || (req.headers["x-cron-token"] || "") !== tok) return res.status(401).json({ error: "no autorizado" });
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
     const out = { cumples: 0, renovaciones: 0, subastas: 0, sesionesPurgadas: 0 };
     const hoy = new Date().toISOString().slice(0, 10);
     // IDEMPOTENCIA: Cloud Scheduler es at-least-once. `reservarNotificacion` es atómico
@@ -947,7 +955,7 @@ function buildRouter() {
     const [totalReal, pendientes, subastas] = await Promise.all([
       store.contarTotal ? store.contarTotal() : 0,
       store.listPedidos ? store.listPedidos({ estado: "pendiente", limit: 200 }) : [],
-      store.listSubastas ? store.listSubastas() : [],
+      store.listSubastasPublicas ? store.listSubastasPublicas() : [],
     ]);
     // Precio a mostrar según la moneda del pedido (Gs y USD son independientes).
     const enrich = pendientes.map((p) => {
@@ -1001,7 +1009,7 @@ function buildRouter() {
       store.listPedidos ? store.listPedidos({ socioId: socio.id, limit: 50 }) : [],
       store.listActualizaciones ? store.listActualizaciones({ socioId: socio.id, limit: 50 }) : [],
     ]);
-    const safe = { ...socio }; delete safe.password_hash; delete safe.password; delete safe.verif_token;
+    const safe = { ...socio }; delete safe.password_hash; delete safe.password; delete safe.verif_token; delete safe.reset_token; delete safe.reset_token_exp; delete safe.carnet_secreto;
     res.json({ socio: safe, membresia, historial, pedidos, actualizaciones });
   }));
   // Editar datos del socio (corregir email/cédula mal cargados = arregla matches de pago).
@@ -1033,7 +1041,7 @@ function buildRouter() {
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const actualizado = await store.updateSocio(socio.id, patch);
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "editar_socio", targetId: socio.id, detalle: Object.keys(patch).join(", "), por: req.adminUser });
-    const safe = { ...actualizado }; delete safe.password_hash; delete safe.password; delete safe.verif_token;
+    const safe = { ...actualizado }; delete safe.password_hash; delete safe.password; delete safe.verif_token; delete safe.reset_token; delete safe.reset_token_exp; delete safe.carnet_secreto;
     res.json({ ok: true, socio: safe });
   }));
   // Reenviar el email de verificación a un socio.
@@ -1042,8 +1050,7 @@ function buildRouter() {
     if (!socio) throw httpError(404, "Socio no encontrado");
     const vtoken = crypto.randomBytes(24).toString("base64url");
     await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false });
-    const proto = req.headers["x-forwarded-proto"] || "https";
-    const link = `${proto}://${req.headers.host}/api/auth/verificar?token=${vtoken}`;
+    const link = `${baseUrl()}/api/auth/verificar?token=${vtoken}`;
     const r0 = await mailer.enviarVerificacion(socio, link);
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "reenviar_verif", targetId: socio.id, detalle: socio.email || "" });
     res.json({ ok: !!(r0 && r0.ok), modo: r0 && r0.modo });
@@ -1469,7 +1476,7 @@ function buildRouter() {
   let _listaSub = null;
   async function listaSubastasBase() {
     if (_listaSub && Date.now() - _listaSub.t < 3000) return _listaSub.v;
-    const raw = (await store.listSubastas()).filter((s) => s.estado === "activa" || s.estado === "cerrada");
+    const raw = (await store.listSubastasPublicas()).filter((s) => s.estado === "activa" || s.estado === "cerrada");
     const v = [];
     for (const s of raw) v.push({ s, pujadores: await store.contarPujadores(s.id) });
     _listaSub = { t: Date.now(), v };
@@ -1481,7 +1488,7 @@ function buildRouter() {
     const items = (await listaSubastasBase()).map(({ s, pujadores }) => {
       const abierta = subastaAbierta(s);
       return {
-        id: s.id, slug: s.slug, titulo: s.titulo, descripcion: s.descripcion, imagen: s.imagen, emoji: s.emoji,
+        id: s.id, slug: s.slug, titulo: s.titulo, descripcion: s.descripcion, imagen_url: urlImagen(s), emoji: s.emoji,
         nivel_min: s.nivel_min, precio_inicial: s.precio_inicial, incremento: s.incremento,
         puja_actual: s.puja_actual, termina: s.termina, estado: abierta ? "activa" : "cerrada",
         pago_estado: s.pago_estado || null,
@@ -1545,7 +1552,7 @@ function buildRouter() {
       subasta: {
         id: s.id, slug: s.slug, titulo: s.titulo,
         descripcion: liviano ? undefined : s.descripcion,
-        imagen: liviano ? undefined : s.imagen,
+        imagen_url: liviano ? undefined : urlImagen(s),
         emoji: s.emoji,
         nivel_min: s.nivel_min, precio_inicial: s.precio_inicial, incremento: s.incremento,
         puja_actual: s.puja_actual, termina: s.termina, estado: abierta ? "activa" : "cerrada",

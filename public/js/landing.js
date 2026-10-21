@@ -51,7 +51,7 @@
   }
   // Foto real del lote si el admin la subió; si no, el mismo placeholder de gradiente
   // que usa el resto de la app (misma lógica que subastaMedia() en socio.js).
-  function destacadoMedia(s) { return s.imagen ? '<img src="' + esc(s.imagen) + '" alt="" />' : artSvg(s.id, s.titulo, s.emoji || OLI.icon("gavel", { size: 34 })); }
+  function destacadoMedia(s) { return (s.imagen_url || s.imagen) ? '<img src="' + esc(s.imagen_url || s.imagen) + '" alt="" decoding="async" />' : artSvg(s.id, s.titulo, s.emoji || OLI.icon("gavel", { size: 34 })); }
   function destacadoCard(s) {
     return '<a class="destacado" href="/subasta/' + encodeURIComponent(s.slug || s.id) + '">' +
       '<div class="destacado-media">' + destacadoMedia(s) +
@@ -166,6 +166,7 @@
       }
       // Total casi en vivo: endpoint liviano (solo total + países), cache corto.
       async function pollContador() {
+        if (document.hidden) return; // pestaña en segundo plano: no gastar requests
         try {
           const s = await api("/contador");
           if (!s || typeof s.total !== "number") return;
@@ -174,6 +175,7 @@
       }
       // Globo + top países: payload pesado, refresco espaciado.
       async function pollGlobo() {
+        if (document.hidden) return;
         try {
           const s = await api("/stats");
           if (!s || !Array.isArray(s.porPais)) return;

@@ -364,6 +364,18 @@ function createMemoryStore({ filePath = null } = {}) {
         return { ...s, ganador_nombre: g ? g.nombre : null };
       });
     },
+    // Mismo contrato que pg-store.listSubastasPublicas: sin la foto, con tiene_imagen + imagen_v.
+    async listSubastasPublicas() {
+      const crypto = require("crypto");
+      return (await this.listSubastas()).map((s) => {
+        const { imagen, ...resto } = s;
+        return { ...resto, tiene_imagen: !!imagen, imagen_v: crypto.createHash("md5").update(imagen || "").digest("hex").slice(0, 10) };
+      });
+    },
+    async imagenSubasta(idOrSlug) {
+      const s = (db.subastas || []).find((x) => x.id === idOrSlug || x.slug === idOrSlug);
+      return s ? { id: s.id, imagen: s.imagen || null } : null;
+    },
     // Acepta el id interno O el slug (link público) — así cualquier ruta que reciba
     // "lo que sea que vino en la URL" sigue funcionando sin tener que saber cuál es.
     async getSubasta(idOrSlug) {

@@ -11,6 +11,8 @@ const crypto = require("crypto");
 const { buildRouter } = require("./routes");
 const auth = require("./lib/auth");
 const log = require("./lib/log");
+const { baseUrl } = require("./lib/url");
+const { urlImagen, servirImagen } = require("./lib/imagen-subasta");
 const { PORT, BRAND } = require("./config");
 
 const app = express();
@@ -88,7 +90,12 @@ app.use((req, _res, next) => {
   if (header) {
     for (const part of header.split(";")) {
       const i = part.indexOf("=");
-      if (i > -1) req.cookies[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+      if (i > -1) {
+        const nombre = part.slice(0, i).trim(), crudo = part.slice(i + 1).trim();
+        // Una cookie con "%" suelto hacía lanzar decodeURIComponent y devolver 500 en toda
+        // ruta no cacheada, home incluida (visto en producción 2026-10-21). Se ignora ese valor.
+        try { req.cookies[nombre] = decodeURIComponent(crudo); } catch (e) { /* cookie corrupta: ignorada */ }
+      }
     }
   }
   next();
@@ -108,6 +115,9 @@ app.get("/health", (_req, res) => res.json({ ok: true, service: "olimpistas", cl
 
 // API — attachSocio se monta SOLO acá (no global): los estáticos y las páginas no
 // necesitan sesión, así se evita una consulta a la DB por cada asset servido en un pico.
+// La foto de cada subasta (cacheable, sin sesión) va ANTES del router: no hace falta resolver
+// la cookie ni tocar la tabla de socios para servir una imagen.
+app.get("/api/subastas/:id/imagen", servirImagen(() => require("./data/store").getStore()));
 app.use("/api", auth.attachSocio, buildRouter());
 
 // Sitemap dinámico (se registra ANTES del static → gana sobre public/sitemap.xml):
@@ -120,7 +130,7 @@ app.get("/sitemap.xml", async (req, res) => {
     { loc: base + "/legal", pri: "0.3", freq: "monthly" },
   ];
   try {
-    const subs = await require("./data/store").getStore().listSubastas();
+    const subs = await require("./data/store").getStore().listSubastasPublicas();
     for (const s of subs || []) if (s.estado === "activa" || s.estado === "cerrada") urls.push({ loc: base + "/subasta/" + (s.slug || s.id), pri: "0.8", freq: "hourly" });
   } catch (e) {}
   res.setHeader("Cache-Control", "public, max-age=600");
@@ -211,8 +221,7 @@ const sendPage = (file, lang) => (req, res) => {
   }
   // OG/Twitter: URL absoluta según el host (WhatsApp/Facebook exigen URL completa para
   // mostrar la imagen). Funciona en cualquier dominio (run.app o www.olimpistas.com).
-  const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
-  const base = proto + "://" + (req.headers.host || "www.olimpistas.com");
+  const base = baseUrl();
   const canonical = base + (req.path === "/" ? "/" : req.path);
   // hreflang ABSOLUTO (Google ignora el relativo): es → /, en → /en, x-default → /.
   const hreflang = `<link rel="alternate" hreflang="es" href="${base}/" />` +
@@ -239,8 +248,7 @@ app.get("/socio", (_req, res) => res.redirect(301, "/miembro")); // compat: link
 // fiable): muestra una confirmación branded + CTA → convierte el escaneo en captación.
 app.get("/c/:numero", (req, res) => {
   const num = String(req.params.numero || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 20);
-  const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
-  const base = proto + "://" + (req.headers.host || "www.olimpistas.com");
+  const base = baseUrl();
   const ogT = "Soy Olimpista 🤍🖤 — mirá mi carnet del Decano";
   const ogD = "Carnet oficial de la comunidad mundial de Olimpia. Sumate gratis en olimpistas.com.";
   const ogImg = base + "/assets/og.jpg";
@@ -275,10 +283,10 @@ app.get("/subasta/:id", async (req, res) => {
   let s = null;
   try { s = await require("./data/store").getStore().getSubasta(id); } catch (e) {}
   if (!s || (s.estado !== "activa" && s.estado !== "cerrada")) return res.redirect(302, "/");
-  const proto = (req.headers["x-forwarded-proto"] || "https").split(",")[0];
-  const base = proto + "://" + (req.headers.host || "www.olimpistas.com");
+  const base = baseUrl();
   const esc2 = (x) => String(x == null ? "" : x).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const og = s.imagen && /^https?:/.test(s.imagen) ? s.imagen : base + "/assets/og.jpg";
+  const imgUrl = urlImagen(s);
+  const og = imgUrl ? (/^https?:/.test(imgUrl) ? imgUrl : base + imgUrl) : base + "/assets/og.jpg";
   // Cerrada = queda pública como histórico, con el MISMO link — es la garantía de que
   // la subasta se terminó de verdad (2026-08-28). Antes esta página quedaba mostrando
   // "En vivo"/"Pujar →" hasta que el JS del cliente la corregía después de cargar —
@@ -333,7 +341,7 @@ app.get("/subasta/:id", async (req, res) => {
 <main class="wrap" style="max-width:680px;padding-top:36px;padding-bottom:60px">
   <a class="sub-back" href="/">← Volver a Olimpistas.com</a>
   <div class="sub-hero">
-    ${s.imagen ? '<img src="' + esc2(s.imagen) + '" alt="">' : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#2a2418,#c9a227);color:#f5efdd">${icGavel}</div>`}
+    ${imgUrl ? '<img src="' + esc2(imgUrl) + '" alt="">' : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,#2a2418,#c9a227);color:#f5efdd">${icGavel}</div>`}
     <span class="sub-unico">${icShield} Pieza única</span>
   </div>
   <span class="chip${cerrada ? "" : " on"}" id="estadoChip">${cerrada ? "Cerrada" : "En vivo"}</span>
@@ -391,8 +399,7 @@ app.get("/subasta/:id/certificado", auth.attachSocio, async (req, res) => {
   const codigo = crypto.createHash("sha256").update(s.id + "|" + s.ganador_id).digest("hex").slice(0, 10).toUpperCase();
   const fecha = new Date(s.termina || Date.now()).toLocaleDateString("es-PY", { year: "numeric", month: "long", day: "numeric" });
   const ganador = [req.socio.nombre, req.socio.apellido].filter(Boolean).join(" ") || req.socio.email;
-  const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
-  const certUrl = proto + "://" + (req.headers.host || "www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id) + "/certificado";
+  const certUrl = baseUrl() + "/subasta/" + encodeURIComponent(s.slug || s.id) + "/certificado";
   // Íconos de línea inline (mismo trazo que el sistema de íconos del cliente) — esta
   // página se genera server-side, sin JS de OLI.icon() disponible.
   const svgIcon = (body, size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">${body}</svg>`;
@@ -440,7 +447,7 @@ body{background:var(--negro)}
       <div class="wm">Olimpistas</div><div class="filete"></div>
       <h1>Certificado de Autenticidad</h1>
       <p class="lote">${esc2(s.titulo)}</p>
-      <div class="hero">${s.imagen ? '<img src="' + esc2(s.imagen) + '" alt="">' : icTrophy}</div>
+      <div class="hero">${urlImagen(s) ? '<img src="' + esc2(urlImagen(s)) + '" alt="">' : icTrophy}</div>
       <div class="row"><span class="l">Adjudicado a</span><span class="v">${esc2(ganador)}</span></div>
       <div class="row"><span class="l">Monto ganador</span><span class="v">₲ ${Number(s.puja_actual || 0).toLocaleString("es-PY")}</span></div>
       <div class="row"><span class="l">Fecha</span><span class="v">${esc2(fecha)}</span></div>
