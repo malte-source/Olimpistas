@@ -1197,19 +1197,19 @@ function buildRouter() {
   // Tablero del club: lo que mira la Comisión Directiva de un vistazo (todo agregado, sin datos personales).
   r.get("/admin/tablero", requireAdmin, wrap(async (_req, res) => {
     res.json(await memoAdmin("tablero", 30000, async () => {
-      const seguro = async (fn, vacio) => { try { return await fn(); } catch (e) { return vacio; } };
-      const [total, est, pagos, subastas, puntos, penas, beneficios, decs] = await Promise.all([
-        seguro(() => (store.contarTotal ? store.contarTotal() : 0), 0),
-        seguro(() => (store.estadisticasAdmin ? store.estadisticasAdmin() : { embudo: {}, membresias: [], tiempo: {} }), { embudo: {}, membresias: [], tiempo: {} }),
-        seguro(() => (store.pagosRecibidos ? store.pagosRecibidos() : { totales: {}, porConcepto: [] }), { totales: {}, porConcepto: [] }),
-        seguro(() => (store.listSubastasPublicas ? store.listSubastasPublicas() : []), []),
-        seguro(() => (store.resumenPuntos ? store.resumenPuntos() : {}), {}),
-        seguro(() => (store.listPenas ? store.listPenas() : []), []),
-        seguro(() => (store.listBeneficios ? store.listBeneficios() : []), []),
-        seguro(() => (store.listDecisiones ? store.listDecisiones() : []), []),
+      // Sin atajos: si la base falla, el tablero falla (un tablero que muestra ceros cuando la base está caída engaña a la CD).
+      const [total, est, pagos, subastas, puntos, penas, beneficios, decs, canjesPena] = await Promise.all([
+        store.contarTotal ? store.contarTotal() : 0,
+        store.estadisticasAdmin ? store.estadisticasAdmin() : { embudo: {}, membresias: [], tiempo: {} },
+        store.pagosRecibidos ? store.pagosRecibidos() : { totales: {}, porConcepto: [] },
+        store.listSubastasPublicas ? store.listSubastasPublicas() : [],
+        store.resumenPuntos ? store.resumenPuntos() : {},
+        store.listPenas ? store.listPenas() : [],
+        store.listBeneficios ? store.listBeneficios() : [],
+        store.listDecisiones ? store.listDecisiones() : [],
+        store.canjesPendientesPena ? store.canjesPendientesPena() : [],
       ]);
       const pagantes = (est.membresias || []).reduce((a, m) => a + (Number(m.pagados) || 0), 0);
-      const canjesPena = await seguro(() => (store.canjesPendientesPena ? store.canjesPendientesPena() : []), []);
       return {
         hinchas: { total: Number(total) || 0, hoy: (est.tiempo || {}).hoy || 0, ayer: (est.tiempo || {}).ayer || 0, pagantes, socios_validados: (est.embudo || {}).valido_socio || 0 },
         ingresos: { hoy: (pagos.totales || {}).hoy || 0, d7: (pagos.totales || {}).d7 || 0, d30: (pagos.totales || {}).d30 || 0, total: (pagos.totales || {}).total || 0, por_concepto: pagos.porConcepto || [] },
@@ -1219,7 +1219,7 @@ function buildRouter() {
           pausadas: (subastas || []).filter((s) => s.estado === "pausada").length,
         },
         puntos: { pasivo: puntos.pasivo || 0, socios_con_saldo: puntos.socios_con_saldo || 0, canjes_pendientes: puntos.canjes_pendientes || 0 },
-        penas: { total: (penas || []).length, verificadas: (penas || []).filter((p) => p.estado === "verificada" || p.estado === "activa").length, canjes_pendientes: (canjesPena || []).length },
+        penas: { total: (penas || []).length, verificadas: (penas || []).filter((p) => p.estado === "verificada").length, canjes_pendientes: (canjesPena || []).length },
         beneficios: { publicados: (beneficios || []).filter((b) => b.estado === "aprobado").length, por_aprobar: (beneficios || []).filter((b) => b.estado === "borrador").length },
         decisiones: { total: Object.keys(DECISIONES).length, tomadas: (decs || []).filter((d) => DECISIONES[d.clave]).length },
         generado: new Date().toISOString(),

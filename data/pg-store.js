@@ -95,12 +95,41 @@ function createPgStore({ databaseUrl, debug }) {
   // el pool. En producción no se notaba: los fragmentos con filtro fallaban al instante por sintaxis y casi ninguna
   // consulta quedaba con un fragmento vacío como único filtro. Ahora el plazo se arma recién cuando alguien ESPERA la consulta (await / .then / .catch /
   // .finally): un fragmento nunca se espera, así que nunca se ejecuta.
+  //
+  // ADMISIÓN (2026-10-21, hallado al probar el tablero en staging): contra el pooler de Supabase en modo transacción,
+  // cuando hay MÁS consultas simultáneas que conexiones y postgres.js las encola, parte de las encoladas se cuelgan
+  // para siempre —y la cancelación a los 8 s no las libera: el pooler ignora el cancel—. Reproducido sin código de la
+  // app (postgres.js suelto, max=3, 9 consultas distintas a la vez: 4 colgadas; con max=9 o con 3, todas bien) y hasta
+  // con `max_pipeline: 1`. La cola tiene que vivir acá, en JS: nunca hay más consultas en vuelo que conexiones, así que
+  // postgres.js no encola ni pipelinea. Cada consulta toma un cupo al ejecutarse y lo suelta al terminar (o fallar);
+  // una transacción retiene su cupo hasta cerrar. Esperar cupo más de DB_ESPERA_MS falla rápido en vez de colgar el request.
+  const DB_ESPERA_MS = Number(process.env.DB_ESPERA_MS || 15000);
+  let cuposEnUso = 0;
+  const esperaCupo = [];
+  function tomarCupo() {
+    if (cuposEnUso < DB_POOL_MAX) { cuposEnUso++; return Promise.resolve(); }
+    return new Promise((resolver, rechazar) => {
+      const w = { resolver, t: setTimeout(() => {
+        const i = esperaCupo.indexOf(w); if (i >= 0) esperaCupo.splice(i, 1);
+        const e = new Error("La base de datos está saturada. Probá de nuevo en unos segundos."); e.code = "DB_BUSY"; rechazar(e);
+      }, DB_ESPERA_MS) };
+      esperaCupo.push(w);
+    });
+  }
+  function soltarCupo() {
+    const w = esperaCupo.shift();
+    if (w) { clearTimeout(w.t); w.resolver(); } else cuposEnUso--;
+  }
   function conPlazo(query) {
     const thenOriginal = query.then;
     query.then = function (alExito, alError) {
-      const t = setTimeout(() => { try { query.cancel(); } catch (e) { /* la conexión ya no existe */ } }, DB_TIMEOUT_MS);
-      const p = thenOriginal.call(query);
-      p.then(() => clearTimeout(t), () => clearTimeout(t));
+      const p = tomarCupo().then(() => {
+        const t = setTimeout(() => { try { query.cancel(); } catch (e) { /* la conexión ya no existe */ } }, DB_TIMEOUT_MS);
+        const q = thenOriginal.call(query);
+        const fin = () => { clearTimeout(t); soltarCupo(); };
+        q.then(fin, fin);
+        return q;
+      });
       return p.then(alExito, alError);
     };
     return query;
@@ -120,6 +149,7 @@ function createPgStore({ databaseUrl, debug }) {
     // el `tx` propio (sin plazo), que es lo correcto: cancelar a la mitad la dejaría abierta.
     get(target, prop, receiver) {
       const v = Reflect.get(target, prop, receiver);
+      if (prop === "begin" && typeof v === "function") return (...args) => tomarCupo().then(() => v.apply(target, args).finally(soltarCupo));
       return typeof v === "function" ? v.bind(target) : v;
     },
   });

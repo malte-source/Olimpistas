@@ -125,3 +125,11 @@ Archivos `migraciones/NNNN_nombre.sql`, en orden. Cada una corre una vez y queda
 **Centro de ayuda**
 - `/ayuda` + `GET /api/ayuda?aud=&cat=&q=`. El contenido (28 tutoriales y 28 preguntas) se exporta **tal cual** del prototipo con `node scripts/exportar-ayuda.js "<Centro de Ayuda Olimpistas.dc.html>"` a `data/ayuda.json`. Se guarda en `data/` y no en `public/data/` (como pedía el paquete) para poder **filtrar por perfil**: los seis perfiles del club solo se ven con sesión del panel.
 - El texto del prototipo conserva cifras "a confirmar" (vencimiento de puntos, plazo de 72 h, fondo de 10 %): coinciden con los valores por defecto de Decisiones; cuando la CD decida otra cosa hay que actualizar el prototipo y volver a exportar.
+
+## Pool de base de datos: admisión de consultas (hallazgo del Sprint 5)
+
+Contra el pooler de Supabase en modo transacción, las consultas que postgres.js deja **encoladas por encima del tamaño del pool** se cuelgan para siempre, y la cancelación a los 8 s no las libera (el pooler ignora el cancel). Se reprodujo en staging **sin código de la app**: `postgres.js` suelto con `max=3` y 9 consultas distintas a la vez → 4 colgadas y las rondas siguientes también; con `max=9` (sin cola) o con 3 consultas, todo bien; tampoco lo arregla `max_pipeline: 1`. En Cloud Run dejó la instancia entera devolviendo 500 hasta reciclarla.
+
+Arreglo (`data/pg-store.js`): la cola vive en JS. Cada consulta toma un cupo (tantos como `DB_POOL_MAX`) al ejecutarse y lo suelta al terminar o fallar; una transacción retiene su cupo hasta cerrar; esperar cupo más de `DB_ESPERA_MS` (15 s) falla con `DB_BUSY` en vez de colgar el request. Contra la base real de staging, la ráfaga de 9 consultas con pool de 3 pasó de colgarse a terminar en ~1 s, tres veces seguidas.
+
+**Para producción:** el mismo código corre allá con `DB_POOL_MAX=6`. Cualquier ráfaga de más de 6 consultas simultáneas en una instancia pudo producir este cuelgue (es compatible con la "degradación en cascada" del 2026-08-09). No se probó contra la base de producción; el arreglo entra con el merge y se verifica en staging antes.

@@ -91,6 +91,16 @@ test("whoami informa secciones y solo lectura según el rol", async () => {
   assert.strictEqual(own.secciones.length, adminAuth.SECCIONES.length);
 });
 
+test("tablero: si la base falla responde error, no ceros que engañen a la CD (y el error no se cachea)", async () => {
+  const original = store.resumenPuntos;
+  store.resumenPuntos = async () => { throw new Error("base caída"); };
+  try {
+    const r = await hit("cd", "/tablero");
+    assert.strictEqual(r.status, 500);
+  } finally { store.resumenPuntos = original; }
+  assert.strictEqual((await hit("cd", "/tablero")).status, 200, "al volver la base, responde normal");
+});
+
 test("la CD ve el tablero y las decisiones, pero no los pagos ni los hinchas con nombre", async () => {
   assert.strictEqual((await hit("cd", "/tablero")).status, 200);
   assert.strictEqual((await hit("cd", "/decisiones")).status, 200);
