@@ -591,8 +591,12 @@ window.OLI = (function () {
     try {
       const r = new URLSearchParams(location.search).get("ref");
       if (r) sessionStorage.setItem("oli_ref", String(r).trim().slice(0, 16));
+      // Peñas: el link de captación de una peña trae ?pena=slug (igual que ?ref=).
+      const pe = new URLSearchParams(location.search).get("pena");
+      if (pe) sessionStorage.setItem("oli_pena", String(pe).trim().toLowerCase().slice(0, 60));
     } catch (e) {}
   })();
+  function pena() { try { return sessionStorage.getItem("oli_pena") || ""; } catch (e) { return ""; } }
   function ref() { try { return sessionStorage.getItem("oli_ref") || ""; } catch (e) { return ""; } }
   // Link de invitación del socio (para compartir): www.olimpistas.com/?ref=<su_codigo>
   function refLink(codigo) { return "https://www.olimpistas.com/?ref=" + encodeURIComponent(codigo || ""); }
@@ -607,5 +611,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, refLink, track, theme, setTheme, initThemeToggle, icon };
+  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, initThemeToggle, icon };
 })();

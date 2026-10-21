@@ -955,6 +955,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .sub-cerrada { background: var(--negro-2); border: 1px solid var(--linea); border-radius: 12px;
   padding: 14px; font-weight: 700; text-align: center; color: var(--gris-2); }
 /* Plazo de pago del lote adjudicado (el oro queda para el botón de pagar). */
+/* Peñas */
+.pena-mia { border: 1px solid var(--linea); border-radius: 14px; padding: 14px 16px; margin: 4px 0 14px; background: var(--negro-2); }
+.pena-acc { display: flex; gap: 8px; flex-wrap: wrap; }
+.pena-lista { display: flex; flex-direction: column; }
+.pena-fila { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--linea); }
+.pena-fila:last-child { border-bottom: 0; }
+.pena-rk { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; background: var(--negro-2); border: 1px solid var(--linea); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.pena-nm { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pena-nm span { font-size: 12.5px; }
+.pena-sol { margin-top: 18px; border: 1px solid var(--linea); border-radius: 12px; padding: 12px 14px; }
+.pena-sol summary { cursor: pointer; font-weight: 700; }
+.pena-form { display: grid; gap: 8px; margin-top: 8px; }
 .sub-plazo-box { display: flex; flex-direction: column; gap: 4px; text-align: center; margin: 10px 0; font-size: 13px; color: var(--gris-2); }
 .sub-plazo b { color: var(--blanco); }
 .sub-plazo.urg { color: var(--blanco); font-weight: 700; }

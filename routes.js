@@ -344,6 +344,18 @@ function buildRouter() {
         mailer.enviarVerificacion(socio, link).catch(() => {});
       } catch (e) { log.error({ err: e.message }, "verificación de email no disponible"); }
     }
+    // Peña: ?pena=slug (igual que ?ref=). Solo cuenta una peña VERIFICADA; un slug inválido nunca rompe el alta.
+    const penaSlug = String((req.body || {}).pena || "").trim().toLowerCase().slice(0, 60);
+    if (penaSlug && store.getPenaPorSlug) {
+      try {
+        const pe = await store.getPenaPorSlug(penaSlug);
+        if (pe && pe.estado === "verificada") {
+          await store.updateSocio(socio.id, { pena_id: pe.id });
+          socio.pena_id = pe.id; _penasPub = null;
+          avisarPenaSumo(pe, { nombre, apellido }).catch(() => {});
+        }
+      } catch (e) { log.warn({ err: e.message }, "registro: no se pudo asignar la peña"); }
+    }
     // Notificar a quien lo invitó (best-effort, no bloquea el alta).
     if (socio.referido_por && store.getSocioById) {
       store.getSocioById(socio.referido_por).then(async (ref) => {
@@ -458,6 +470,16 @@ function buildRouter() {
     // Avisos por email, granulares (independientes del opt-out global marketing_baja).
     for (const key of ["avisos_subastas", "avisos_sorteos", "avisos_contenido"]) {
       if (typeof b[key] === "boolean") patch[key] = b[key];
+    }
+    // Peña: sumarse a una peña verificada, o dejarla (null / "").
+    if (b.pena_id !== undefined) {
+      if (b.pena_id === null || b.pena_id === "") patch.pena_id = null;
+      else {
+        const pe = store.getPena ? await store.getPena(String(b.pena_id)) : null;
+        if (!pe || pe.estado !== "verificada") throw httpError(400, "Esa peña no está disponible");
+        patch.pena_id = pe.id;
+      }
+      _penasPub = null;
     }
     // Fecha de nacimiento (define el tier por edad). Formato YYYY-MM-DD.
     if (typeof b.fecha_nacimiento === "string" && b.fecha_nacimiento) {
@@ -687,7 +709,7 @@ function buildRouter() {
         log.error({ pedidoId: pedido.id, subastaId: pedido.subasta_id, socioId: pedido.socio_id }, "pago recibido por un lote que ya no está adjudicado a ese socio");
         alertar("subasta:pago-huerfano:" + pedido.id, "Pago recibido por un lote que ya no es de esa persona — REEMBOLSAR",
           "Pedido " + pedido.id + " · ₲ " + Number(pedido.monto || 0).toLocaleString("es-PY") + " · el plazo venció y el lote pasó a otro postor o volvió a borrador. Reembolsar por Pagopar.");
-        return null;
+        return { huerfano: true };
       }
       if (store.marcarSubastaPagada) await store.marcarSubastaPagada(pedido.subasta_id);
       const s = actual;
@@ -720,6 +742,7 @@ function buildRouter() {
     try {
       const out = await cumplirPedidoPagado(p);
       await store.marcarCumplido(p.id);
+      if (!(out && out.huerfano)) await acreditarFondoPena(p); // el 10 % (decisión pct) al fondo de la peña del hincha
       return { estado: "entregado", out };
     } catch (e) {
       await store.liberarCumplimiento(p.id).catch(() => {});
@@ -790,6 +813,7 @@ function buildRouter() {
       await acreditarPago(pedido.id, "webhook");
     } else if (row.pagado === false && pedido.estado === "pagado" && (await store.marcarReversado(pedido.id))) {
       // Reversión de un pago ya confirmado (la transición pagado → reversado es atómica).
+      if (store.revertirIngresoPena) await store.revertirIngresoPena(pedido.id).catch((e) => log.error({ pedidoId: pedido.id, err: e.message }, "peña: no se pudo revertir el aporte"));
       if (pedido.reserva_id && store.cancelarReservaYreponer) {
         // Entradas: cancelamos la reserva y reponemos el stock.
         await store.cancelarReservaYreponer(pedido.reserva_id);
@@ -1229,6 +1253,7 @@ function buildRouter() {
     ]);
     const tier = (membresia && membresia.tier_slug) || "olimpista";
     const resultado = (p) => p.estado === "activa" ? "en_vivo" : (p.adjudicado_a || p.ganador_id) === socio.id ? (p.pago_estado === "pagado" ? "pagado" : "gano_sin_pagar") : "no_gano";
+    const pena = socio.pena_id && store.getPena ? await store.getPena(socio.pena_id).catch(() => null) : null;
     const pujas = pujasRaw.map((p) => ({ subasta_id: p.subasta_id, titulo: p.titulo, mejor_oferta: p.mejor_oferta, pujas: p.pujas, ultima: p.ultima, resultado: resultado(p) }));
     const pagados = pedidos.filter((p) => p.estado === "pagado");
     const bloqueo = socio.subastas_bloqueo_hasta && new Date(socio.subastas_bloqueo_hasta).getTime() > Date.now() ? socio.subastas_bloqueo_hasta : null;
@@ -1254,8 +1279,9 @@ function buildRouter() {
       estado_club: club,
       suspension_subastas: bloqueo,
       canjes, pujas,
-      // Llegan con sus sprints (puntos, peñas) o con los endpoints nuevos de Tuti (abono).
-      puntos: null, pena: null, abono: null,
+      // Llegan con su sprint (puntos) o con los endpoints nuevos de Tuti (abono).
+      puntos: null, abono: null,
+      pena: pena ? { id: pena.id, nombre: pena.nombre, slug: pena.slug, ciudad: pena.ciudad } : null,
       eventos: eventos.slice(0, 60),
     });
   }));
@@ -2056,6 +2082,208 @@ function buildRouter() {
       pujadores: await store.contarPujadores(s.id), ganador, pujas: await store.pujasDeSubasta(s.id, 50),
     });
   }));
+
+  // ─── Peñas oficiales: link de captación, panel de la comisión y fondo ───────────
+  const emailOk = (e) => typeof e === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+  const limpioTxt = (s, max) => (typeof s === "string" ? s.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "");
+  const linkPena = (p) => baseUrl() + "/?pena=" + encodeURIComponent(p.slug);
+  // Privacidad: la comisión ve el nombre y la inicial del apellido de quien se sumó, nunca email, cédula ni teléfono.
+  const nombreCorto = (s) => [s.nombre, s.apellido ? s.apellido[0].toUpperCase() + "." : ""].filter(Boolean).join(" ") || "Hincha";
+
+  // Ranking público de peñas verificadas por altas (caché de 30 s: la home lo pide seguido).
+  let _penasPub = null;
+  async function penasVerificadas() {
+    if (_penasPub && Date.now() - _penasPub.t < 30000) return _penasPub.v;
+    const filas = store.listPenas ? await store.listPenas({ estado: "verificada" }) : [];
+    const v = filas.map((p, i) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, socios: p.socios, plus: p.plus, ranking: i + 1 }));
+    _penasPub = { t: Date.now(), v };
+    return v;
+  }
+  r.get("/penas", wrap(async (req, res) => {
+    const mia = req.socio && req.socio.pena_id;
+    res.json({ items: (await penasVerificadas()).map((p) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, ranking: p.ranking, es_tuya: p.id === mia })), mia: mia || null });
+  }));
+  r.get("/penas/:slug", wrap(async (req, res) => {
+    const p = (await penasVerificadas()).find((x) => x.slug === String(req.params.slug).toLowerCase());
+    if (!p) throw httpError(404, "Peña no encontrada");
+    res.json({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, ranking: p.ranking, link: linkPena(p), es_tuya: !!(req.socio && req.socio.pena_id === p.id) });
+  }));
+  // Pedir que el club verifique una peña nueva. Queda PENDIENTE: no aparece en el ranking ni recibe aportes hasta que el club la verifique.
+  r.post("/penas/solicitud", wrap(async (req, res) => {
+    const b = req.body || {};
+    const nombre = limpioTxt(b.nombre, 80), ciudad = limpioTxt(b.ciudad, 60), presidente = limpioTxt(b.presidente, 80), contacto = limpioTxt(b.contacto, 120).toLowerCase();
+    const iso = String(b.pais_iso || "PY").toUpperCase();
+    if (nombre.length < 3) throw httpError(400, "Poné el nombre de la peña");
+    if (ciudad.length < 2) throw httpError(400, "Poné la ciudad");
+    if (presidente.length < 3) throw httpError(400, "Poné el nombre de quien preside");
+    if (!emailOk(contacto)) throw httpError(400, "Poné un email de contacto válido: ahí te mandamos el acceso al panel");
+    if (!PAISES[iso]) throw httpError(400, "País inválido");
+    const pendientes = await store.listPenas({ estado: "pendiente" });
+    if (pendientes.some((p) => String(p.contacto).toLowerCase() === contacto)) throw httpError(409, "Ya recibimos una solicitud con ese email. Te vamos a escribir.");
+    const p = await store.crearPena({ nombre, ciudad, pais_iso: iso, presidente, contacto });
+    alertar("pena:solicitud:" + p.id, "Peña nueva para verificar", `${nombre} · ${ciudad} · preside ${presidente} · ${contacto}`);
+    res.status(201).json({ ok: true, id: p.id });
+  }));
+
+  // ── Panel de la comisión (usuario de peña, sesión de 12 h, header x-pena-token) ──
+  async function requirePena(req, res, next) {
+    try {
+      const s = await store.getPenaSesion(req.headers["x-pena-token"] || "");
+      if (!s) return res.status(401).json({ error: "Sesión de peña inválida" });
+      if (s.estado !== "verificada") return res.status(403).json({ error: "Tu peña está en pausa. Escribinos al club." });
+      req.pena = { id: s.pena_id, nombre: s.nombre, slug: s.slug };
+      next();
+    } catch (e) { res.status(401).json({ error: "no autorizado" }); }
+  }
+  async function abrirSesionPena(penaId) {
+    const token = crypto.randomBytes(32).toString("base64url");
+    await store.crearPenaSesion(penaId, token, new Date(Date.now() + 12 * 3600 * 1000).toISOString());
+    return token;
+  }
+  r.post("/pena/login", wrap(async (req, res) => {
+    const u = store.getPenaUsuarioPorUsuario ? await store.getPenaUsuarioPorUsuario(String(req.body?.usuario || "")) : null;
+    const ok = u && (await bcrypt.compare(String(req.body?.password || ""), u.password_hash));
+    if (!ok) throw httpError(401, "Usuario o contraseña incorrectos");
+    const p = await store.getPena(u.pena_id);
+    if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
+    res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
+  }));
+  // Elegir la contraseña con el link de un solo uso del correo de verificación.
+  r.post("/pena/clave", wrap(async (req, res) => {
+    const password = String(req.body?.password || "");
+    if (password.length < 8) throw httpError(400, "La contraseña debe tener al menos 8 caracteres");
+    const u = await store.getPenaUsuarioPorSetupToken(String(req.body?.token || ""));
+    if (!u) throw httpError(400, "El link venció o ya se usó. Pedile al club que te mande otro.");
+    await store.updatePenaUsuario(u.id, { password_hash: await bcrypt.hash(password, 10), setup_token: null, setup_exp: null });
+    const p = await store.getPena(u.pena_id);
+    if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
+    res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
+  }));
+  r.post("/pena/logout", requirePena, wrap(async (req, res) => { await store.borrarPenaSesion(req.headers["x-pena-token"]); res.json({ ok: true }); }));
+
+  async function fondoDe(penaId) {
+    const [p] = await store.listPenas({ id: penaId });
+    return { saldo: p.saldo, pendiente: p.canje_pendiente, disponible: Math.max(0, p.saldo - p.canje_pendiente), pena: p };
+  }
+  r.get("/pena/panel", requirePena, wrap(async (req, res) => {
+    const [f, altas, ranking, pct] = await Promise.all([fondoDe(req.pena.id), store.ultimasAltasPena(req.pena.id, 8), penasVerificadas(), decision("pct")]);
+    const mia = ranking.find((x) => x.id === req.pena.id);
+    res.json({
+      pena: { nombre: f.pena.nombre, slug: f.pena.slug, ciudad: f.pena.ciudad, pais_iso: f.pena.pais_iso, estado: f.pena.estado },
+      ranking: mia ? mia.ranking : null, total_penas: ranking.length,
+      kpis: { altas: f.pena.altas, socios: f.pena.socios, plus: f.pena.plus, saldo: f.saldo },
+      link: linkPena(f.pena), pct: Number(pct) || 10,
+      ultimas_altas: altas.map((s) => ({ nombre: nombreCorto(s), ciudad: s.ciudad || "", nivel: (tierBySlug(s.tier_slug) || {}).nombre || "Olimpista", creado: s.creado })),
+    });
+  }));
+  r.get("/pena/fondo", requirePena, wrap(async (req, res) => {
+    const [f, mov, pct] = await Promise.all([fondoDe(req.pena.id), store.movimientosPena(req.pena.id, 40), decision("pct")]);
+    res.json({ saldo: f.saldo, pendiente: f.pendiente, disponible: f.disponible, pct: Number(pct) || 10,
+      movimientos: mov.map((m) => ({ id: m.id, motivo: m.motivo, monto: m.monto, detalle: m.detalle, estado: m.estado, creado: m.creado })) });
+  }));
+  r.post("/pena/fondo/canje", requirePena, wrap(async (req, res) => {
+    const item = limpioTxt(req.body?.item, 120), monto = Math.round(Number(req.body?.monto) || 0);
+    if (item.length < 3) throw httpError(400, "Contanos qué querés canjear (ej: bus para ir al estadio)");
+    if (!(monto >= 1000)) throw httpError(400, "El monto mínimo es ₲ 1.000");
+    const out = await store.pedirCanjePena({ penaId: req.pena.id, monto, detalle: item });
+    if (!out || !out.ok) throw httpError(409, "El fondo disponible es ₲ " + Number((out && out.disponible) || 0).toLocaleString("es-PY"));
+    alertar("pena:canje:" + out.movimiento.id, "Peña pide canjear su fondo", `${req.pena.nombre} · ${item} · ₲ ${monto.toLocaleString("es-PY")}`);
+    res.status(201).json({ ok: true, movimiento: { id: out.movimiento.id, monto: out.movimiento.monto, detalle: out.movimiento.detalle, estado: out.movimiento.estado } });
+  }));
+
+  // ── Admin (club): verificar, pausar, aprobar canjes ──
+  r.get("/admin/penas", requireAdmin, wrap(async (_req, res) => {
+    const [items, canjes, pct] = await Promise.all([store.listPenas(), store.canjesPendientesPena(), decision("pct")]);
+    res.json({ items, canjes, pct: Number(pct) || 10 });
+  }));
+  async function enviarAccesoPena(pena, { renovar = false } = {}) {
+    let u = await store.getPenaUsuarioDePena(pena.id);
+    const setupToken = crypto.randomBytes(24).toString("base64url");
+    const setupExp = new Date(Date.now() + 7 * 86400000).toISOString();
+    if (!u) {
+      let usuario = pena.slug, n = 1;
+      while (await store.getPenaUsuarioPorUsuario(usuario)) usuario = pena.slug + "-" + (++n);
+      // Contraseña al azar que nadie conoce: la comisión elige la suya con el link de un solo uso.
+      u = await store.crearPenaUsuario({ penaId: pena.id, usuario, passwordHash: await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 10), setupToken, setupExp });
+    } else {
+      u = await store.updatePenaUsuario(u.id, { setup_token: setupToken, setup_exp: setupExp });
+      if (renovar && store.borrarSesionesDePena) await store.borrarSesionesDePena(pena.id);
+    }
+    const urlClave = baseUrl() + "/pena?token=" + encodeURIComponent(setupToken);
+    let correo = false;
+    if (emailOk(pena.contacto) && mailer.enviarPenaVerificada) {
+      await mailer.enviarPenaVerificada({ email: pena.contacto }, { pena, usuario: u.usuario, urlClave, urlLink: linkPena(pena) }).then(() => { correo = true; }).catch(() => {});
+    }
+    return { usuario: u.usuario, urlClave, correo };
+  }
+  r.post("/admin/penas/:id/verificar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const pena = await store.getPena(req.params.id);
+    if (!pena) throw httpError(404, "Peña no encontrada");
+    const p = await store.updatePena(pena.id, { estado: "verificada" });
+    _penasPub = null;
+    const acceso = await enviarAccesoPena(p);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:verificar", targetId: p.id, detalle: p.nombre, por: req.adminUser });
+    // Si no hay correo válido, el admin recibe el link para pasárselo a la comisión por otro medio.
+    res.json({ ok: true, pena: { id: p.id, slug: p.slug, estado: p.estado }, usuario: acceso.usuario, correo_enviado: acceso.correo, ...(acceso.correo ? {} : { url_clave: acceso.urlClave }) });
+  }));
+  r.post("/admin/penas/:id/acceso", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const pena = await store.getPena(req.params.id);
+    if (!pena || pena.estado !== "verificada") throw httpError(409, "Solo se reenvía el acceso de una peña verificada");
+    const acceso = await enviarAccesoPena(pena, { renovar: true });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:acceso", targetId: pena.id, detalle: pena.nombre, por: req.adminUser });
+    res.json({ ok: true, usuario: acceso.usuario, correo_enviado: acceso.correo, ...(acceso.correo ? {} : { url_clave: acceso.urlClave }) });
+  }));
+  r.post("/admin/penas/:id/estado", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const estado = String(req.body?.estado || "");
+    if (!["verificada", "pausada"].includes(estado)) throw httpError(400, "Estado inválido (verificada | pausada)");
+    const pena = await store.getPena(req.params.id);
+    if (!pena || pena.estado === "pendiente") throw httpError(409, "Una peña pendiente se verifica, no se pausa");
+    const p = await store.updatePena(pena.id, { estado });
+    if (estado === "pausada" && store.borrarSesionesDePena) await store.borrarSesionesDePena(pena.id);
+    _penasPub = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:" + estado, targetId: pena.id, detalle: pena.nombre, por: req.adminUser });
+    res.json({ ok: true, pena: { id: p.id, estado: p.estado } });
+  }));
+  // Aprobar (resta del saldo) o rechazar un canje pedido por una peña.
+  r.post("/admin/penas/canje/:id", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
+    const aprobar = !(req.body && req.body.rechazar === true);
+    const out = await store.resolverCanjePena(req.params.id, { aprobar });
+    if (!out.ok) {
+      if (out.motivo === "no_existe") throw httpError(404, "Canje no encontrado");
+      if (out.motivo === "ya_resuelto") throw httpError(409, "Ese canje ya se resolvió (" + out.estado + ")");
+      throw httpError(409, "El fondo de la peña ya no alcanza para este canje");
+    }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: aprobar ? "penas:canje-aprobado" : "penas:canje-rechazado", targetId: req.params.id, detalle: out.movimiento.detalle, por: req.adminUser });
+    res.json({ ok: true, estado: out.movimiento.estado });
+  }));
+
+  // Aporte al fondo: el % que decide el club (10 por defecto) de lo que paga cada hincha de la peña.
+  // Un pedido acredita UNA vez (pedido_id único en el libro). Una falla acá nunca frena la entrega del pago.
+  async function acreditarFondoPena(pedido) {
+    try {
+      if (!store.acreditarPena || !pedido.socio_id) return;
+      const socio = await store.getSocioById(pedido.socio_id);
+      if (!socio || !socio.pena_id) return;
+      const pena = await store.getPena(socio.pena_id);
+      if (!pena || pena.estado !== "verificada") return;
+      const pct = Number(await decision("pct")) || 10;
+      const monto = Math.floor(Number(pedido.monto || 0) * pct / 100);
+      if (monto <= 0) return;
+      const m = await store.acreditarPena({ penaId: pena.id, pedidoId: pedido.id, monto, detalle: `${pedido.concepto || "Pago"} · ${nombreCorto(socio)} (${pct}%)` });
+      if (m) log.info({ penaId: pena.id, pedidoId: pedido.id, monto }, "peña: aporte al fondo");
+    } catch (e) {
+      log.error({ pedidoId: pedido.id, err: e.message }, "peña: no se pudo acreditar el fondo");
+      alertar("pena:fondo-fallo:" + pedido.id, "Falló el aporte al fondo de una peña", `Pedido ${pedido.id}: ${e.message}. El pago se entregó igual; hay que acreditar el fondo a mano.`);
+    }
+  }
+  // Aviso a la comisión de que se sumó un hincha: como máximo uno por día y peña.
+  async function avisarPenaSumo(pena, socio) {
+    if (!emailOk(pena.contacto) || !mailer.enviarPenaSumoSocio) return;
+    const reservar = store.reservarNotificacion ? (k) => store.reservarNotificacion(k) : async () => true;
+    if (!(await reservar("pena:sumo:" + pena.id + ":" + new Date().toISOString().slice(0, 10)))) return;
+    const [p] = await store.listPenas({ id: pena.id });
+    await mailer.enviarPenaSumoSocio({ email: pena.contacto }, { pena, invitado: nombreCorto(socio), total: p ? p.altas : undefined }).catch(() => {});
+  }
 
   // ─── Preventas de entradas ──────────────────────────────────────────────────
   r.get("/preventas", auth.attachSocio, wrap(async (req, res) => {

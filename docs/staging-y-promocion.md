@@ -73,3 +73,12 @@ Archivos `migraciones/NNNN_nombre.sql`, en orden. Cada una corre una vez y queda
 - `GET /api/admin/socios/:id/parecidos?por=perfil|habito` y `GET/POST/DELETE /api/admin/segmentos` (guardar y borrar exigen `campanas.write`).
 - `socios.gasto_total` lo suma la entrega del pedido (una vez por pedido) y la reversión lo descuenta; `ultima_actividad` se toca a lo sumo una vez por hora; `plan_club` es una copia de lectura del plan de ITTI (Olimpistas no escribe nada allá).
 - Migración 0004 es aditiva; recalcula `gasto_total` con lo ya pagado.
+
+## Peñas oficiales y fondo (Sprint 2)
+
+- **Solicitud** pública (`POST /api/penas/solicitud`, 10/hora por red) → queda `pendiente`: no aparece en el ranking ni recibe aportes. El club la **verifica** desde Admin → Contenido → Peñas: se crea el usuario de la comisión y se le manda **un link de un solo uso (7 días)** para elegir su contraseña. No se envía ninguna contraseña por correo; si no hay email válido, el admin recibe el link en pantalla.
+- **Link de captación:** `/?pena=<slug>` (igual que `?ref=`); el alta guarda `socios.pena_id` solo si la peña está verificada. El hincha también puede sumarse o dejarla desde "Descubrir → Mi peña" (`PATCH /api/perfil {pena_id}`).
+- **Panel de la comisión:** `/pena` (login propio, sesión de 12 h, 12 intentos/15 min). La comisión ve altas con **nombre e inicial del apellido**, ciudad y nivel; nunca email, cédula ni teléfono.
+- **Fondo:** cada pago acreditado de un hincha de una peña **verificada** aporta el `pct` de la decisión del club (10 % por defecto, 15 % opcional) — membresías, entradas **y subastas**. Un pedido acredita **una sola vez** (`pedido_id` único), una reversión de pago descuenta el aporte una sola vez, y un pago "huérfano" (lote perdido, a reembolsar) no aporta. Una falla del fondo avisa al equipo pero nunca frena la entrega del pago.
+- **Canje:** la comisión pide (`POST /api/pena/fondo/canje`); queda `pendiente` y reserva saldo (no se puede pedir más de lo disponible, ni con pedidos simultáneos). El club aprueba (resta del saldo) o rechaza desde el admin (`pagos.write`). Aprobar exige que el saldo siga alcanzando.
+- Migración 0005 aditiva (4 tablas + `pena_id` en socios y comercios).

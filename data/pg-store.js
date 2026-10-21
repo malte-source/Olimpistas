@@ -1032,6 +1032,125 @@ function createPgStore({ databaseUrl }) {
     async marcarSubastaNotificada(id) { await sql`UPDATE subastas SET notificado = true WHERE id = ${id}`; return true; },
     async subastasSinNotificar() { return sql`SELECT * FROM subastas WHERE estado = 'cerrada' AND ganador_id IS NOT NULL AND notificado = false`; },
 
+    // ── Peñas oficiales (migración 0005) ──
+    async crearPena({ nombre, ciudad, pais_iso, presidente, contacto }) {
+      const id = uid("pen");
+      const base = String(nombre || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "pena";
+      for (let i = 0; i < 8; i++) {
+        const slug = i === 0 ? base : base + "-" + (i + 1);
+        try {
+          const [p] = await sql`INSERT INTO penas (id, slug, nombre, ciudad, pais_iso, presidente, contacto)
+            VALUES (${id}, ${slug}, ${nombre}, ${ciudad || ""}, ${pais_iso || "PY"}, ${presidente || ""}, ${contacto || ""}) RETURNING *`;
+          return p;
+        } catch (e) { if (e.code !== "23505") throw e; }   // slug ocupado → probar el siguiente
+      }
+      throw new Error("no se pudo generar un slug único para la peña");
+    },
+    async getPena(id) { const [p] = await sql`SELECT * FROM penas WHERE id = ${id} LIMIT 1`; return p || null; },
+    async getPenaPorSlug(slug) { const [p] = await sql`SELECT * FROM penas WHERE slug = ${String(slug || "").toLowerCase()} LIMIT 1`; return p || null; },
+    async updatePena(id, patch) { const [p] = await sql`UPDATE penas SET ${sql(patch)} WHERE id = ${id} RETURNING *`; return p || null; },
+    // Peñas con sus números: altas (hinchas que se sumaron), socios validados, Plus/Junior pagos y canjes por aprobar.
+    async listPenas({ estado, id } = {}) {
+      const conds = [];
+      if (estado) conds.push(sql`p.estado = ${estado}`);
+      if (id) conds.push(sql`p.id = ${id}`);
+      const where = conds.length ? sql`WHERE ${conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`))}` : sql``;
+      return sql`SELECT p.*,
+          (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id)::int AS altas,
+          (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id AND s.es_socio_olimpia)::int AS socios,
+          (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id AND EXISTS
+             (SELECT 1 FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug IN ('premium','kids')))::int AS plus,
+          COALESCE((SELECT SUM(-mv.monto) FROM pena_movimientos mv WHERE mv.pena_id = p.id AND mv.motivo = 'canje' AND mv.estado = 'pendiente'), 0)::int AS canje_pendiente
+        FROM penas p ${where} ORDER BY altas DESC, p.creado ASC`;
+    },
+    async ultimasAltasPena(penaId, limit = 8) {
+      return sql`SELECT s.id, s.nombre, s.apellido, s.ciudad, s.creado, coalesce(m.tier_slug, 'olimpista') AS tier_slug
+        FROM socios s LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
+        WHERE s.pena_id = ${penaId} ORDER BY s.creado DESC LIMIT ${limit}`;
+    },
+    async crearPenaUsuario({ penaId, usuario, passwordHash, setupToken, setupExp }) {
+      const [u] = await sql`INSERT INTO pena_usuarios (id, pena_id, usuario, password_hash, setup_token, setup_exp)
+        VALUES (${uid("peu")}, ${penaId}, ${String(usuario).toLowerCase()}, ${passwordHash}, ${setupToken || null}, ${setupExp || null}) RETURNING *`;
+      return u;
+    },
+    async getPenaUsuarioPorUsuario(usuario) { const [u] = await sql`SELECT * FROM pena_usuarios WHERE usuario = ${String(usuario || "").toLowerCase()} LIMIT 1`; return u || null; },
+    async getPenaUsuarioDePena(penaId) { const [u] = await sql`SELECT * FROM pena_usuarios WHERE pena_id = ${penaId} ORDER BY creado LIMIT 1`; return u || null; },
+    async getPenaUsuarioPorSetupToken(token) {
+      if (!token) return null;
+      const [u] = await sql`SELECT * FROM pena_usuarios WHERE setup_token = ${token} AND setup_exp > now() LIMIT 1`;
+      return u || null;
+    },
+    async updatePenaUsuario(id, patch) { const [u] = await sql`UPDATE pena_usuarios SET ${sql(patch)} WHERE id = ${id} RETURNING *`; return u || null; },
+    async crearPenaSesion(penaId, token, expira) {
+      await sql`DELETE FROM pena_sesiones WHERE expira < now()`;
+      await sql`INSERT INTO pena_sesiones (token, pena_id, expira) VALUES (${token}, ${penaId}, ${expira})`;
+      return true;
+    },
+    async getPenaSesion(token) {
+      if (!token) return null;
+      const [s] = await sql`SELECT s.token, s.pena_id, s.expira, p.nombre, p.slug, p.estado FROM pena_sesiones s JOIN penas p ON p.id = s.pena_id
+        WHERE s.token = ${token} AND s.expira > now() LIMIT 1`;
+      return s || null;
+    },
+    async borrarPenaSesion(token) { await sql`DELETE FROM pena_sesiones WHERE token = ${token}`; return true; },
+    async borrarSesionesDePena(penaId) { await sql`DELETE FROM pena_sesiones WHERE pena_id = ${penaId}`; return true; },
+
+    // ── Fondo de la peña: un libro de movimientos + el saldo, siempre juntos en una transacción ──
+    // Ingreso por un pago de uno de sus hinchas. pedido_id es ÚNICO: un pedido acredita una sola vez,
+    // aunque el pago se procese dos veces. Devuelve el movimiento, o null si ya estaba acreditado.
+    async acreditarPena({ penaId, pedidoId, monto, detalle }) {
+      return sql.begin(async (tx) => {
+        const [m] = await tx`INSERT INTO pena_movimientos (id, pena_id, pedido_id, monto, motivo, detalle, estado)
+          VALUES (${uid("pmv")}, ${penaId}, ${pedidoId}, ${monto}, 'ingreso', ${detalle || ""}, 'aplicado')
+          ON CONFLICT (pedido_id) DO NOTHING RETURNING *`;
+        if (!m) return null;
+        await tx`UPDATE penas SET saldo = saldo + ${monto} WHERE id = ${penaId}`;
+        return m;
+      });
+    },
+    // Un pago revertido descuenta lo que había aportado al fondo (si el fondo ya se canjeó, el saldo puede quedar negativo: lo ve el club).
+    async revertirIngresoPena(pedidoId) {
+      return sql.begin(async (tx) => {
+        const [m] = await tx`UPDATE pena_movimientos SET estado = 'revertido' WHERE pedido_id = ${pedidoId} AND motivo = 'ingreso' AND estado = 'aplicado' RETURNING *`;
+        if (!m) return null;
+        await tx`UPDATE penas SET saldo = saldo - ${m.monto} WHERE id = ${m.pena_id}`;
+        return m;
+      });
+    },
+    // La peña pide canjear parte del fondo. Queda PENDIENTE hasta que el club lo apruebe; no se puede pedir
+    // más de lo disponible (saldo menos lo ya pedido y pendiente). Devuelve null si no alcanza.
+    async pedirCanjePena({ penaId, monto, detalle }) {
+      return sql.begin(async (tx) => {
+        const [p] = await tx`SELECT id, saldo FROM penas WHERE id = ${penaId} FOR UPDATE`;
+        if (!p) return null;
+        const [{ pendiente }] = await tx`SELECT COALESCE(SUM(-monto), 0)::int AS pendiente FROM pena_movimientos WHERE pena_id = ${penaId} AND motivo = 'canje' AND estado = 'pendiente'`;
+        if (monto > p.saldo - pendiente) return { ok: false, disponible: Math.max(0, p.saldo - pendiente) };
+        const [m] = await tx`INSERT INTO pena_movimientos (id, pena_id, monto, motivo, detalle, estado)
+          VALUES (${uid("pmv")}, ${penaId}, ${-monto}, 'canje', ${detalle || ""}, 'pendiente') RETURNING *`;
+        return { ok: true, movimiento: m };
+      });
+    },
+    // El club aprueba (resta el saldo) o rechaza un canje pendiente. Una sola resolución por canje.
+    async resolverCanjePena(movId, { aprobar }) {
+      return sql.begin(async (tx) => {
+        const [m] = await tx`SELECT * FROM pena_movimientos WHERE id = ${movId} AND motivo = 'canje' FOR UPDATE`;
+        if (!m) return { ok: false, motivo: "no_existe" };
+        if (m.estado !== "pendiente") return { ok: false, motivo: "ya_resuelto", estado: m.estado };
+        if (aprobar) {
+          const [p] = await tx`UPDATE penas SET saldo = saldo + ${m.monto} WHERE id = ${m.pena_id} AND saldo + ${m.monto} >= 0 RETURNING *`;
+          if (!p) return { ok: false, motivo: "saldo" };
+        }
+        const [r] = await tx`UPDATE pena_movimientos SET estado = ${aprobar ? "aplicado" : "rechazado"} WHERE id = ${movId} RETURNING *`;
+        return { ok: true, movimiento: r };
+      });
+    },
+    async movimientosPena(penaId, limit = 30) {
+      return sql`SELECT * FROM pena_movimientos WHERE pena_id = ${penaId} ORDER BY creado DESC LIMIT ${limit}`;
+    },
+    async canjesPendientesPena() {
+      return sql`SELECT mv.*, p.nombre AS pena, p.saldo FROM pena_movimientos mv JOIN penas p ON p.id = mv.pena_id
+        WHERE mv.motivo = 'canje' AND mv.estado = 'pendiente' ORDER BY mv.creado`;
+    },
     // ── Encuestas (Fan Survey) ──
     async listEncuestas() { return (await sql`SELECT * FROM encuestas ORDER BY creado DESC`).map(_enc); },
     async encuestasActivas() { return (await sql`SELECT * FROM encuestas WHERE estado = 'activa' ORDER BY creado DESC`).map(_enc); },

@@ -72,6 +72,14 @@ app.use("/api/auth/verificar-socio", limiteVerificar);
 // Login de admin: ESTRICTO (credencial de máximo valor, son pocos usuarios y no comparten IP como los socios).
 const limiteAdminLogin = rateLimit({ windowMs: 15 * 60_000, max: 12, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiados intentos. Esperá unos minutos." } });
 app.use("/api/admin/login", limiteAdminLogin);
+// Panel de peñas: login y elección de contraseña con el mismo rigor que el admin; la solicitud pública de una
+// peña nueva se limita bastante más (cada una dispara un aviso al equipo).
+// (En test se saltean para que la suite no agote el cupo; TEST_LIMITES=1 los activa para probarlos.)
+const sinLimitarEnTest = () => process.env.NODE_ENV === "test" && process.env.TEST_LIMITES !== "1";
+const limitePenaAcceso = rateLimit({ windowMs: 15 * 60_000, max: 12, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiados intentos. Esperá unos minutos." } });
+app.use("/api/pena/login", limitePenaAcceso);
+app.use("/api/pena/clave", limitePenaAcceso);
+app.use("/api/penas/solicitud", rateLimit({ windowMs: 60 * 60_000, max: 10, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiadas solicitudes desde esta red. Probá más tarde." } }));
 // TODO /api/admin/*: corta el brute-force de la llave break-glass (x-admin-key) contra
 // cualquier endpoint (no solo /login). Generoso para uso humano real (pocos admins, no
 // comparten IP), estricto contra scripting. En multi-instancia es por-instancia (mejorar
@@ -256,6 +264,7 @@ app.get("/legal", sendPage("legal.html"));
 app.get("/reset", sendPage("reset.html"));           // página para crear nueva contraseña
 app.get("/admin", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "admin.html")); });
 app.get("/comercio", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "comercio.html")); });
+app.get("/pena", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "pena.html")); }); // panel de la comisión de una peña
 app.get("/socio", (_req, res) => res.redirect(301, "/miembro")); // compat: links viejos
 
 // Verificación pública del carnet (QR). No expone PII (el número no es un lookup

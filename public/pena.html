@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Panel de la peña — Olimpistas</title>
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#0b0b0f" />
+  <style>
+    :root{--negro:#0a0a0e;--panel:#14141c;--panel2:#1b1b25;--linea:rgba(255,255,255,.12);--oro:#c9a227;--oro2:#e7c64b;
+      --blanco:#f3efe4;--gris:#9a9aa6;--verde:#37b26b;--rojo:#e94560;
+      --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+    @media (prefers-color-scheme: light){:root{--negro:#f4f2ee;--panel:#fff;--panel2:#efece6;--linea:rgba(0,0,0,.12);--blanco:#15151a;--gris:#6a6a74}}
+    *{box-sizing:border-box} body{margin:0;background:var(--negro);color:var(--blanco);font-family:var(--sans);line-height:1.5}
+    .wrap{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+    .card{background:var(--panel);border:1px solid var(--linea);border-radius:18px;padding:20px}
+    .login{max-width:420px;margin:8vh auto 0}
+    .wm{font-weight:900;letter-spacing:.3em;font-size:13px;text-transform:uppercase;text-align:center;margin-bottom:6px}
+    .stripes{height:5px;width:100px;margin:8px auto 18px;border-radius:3px;background:repeating-linear-gradient(90deg,#fff 0 10px,#000 10px 20px)}
+    h1{font-size:22px;margin:0 0 4px;text-align:center} .muted{color:var(--gris);font-size:14px}
+    label{display:block;font-size:12px;color:var(--gris);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px}
+    input{width:100%;font-family:inherit;font-size:16px;padding:13px;border-radius:11px;background:var(--panel2);color:var(--blanco);border:1px solid var(--linea)}
+    button{font-family:inherit;cursor:pointer}
+    .btn{border:0;font-weight:800;font-size:15px;padding:13px 18px;border-radius:12px;background:#0a0a0e;color:#fff;margin-top:16px}
+    @media (prefers-color-scheme: light){.btn{background:#15151a}}
+    .btn.block{width:100%} .btn.ghost{background:transparent;color:var(--blanco);border:1px solid var(--linea);font-weight:700}
+    .btn:disabled{opacity:.55}
+    .err{color:#ff9bab;font-size:13px;margin-top:10px;min-height:16px} .ok{color:var(--verde);font-size:13px;margin-top:10px}
+    .hero{background:#0a0a0e;color:#fff;border-radius:22px;padding:26px 28px;position:relative;overflow:hidden}
+    .hero .kick{font-weight:700;font-size:12px;letter-spacing:.12em;color:#d9b65a}
+    .hero h2{font-size:34px;line-height:1.1;margin:8px 0 0;letter-spacing:-.02em}
+    .hero .bar{position:absolute;left:0;right:0;bottom:0;height:6px;background:repeating-linear-gradient(90deg,#fff 0 18px,#0a0a0e 18px 36px)}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+    .grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:14px 0}
+    .kpi{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:16px}
+    .kpi b{display:block;font-size:28px;line-height:1.1;font-variant-numeric:tabular-nums} .kpi span{font-size:13px;color:var(--gris)}
+    .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media (max-width:760px){.cols{grid-template-columns:1fr}}
+    .link{display:flex;align-items:center;gap:8px;font:500 13.5px/1.3 var(--mono);padding:12px 14px;background:var(--panel2);border-radius:12px;word-break:break-all}
+    .qr{display:block;width:160px;height:160px;margin:12px 0 4px;border-radius:12px;background:#fff;padding:6px}
+    h3{font-size:16px;margin:0 0 10px}
+    .row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--linea);font-size:14px} .row:last-child{border-bottom:0}
+    .row small{display:block;color:var(--gris);font-size:12px}
+    .mas{color:var(--verde);font-weight:800;white-space:nowrap} .menos{font-weight:800;white-space:nowrap}
+    .pill{font-size:11px;font-weight:800;border-radius:999px;padding:2px 9px;border:1px solid var(--linea);color:var(--gris);white-space:nowrap}
+    .saldo{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums}
+    .hide{display:none}
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Elegir contraseña (link de un solo uso del correo) -->
+  <div class="card login hide" id="claveCard">
+    <div class="wm">Olimpistas</div><div class="stripes"></div>
+    <h1>Elegí tu contraseña</h1>
+    <p class="muted" style="text-align:center">Es para entrar al panel de tu peña.</p>
+    <label for="clave1">Contraseña (mínimo 8 caracteres)</label>
+    <input id="clave1" type="password" autocomplete="new-password" />
+    <label for="clave2">Repetila</label>
+    <input id="clave2" type="password" autocomplete="new-password" />
+    <button class="btn block" id="claveBtn">Guardar y entrar</button>
+    <div class="err" id="claveErr"></div>
+  </div>
+
+  <!-- Login -->
+  <div class="card login" id="loginCard">
+    <div class="wm">Olimpistas</div><div class="stripes"></div>
+    <h1>Panel de la peña</h1>
+    <p class="muted" style="text-align:center">Para la comisión de una peña oficial.</p>
+    <label for="usuario">Usuario</label>
+    <input id="usuario" autocomplete="username" autocapitalize="none" />
+    <label for="password">Contraseña</label>
+    <input id="password" type="password" autocomplete="current-password" />
+    <button class="btn block" id="loginBtn">Entrar</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+
+  <!-- Panel -->
+  <div id="panel" class="hide">
+    <div class="top"><span class="muted" id="quien"></span><button class="btn ghost" id="salirBtn" style="margin:0;padding:8px 14px">Salir</button></div>
+    <div class="hero"><div class="kick" id="kick"></div><h2 id="nombre"></h2><div class="bar"></div></div>
+    <div class="grid4" id="kpis"></div>
+    <div class="cols">
+      <div class="card">
+        <h3>Link de captación</h3>
+        <div class="link" id="link"></div>
+        <img class="qr" id="qr" alt="QR del link de la peña" />
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="copiarBtn" style="margin-top:8px">Copiar link</button></div>
+        <p class="muted" id="linkNota" style="margin:12px 0 0"></p>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">Fondo de la peña</h3><span class="saldo" id="saldo"></span></div>
+        <p class="muted" id="fondoNota" style="margin:4px 0 8px"></p>
+        <div id="mov"></div>
+        <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">Pedir canje</summary>
+          <label for="cjItem">¿Qué querés canjear?</label>
+          <input id="cjItem" maxlength="120" placeholder="Ej: bus de ida y vuelta al estadio" />
+          <label for="cjMonto">Monto (₲)</label>
+          <input id="cjMonto" type="number" inputmode="numeric" min="1000" step="1000" />
+          <button class="btn block" id="cjBtn">Pedir canje</button>
+          <div class="err" id="cjMsg"></div>
+        </details>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Últimas altas</h3><div id="altas"></div></div>
+  </div>
+</div>
+
+<script src="/assets/vendor/qrcode.js"></script>
+<script>
+(function () {
+  var TK = "oli_pena_token";
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function gs(n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); }
+  function token() { try { return sessionStorage.getItem(TK) || ""; } catch (e) { return ""; } }
+  function setToken(t) { try { t ? sessionStorage.setItem(TK, t) : sessionStorage.removeItem(TK); } catch (e) {} }
+  function fecha(s) { try { return new Date(s).toLocaleDateString("es-PY", { day: "numeric", month: "short" }); } catch (e) { return ""; } }
+  async function api(ruta, o) {
+    o = o || {};
+    var r = await fetch("/api" + ruta, { method: o.method || "GET", headers: { "Content-Type": "application/json", "x-pena-token": token() }, body: o.body ? JSON.stringify(o.body) : undefined });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) { var e = new Error(j.error || "Error"); e.status = r.status; throw e; }
+    return j;
+  }
+  function mostrar(que) {
+    $("loginCard").classList.toggle("hide", que !== "login");
+    $("claveCard").classList.toggle("hide", que !== "clave");
+    $("panel").classList.toggle("hide", que !== "panel");
+  }
+
+  var NIVEL_MOV = { ingreso: "Aporte", canje: "Canje" };
+  async function cargar() {
+    try {
+      var d = await api("/pena/panel"), f = await api("/pena/fondo");
+      mostrar("panel");
+      $("quien").textContent = d.pena.ciudad || "";
+      $("kick").textContent = "PANEL DE LA COMISIÓN · VERIFICADA" + (d.ranking ? " · #" + d.ranking + " DEL RANKING" : "");
+      $("nombre").textContent = d.pena.nombre;
+      $("kpis").innerHTML = [["Hinchas que se sumaron", d.kpis.altas], ["Socios del club", d.kpis.socios], ["Pagan Plus o Junior", d.kpis.plus], ["Saldo del fondo", gs(d.kpis.saldo)]]
+        .map(function (k) { return '<div class="kpi"><b>' + esc(k[1]) + '</b><span>' + esc(k[0]) + '</span></div>'; }).join("");
+      $("link").textContent = d.link;
+      $("linkNota").textContent = "Cada alta por este link o su QR queda en la peña. El " + d.pct + "% de lo que esos hinchas pagan por Pagopar va al fondo.";
+      try { var qr = qrcode(0, "M"); qr.addData(d.link); qr.make(); $("qr").src = qr.createDataURL(5, 2); } catch (e) {}
+      $("copiarBtn").onclick = function () { navigator.clipboard.writeText(d.link).then(function () { $("copiarBtn").textContent = "¡Copiado!"; setTimeout(function () { $("copiarBtn").textContent = "Copiar link"; }, 1500); }); };
+      $("altas").innerHTML = d.ultimas_altas.length ? d.ultimas_altas.map(function (a) {
+        return '<div class="row"><div>' + esc(a.nombre) + '<small>' + esc(a.ciudad || "") + ' · ' + esc(a.nivel) + '</small></div><span class="muted">' + esc(fecha(a.creado)) + '</span></div>';
+      }).join("") : '<p class="muted">Todavía no se sumó nadie por el link. Compartilo para empezar.</p>';
+      $("saldo").textContent = gs(f.saldo);
+      $("fondoNota").textContent = f.pendiente ? "Disponible: " + gs(f.disponible) + " · " + gs(f.pendiente) + " esperan aprobación del club." : "Disponible: " + gs(f.disponible) + ".";
+      $("mov").innerHTML = f.movimientos.length ? f.movimientos.map(function (m) {
+        var neg = m.monto < 0, est = m.estado === "pendiente" ? "Espera aprobación del club" : m.estado === "rechazado" ? "Rechazado" : m.estado === "revertido" ? "Revertido" : "";
+        return '<div class="row"><div>' + esc((NIVEL_MOV[m.motivo] || m.motivo) + (m.detalle ? " · " + m.detalle : "")) + '<small>' + esc(fecha(m.creado)) + (est ? " · " + est : "") + '</small></div>' +
+          '<span class="' + (neg ? "menos" : "mas") + '">' + (neg ? "− " : "+ ") + gs(Math.abs(m.monto)) + '</span></div>';
+      }).join("") : '<p class="muted">Todavía no hay movimientos.</p>';
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) { setToken(""); mostrar("login"); $("loginErr").textContent = e.status === 403 ? e.message : ""; }
+      else $("panel").insertAdjacentHTML("afterbegin", '<p class="err">' + esc(e.message) + '</p>');
+    }
+  }
+
+  $("loginBtn").onclick = async function () {
+    $("loginErr").textContent = ""; $("loginBtn").disabled = true;
+    try { var r = await api("/pena/login", { method: "POST", body: { usuario: $("usuario").value, password: $("password").value } }); setToken(r.token); cargar(); }
+    catch (e) { $("loginErr").textContent = e.message; }
+    $("loginBtn").disabled = false;
+  };
+  $("password").addEventListener("keydown", function (e) { if (e.key === "Enter") $("loginBtn").click(); });
+  $("salirBtn").onclick = async function () { try { await api("/pena/logout", { method: "POST" }); } catch (e) {} setToken(""); mostrar("login"); };
+
+  $("claveBtn").onclick = async function () {
+    var t = new URLSearchParams(location.search).get("token") || "";
+    $("claveErr").textContent = "";
+    if ($("clave1").value !== $("clave2").value) { $("claveErr").textContent = "Las contraseñas no coinciden."; return; }
+    $("claveBtn").disabled = true;
+    try { var r = await api("/pena/clave", { method: "POST", body: { token: t, password: $("clave1").value } }); setToken(r.token); history.replaceState(null, "", "/pena"); cargar(); }
+    catch (e) { $("claveErr").textContent = e.message; }
+    $("claveBtn").disabled = false;
+  };
+
+  $("cjBtn").onclick = async function () {
+    var m = $("cjMsg"); m.className = "err"; m.textContent = "";
+    try {
+      await api("/pena/fondo/canje", { method: "POST", body: { item: $("cjItem").value, monto: Number($("cjMonto").value) } });
+      $("cjItem").value = ""; $("cjMonto").value = ""; m.className = "ok"; m.textContent = "Pedido enviado: queda a la espera de la aprobación del club.";
+      cargar();
+    } catch (e) { m.textContent = e.message; }
+  };
+
+  // Arranque: con ?token= se elige la contraseña; con sesión se abre el panel; si no, login.
+  if (new URLSearchParams(location.search).get("token")) mostrar("clave");
+  else if (token()) cargar();
+  else mostrar("login");
+})();
+</script>
+</body>
+</html>

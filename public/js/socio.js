@@ -13,7 +13,7 @@
   // /miembro/beneficios, /miembro/perfil, /miembro/descubrir(/<segmento>)(/subastas/<id>).
   let curTab = "inicio", curSubId = null;
   const TABS_RUTA = ["inicio", "carnet", "beneficios", "perfil", "descubrir"];
-  const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media"];
+  const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media", "penas"];
   function parseRuta(pathname) {
     const parts = pathname.replace(/^\/miembro\/?/, "").split("/").filter(Boolean);
     if (!parts.length || !TABS_RUTA.includes(parts[0])) return { tab: "inicio" };
@@ -341,7 +341,7 @@
   let descSeg = "subastas", _deepSub = null;
   function vDescubrir() {
     stopSub();
-    const segs = [["subastas", T("tab_subastas")], ["sorteos", T("tab_sorteos")], ["preventas", T("tab_preventas")], ["media", T("tab_media")]];
+    const segs = [["subastas", T("tab_subastas")], ["sorteos", T("tab_sorteos")], ["preventas", T("tab_preventas")], ["media", T("tab_media")], ["penas", T("tab_penas")]];
     view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
       <h2>${T("m_desc_h")}</h2><p class="lead">${T("m_desc_p")}</p>
       <div class="seg-nav" id="descSegNav">${segs.map(([id, l]) => `<button class="seg-b${id === descSeg ? " on" : ""}" data-seg="${id}">${l}</button>`).join("")}</div>
@@ -356,7 +356,7 @@
     const nav = document.getElementById("descSegNav");
     if (nav) nav.querySelectorAll("[data-seg]").forEach((b) => b.classList.toggle("on", b.dataset.seg === descSeg));
     if (descSeg === "subastas" && _deepSub) { const id = _deepSub; _deepSub = null; curSubId = id; syncUrl(true); return vSubastaDetalle(id); }
-    ({ subastas: vSubastas, sorteos: vSorteos, preventas: vPreventas, media: vContenido }[descSeg] || vSubastas)();
+    ({ subastas: vSubastas, sorteos: vSorteos, preventas: vPreventas, media: vContenido, penas: vPenas }[descSeg] || vSubastas)();
   }
 
   // ── Upgrade de socio (validación de cédula) — disponible en todo el portal ──
@@ -753,6 +753,62 @@
   }
 
   // ─── Sorteos ───────────────────────────────────────────────────────────────────
+  // ─── Peñas: ranking, sumarse, compartir el link y pedir una peña nueva ───────────
+  async function vPenas() {
+    cv().innerHTML = skeleton(3);
+    let d;
+    try { d = await api("/penas"); } catch (e) { cv().innerHTML = vacio(T("m_error_generico")); return; }
+    const items = Array.isArray(d.items) ? d.items : [];
+    const mia = items.find((p) => p.es_tuya);
+    const link = (p) => location.origin + "/?pena=" + encodeURIComponent(p.slug);
+    cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <p class="lead">${T("m_pena_p")}</p>
+      ${mia ? `<div class="pena-mia"><b>${esc(mia.nombre)}</b><span class="muted"> · ${T("m_pena_tuya")}</span>
+        <p class="muted" style="font-size:13px;margin:6px 0 10px">${T("m_pena_link_p")}</p>
+        <div class="pena-acc"><button class="btn btn-sm" id="penaCompartir">${T("m_pena_compartir")}</button><button class="btn btn-ghost btn-sm" id="penaDejar">${T("m_pena_dejar")}</button></div></div>` : ""}
+      <div class="pena-lista">${items.length ? items.map((p) => `<div class="pena-fila">
+          <span class="pena-rk">${p.ranking}</span>
+          <div class="pena-nm"><b>${esc(p.nombre)}</b><span class="muted">${esc(p.ciudad || "")} · ${p.altas} ${T(p.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas")}</span></div>
+          ${p.es_tuya ? `<span class="chip on">${T("m_pena_tuya_chip")}</span>` : `<button class="btn btn-sm btn-ghost" data-pena="${esc(p.id)}">${T("m_pena_sumarme")}</button>`}
+        </div>`).join("") : vacio(T("m_pena_vacio"))}</div>
+      <details class="pena-sol"><summary>${T("m_pena_solicitar")}</summary>
+        <p class="muted" style="font-size:13px;margin:8px 0">${T("m_pena_sol_p")}</p>
+        <form id="penaSolForm" class="pena-form">
+          <input name="nombre" placeholder="${T("m_pena_f_nombre")}" maxlength="80" required />
+          <input name="ciudad" placeholder="${T("m_pena_f_ciudad")}" maxlength="60" required />
+          <input name="presidente" placeholder="${T("m_pena_f_presi")}" maxlength="80" required />
+          <input name="contacto" type="email" placeholder="${T("m_pena_f_email")}" maxlength="120" required />
+          <button class="btn btn-block" type="submit">${T("m_pena_enviar")}</button>
+        </form></details>
+    </div>`;
+    cv().querySelectorAll("[data-pena]").forEach((b) => b.addEventListener("click", async () => {
+      try {
+        const r = await api("/perfil", { method: "PATCH", body: { pena_id: b.dataset.pena } });
+        if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = r.socio.pena_id;
+        toast(T("m_pena_sumada"));
+        vPenas();
+      } catch (e) { toast(e.message); }
+    }));
+    const dejar = cv().querySelector("#penaDejar");
+    if (dejar) dejar.addEventListener("click", async () => {
+      try { const r = await api("/perfil", { method: "PATCH", body: { pena_id: null } }); if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = null; toast(T("m_pena_dejada")); vPenas(); }
+      catch (e) { toast(e.message); }
+    });
+    const comp = cv().querySelector("#penaCompartir");
+    if (comp && mia) comp.addEventListener("click", async () => {
+      const url = link(mia), txt = T("m_pena_compartir_txt") + " " + mia.nombre;
+      try { if (navigator.share) { await navigator.share({ text: txt, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+      try { await navigator.clipboard.writeText(url); toast(T("m_pena_link_copiado")); } catch (e) { toast(url); }
+    });
+    const form = cv().querySelector("#penaSolForm");
+    if (form) form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(form).entries());
+      try { await api("/penas/solicitud", { method: "POST", body: f }); form.reset(); toast(T("m_pena_sol_ok")); form.closest("details").open = false; }
+      catch (err) { toast(err.message); }
+    });
+  }
+
   async function vSorteos() {
     cv().innerHTML = skeleton(3);
     const { items } = await api("/sorteos");

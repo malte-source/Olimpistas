@@ -320,6 +320,10 @@
           <div id="crudForm"></div>
           <div id="crudList"><p class="loading">Cargando…</p></div>
 
+          <h2>Peñas</h2>
+          <p class="hint">Solicitudes para <b>verificar</b>, ranking y canjes del fondo que esperan tu aprobación.</p>
+          <div id="penasWrap"><p class="loading">Cargando…</p></div>
+
           <h2>Cola de Actualización (socios)</h2>
           <p class="hint">Datos capturados en el onboarding. Verificá contra el padrón y <b>Unificá</b> para volcarlos a la base oficial, o <b>Rechazá</b>.</p>
           <div class="search-row" style="margin-bottom:10px">
@@ -502,7 +506,7 @@
       socios: [],                                 // búsqueda/segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
       campanas: [cargarEmailMetricas, cargarCampanas, cargarGhl],
-      contenido: [cargarCrud, cargarActualizaciones],
+      contenido: [cargarCrud, cargarActualizaciones, cargarPenasAdmin],
       sistema: [cargarUsuarios, cargarSelfies, cargarAcciones],
     };
     var areaLoaded = {};
@@ -1283,6 +1287,37 @@
         cargar360(id);
       } catch (e) { $("fichaBox").innerHTML = '<button class="close" data-cerrar>×</button><p class="err">' + esc(e.message) + '</p>'; }
     }
+    // Peñas: solicitudes, ranking y canjes del fondo.
+    async function cargarPenasAdmin() {
+      var box = $("penasWrap"); if (!box) return;
+      try {
+        var d = await api("/admin/penas");
+        var gsA = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); };
+        var w = puede("contenido.write"), wp = puede("pagos.write");
+        var pend = d.items.filter(function (p) { return p.estado === "pendiente"; });
+        var ok = d.items.filter(function (p) { return p.estado !== "pendiente"; });
+        var html = "";
+        html += pend.map(function (p) {
+          return '<div class="card-row" style="border:1px solid var(--linea);border-radius:10px;padding:10px;margin:8px 0">' +
+            '<b>' + esc(p.nombre) + '</b> <span class="pill">pendiente</span>' +
+            '<div class="muted" style="font-size:13px">' + esc(p.ciudad) + ' · ' + esc(p.pais_iso) + ' · preside ' + esc(p.presidente) + ' · ' + esc(p.contacto) + '</div>' +
+            (w ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" data-penaver="' + esc(p.id) + '">Verificar peña</button></div>' : '') + '</div>';
+        }).join("");
+        html += d.canjes.map(function (c) {
+          return '<div class="card-row" style="border:1px solid var(--linea);border-radius:10px;padding:10px;margin:8px 0">' +
+            '<b>Canje pedido por ' + esc(c.pena) + '</b>: ' + esc(c.detalle) + ' — ' + gsA(Math.abs(c.monto)) +
+            '<div class="muted" style="font-size:13px">Saldo del fondo: ' + gsA(c.saldo) + ' · ' + esc(fmtFecha(c.creado)) + '</div>' +
+            (wp ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm btn-ok" data-penacj="' + esc(c.id) + '">Aprobar</button><button class="btn btn-sm btn-no" data-penacjno="' + esc(c.id) + '">Rechazar</button></div>' : '') + '</div>';
+        }).join("");
+        html += ok.length ? '<table class="tbl" style="width:100%;font-size:13px;margin-top:10px"><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Peña</th><th>Hinchas</th><th>Socios</th><th>Plus/Junior</th><th>Fondo</th><th></th></tr></thead><tbody>' +
+          ok.map(function (p, i) {
+            return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(p.nombre) + '</b><br><span class="muted">' + esc(p.ciudad) + (p.estado === "pausada" ? ' · en pausa' : '') + '</span></td>' +
+              '<td style="text-align:center">' + p.altas + '</td><td style="text-align:center">' + p.socios + '</td><td style="text-align:center">' + p.plus + '</td><td style="text-align:right">' + gsA(p.saldo) + '</td>' +
+              '<td style="text-align:right">' + (w ? '<button class="btn btn-sm btn-ghost" data-penaacc="' + esc(p.id) + '">Reenviar acceso</button> <button class="btn btn-sm btn-ghost" data-penaest="' + esc(p.id) + '" data-a="' + (p.estado === "pausada" ? "verificada" : "pausada") + '">' + (p.estado === "pausada" ? "Reactivar" : "Pausar") + '</button>' : '') + '</td></tr>';
+          }).join("") + '</tbody></table>' : '';
+        box.innerHTML = html || '<p class="empty">Todavía no hay peñas. Las solicitudes llegan desde la app de los hinchas.</p>';
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
     // Ficha 360: cinco indicadores, estado en el club (en vivo o "sin confirmar") y línea de tiempo.
     var ultimoParecido = null;
     async function cargar360(id) {
@@ -1410,6 +1445,27 @@
     $("segBtn").addEventListener("click", cargarSegmento);
     $("segExport").addEventListener("click", exportarSocios);
     $("crudSel").addEventListener("change", cargarCrud);
+    $("penasWrap").addEventListener("click", async function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      try {
+        if (b.dataset.penaver) {
+          if (!(await confirmar("Se crea el acceso de la comisión y se le manda por correo un link para elegir su contraseña. Desde ese momento la peña aparece en el ranking y recibe el aporte al fondo.", { titulo: "Verificar peña", ok: "Verificar" })).ok) return;
+          var r = await api("/admin/penas/" + encodeURIComponent(b.dataset.penaver) + "/verificar", { method: "POST" });
+          if (r.correo_enviado) toast("Peña verificada. Le mandamos el acceso por correo.");
+          else infoModal("Peña verificada", '<p class="muted">No se pudo mandar el correo. Pasale este link a la comisión (sirve una vez, vence en 7 días):</p><p style="word-break:break-all"><b>' + esc(r.url_clave || "") + '</b></p>');
+        } else if (b.dataset.penaacc) {
+          var r2 = await api("/admin/penas/" + encodeURIComponent(b.dataset.penaacc) + "/acceso", { method: "POST" });
+          if (r2.correo_enviado) toast("Acceso reenviado por correo."); else infoModal("Nuevo acceso", '<p style="word-break:break-all"><b>' + esc(r2.url_clave || "") + '</b></p>');
+        } else if (b.dataset.penaest) {
+          await api("/admin/penas/" + encodeURIComponent(b.dataset.penaest) + "/estado", { method: "POST", body: { estado: b.dataset.a } }); toast(b.dataset.a === "pausada" ? "Peña en pausa" : "Peña reactivada");
+        } else if (b.dataset.penacj || b.dataset.penacjno) {
+          var rech = !!b.dataset.penacjno, id = b.dataset.penacj || b.dataset.penacjno;
+          if (!(await confirmar(rech ? "Se rechaza el pedido y el fondo queda como estaba." : "Se aprueba el canje y se resta del saldo del fondo de la peña.", { titulo: rech ? "Rechazar canje" : "Aprobar canje", ok: rech ? "Rechazar" : "Aprobar", danger: rech })).ok) return;
+          await api("/admin/penas/canje/" + encodeURIComponent(id), { method: "POST", body: { rechazar: rech } }); toast(rech ? "Canje rechazado" : "Canje aprobado");
+        } else return;
+        cargarPenasAdmin();
+      } catch (err) { toast(err.message, "err"); }
+    });
     $("crudNuevo").addEventListener("click", function () { formCrud(null); });
     $("crudList").addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;

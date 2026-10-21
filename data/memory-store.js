@@ -548,6 +548,96 @@ function createMemoryStore({ filePath = null } = {}) {
     async marcarSubastaNotificada(id) { const s = (db.subastas || []).find((x) => x.id === id); if (s) { s.notificado = true; persist(); } return true; },
     async subastasSinNotificar() { return (db.subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && !s.notificado); },
 
+    // ── Peñas oficiales (mismo contrato que pg-store) ──
+    async crearPena({ nombre, ciudad, pais_iso, presidente, contacto }) {
+      const base = String(nombre || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "pena";
+      db.penas = db.penas || [];
+      let slug = base, i = 1;
+      while (db.penas.some((p) => p.slug === slug)) slug = base + "-" + (++i);
+      const p = { id: uid("pen"), slug, nombre, ciudad: ciudad || "", pais_iso: pais_iso || "PY", presidente: presidente || "", contacto: contacto || "",
+        comision_pct: 10, saldo: 0, estado: "pendiente", creado: nowIso() };
+      db.penas.push(p); persist(); return p;
+    },
+    async getPena(id) { return (db.penas || []).find((p) => p.id === id) || null; },
+    async getPenaPorSlug(slug) { const s = String(slug || "").toLowerCase(); return (db.penas || []).find((p) => p.slug === s) || null; },
+    async updatePena(id, patch) { const p = (db.penas || []).find((x) => x.id === id); if (!p) return null; Object.assign(p, patch); persist(); return p; },
+    async listPenas({ estado, id } = {}) {
+      const tier = (sid) => { const m = (db.membresias || []).filter((x) => x.socio_id === sid && x.estado === "activa").slice(-1)[0]; return m ? m.tier_slug : "olimpista"; };
+      return (db.penas || []).filter((p) => (!estado || p.estado === estado) && (!id || p.id === id)).map((p) => {
+        const mios = (db.socios || []).filter((s) => s.pena_id === p.id);
+        const pend = (db.pena_movimientos || []).filter((m) => m.pena_id === p.id && m.motivo === "canje" && m.estado === "pendiente").reduce((a, m) => a - m.monto, 0);
+        return { ...p, altas: mios.length, socios: mios.filter((s) => s.es_socio_olimpia).length, plus: mios.filter((s) => ["premium", "kids"].includes(tier(s.id))).length, canje_pendiente: pend };
+      }).sort((a, b) => (b.altas - a.altas) || String(a.creado).localeCompare(String(b.creado)));
+    },
+    async ultimasAltasPena(penaId, limit = 8) {
+      const tier = (sid) => { const m = (db.membresias || []).filter((x) => x.socio_id === sid && x.estado === "activa").slice(-1)[0]; return m ? m.tier_slug : "olimpista"; };
+      return (db.socios || []).filter((s) => s.pena_id === penaId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
+        .map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, ciudad: s.ciudad, creado: s.creado, tier_slug: tier(s.id) }));
+    },
+    async crearPenaUsuario({ penaId, usuario, passwordHash, setupToken, setupExp }) {
+      db.pena_usuarios = db.pena_usuarios || [];
+      const u = { id: uid("peu"), pena_id: penaId, usuario: String(usuario).toLowerCase(), password_hash: passwordHash, setup_token: setupToken || null, setup_exp: setupExp || null, creado: nowIso() };
+      db.pena_usuarios.push(u); persist(); return u;
+    },
+    async getPenaUsuarioPorUsuario(usuario) { const s = String(usuario || "").toLowerCase(); return (db.pena_usuarios || []).find((u) => u.usuario === s) || null; },
+    async getPenaUsuarioDePena(penaId) { return (db.pena_usuarios || []).find((u) => u.pena_id === penaId) || null; },
+    async getPenaUsuarioPorSetupToken(token) {
+      if (!token) return null;
+      return (db.pena_usuarios || []).find((u) => u.setup_token === token && u.setup_exp && new Date(u.setup_exp).getTime() > Date.now()) || null;
+    },
+    async updatePenaUsuario(id, patch) { const u = (db.pena_usuarios || []).find((x) => x.id === id); if (!u) return null; Object.assign(u, patch); persist(); return u; },
+    async crearPenaSesion(penaId, token, expira) {
+      db.pena_sesiones = (db.pena_sesiones || []).filter((s) => new Date(s.expira).getTime() > Date.now());
+      db.pena_sesiones.push({ token, pena_id: penaId, expira }); persist(); return true;
+    },
+    async getPenaSesion(token) {
+      const s = (db.pena_sesiones || []).find((x) => x.token === token && new Date(x.expira).getTime() > Date.now());
+      const p = s && (db.penas || []).find((x) => x.id === s.pena_id);
+      return s && p ? { token: s.token, pena_id: s.pena_id, expira: s.expira, nombre: p.nombre, slug: p.slug, estado: p.estado } : null;
+    },
+    async borrarPenaSesion(token) { db.pena_sesiones = (db.pena_sesiones || []).filter((s) => s.token !== token); persist(); return true; },
+    async borrarSesionesDePena(penaId) { db.pena_sesiones = (db.pena_sesiones || []).filter((s) => s.pena_id !== penaId); persist(); return true; },
+    async acreditarPena({ penaId, pedidoId, monto, detalle }) {
+      db.pena_movimientos = db.pena_movimientos || [];
+      if (db.pena_movimientos.some((m) => m.pedido_id === pedidoId)) return null;
+      const p = (db.penas || []).find((x) => x.id === penaId); if (!p) return null;
+      const m = { id: uid("pmv"), pena_id: penaId, pedido_id: pedidoId, monto, motivo: "ingreso", detalle: detalle || "", estado: "aplicado", creado: nowIso() };
+      db.pena_movimientos.push(m); p.saldo += monto; persist(); return m;
+    },
+    async revertirIngresoPena(pedidoId) {
+      const m = (db.pena_movimientos || []).find((x) => x.pedido_id === pedidoId && x.motivo === "ingreso" && x.estado === "aplicado");
+      if (!m) return null;
+      m.estado = "revertido";
+      const p = (db.penas || []).find((x) => x.id === m.pena_id); if (p) p.saldo -= m.monto;
+      persist(); return m;
+    },
+    async pedirCanjePena({ penaId, monto, detalle }) {
+      const p = (db.penas || []).find((x) => x.id === penaId); if (!p) return null;
+      const pendiente = (db.pena_movimientos || []).filter((m) => m.pena_id === penaId && m.motivo === "canje" && m.estado === "pendiente").reduce((a, m) => a - m.monto, 0);
+      if (monto > p.saldo - pendiente) return { ok: false, disponible: Math.max(0, p.saldo - pendiente) };
+      const m = { id: uid("pmv"), pena_id: penaId, pedido_id: null, monto: -monto, motivo: "canje", detalle: detalle || "", estado: "pendiente", creado: nowIso() };
+      (db.pena_movimientos = db.pena_movimientos || []).push(m); persist();
+      return { ok: true, movimiento: m };
+    },
+    async resolverCanjePena(movId, { aprobar }) {
+      const m = (db.pena_movimientos || []).find((x) => x.id === movId && x.motivo === "canje");
+      if (!m) return { ok: false, motivo: "no_existe" };
+      if (m.estado !== "pendiente") return { ok: false, motivo: "ya_resuelto", estado: m.estado };
+      const p = (db.penas || []).find((x) => x.id === m.pena_id);
+      if (aprobar) {
+        if (!p || p.saldo + m.monto < 0) return { ok: false, motivo: "saldo" };
+        p.saldo += m.monto;
+      }
+      m.estado = aprobar ? "aplicado" : "rechazado"; persist();
+      return { ok: true, movimiento: m };
+    },
+    async movimientosPena(penaId, limit = 30) {
+      return (db.pena_movimientos || []).filter((m) => m.pena_id === penaId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit);
+    },
+    async canjesPendientesPena() {
+      return (db.pena_movimientos || []).filter((m) => m.motivo === "canje" && m.estado === "pendiente").sort((a, b) => String(a.creado).localeCompare(String(b.creado)))
+        .map((m) => { const p = (db.penas || []).find((x) => x.id === m.pena_id) || {}; return { ...m, pena: p.nombre, saldo: p.saldo }; });
+    },
     // ── Encuestas (Fan Survey) ──
     async listEncuestas() { return (db.encuestas || []).slice().sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
     async encuestasActivas() { return (db.encuestas || []).filter((e) => e.estado === "activa"); },
