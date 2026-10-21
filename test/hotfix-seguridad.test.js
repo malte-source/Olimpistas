@@ -158,3 +158,11 @@ test("producción (sin ENTORNO=staging): ni cartel de pruebas ni noindex", async
     assert.ok(!(r.headers.get("x-robots-tag") || "").includes("noindex"));
   } finally { srv.close(); }
 });
+
+test("producción: el Tuti falso NO existe (solo se monta en staging)", async () => {
+  const srv = await servir();
+  try {
+    const r = await fetch(`http://127.0.0.1:${srv.address().port}/_mock/tuti/bff-service/OLIMPIA/subscription/members?documentNumber=4000001`, { headers: { "X-Api-Key": "mock", "X-Merchant-Key": "mock" } });
+    assert.strictEqual(r.status, 404);
+  } finally { srv.close(); }
+});

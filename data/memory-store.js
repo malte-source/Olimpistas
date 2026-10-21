@@ -391,6 +391,7 @@ function createMemoryStore({ filePath = null } = {}) {
         puja_actual: Math.round(d.precio_inicial || 0), ganador_id: null,
         duracion_horas: d.duracion_horas != null ? Math.round(d.duracion_horas) : 48,
         inicia: d.inicia || nowIso(), termina: d.termina || null, estado: d.estado || "borrador", notificado: false, creado: nowIso(),
+        pago_estado: null, pausada_en: null, // mismas columnas que la tabla (contrato con pg-store)
         slug: slugify(d.titulo, id) };
       (db.subastas = db.subastas || []).push(s); persist(); return s;
     },
@@ -721,6 +722,43 @@ function createMemoryStore({ filePath = null } = {}) {
       if (!ref) return null;
       return (db.pedidos || []).filter((p) => p.ref_externa === ref).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null;
     },
+    // ── Cobro y entrega, como dos hechos atómicos (mismo contrato que pg-store) ──
+    async reclamarCumplimiento(id) {
+      const p = db.pedidos.find((x) => x.id === id);
+      if (!p || p.cumplido_en) return null;
+      const dosMin = 2 * 60 * 1000;
+      if (p.cumplimiento_desde && Date.now() - new Date(p.cumplimiento_desde).getTime() < dosMin) return null;
+      p.estado = "pagado"; p.pagado_en = p.pagado_en || nowIso(); p.cumplimiento_desde = nowIso();
+      persist();
+      return { ...p };
+    },
+    async marcarCumplido(id) {
+      const p = db.pedidos.find((x) => x.id === id);
+      if (!p || p.cumplido_en) return null;
+      p.cumplido_en = nowIso(); p.cumplimiento_desde = null; persist();
+      return { ...p };
+    },
+    async liberarCumplimiento(id) {
+      const p = db.pedidos.find((x) => x.id === id);
+      if (p && !p.cumplido_en) { p.cumplimiento_desde = null; persist(); }
+      return true;
+    },
+    async marcarReversado(id) {
+      const p = db.pedidos.find((x) => x.id === id);
+      if (!p || p.estado !== "pagado") return null;
+      p.estado = "reversado"; persist();
+      return { ...p };
+    },
+    async pedidosParaConciliar({ pendienteMin = 10, maxDias = 7, sinEntregarMin = 5, limit = 50 } = {}) {
+      const ahora = Date.now(), min = 60 * 1000, dia = 24 * 60 * min;
+      const edad = (p) => ahora - new Date(p.creado).getTime();
+      const abiertos = (db.pedidos || []).filter((p) => p.estado === "pendiente" && p.ref_externa && edad(p) > pendienteMin * min && edad(p) < maxDias * dia).slice(0, limit);
+      const sinEntregar = (db.pedidos || []).filter((p) => p.estado === "pagado" && !p.cumplido_en
+        && ahora - new Date(p.pagado_en || p.creado).getTime() > sinEntregarMin * min
+        && (!p.cumplimiento_desde || ahora - new Date(p.cumplimiento_desde).getTime() > 2 * min)).slice(0, limit);
+      return { abiertos, sinEntregar };
+    },
+
     async getPedidoPorSubasta(subastaId) {
       return (db.pedidos || []).filter((p) => p.subasta_id === subastaId).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null;
     },

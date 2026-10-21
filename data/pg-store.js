@@ -60,7 +60,7 @@ function createPgStore({ databaseUrl }) {
   // reutilizarla después sale ECONNRESET. 1800s (30min) recicla la conexión DESDE el
   // cliente antes de que el servidor tenga chance de hacerlo por su cuenta.
   const DB_MAX_LIFETIME = Number(process.env.DB_MAX_LIFETIME || 1800);
-  const sqlRaw = postgres(databaseUrl, { max: DB_POOL_MAX, idle_timeout: 20, max_lifetime: DB_MAX_LIFETIME, connect_timeout: 10, prepare: false, ssl: "require" });
+  const sqlRaw = postgres(databaseUrl, { max: DB_POOL_MAX, idle_timeout: 20, max_lifetime: DB_MAX_LIFETIME, connect_timeout: 10, prepare: false, ssl: process.env.DB_SSL === "disable" ? false : "require" });
 
   // ── Plazo máximo por consulta (caída del 2026-08-09) ───────────────────────
   // `connect_timeout` sólo cubre el momento de conectar: una vez conectada, una consulta
@@ -728,6 +728,49 @@ function createPgStore({ databaseUrl }) {
       const [p] = await sql`SELECT * FROM pedidos_pago WHERE id = ${id} LIMIT 1`;
       return p || null;
     },
+    // ── Cobro y entrega, como dos hechos atómicos (migración 0002) ──
+    // Reclama la entrega de un pedido cuyo pago se acreditó: en UN solo UPDATE lo marca pagado
+    // (si no lo estaba) y toma un candado de 2 minutos. Devuelve la fila solo a quien lo ganó;
+    // si otro webhook ya lo está entregando, o ya se entregó, devuelve null. Así dos webhooks
+    // simultáneos (o el reintento de Pagopar) nunca entregan dos veces, y un pedido pagado
+    // cuya entrega falló sigue "reclamable" hasta que alguien la complete.
+    async reclamarCumplimiento(id) {
+      const [p] = await sql`UPDATE pedidos_pago
+        SET estado = 'pagado', pagado_en = COALESCE(pagado_en, now()), cumplimiento_desde = now()
+        WHERE id = ${id} AND cumplido_en IS NULL
+          AND (cumplimiento_desde IS NULL OR cumplimiento_desde < now() - interval '2 minutes')
+        RETURNING *`;
+      return p || null;
+    },
+    async marcarCumplido(id) {
+      const [p] = await sql`UPDATE pedidos_pago SET cumplido_en = now(), cumplimiento_desde = NULL
+        WHERE id = ${id} AND cumplido_en IS NULL RETURNING *`;
+      return p || null;
+    },
+    async liberarCumplimiento(id) {
+      await sql`UPDATE pedidos_pago SET cumplimiento_desde = NULL WHERE id = ${id} AND cumplido_en IS NULL`;
+      return true;
+    },
+    // pagado → reversado, atómico. Devuelve la fila solo si este llamado hizo la transición.
+    async marcarReversado(id) {
+      const [p] = await sql`UPDATE pedidos_pago SET estado = 'reversado' WHERE id = ${id} AND estado = 'pagado' RETURNING *`;
+      return p || null;
+    },
+    // Para la conciliación: pedidos con hash de Pagopar que siguen pendientes (el webhook pudo
+    // perderse) y pedidos pagados cuya entrega quedó a medias.
+    async pedidosParaConciliar({ pendienteMin = 10, maxDias = 7, sinEntregarMin = 5, limit = 50 } = {}) {
+      const abiertos = await sql`SELECT * FROM pedidos_pago
+        WHERE estado = 'pendiente' AND ref_externa IS NOT NULL
+          AND creado < now() - make_interval(mins => ${pendienteMin}) AND creado > now() - make_interval(days => ${maxDias})
+        ORDER BY creado LIMIT ${limit}`;
+      const sinEntregar = await sql`SELECT * FROM pedidos_pago
+        WHERE estado = 'pagado' AND cumplido_en IS NULL
+          AND COALESCE(pagado_en, creado) < now() - make_interval(mins => ${sinEntregarMin})
+          AND (cumplimiento_desde IS NULL OR cumplimiento_desde < now() - interval '2 minutes')
+        ORDER BY creado LIMIT ${limit}`;
+      return { abiertos, sinEntregar };
+    },
+
     // Busca un pedido por su hash de PAGOPAR (guardado en ref_externa). Usado por el webhook.
     async getPedidoByRefExterna(ref) {
       if (!ref) return null;

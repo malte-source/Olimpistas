@@ -655,7 +655,7 @@ function buildRouter() {
   async function cumplirPedidoPagado(pedido) {
     if (pedido.tier_slug) {
       const tier = tierBySlug(pedido.tier_slug);
-      if (!tier) return null;
+      if (!tier) throw new Error("el pedido " + pedido.id + " es de un nivel que ya no existe (" + pedido.tier_slug + ")");
       const membresia = await store.setMembresia(pedido.socio_id, { tierSlug: tier.slug, ciclo: pedido.ciclo || "anio", pagoRef: pedido.id });
       const s = await store.getSocioById(pedido.socio_id).catch(() => null);
       if (s && s.email && mailer.enviarBienvenidaCompra) {
@@ -698,6 +698,55 @@ function buildRouter() {
     return null;
   }
 
+  // ÚNICA puerta para dar un pedido por pagado y entregarlo (webhook, conciliación, admin y
+  // confirmación simulada pasan todos por acá). El cobro y la entrega son dos hechos:
+  //  1) reclamarCumplimiento: UPDATE atómico → lo gana UNA sola llamada (dos webhooks a la vez,
+  //     o el reintento de Pagopar, no entregan dos veces);
+  //  2) se entrega; si falla, se libera el candado y se propaga el error → el webhook responde
+  //     500, Pagopar reintenta y la entrega se completa (antes el pedido quedaba "pagado" sin
+  //     entregar y el reintento lo salteaba para siempre);
+  //  3) marcarCumplido.
+  async function acreditarPago(pedidoId, origen) {
+    const p = await store.reclamarCumplimiento(pedidoId);
+    if (!p) return { estado: "ya_procesado" };
+    try {
+      const out = await cumplirPedidoPagado(p);
+      await store.marcarCumplido(p.id);
+      return { estado: "entregado", out };
+    } catch (e) {
+      await store.liberarCumplimiento(p.id).catch(() => {});
+      log.error({ pedidoId: p.id, origen, err: e.message }, "pago acreditado pero la entrega falló: se reintenta");
+      alertar("pago:entrega-fallo:" + p.id, "Pago acreditado y NO entregado",
+        "Pedido " + p.id + " (" + p.concepto + ") · origen " + origen + " · " + e.message + ". Se reintenta solo (conciliación); si persiste, revisar a mano.");
+      throw e;
+    }
+  }
+
+  // Red de seguridad por si un webhook se pierde o una entrega queda a medias: pregunta a
+  // Pagopar por los pedidos que siguen pendientes y completa las entregas inconclusas.
+  async function conciliarPagos() {
+    const out = { verificados: 0, acreditados: 0, reintentados: 0, errores: 0 };
+    if (!store.pedidosParaConciliar) return out;
+    const { abiertos, sinEntregar } = await store.pedidosParaConciliar();
+    if (pagopar.habilitado) {
+      for (const p of abiertos) {
+        try {
+          const v = await pagopar.verificarPago({ hash: p.ref_externa });
+          out.verificados++;
+          if (v.pagado) { const r = await acreditarPago(p.id, "conciliacion"); if (r.estado === "entregado") out.acreditados++; }
+        } catch (e) { out.errores++; log.warn({ pedidoId: p.id, err: e.message }, "conciliación: no se pudo verificar"); }
+      }
+    }
+    for (const p of sinEntregar) {
+      try { const r = await acreditarPago(p.id, "reintento"); if (r.estado === "entregado") out.reintentados++; }
+      catch (e) { out.errores++; }
+    }
+    if (out.acreditados || out.reintentados)
+      alertar("pagos:conciliacion:" + new Date().toISOString().slice(0, 13), "Conciliación de pagos: se recuperaron entregas",
+        "Acreditados que el webhook no avisó: " + out.acreditados + " · entregas completadas: " + out.reintentados);
+    return out;
+  }
+
   // Confirmación de pago en modo SIMULADO (solo DEV). En producción está deshabilitado:
   // el cobro real es por los links de pago y la activación se hace desde el panel admin.
   r.post("/pagos/confirmar-simulado", auth.requireSocio, wrap(async (req, res) => {
@@ -706,9 +755,8 @@ function buildRouter() {
     const pedido = await store.getPedidoPago(req.body?.pedidoId);
     if (!pedido || pedido.socio_id !== req.socio.id) throw httpError(404, "Pedido no encontrado");
 
-    await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-    const out = await cumplirPedidoPagado(pedido);
-    res.json({ ok: true, membresia: (out && out.membresia) || null });
+    const r0 = await acreditarPago(pedido.id, "simulado");
+    res.json({ ok: true, membresia: (r0.out && r0.out.membresia) || null });
   }));
 
   // ─── Webhook de PAGOPAR (Paso #3): notificación de pago/reversión ──────────────
@@ -729,14 +777,11 @@ function buildRouter() {
     if (!pedido) {
       log.warn({ hash }, "pagopar webhook sin pedido");
     } else if (row.pagado === true) {
-      // Pago confirmado → marcar pedido pagado + ENTREGAR según el tipo (idempotente).
-      if (pedido.estado !== "pagado") {
-        await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-        await cumplirPedidoPagado(pedido);
-      }
-    } else if (row.pagado === false && pedido.estado === "pagado") {
-      // Reversión de un pago ya confirmado.
-      await store.updatePedidoPago(pedido.id, { estado: "reversado" });
+      // Pago confirmado → marcar pagado + ENTREGAR según el tipo. Atómico e idempotente: si la
+      // entrega falla se propaga el error (500) y Pagopar reintenta; ver acreditarPago.
+      await acreditarPago(pedido.id, "webhook");
+    } else if (row.pagado === false && pedido.estado === "pagado" && (await store.marcarReversado(pedido.id))) {
+      // Reversión de un pago ya confirmado (la transición pagado → reversado es atómica).
       if (pedido.reserva_id && store.cancelarReservaYreponer) {
         // Entradas: cancelamos la reserva y reponemos el stock.
         await store.cancelarReservaYreponer(pedido.reserva_id);
@@ -774,6 +819,11 @@ function buildRouter() {
   // ─── Cron diario (Cloud Scheduler): cumpleaños + renovaciones. Gateado por CRON_SECRET. ──
   // Configurar en Cloud Scheduler: POST https://www.olimpistas.com/api/cron/diario con header
   // x-cron-token = CRON_SECRET, frecuencia diaria. Reemplaza correr los scripts a mano.
+  r.post("/cron/conciliar-pagos", wrap(async (req, res) => {
+    const tok = process.env.CRON_SECRET;
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
+    res.json(await conciliarPagos());
+  }));
   r.post("/cron/diario", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
     if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
@@ -784,6 +834,7 @@ function buildRouter() {
     // reintenta, cada socio recibe el correo UNA sola vez. Sin esto = spam + gasto de cuota.
     const puede = store.reservarNotificacion ? (clave) => store.reservarNotificacion(clave) : async () => true;
     try { out.subastas = await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron subastas"); }
+    try { out.pagos = await conciliarPagos(); } catch (e) { log.error({ err: e.message }, "cron conciliación de pagos"); }
     try {
       const cumples = store.cumplenHoy ? await store.cumplenHoy() : [];
       for (const s of cumples) {
@@ -1276,12 +1327,12 @@ function buildRouter() {
   r.post("/admin/pedidos/:id/activar", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
     const pedido = await store.getPedidoPago(req.params.id);
     if (!pedido) throw httpError(404, "Pedido no encontrado");
-    await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-    const tier = tierBySlug(pedido.tier_slug);
-    const membresia = tier
-      ? await store.setMembresia(pedido.socio_id, { tierSlug: tier.slug, ciclo: pedido.ciclo, pagoRef: pedido.id })
-      : null;
-    res.json({ ok: true, membresia });
+    // Misma puerta que el webhook: entrega según el tipo de pedido (membresía, entrada o lote;
+    // antes solo activaba membresías) y no entrega dos veces si el webhook ya lo hizo.
+    const r0 = await acreditarPago(pedido.id, "admin");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "pedido:activar", targetId: pedido.id, detalle: r0.estado, por: req.adminUser });
+    const membresia = (r0.out && r0.out.membresia) || (pedido.tier_slug ? await store.getMembresia(pedido.socio_id) : null);
+    res.json({ ok: true, membresia, ya_procesado: r0.estado === "ya_procesado" });
   }));
   // Rechazar/cancelar un pedido.
   r.post("/admin/pedidos/:id/rechazar", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {

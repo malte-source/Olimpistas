@@ -110,6 +110,8 @@ const CARTEL_STAGING = '<div id="cartelPruebas" style="position:fixed;left:0;rig
 if (STAGING) {
   app.use((_req, res, next) => { res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive"); next(); });
   app.get("/robots.txt", (_req, res) => res.type("text/plain").send("User-agent: *\nDisallow: /\n"));
+  // Tuti falso (la key real y su límite de consultas son de producción): ver lib/tuti-mock.js.
+  app.use("/_mock/tuti", require("./lib/tuti-mock").router());
 }
 
 const PUBLIC = path.join(__dirname, "public");
@@ -502,10 +504,21 @@ img{width:160px;max-width:70%;margin-bottom:20px}a{color:#f0d873;font-weight:700
 <p style="color:#c6c6d0">Volvé al <a href="/">inicio</a> y hacete Olimpista.</p></div></body></html>`);
 });
 
-if (require.main === module) {
+// Migraciones al arrancar: solo si se pide (MIGRAR_AL_ARRANCAR=1, pensado para staging). En
+// producción se migra ANTES del deploy con `node setup/migrar.js`, para que un fallo de
+// migración no tire el servicio mientras atiende tráfico.
+async function arrancar() {
+  if (process.env.MIGRAR_AL_ARRANCAR === "1") {
+    const st = require("./data/store").getStore();
+    if (st._sql) {
+      try { await require("./lib/migrar").migrar(st._sql, { log, tolerarDesconocidas: true }); }
+      catch (e) { log.fatal({ err: e.message }, "migraciones: falló, no se arranca"); process.exit(1); }
+    }
+  }
   app.listen(PORT, () => {
     log.info({ port: PORT, club: BRAND.club }, `Olimpistas arriba en http://localhost:${PORT}`);
   });
 }
+if (require.main === module) arrancar();
 
 module.exports = app;
