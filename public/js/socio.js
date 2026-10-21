@@ -12,7 +12,7 @@
   // deben reflejar la vista actual. Esquema: /miembro, /miembro/carnet,
   // /miembro/beneficios, /miembro/perfil, /miembro/descubrir(/<segmento>)(/subastas/<id>).
   let curTab = "inicio", curSubId = null;
-  const TABS_RUTA = ["inicio", "carnet", "beneficios", "perfil", "descubrir"];
+  const TABS_RUTA = ["inicio", "carnet", "beneficios", "puntos", "perfil", "descubrir"];
   const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media", "penas"];
   function parseRuta(pathname) {
     const parts = pathname.replace(/^\/miembro\/?/, "").split("/").filter(Boolean);
@@ -145,7 +145,7 @@
       t.setAttribute("aria-selected", on ? "true" : "false");
     });
     moveTabInd();
-    ({ inicio: vInicio, carnet: vCarnet, beneficios: vBeneficios, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio)();
+    ({ inicio: vInicio, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio)();
   }
 
   // Pulido PRO: pill deslizante bajo el tab activo (solo mobile) + borde glass al hacer scroll.
@@ -753,6 +753,60 @@
   }
 
   // ─── Sorteos ───────────────────────────────────────────────────────────────────
+  // ─── Puntos: saldo y escalón, misión de la semana, cómo se ganan, catálogo de canje y movimientos ──
+  async function vPuntos() {
+    view().innerHTML = skeleton(3);
+    let d, pr;
+    try { [d, pr] = await Promise.all([api("/puntos"), api("/puntos/premios")]); } catch (e) { view().innerHTML = vacio(T("m_error_generico")); return; }
+    const nf = (n) => Number(n || 0).toLocaleString(LOC);
+    const esc2 = d.escalon || {};
+    const falta = esc2.siguiente ? `${T("m_pts_faltan")} ${nf(esc2.faltan)} ${T("m_pts_para")} ${esc2.siguiente.nombre}` : T("m_pts_top");
+    const m = d.mision;
+    const misionHtml = !m ? "" : m.respondida
+      ? `<div class="pts-mision pts-hecha">${icon("check", { size: 16 })} ${m.respondida.correcta ? T("m_pts_mision_ok") : T("m_pts_mision_no")}</div>`
+      : `<div class="pts-mision"><span class="pts-kick">${T("m_pts_mision")} · +${nf(m.puntos)}</span><p>${esc(m.pregunta)}</p>
+          <div class="pts-ops">${m.opciones.map((o, i) => `<button class="pts-op" data-mision="${esc(m.id)}" data-op="${i}">${esc(o)}</button>`).join("")}</div></div>`;
+    const reglasHtml = d.reglas.map((r) => `<div class="pts-fila${r.aplica && r.activa ? "" : " off"}">
+        <span><b>${esc(r.titulo)}</b><small>${esc(r.fuente)} · ${T("m_pts_q_" + r.quien)}${r.pendiente ? " · " + T("m_pts_pronto") : ""}</small></span>
+        <span class="pts-n">${r.activa ? "+" + nf(r.puntos) : "—"}</span></div>`).join("");
+    const premiosHtml = pr.items.length ? pr.items.map((p) => {
+      const txt = p.proximamente ? T("m_pts_pronto") : p.agotado ? T("m_pts_agotado") : p.puede_canjear ? T("m_pts_canjear") : T("m_pts_faltan") + " " + nf(p.faltan);
+      return `<div class="pts-fila"><span><small class="pts-esc">${esc(String(p.escalon).toUpperCase())} · ${nf(p.costo)} PTS</small><b>${esc(p.titulo)}</b>${p.descripcion ? `<small>${esc(p.descripcion)}</small>` : ""}</span>
+        <button class="btn btn-sm${p.puede_canjear ? "" : " btn-ghost"}" data-premio="${esc(p.id)}" ${p.puede_canjear ? "" : "disabled"}>${txt}</button></div>`;
+    }).join("") : `<p class="muted" style="padding:12px 0">${T("m_pts_sin_premios")}</p>`;
+    const movHtml = d.movimientos.length ? d.movimientos.map((x) => `<div class="pts-fila"><span><b>${esc(x.detalle || x.motivo)}</b><small>${fecha(x.creado)}</small></span>
+        <span class="pts-n${x.puntos < 0 ? " neg" : ""}">${x.puntos > 0 ? "+" : "−"}${nf(Math.abs(x.puntos))}</span></div>`).join("") : `<p class="muted" style="padding:12px 0">${T("m_pts_sin_mov")}</p>`;
+    view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <div class="pts-head"><div class="pts-anillo" style="--p:${Math.round((esc2.pct || 0) * 3.6)}deg"><b>${nf(d.saldo)}</b></div>
+        <div><h2 style="margin:0">${T("m_pts_h")}</h2><p class="muted" style="margin:2px 0">${T("m_pts_escalon")} ${esc(esc2.nombre || "")} · ${falta}</p></div></div>
+      ${misionHtml}
+      <h3 class="pts-h3">${T("m_pts_como")}</h3><div class="pts-lista">${reglasHtml}</div>
+      <h3 class="pts-h3">${T("m_pts_canje")}</h3><div class="pts-lista">${premiosHtml}</div>
+      <h3 class="pts-h3">${T("m_pts_mov")}</h3><div class="pts-lista">${movHtml}</div>
+      ${d.vencen ? `<p class="muted" style="font-size:12.5px;margin-top:14px">${T("m_pts_vencen")}</p>` : ""}
+    </div>`;
+    view().querySelectorAll("[data-mision]").forEach((b) => b.addEventListener("click", async () => {
+      view().querySelectorAll("[data-mision]").forEach((x) => { x.disabled = true; });
+      try {
+        const r = await api("/puntos/mision/" + b.dataset.mision, { method: "POST", body: { opcion: Number(b.dataset.op) } });
+        toast(r.correcta ? T("m_pts_mision_ok") + " +" + nf(r.puntos) : T("m_pts_mision_no"));
+      } catch (e) { toast(e.message); }
+      vPuntos();
+    }));
+    view().querySelectorAll("[data-premio]:not([disabled])").forEach((b) => b.addEventListener("click", () => {
+      const p = pr.items.find((x) => x.id === b.dataset.premio); if (!p) return;
+      const { root, close } = OLI.modal(`<h3>${esc(p.titulo)}</h3><p class="muted">${T("m_pts_confirma")} <b>${nf(p.costo)}</b> ${T("m_pts_puntos")}. ${T("m_pts_wsp")}</p>
+        <button class="btn btn-block" id="ptsOk">${T("m_pts_canjear")}</button><button class="btn btn-ghost btn-block" id="ptsNo" style="margin-top:8px">${T("up_cerrar")}</button>`);
+      root.querySelector("#ptsNo").onclick = close;
+      root.querySelector("#ptsOk").onclick = async () => {
+        root.querySelector("#ptsOk").disabled = true;
+        try { await api("/puntos/premios/" + p.id + "/canjear", { method: "POST" }); close(); toast(T("m_pts_canjeado")); }
+        catch (e) { close(); toast(e.message); }
+        vPuntos();
+      };
+    }));
+  }
+
   // ─── Peñas: ranking, sumarse, compartir el link y pedir una peña nueva ───────────
   async function vPenas() {
     cv().innerHTML = skeleton(3);

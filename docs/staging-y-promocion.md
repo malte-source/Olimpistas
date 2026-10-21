@@ -82,3 +82,14 @@ Archivos `migraciones/NNNN_nombre.sql`, en orden. Cada una corre una vez y queda
 - **Fondo:** cada pago acreditado de un hincha de una peña **verificada** aporta el `pct` de la decisión del club (10 % por defecto, 15 % opcional) — membresías, entradas **y subastas**. Un pedido acredita **una sola vez** (`pedido_id` único), una reversión de pago descuenta el aporte una sola vez, y un pago "huérfano" (lote perdido, a reembolsar) no aporta. Una falla del fondo avisa al equipo pero nunca frena la entrega del pago.
 - **Canje:** la comisión pide (`POST /api/pena/fondo/canje`); queda `pendiente` y reserva saldo (no se puede pedir más de lo disponible, ni con pedidos simultáneos). El club aprueba (resta del saldo) o rechaza desde el admin (`pagos.write`). Aprobar exige que el saldo siga alcanzando.
 - Migración 0005 aditiva (4 tablas + `pena_id` en socios y comercios).
+
+## Motor de puntos y catálogo de canje (Sprint 3)
+
+- **Libro de puntos** (`puntos_movimientos`): cada regla suma **una vez por hecho** (clave única socio + regla + ref: un referido, una semana, un mes). El saldo es la suma; canjes, reintegros y vencimientos son movimientos negativos/positivos. Los de 0 puntos son marcas internas ("ya revisé la cuota de este mes") y no se muestran.
+- **Reglas** (valores del paquete, editables desde Admin → Contenido → Puntos con −50/+50 y activar/desactivar): referido 300 · misión/encuesta 50 · perfil completo 100 · cuota 100 · débito 500 · estadio 150 y liberar 200 (**pendientes**: esperan los endpoints nuevos de Tuti).
+- **Cuota y débito** (Portal de Socios): el cron diario revisa **durante los primeros 5 días del mes** (la API tiene límite de velocidad: lotes de 120, se frena ante un 429 y sigue otro día). La cuota suma con `ACTIVE`/`LIFETIME` (nunca `DEBT`). Cada socio queda marcado por mes para no reconsultarlo. `PUNTOS_CUOTA_DIAS` ajusta la ventana.
+- **Misión semanal:** una pregunta por semana ISO (hora de Paraguay), **una sola respuesta por hincha** (con 3 opciones, permitir reintentos regala los puntos); la respuesta correcta nunca viaja al cliente. Responder una encuesta también suma como misión (una vez por encuesta).
+- **Escalones** por saldo: Bronce 200 · Plata 1.000 · Oro 5.000.
+- **Catálogo:** premios por escalón y `nivel_min`; **Oro sale como "próximamente"** mientras la decisión `oro` sea `no_publicar`. Canjear es **atómico** (bloquea al socio y al premio): no se gastan dos veces los mismos puntos ni se vende más stock que el que hay. El club marca **entregado** (avisa al hincha) o **cancela** (devuelve puntos y stock, una sola vez).
+- **Vencimiento** (decisión `venc`): con `12_meses` vencen **todos** los puntos de quien pasó 12 meses sin actividad (`ultima_actividad`, que se toca al usar la app); aviso por correo **una vez** a los 11 meses. Con `no_vencen` no pasa nada.
+- Admin: `GET/PUT /api/admin/puntos/reglas`, `/resumen` (pasivo), `/premios`, `/canjes`, `/misiones`.

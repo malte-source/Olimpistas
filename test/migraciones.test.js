@@ -43,7 +43,7 @@ test("base vacía: aplica todas las migraciones y deja el esquema completo", opt
     const r = await migrar(sql, { log: {} });
     assert.deepStrictEqual(r.aplicadas, listar().map((m) => m.id));
     assert.strictEqual(r.baseline, false);
-    assert.strictEqual(await tablas(sql), 33, "27 de producción + decisiones_club (0003) + segmentos_guardados (0004) + 4 de peñas (0005)");
+    assert.strictEqual(await tablas(sql), 39, "27 de producción + decisiones_club (0003) + segmentos_guardados (0004) + 4 de peñas (0005) + 6 de puntos (0006)");
     const colsSub = (await sql`SELECT column_name FROM information_schema.columns WHERE table_name='subastas'`).map((c) => c.column_name);
     for (const c of ["pago_vence", "adjudicado_a", "ronda"]) assert.ok(colsSub.includes(c), "falta subastas." + c);
     const cols = (await sql`SELECT column_name FROM information_schema.columns WHERE table_name='pedidos_pago'`).map((c) => c.column_name);

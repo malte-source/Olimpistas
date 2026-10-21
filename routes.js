@@ -26,6 +26,7 @@ const geo = require("./lib/geo");
 const tutiApi = require("./lib/tuti");
 const { baseUrl } = require("./lib/url");
 const { urlImagen } = require("./lib/imagen-subasta");
+const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib/puntos");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
   const h = (x) => require("crypto").createHash("sha256").update(String(x == null ? "" : x)).digest();
@@ -356,6 +357,8 @@ function buildRouter() {
         }
       } catch (e) { log.warn({ err: e.message }, "registro: no se pudo asignar la peña"); }
     }
+    // Puntos al que invitó: una vez por referido (ref = el id del invitado).
+    if (socio.referido_por) darPuntos(socio.referido_por, "referido", socio.id, "Referido: " + (nombre || "un hincha")).catch(() => {});
     // Notificar a quien lo invitó (best-effort, no bloquea el alta).
     if (socio.referido_por && store.getSocioById) {
       store.getSocioById(socio.referido_por).then(async (ref) => {
@@ -492,7 +495,9 @@ function buildRouter() {
     }
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const socio = auth.sanitize(await store.updateSocio(req.socio.id, patch));
-    res.json({ socio, progreso: perfilProgreso(socio) });
+    const progreso = perfilProgreso(socio);
+    if (progreso.pct >= 100) darPuntos(req.socio.id, "perfil", "completo", "Perfil completo").catch(() => {});
+    res.json({ socio, progreso });
   }));
 
   r.post("/perfil/foto", auth.requireSocio, wrap(async (req, res) => {
@@ -501,7 +506,9 @@ function buildRouter() {
       throw httpError(400, "Imagen inválida (se espera un data URL de imagen)");
     if (foto.length > 800_000) throw httpError(413, "La imagen es muy grande (máx ~600KB)");
     const socio = auth.sanitize(await store.updateSocio(req.socio.id, { foto }));
-    res.json({ ok: true, foto: socio.foto, progreso: perfilProgreso(socio) });
+    const progreso = perfilProgreso(socio);
+    if (progreso.pct >= 100) darPuntos(req.socio.id, "perfil", "completo", "Perfil completo").catch(() => {});
+    res.json({ ok: true, foto: socio.foto, progreso });
   }));
 
   // ─── Instancia 3 — Validación de socio (cédula → nivel SOCIO otorgado) ──
@@ -878,6 +885,7 @@ function buildRouter() {
     try { out.subastas = await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron subastas"); }
     try { out.pagos = await conciliarPagos(); } catch (e) { log.error({ err: e.message }, "cron conciliación de pagos"); }
     try { out.plazosSubastas = await procesarPlazosSubastas(); } catch (e) { log.error({ err: e.message }, "cron plazos de subastas"); }
+    try { out.puntos = await procesarPuntosDiario(); } catch (e) { log.error({ err: e.message }, "cron puntos"); }
     try {
       const cumples = store.cumplenHoy ? await store.cumplenHoy() : [];
       for (const s of cumples) {
@@ -1253,6 +1261,8 @@ function buildRouter() {
     ]);
     const tier = (membresia && membresia.tier_slug) || "olimpista";
     const resultado = (p) => p.estado === "activa" ? "en_vivo" : (p.adjudicado_a || p.ganador_id) === socio.id ? (p.pago_estado === "pagado" ? "pagado" : "gano_sin_pagar") : "no_gano";
+    const puntosSaldo = store.saldoPuntos ? await store.saldoPuntos(socio.id) : 0;
+    const puntosMov = store.movimientosPuntos ? await store.movimientosPuntos(socio.id, 10) : [];
     const pena = socio.pena_id && store.getPena ? await store.getPena(socio.pena_id).catch(() => null) : null;
     const pujas = pujasRaw.map((p) => ({ subasta_id: p.subasta_id, titulo: p.titulo, mejor_oferta: p.mejor_oferta, pujas: p.pujas, ultima: p.ultima, resultado: resultado(p) }));
     const pagados = pedidos.filter((p) => p.estado === "pagado");
@@ -1279,8 +1289,9 @@ function buildRouter() {
       estado_club: club,
       suspension_subastas: bloqueo,
       canjes, pujas,
-      // Llegan con su sprint (puntos) o con los endpoints nuevos de Tuti (abono).
-      puntos: null, abono: null,
+      // El abono llega con los endpoints nuevos de Tuti.
+      abono: null,
+      puntos: { saldo: puntosSaldo, escalon: escalonDe(puntosSaldo).nombre, movimientos: puntosMov },
       pena: pena ? { id: pena.id, nombre: pena.nombre, slug: pena.slug, ciudad: pena.ciudad } : null,
       eventos: eventos.slice(0, 60),
     });
@@ -1625,6 +1636,7 @@ function buildRouter() {
     const rr = await store.responderEncuesta({ encuestaId: e.id, socioId: req.socio.id, opcion, texto });
     if (!rr.ok) throw httpError(409, "La encuesta está cerrada");
     _encResCache.delete(e.id); // el voto debe reflejarse al toque
+    darPuntos(req.socio.id, "mision", "encuesta:" + e.id, "Respondió una encuesta").catch(() => {}); // "misión semanal o encuesta"
     res.json({ ok: true, resultados: await store.resultadosEncuesta(e.id) });
   }));
 
@@ -2082,6 +2094,229 @@ function buildRouter() {
       pujadores: await store.contarPujadores(s.id), ganador, pujas: await store.pujasDeSubasta(s.id, 50),
     });
   }));
+
+  // ─── Motor de puntos: reglas, escalones, misión semanal y catálogo de canje ──────
+  let _reglasCache = null;
+  async function reglasPuntos() {
+    if (_reglasCache && Date.now() - _reglasCache.t < 30000) return _reglasCache.v;
+    const filas = store.listReglas ? await store.listReglas() : [];
+    const v = {};
+    for (const f of filas) v[f.clave] = { puntos: f.puntos, activa: f.activa };
+    _reglasCache = { t: Date.now(), v };
+    return v;
+  }
+  // Suma los puntos de una regla UNA vez por hecho (socio + regla + ref): un evento repetido no suma dos veces.
+  // Una falla acá nunca rompe la acción que la disparó (alta, perfil, encuesta…).
+  async function darPuntos(socioId, clave, refId, detalle) {
+    try {
+      if (!store.sumarPuntos) return null;
+      const regla = (await reglasPuntos())[clave];
+      if (!regla || !regla.activa || !(regla.puntos > 0)) return null;
+      return await store.sumarPuntos({ socioId, motivo: clave, refId, puntos: regla.puntos, detalle });
+    } catch (e) { log.error({ socioId, clave, err: e.message }, "puntos: no se pudo sumar"); return null; }
+  }
+  const oroHabilitado = async () => (await decision("oro")) === "habilita_futbol";
+  // Todo socio con sesión es al menos Olimpista: una cuenta sin fila de membresía (importada, por ejemplo) no es "público".
+  const membresiaDe = async (socioId) => (await store.getMembresia(socioId)) || { tier_slug: "olimpista" };
+
+  async function misionParaSocio(socioId) {
+    const m = store.getMisionDeSemana ? await store.getMisionDeSemana(semanaIso()) : null;
+    if (!m) return null;
+    const resp = await store.respuestaMision(m.id, socioId);
+    const regla = (await reglasPuntos()).mision || {};
+    // Nunca se manda cuál es la correcta: solo si ya respondió y si acertó.
+    return { id: m.id, semana: m.semana, pregunta: m.pregunta, opciones: m.opciones, puntos: regla.activa ? regla.puntos : 0, respondida: resp ? { opcion: resp.opcion, correcta: resp.correcta } : null };
+  }
+
+  r.get("/puntos", auth.requireSocio, wrap(async (req, res) => {
+    const id = req.socio.id;
+    const [saldo, movimientos, reglas, membresia, mision, venc] = await Promise.all([
+      store.saldoPuntos(id), store.movimientosPuntos(id, 20), reglasPuntos(), store.getMembresia(id), misionParaSocio(id), decision("venc"),
+    ]);
+    const esSocio = !!req.socio.es_socio_olimpia || (membresia && membresia.tier_slug === "socio");
+    res.json({
+      saldo, escalon: escalonDe(saldo), movimientos, mision, vencen: venc === "12_meses",
+      reglas: Object.entries(REGLAS_META).map(([clave, m]) => ({
+        clave, titulo: m.t, fuente: m.fuente, quien: m.quien, pendiente: !!m.pendiente,
+        puntos: (reglas[clave] || {}).puntos || 0, activa: !!(reglas[clave] || {}).activa,
+        aplica: m.quien === "todos" || (m.quien === "socios" && esSocio),
+      })),
+    });
+  }));
+  r.get("/puntos/premios", auth.requireSocio, wrap(async (req, res) => {
+    const [saldo, membresia, premios, oro] = await Promise.all([store.saldoPuntos(req.socio.id), membresiaDe(req.socio.id), store.listPremios(), oroHabilitado()]);
+    res.json({
+      saldo,
+      items: premios.filter((p) => access.puedeAcceder(membresia, p.nivel_min)).map((p) => {
+        const proximamente = p.escalon === "oro" && !oro, agotado = p.stock !== null && p.stock <= 0;
+        return { id: p.id, titulo: p.titulo, descripcion: p.descripcion, escalon: p.escalon, costo: p.costo, agotado, proximamente,
+          puede_canjear: !proximamente && !agotado && saldo >= p.costo, faltan: Math.max(0, p.costo - saldo) };
+      }),
+    });
+  }));
+  r.post("/puntos/premios/:id/canjear", auth.requireSocio, wrap(async (req, res) => {
+    const p = await store.getPremio(req.params.id);
+    if (!p || !p.activo) throw httpError(404, "Premio no encontrado");
+    const membresia = await membresiaDe(req.socio.id);
+    if (!access.puedeAcceder(membresia, p.nivel_min)) throw httpError(403, "Este premio es para otro nivel");
+    if (p.escalon === "oro" && !(await oroHabilitado())) throw httpError(409, "Las experiencias Oro llegan pronto");
+    const out = await store.canjearPremio({ socioId: req.socio.id, premioId: p.id });
+    if (!out.ok) {
+      if (out.motivo === "saldo") throw httpError(409, "Te faltan " + Number(out.costo - out.saldo).toLocaleString("es-PY") + " puntos");
+      if (out.motivo === "stock") throw httpError(409, "Este premio se agotó");
+      throw httpError(404, "Premio no encontrado");
+    }
+    alertar("puntos:canje:" + out.canje.id, "Canje de premio por entregar", `${p.titulo} · ${req.socio.nombre || req.socio.email} · ${p.costo} puntos`);
+    res.status(201).json({ ok: true, saldo: out.saldo, canje: { id: out.canje.id, estado: out.canje.estado } });
+  }));
+  // Misión de la semana: UNA respuesta por hincha (con tres opciones, dejar reintentar equivale a regalar los puntos).
+  r.post("/puntos/mision/:id", auth.requireSocio, wrap(async (req, res) => {
+    const m = await store.getMision(req.params.id);
+    if (!m || !m.activa) throw httpError(404, "Misión no encontrada");
+    if (m.semana !== semanaIso()) throw httpError(409, "Esa misión ya no está disponible");
+    const opcion = Number(req.body && req.body.opcion);
+    if (!Number.isInteger(opcion) || opcion < 0 || opcion >= m.opciones.length) throw httpError(400, "Opción inválida");
+    const correcta = opcion === m.correcta;
+    const reg = await store.responderMision({ misionId: m.id, socioId: req.socio.id, opcion, correcta });
+    if (!reg) throw httpError(409, "Ya respondiste la misión de esta semana");
+    let puntos = 0;
+    if (correcta) { const mov = await darPuntos(req.socio.id, "mision", m.semana, "Misión de la semana"); puntos = mov ? mov.puntos : 0; }
+    res.json({ ok: true, correcta, puntos, saldo: await store.saldoPuntos(req.socio.id) });
+  }));
+
+  // ── Admin de puntos ──
+  r.get("/admin/puntos/reglas", requireAdmin, wrap(async (_req, res) => {
+    const reglas = await reglasPuntos();
+    res.json({ items: Object.entries(REGLAS_META).map(([clave, m]) => ({ clave, titulo: m.t, fuente: m.fuente, quien: m.quien, pendiente: !!m.pendiente, puntos: (reglas[clave] || {}).puntos || 0, activa: !!(reglas[clave] || {}).activa })) });
+  }));
+  r.put("/admin/puntos/reglas", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const b = req.body || {};
+    if (!REGLAS_META[b.clave]) throw httpError(404, "Regla desconocida");
+    const patch = {};
+    if (b.puntos !== undefined) { const n = Math.round(Number(b.puntos)); if (!(n >= 0 && n <= 100000)) throw httpError(400, "Los puntos van de 0 a 100.000"); patch.puntos = n; }
+    if (typeof b.activa === "boolean") patch.activa = b.activa;
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const out = await store.setRegla(b.clave, patch);
+    if (!out) throw httpError(404, "Regla desconocida");
+    _reglasCache = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:regla", targetId: b.clave, detalle: JSON.stringify(patch), por: req.adminUser });
+    res.json({ ok: true, regla: out });
+  }));
+  r.get("/admin/puntos/resumen", requireAdmin, wrap(async (_req, res) => { res.json(await store.resumenPuntos()); }));
+  r.get("/admin/puntos/premios", requireAdmin, wrap(async (_req, res) => { res.json({ items: await store.listPremios({ soloActivos: false }) }); }));
+  const limpiarPremio = (b, parcial) => {
+    const p = {};
+    const txt = (k, max) => { if (b[k] !== undefined) p[k] = String(b[k]).replace(/[<>]/g, "").trim().slice(0, max); };
+    txt("titulo", 120); txt("descripcion", 400);
+    if (b.escalon !== undefined) { if (!["bronce", "plata", "oro"].includes(b.escalon)) throw httpError(400, "Escalón inválido (bronce, plata u oro)"); p.escalon = b.escalon; }
+    if (b.nivel_min !== undefined) { if (!tierBySlug(b.nivel_min)) throw httpError(400, "Nivel mínimo inválido"); p.nivel_min = b.nivel_min; }
+    if (b.costo !== undefined) { const n = Math.round(Number(b.costo)); if (!(n >= 1 && n <= 1000000)) throw httpError(400, "El costo va de 1 a 1.000.000 de puntos"); p.costo = n; }
+    if (b.stock !== undefined) { if (b.stock === null || b.stock === "") p.stock = null; else { const n = Math.round(Number(b.stock)); if (!(n >= 0 && n <= 100000)) throw httpError(400, "Stock inválido"); p.stock = n; } }
+    if (typeof b.activo === "boolean") p.activo = b.activo;
+    if (!parcial && (!p.titulo || p.titulo.length < 3)) throw httpError(400, "Poné un título");
+    if (!parcial && p.costo === undefined) throw httpError(400, "Poné el costo en puntos");
+    return p;
+  };
+  r.post("/admin/puntos/premios", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const p = await store.crearPremio(limpiarPremio(req.body || {}, false));
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:premio-crear", targetId: p.id, detalle: p.titulo, por: req.adminUser });
+    res.status(201).json({ ok: true, premio: p });
+  }));
+  r.patch("/admin/puntos/premios/:id", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const patch = limpiarPremio(req.body || {}, true);
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const p = await store.updatePremio(req.params.id, patch);
+    if (!p) throw httpError(404, "Premio no encontrado");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:premio-editar", targetId: p.id, detalle: JSON.stringify(patch), por: req.adminUser });
+    res.json({ ok: true, premio: p });
+  }));
+  r.get("/admin/puntos/canjes", requireAdmin, wrap(async (req, res) => {
+    res.json({ items: await store.listCanjesPremio({ estado: req.query.estado || undefined }) });
+  }));
+  // Entregar (avisa al hincha) o cancelar (devuelve los puntos y el stock) un canje pendiente.
+  r.patch("/admin/puntos/canjes/:id", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const estado = String(req.body && req.body.estado);
+    if (!["entregado", "cancelado"].includes(estado)) throw httpError(400, "Estado inválido (entregado | cancelado)");
+    const out = await store.resolverCanjePremio(req.params.id, { estado });
+    if (!out.ok) throw httpError(out.motivo === "no_existe" ? 404 : 409, out.motivo === "no_existe" ? "Canje no encontrado" : "Ese canje ya se resolvió (" + out.estado + ")");
+    if (estado === "entregado" && mailer.enviarPremioListo) {
+      const socio = await store.getSocioById(out.canje.socio_id).catch(() => null);
+      if (socio && socio.email) mailer.enviarPremioListo(socio, { premio: out.premio && out.premio.titulo }).catch(() => {});
+    }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:canje-" + estado, targetId: req.params.id, detalle: out.premio && out.premio.titulo, por: req.adminUser });
+    res.json({ ok: true, estado: out.canje.estado });
+  }));
+  r.get("/admin/puntos/misiones", requireAdmin, wrap(async (_req, res) => { res.json({ items: await store.listMisiones(30), semana_actual: semanaIso() }); }));
+  r.post("/admin/puntos/misiones", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    const b = req.body || {};
+    const semana = String(b.semana || ""), pregunta = String(b.pregunta || "").replace(/[<>]/g, "").trim();
+    const opciones = Array.isArray(b.opciones) ? b.opciones.map((o) => String(o).replace(/[<>]/g, "").trim().slice(0, 60)).filter(Boolean) : [];
+    const correcta = Number(b.correcta);
+    if (!/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(semana)) throw httpError(400, "La semana va como 2026-W43");
+    if (pregunta.length < 5 || pregunta.length > 200) throw httpError(400, "La pregunta va de 5 a 200 caracteres");
+    if (opciones.length < 2 || opciones.length > 4) throw httpError(400, "Poné entre 2 y 4 opciones");
+    if (!Number.isInteger(correcta) || correcta < 0 || correcta >= opciones.length) throw httpError(400, "Indicá cuál opción es la correcta");
+    let m;
+    try { m = await store.crearMision({ semana, pregunta, opciones, correcta }); }
+    catch (e) { if (e.code === "23505") throw httpError(409, "Ya hay una misión para esa semana"); throw e; }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:mision-crear", targetId: m.id, detalle: semana, por: req.adminUser });
+    res.status(201).json({ ok: true, mision: m });
+  }));
+  r.patch("/admin/puntos/misiones/:id", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    if (typeof (req.body && req.body.activa) !== "boolean") throw httpError(400, "Indicá activa: true o false");
+    const m = await store.updateMision(req.params.id, { activa: req.body.activa });
+    if (!m) throw httpError(404, "Misión no encontrada");
+    res.json({ ok: true, mision: m });
+  }));
+
+  // ── Tareas del cron diario: cuota y débito (Portal de Socios) y vencimiento por inactividad ──
+  // La cuota al día suma con status ACTIVE o LIFETIME (nunca DEBT: es un pago pendiente). La API de socios tiene
+  // límite de velocidad, así que se revisan lotes durante los primeros 5 días del mes; cada socio queda marcado
+  // (un movimiento de 0 puntos) para no volver a consultarlo ese mes.
+  async function procesarCuotasMes() {
+    const out = { revisados: 0, cuota: 0, debito: 0, pausado: null };
+    if (!tutiApi.habilitado() || !store.sociosParaCuota || diaDelMesPy() > (Number(process.env.PUNTOS_CUOTA_DIAS) || 5)) return out; // PUNTOS_CUOTA_DIAS: hasta qué día del mes se revisan cuotas (5 por defecto)
+    const mes = mesPy(), reglas = await reglasPuntos(), rc = reglas.cuota || {};
+    const t0 = Date.now();
+    for (const c of await store.sociosParaCuota({ mes, limit: 120 })) {
+      if (Date.now() - t0 > 90000) { out.pausado = "tiempo"; break; }
+      const v = await tutiApi.consultarSocio(c.cedula);
+      if (!v.ok) { if (v.motivo === "limite" || v.motivo === "credenciales") { out.pausado = v.motivo; break; } continue; } // error puntual: mañana se reintenta
+      out.revisados++;
+      const s = v.encontrado ? v.socio : null;
+      if (s && ["ACTIVE", "LIFETIME"].includes(s.status) && rc.activa && rc.puntos > 0) {
+        await store.sumarPuntos({ socioId: c.id, motivo: "cuota", refId: mes, puntos: rc.puntos, detalle: "Cuota al día · " + mes });
+        out.cuota++;
+      } else {
+        await store.sumarPuntos({ socioId: c.id, motivo: "cuota", refId: mes, puntos: 0, detalle: s ? "Cuota sin confirmar al día (" + s.status + ")" : "No figura como titular" });
+      }
+      if (s && s.debitoAutomatico && (await darPuntos(c.id, "debito", "debito", "Débito automático activado"))) out.debito++;
+    }
+    return out;
+  }
+  async function procesarVencimientoPuntos() {
+    const out = { vencidos: 0, puntos: 0, avisos: 0 };
+    if ((await decision("venc")) !== "12_meses" || !store.puntosInactivos) return out;
+    const haceMeses = (n) => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() - n); return d.toISOString(); };
+    const dia = (f) => new Date(f).toISOString().slice(0, 10);
+    for (const s of await store.puntosInactivos({ desde: "1970-01-01T00:00:00Z", hasta: haceMeses(12) })) {
+      const m = await store.vencerPuntosSocio(s.id, "inact:" + dia(s.ultima_actividad));
+      if (m) { out.vencidos++; out.puntos += -m.puntos; }
+    }
+    const reservar = store.reservarNotificacion ? (k) => store.reservarNotificacion(k) : async () => true;
+    for (const s of await store.puntosInactivos({ desde: haceMeses(12), hasta: haceMeses(11) })) {
+      if (!(await reservar("puntos:aviso:" + s.id + ":" + dia(s.ultima_actividad)))) continue;
+      const vence = new Date(s.ultima_actividad); vence.setUTCMonth(vence.getUTCMonth() + 12);
+      if (mailer.enviarPuntosPorVencer) { await mailer.enviarPuntosPorVencer(s, { saldo: s.saldo, vence }).catch(() => {}); out.avisos++; }
+    }
+    return out;
+  }
+  async function procesarPuntosDiario() {
+    const out = {};
+    try { out.cuotas = await procesarCuotasMes(); } catch (e) { log.error({ err: e.message }, "puntos: cuotas del mes"); }
+    try { out.vencimiento = await procesarVencimientoPuntos(); } catch (e) { log.error({ err: e.message }, "puntos: vencimiento"); }
+    return out;
+  }
 
   // ─── Peñas oficiales: link de captación, panel de la comisión y fondo ───────────
   const emailOk = (e) => typeof e === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);

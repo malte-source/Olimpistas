@@ -157,10 +157,10 @@ test("360: indicadores, estado en el club (en vivo), plan guardado y línea de t
   for (const t of ["alta", "membresia", "pago", "canje", "puja"]) assert.ok(f.eventos.some((e) => e.tipo === t), "falta el evento " + t);
 });
 
-test("360: lo que llega con otros sprints sale null (no se inventa) y no se filtran datos privados", async () => {
+test("360: lo que depende de Tuti (abono) sale null, no se inventa; puntos y peña ya vienen; no se filtran datos privados", async () => {
   const { A } = await conHistoria();
   const f = await (await admin(`/socios/${A.id}/360`)).json();
-  assert.deepStrictEqual({ p: f.puntos, pe: f.pena, ab: f.abono }, { p: null, pe: null, ab: null });
+  assert.deepStrictEqual({ p: f.puntos, pe: f.pena, ab: f.abono }, { p: { saldo: 0, escalon: "Inicial", movimientos: [] }, pe: null, ab: null });
   const txt = JSON.stringify(f);
   for (const prohibido of ["password_hash", "reset_token", "verif_token", "carnet_secreto"]) assert.ok(!txt.includes(prohibido), prohibido);
 });

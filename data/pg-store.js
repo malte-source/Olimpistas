@@ -1164,6 +1164,131 @@ function createPgStore({ databaseUrl, debug }) {
       return sql`SELECT mv.*, p.nombre AS pena, p.saldo FROM pena_movimientos mv JOIN penas p ON p.id = mv.pena_id
         WHERE mv.motivo = 'canje' AND mv.estado = 'pendiente' ORDER BY mv.creado`;
     },
+    // ── Motor de puntos (migración 0006) ──
+    async listReglas() { return sql`SELECT clave, puntos, activa FROM puntos_reglas ORDER BY clave`; },
+    async setRegla(clave, patch) {
+      const [r] = await sql`UPDATE puntos_reglas SET ${sql(patch)} WHERE clave = ${clave} RETURNING *`;
+      return r || null;
+    },
+    // Suma (o resta) puntos UNA vez por hecho: (socio, motivo, ref) es único. Devuelve el movimiento, o null si ya estaba.
+    async sumarPuntos({ socioId, motivo, refId, puntos, detalle }) {
+      const [m] = await sql`INSERT INTO puntos_movimientos (id, socio_id, puntos, motivo, ref_id, detalle)
+        VALUES (${uid("pmo")}, ${socioId}, ${puntos}, ${motivo}, ${refId || ""}, ${detalle || ""})
+        ON CONFLICT (socio_id, motivo, ref_id) DO NOTHING RETURNING *`;
+      return m || null;
+    },
+    async saldoPuntos(socioId) { const [r] = await sql`SELECT COALESCE(SUM(puntos), 0)::int AS s FROM puntos_movimientos WHERE socio_id = ${socioId}`; return r.s; },
+    // Los movimientos de 0 puntos son marcas internas ("revisado este mes"): no se muestran.
+    async movimientosPuntos(socioId, limit = 20) {
+      return sql`SELECT id, puntos, motivo, ref_id, detalle, creado FROM puntos_movimientos WHERE socio_id = ${socioId} AND puntos <> 0 ORDER BY creado DESC LIMIT ${limit}`;
+    },
+    async resumenPuntos() {
+      const [r] = await sql`SELECT
+        COALESCE(SUM(saldo) FILTER (WHERE saldo > 0), 0)::bigint AS pasivo,
+        COUNT(*) FILTER (WHERE saldo > 0)::int AS socios_con_saldo
+        FROM (SELECT socio_id, SUM(puntos) AS saldo FROM puntos_movimientos GROUP BY socio_id) t`;
+      const [c] = await sql`SELECT COUNT(*)::int AS n FROM canjes_premio WHERE estado = 'pendiente'`;
+      return { pasivo: Number(r.pasivo), socios_con_saldo: r.socios_con_saldo, canjes_pendientes: c.n };
+    },
+    // ── Premios y canjes ──
+    async listPremios({ soloActivos = true } = {}) {
+      return soloActivos ? sql`SELECT * FROM premios WHERE activo = true ORDER BY costo, creado` : sql`SELECT * FROM premios ORDER BY costo, creado`;
+    },
+    async getPremio(id) { const [p] = await sql`SELECT * FROM premios WHERE id = ${id} LIMIT 1`; return p || null; },
+    async crearPremio(d) {
+      const [p] = await sql`INSERT INTO premios ${sql({ id: uid("pre"), titulo: d.titulo, descripcion: d.descripcion || "", imagen: d.imagen || null,
+        escalon: d.escalon || "bronce", costo: Math.round(d.costo), stock: d.stock == null ? null : Math.round(d.stock), nivel_min: d.nivel_min || "olimpista", activo: d.activo !== false })} RETURNING *`;
+      return p;
+    },
+    async updatePremio(id, patch) { const [p] = await sql`UPDATE premios SET ${sql(patch)} WHERE id = ${id} RETURNING *`; return p || null; },
+    // Canje ATÓMICO: serializa los canjes del socio (lock de su fila) y el stock del premio, comprueba saldo y stock
+    // y resta puntos, stock y crea el pedido en una sola transacción. Dos canjes simultáneos no gastan dos veces los mismos puntos.
+    async canjearPremio({ socioId, premioId }) {
+      return sql.begin(async (tx) => {
+        const [s] = await tx`SELECT id FROM socios WHERE id = ${socioId} FOR UPDATE`;
+        if (!s) return { ok: false, motivo: "no_existe" };
+        const [p] = await tx`SELECT * FROM premios WHERE id = ${premioId} FOR UPDATE`;
+        if (!p || !p.activo) return { ok: false, motivo: "no_existe" };
+        const [{ saldo }] = await tx`SELECT COALESCE(SUM(puntos), 0)::int AS saldo FROM puntos_movimientos WHERE socio_id = ${socioId}`;
+        if (saldo < p.costo) return { ok: false, motivo: "saldo", saldo, costo: p.costo };
+        if (p.stock !== null && p.stock <= 0) return { ok: false, motivo: "stock" };
+        if (p.stock !== null) await tx`UPDATE premios SET stock = stock - 1 WHERE id = ${premioId}`;
+        const [c] = await tx`INSERT INTO canjes_premio (id, socio_id, premio_id, costo) VALUES (${uid("cjp")}, ${socioId}, ${premioId}, ${p.costo}) RETURNING *`;
+        await tx`INSERT INTO puntos_movimientos (id, socio_id, puntos, motivo, ref_id, detalle)
+          VALUES (${uid("pmo")}, ${socioId}, ${-p.costo}, 'canje', ${c.id}, ${"Canje · " + p.titulo})`;
+        return { ok: true, canje: c, premio: p, saldo: saldo - p.costo };
+      });
+    },
+    async listCanjesPremio({ estado, socioId, limit = 100 } = {}) {
+      const conds = [];
+      if (estado) conds.push(sql`c.estado = ${estado}`);
+      if (socioId) conds.push(sql`c.socio_id = ${socioId}`);
+      const where = conds.length ? sql`WHERE ${conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`))}` : sql``;
+      return sql`SELECT c.*, p.titulo AS premio, p.escalon, s.nombre, s.apellido, s.email
+        FROM canjes_premio c JOIN premios p ON p.id = c.premio_id JOIN socios s ON s.id = c.socio_id ${where} ORDER BY c.creado DESC LIMIT ${limit}`;
+    },
+    // Entregar o cancelar un canje pendiente (una sola resolución). Cancelar devuelve los puntos y el stock.
+    async resolverCanjePremio(id, { estado }) {
+      return sql.begin(async (tx) => {
+        const [c] = await tx`SELECT * FROM canjes_premio WHERE id = ${id} FOR UPDATE`;
+        if (!c) return { ok: false, motivo: "no_existe" };
+        if (c.estado !== "pendiente") return { ok: false, motivo: "ya_resuelto", estado: c.estado };
+        const [r] = await tx`UPDATE canjes_premio SET estado = ${estado}, resuelto = now() WHERE id = ${id} RETURNING *`;
+        const [p] = await tx`SELECT * FROM premios WHERE id = ${c.premio_id}`;
+        if (estado === "cancelado") {
+          await tx`INSERT INTO puntos_movimientos (id, socio_id, puntos, motivo, ref_id, detalle)
+            VALUES (${uid("pmo")}, ${c.socio_id}, ${c.costo}, 'reintegro', ${c.id}, ${"Canje cancelado · " + (p ? p.titulo : "")})
+            ON CONFLICT (socio_id, motivo, ref_id) DO NOTHING`;
+          if (p && p.stock !== null) await tx`UPDATE premios SET stock = stock + 1 WHERE id = ${p.id}`;
+        }
+        return { ok: true, canje: r, premio: p };
+      });
+    },
+    // ── Misión semanal: una respuesta por socio ──
+    async crearMision({ semana, pregunta, opciones, correcta }) {
+      const [m] = await sql`INSERT INTO misiones (id, semana, pregunta, opciones, correcta) VALUES (${uid("mis")}, ${semana}, ${pregunta}, ${JSON.stringify(opciones)}, ${correcta}) RETURNING *`;
+      return { ...m, opciones };
+    },
+    async listMisiones(limit = 30) {
+      return (await sql`SELECT * FROM misiones ORDER BY semana DESC LIMIT ${limit}`).map((m) => ({ ...m, opciones: JSON.parse(m.opciones || "[]") }));
+    },
+    async getMision(id) { const [m] = await sql`SELECT * FROM misiones WHERE id = ${id} LIMIT 1`; return m ? { ...m, opciones: JSON.parse(m.opciones || "[]") } : null; },
+    async getMisionDeSemana(semana) { const [m] = await sql`SELECT * FROM misiones WHERE semana = ${semana} AND activa = true LIMIT 1`; return m ? { ...m, opciones: JSON.parse(m.opciones || "[]") } : null; },
+    async updateMision(id, patch) { const [m] = await sql`UPDATE misiones SET ${sql(patch)} WHERE id = ${id} RETURNING *`; return m ? { ...m, opciones: JSON.parse(m.opciones || "[]") } : null; },
+    async responderMision({ misionId, socioId, opcion, correcta }) {
+      const [r] = await sql`INSERT INTO mision_respuestas (mision_id, socio_id, opcion, correcta) VALUES (${misionId}, ${socioId}, ${opcion}, ${correcta})
+        ON CONFLICT (mision_id, socio_id) DO NOTHING RETURNING *`;
+      return r || null;
+    },
+    async respuestaMision(misionId, socioId) { const [r] = await sql`SELECT * FROM mision_respuestas WHERE mision_id = ${misionId} AND socio_id = ${socioId} LIMIT 1`; return r || null; },
+    // ── Vencimiento por inactividad (decisión venc) y cuota del mes ──
+    // Socios con saldo > 0 cuya última actividad cae en [desde, hasta).
+    async puntosInactivos({ desde, hasta, limit = 500 }) {
+      return sql`SELECT s.id, s.email, s.nombre, s.idioma, s.ultima_actividad, SUM(m.puntos)::int AS saldo
+        FROM socios s JOIN puntos_movimientos m ON m.socio_id = s.id
+        WHERE s.ultima_actividad >= ${desde} AND s.ultima_actividad < ${hasta}
+        GROUP BY s.id HAVING SUM(m.puntos) > 0 ORDER BY s.ultima_actividad LIMIT ${limit}`;
+    },
+    // Vence TODO el saldo de un socio inactivo, una sola vez por ciclo de inactividad (ref = su última actividad).
+    async vencerPuntosSocio(socioId, refId) {
+      return sql.begin(async (tx) => {
+        const [s] = await tx`SELECT id FROM socios WHERE id = ${socioId} FOR UPDATE`;
+        if (!s) return null;
+        const [{ saldo }] = await tx`SELECT COALESCE(SUM(puntos), 0)::int AS saldo FROM puntos_movimientos WHERE socio_id = ${socioId}`;
+        if (saldo <= 0) return null;
+        const [m] = await tx`INSERT INTO puntos_movimientos (id, socio_id, puntos, motivo, ref_id, detalle)
+          VALUES (${uid("pmo")}, ${socioId}, ${-saldo}, 'vencimiento', ${refId}, 'Puntos vencidos por inactividad')
+          ON CONFLICT (socio_id, motivo, ref_id) DO NOTHING RETURNING *`;
+        return m || null;
+      });
+    },
+    // Socios validados con cédula que todavía no se revisaron este mes (ref = YYYY-MM).
+    async sociosParaCuota({ mes, limit = 200 }) {
+      return sql`SELECT s.id, s.cedula FROM socios s
+        WHERE s.es_socio_olimpia = true AND s.cedula IS NOT NULL AND s.cedula <> ''
+          AND NOT EXISTS (SELECT 1 FROM puntos_movimientos m WHERE m.socio_id = s.id AND m.motivo = 'cuota' AND m.ref_id = ${mes})
+        ORDER BY s.id LIMIT ${limit}`;
+    },
     // ── Encuestas (Fan Survey) ──
     async listEncuestas() { return (await sql`SELECT * FROM encuestas ORDER BY creado DESC`).map(_enc); },
     async encuestasActivas() { return (await sql`SELECT * FROM encuestas WHERE estado = 'activa' ORDER BY creado DESC`).map(_enc); },

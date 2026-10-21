@@ -638,6 +638,106 @@ function createMemoryStore({ filePath = null } = {}) {
       return (db.pena_movimientos || []).filter((m) => m.motivo === "canje" && m.estado === "pendiente").sort((a, b) => String(a.creado).localeCompare(String(b.creado)))
         .map((m) => { const p = (db.penas || []).find((x) => x.id === m.pena_id) || {}; return { ...m, pena: p.nombre, saldo: p.saldo }; });
     },
+    // ── Motor de puntos (mismo contrato que pg-store) ──
+    async listReglas() {
+      if (!db.puntos_reglas) db.puntos_reglas = [["referido", 300], ["mision", 50], ["estadio", 150], ["liberar", 200], ["cuota", 100], ["debito", 500], ["perfil", 100]].map(([clave, puntos]) => ({ clave, puntos, activa: true }));
+      return db.puntos_reglas.slice().sort((a, b) => a.clave.localeCompare(b.clave));
+    },
+    async setRegla(clave, patch) { await this.listReglas(); const r = db.puntos_reglas.find((x) => x.clave === clave); if (!r) return null; Object.assign(r, patch); persist(); return r; },
+    async sumarPuntos({ socioId, motivo, refId, puntos, detalle }) {
+      db.puntos_mov = db.puntos_mov || [];
+      if (db.puntos_mov.some((m) => m.socio_id === socioId && m.motivo === motivo && m.ref_id === (refId || ""))) return null;
+      const m = { id: uid("pmo"), socio_id: socioId, puntos, motivo, ref_id: refId || "", detalle: detalle || "", vence: null, creado: nowIso() };
+      db.puntos_mov.push(m); persist(); return m;
+    },
+    async saldoPuntos(socioId) { return (db.puntos_mov || []).filter((m) => m.socio_id === socioId).reduce((a, m) => a + m.puntos, 0); },
+    async movimientosPuntos(socioId, limit = 20) {
+      return (db.puntos_mov || []).filter((m) => m.socio_id === socioId && m.puntos !== 0).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
+        .map((m) => ({ id: m.id, puntos: m.puntos, motivo: m.motivo, ref_id: m.ref_id, detalle: m.detalle, creado: m.creado }));
+    },
+    async resumenPuntos() {
+      const por = new Map();
+      for (const m of (db.puntos_mov || [])) por.set(m.socio_id, (por.get(m.socio_id) || 0) + m.puntos);
+      const saldos = [...por.values()].filter((s) => s > 0);
+      return { pasivo: saldos.reduce((a, s) => a + s, 0), socios_con_saldo: saldos.length, canjes_pendientes: (db.canjes_premio || []).filter((c) => c.estado === "pendiente").length };
+    },
+    async listPremios({ soloActivos = true } = {}) {
+      return (db.premios || []).filter((p) => !soloActivos || p.activo).sort((a, b) => (a.costo - b.costo) || String(a.creado).localeCompare(String(b.creado)));
+    },
+    async getPremio(id) { return (db.premios || []).find((p) => p.id === id) || null; },
+    async crearPremio(d) {
+      const p = { id: uid("pre"), titulo: d.titulo, descripcion: d.descripcion || "", imagen: d.imagen || null, escalon: d.escalon || "bronce", costo: Math.round(d.costo),
+        stock: d.stock == null ? null : Math.round(d.stock), nivel_min: d.nivel_min || "olimpista", activo: d.activo !== false, creado: nowIso() };
+      (db.premios = db.premios || []).push(p); persist(); return p;
+    },
+    async updatePremio(id, patch) { const p = (db.premios || []).find((x) => x.id === id); if (!p) return null; Object.assign(p, patch); persist(); return p; },
+    async canjearPremio({ socioId, premioId }) {
+      if (!(db.socios || []).some((s) => s.id === socioId)) return { ok: false, motivo: "no_existe" };
+      const p = (db.premios || []).find((x) => x.id === premioId);
+      if (!p || !p.activo) return { ok: false, motivo: "no_existe" };
+      const saldo = await this.saldoPuntos(socioId);
+      if (saldo < p.costo) return { ok: false, motivo: "saldo", saldo, costo: p.costo };
+      if (p.stock !== null && p.stock <= 0) return { ok: false, motivo: "stock" };
+      if (p.stock !== null) p.stock -= 1;
+      const c = { id: uid("cjp"), socio_id: socioId, premio_id: premioId, costo: p.costo, estado: "pendiente", creado: nowIso(), resuelto: null };
+      (db.canjes_premio = db.canjes_premio || []).push(c);
+      (db.puntos_mov = db.puntos_mov || []).push({ id: uid("pmo"), socio_id: socioId, puntos: -p.costo, motivo: "canje", ref_id: c.id, detalle: "Canje · " + p.titulo, vence: null, creado: nowIso() });
+      persist();
+      return { ok: true, canje: { ...c }, premio: p, saldo: saldo - p.costo };
+    },
+    async listCanjesPremio({ estado, socioId, limit = 100 } = {}) {
+      return (db.canjes_premio || []).filter((c) => (!estado || c.estado === estado) && (!socioId || c.socio_id === socioId))
+        .sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit).map((c) => {
+          const p = (db.premios || []).find((x) => x.id === c.premio_id) || {}, s = (db.socios || []).find((x) => x.id === c.socio_id) || {};
+          return { ...c, premio: p.titulo, escalon: p.escalon, nombre: s.nombre, apellido: s.apellido, email: s.email };
+        });
+    },
+    async resolverCanjePremio(id, { estado }) {
+      const c = (db.canjes_premio || []).find((x) => x.id === id);
+      if (!c) return { ok: false, motivo: "no_existe" };
+      if (c.estado !== "pendiente") return { ok: false, motivo: "ya_resuelto", estado: c.estado };
+      c.estado = estado; c.resuelto = nowIso();
+      const p = (db.premios || []).find((x) => x.id === c.premio_id);
+      if (estado === "cancelado") {
+        const ya = (db.puntos_mov || []).some((m) => m.socio_id === c.socio_id && m.motivo === "reintegro" && m.ref_id === c.id);
+        if (!ya) (db.puntos_mov = db.puntos_mov || []).push({ id: uid("pmo"), socio_id: c.socio_id, puntos: c.costo, motivo: "reintegro", ref_id: c.id, detalle: "Canje cancelado · " + (p ? p.titulo : ""), vence: null, creado: nowIso() });
+        if (p && p.stock !== null) p.stock += 1;
+      }
+      persist();
+      return { ok: true, canje: { ...c }, premio: p };
+    },
+    async crearMision({ semana, pregunta, opciones, correcta }) {
+      db.misiones = db.misiones || [];
+      if (db.misiones.some((m) => m.semana === semana)) { const e = new Error("semana repetida"); e.code = "23505"; throw e; }
+      const m = { id: uid("mis"), semana, pregunta, opciones, correcta, activa: true, creado: nowIso() };
+      db.misiones.push(m); persist(); return m;
+    },
+    async listMisiones(limit = 30) { return (db.misiones || []).slice().sort((a, b) => b.semana.localeCompare(a.semana)).slice(0, limit); },
+    async getMision(id) { return (db.misiones || []).find((m) => m.id === id) || null; },
+    async getMisionDeSemana(semana) { return (db.misiones || []).find((m) => m.semana === semana && m.activa) || null; },
+    async updateMision(id, patch) { const m = (db.misiones || []).find((x) => x.id === id); if (!m) return null; Object.assign(m, patch); persist(); return m; },
+    async responderMision({ misionId, socioId, opcion, correcta }) {
+      db.mision_respuestas = db.mision_respuestas || [];
+      if (db.mision_respuestas.some((r) => r.mision_id === misionId && r.socio_id === socioId)) return null;
+      const r = { mision_id: misionId, socio_id: socioId, opcion, correcta, creado: nowIso() };
+      db.mision_respuestas.push(r); persist(); return r;
+    },
+    async respuestaMision(misionId, socioId) { return (db.mision_respuestas || []).find((r) => r.mision_id === misionId && r.socio_id === socioId) || null; },
+    async puntosInactivos({ desde, hasta, limit = 500 }) {
+      const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
+      return (db.socios || []).filter((s) => s.ultima_actividad && new Date(s.ultima_actividad).getTime() >= d && new Date(s.ultima_actividad).getTime() < h)
+        .map((s) => ({ id: s.id, email: s.email, nombre: s.nombre, idioma: s.idioma, ultima_actividad: s.ultima_actividad, saldo: (db.puntos_mov || []).filter((m) => m.socio_id === s.id).reduce((a, m) => a + m.puntos, 0) }))
+        .filter((s) => s.saldo > 0).sort((a, b) => String(a.ultima_actividad).localeCompare(String(b.ultima_actividad))).slice(0, limit);
+    },
+    async vencerPuntosSocio(socioId, refId) {
+      const saldo = await this.saldoPuntos(socioId);
+      if (saldo <= 0) return null;
+      return this.sumarPuntos({ socioId, motivo: "vencimiento", refId, puntos: -saldo, detalle: "Puntos vencidos por inactividad" });
+    },
+    async sociosParaCuota({ mes, limit = 200 }) {
+      return (db.socios || []).filter((s) => s.es_socio_olimpia && s.cedula && !(db.puntos_mov || []).some((m) => m.socio_id === s.id && m.motivo === "cuota" && m.ref_id === mes))
+        .sort((a, b) => a.id.localeCompare(b.id)).slice(0, limit).map((s) => ({ id: s.id, cedula: s.cedula }));
+    },
     // ── Encuestas (Fan Survey) ──
     async listEncuestas() { return (db.encuestas || []).slice().sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
     async encuestasActivas() { return (db.encuestas || []).filter((e) => e.estado === "activa"); },
