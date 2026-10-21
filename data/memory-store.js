@@ -149,7 +149,7 @@ function createMemoryStore({ filePath = null } = {}) {
     async createSocio({ email, passwordHash, nombre, apellido, telefono, cedula, fechaNacimiento, referidoPor, idioma }) {
       const id = uid("soc");
       const socio = {
-        id, email: email.toLowerCase(), password_hash: passwordHash,
+        id, email: email.toLowerCase(), password_hash: passwordHash, ultima_actividad: new Date().toISOString(), gasto_total: 0, plan_club: "",
         nombre: nombre || "", apellido: apellido || "", telefono: telefono || "",
         // Campos de enriquecimiento (barra de progreso, se completan después):
         whatsapp: "", foto: "", pais: "", pais_iso: "", ciudad: "",
@@ -264,11 +264,16 @@ function createMemoryStore({ filePath = null } = {}) {
         if (f.paisIso && String(s.pais_iso || "").toUpperCase() !== String(f.paisIso).toUpperCase()) return false;
         if (f.validoSocio && !s.es_socio_olimpia) return false;
         if (f.sinFoto && s.foto) return false;
+        if (f.canjes !== undefined && f.canjes !== null && (db.canjes || []).some((c) => c.socio_id === s.id) !== f.canjes) return false;
+        if (f.pujas !== undefined && f.pujas !== null && (db.pujas || []).some((p) => p.socio_id === s.id) !== f.pujas) return false;
+        if (f.gasto !== undefined && f.gasto !== null && ((s.gasto_total || 0) > 0) !== f.gasto) return false;
+        if (f.ciudad && String(s.ciudad || "").toLowerCase() !== String(f.ciudad).toLowerCase()) return false;
+        if (f.excluirId && s.id === f.excluirId) return false;
         if (f.tier && tierDe(s.id) !== f.tier) return false;
         if (term && !((s.email || "").toLowerCase().includes(term) || ((s.nombre || "") + " " + (s.apellido || "")).toLowerCase().includes(term) || (s.cedula || "").includes(term))) return false;
         return true;
       }).sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
-      return rows.slice(0, Math.min(Number(f.limit) || 500, 5000)).map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, cedula: s.cedula, pais: s.pais, pais_iso: s.pais_iso, es_socio_olimpia: s.es_socio_olimpia, tiene_foto: !!s.foto, tier_slug: tierDe(s.id), creado: s.creado }));
+      return rows.slice(0, Math.min(Number(f.limit) || 500, 5000)).map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, cedula: s.cedula, pais: s.pais, pais_iso: s.pais_iso, ciudad: s.ciudad, es_socio_olimpia: s.es_socio_olimpia, gasto_total: s.gasto_total || 0, ultima_actividad: s.ultima_actividad || null, tiene_foto: !!s.foto, tier_slug: tierDe(s.id), creado: s.creado }));
     },
     async cuadrePagos() {
       const peds = db.pedidos || [];
@@ -337,12 +342,46 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     async registrarCanje({ beneficioId, socioId, comercioId, validadoPor, monto, ahorro } = {}) { const c = { id: uid("cnj"), beneficio_id: beneficioId, socio_id: socioId || null, comercio_id: comercioId || null, validado_por: validadoPor || "", monto: monto != null ? Math.round(monto) : null, ahorro: ahorro != null ? Math.round(ahorro) : null, creado: nowIso() }; (db.canjes = db.canjes || []).push(c); persist(); return c; },
     async ultimoCanje(socioId, beneficioId) { return (db.canjes || []).filter((c) => c.socio_id === socioId && c.beneficio_id === beneficioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null; },
+    // ── Billetera de ahorro, Ficha 360 y segmentos (mismo contrato que pg-store) ──
     async resumenAhorroSocio(socioId) {
-      const mesIni = new Date().toISOString().slice(0, 7); // YYYY-MM
-      let mes = 0, total = 0;
-      (db.canjes || []).forEach((c) => { if (c.socio_id !== socioId) return; const a = Number(c.ahorro) || 0; total += a; if (String(c.creado).slice(0, 7) === mesIni) mes += a; });
-      return { mes, total };
+      // Mes y año calendario en hora de Paraguay (UTC-3 fijo desde 2024).
+      const L = new Date(Date.now() - 3 * 3600000), ym = L.toISOString().slice(0, 7), y = L.toISOString().slice(0, 4);
+      let mes = 0, anio = 0, total = 0, canjesMes = 0;
+      (db.canjes || []).forEach((c) => {
+        if (c.socio_id !== socioId) return;
+        const a = Number(c.ahorro) || 0, cl = new Date(new Date(c.creado).getTime() - 3 * 3600000).toISOString();
+        total += a;
+        if (cl.slice(0, 4) === y) anio += a;
+        if (cl.slice(0, 7) === ym) { mes += a; canjesMes++; }
+      });
+      return { mes, anio, total, canjes_mes: canjesMes };
     },
+    async tocarActividad(socioId) { const s = (db.socios || []).find((x) => x.id === socioId); if (s) { s.ultima_actividad = nowIso(); persist(); } return true; },
+    async canjesDeSocio(socioId, limit = 20) {
+      return (db.canjes || []).filter((c) => c.socio_id === socioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit).map((c) => {
+        const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}, co = (db.comercios || []).find((x) => x.id === c.comercio_id) || {};
+        return { id: c.id, creado: c.creado, monto: c.monto, ahorro: c.ahorro, beneficio: b.titulo || null, comercio: co.nombre || null };
+      });
+    },
+    async pujasDeSocio(socioId, limit = 20) {
+      const por = new Map();
+      for (const p of (db.pujas || [])) {
+        if (p.socio_id !== socioId) continue;
+        const e = por.get(p.subasta_id) || { mejor_oferta: 0, pujas: 0, ultima: "" };
+        e.mejor_oferta = Math.max(e.mejor_oferta, p.monto); e.pujas++; if (String(p.creado) > String(e.ultima)) e.ultima = p.creado;
+        por.set(p.subasta_id, e);
+      }
+      return [...por.entries()].map(([id, e]) => {
+        const s = (db.subastas || []).find((x) => x.id === id) || {};
+        return { subasta_id: id, titulo: s.titulo, estado: s.estado, puja_actual: s.puja_actual, ganador_id: s.ganador_id || null, adjudicado_a: s.adjudicado_a || null, pago_estado: s.pago_estado || null, ...e };
+      }).sort((a, b) => String(b.ultima).localeCompare(String(a.ultima))).slice(0, limit);
+    },
+    async crearSegmento({ nombre, filtros, por }) {
+      const s = { id: uid("seg"), nombre, filtros: filtros || {}, creado_por: por || "admin", creado: nowIso() };
+      (db.segmentos = db.segmentos || []).push(s); persist(); return s;
+    },
+    async listSegmentos() { return (db.segmentos || []).slice().sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, 200); },
+    async deleteSegmento(id) { db.segmentos = (db.segmentos || []).filter((s) => s.id !== id); persist(); return true; },
     // ── Auth del panel de comercio ──
     async getComercioByUsuario(usuario) { const u = String(usuario || "").toLowerCase(); return (db.comercios || []).find((c) => (c.usuario || "").toLowerCase() === u) || null; },
     async setComercioAcceso(id, usuario, passwordHash) { const c = (db.comercios || []).find((x) => x.id === id); if (!c) return null; c.usuario = String(usuario || "").toLowerCase(); c.password_hash = passwordHash; persist(); return c; },
@@ -803,7 +842,10 @@ function createMemoryStore({ filePath = null } = {}) {
     async marcarCumplido(id) {
       const p = db.pedidos.find((x) => x.id === id);
       if (!p || p.cumplido_en) return null;
-      p.cumplido_en = nowIso(); p.cumplimiento_desde = null; persist();
+      p.cumplido_en = nowIso(); p.cumplimiento_desde = null;
+      const so = (db.socios || []).find((x) => x.id === p.socio_id);
+      if (so) { so.gasto_total = (so.gasto_total || 0) + (p.monto || 0); so.ultima_actividad = nowIso(); }
+      persist();
       return { ...p };
     },
     async liberarCumplimiento(id) {
@@ -814,7 +856,10 @@ function createMemoryStore({ filePath = null } = {}) {
     async marcarReversado(id) {
       const p = db.pedidos.find((x) => x.id === id);
       if (!p || p.estado !== "pagado") return null;
-      p.estado = "reversado"; persist();
+      p.estado = "reversado";
+      const so = (db.socios || []).find((x) => x.id === p.socio_id);
+      if (so && p.cumplido_en) so.gasto_total = Math.max(0, (so.gasto_total || 0) - (p.monto || 0));
+      persist();
       return { ...p };
     },
     async pedidosParaConciliar({ pendienteMin = 10, maxDias = 7, sinEntregarMin = 5, limit = 50 } = {}) {

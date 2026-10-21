@@ -512,6 +512,7 @@ function buildRouter() {
     const vivo = tutiApi.habilitado() ? await tutiApi.consultarSocio(cedula) : null;
     const enClub = vivo && vivo.ok && vivo.encontrado ? vivo.socio : null;
     const noAlDia = !!(enClub && !enClub.alDia);
+    if (enClub && enClub.plan) store.updateSocio(req.socio.id, { plan_club: enClub.plan }).catch(() => {}); // copia de lectura del plan
 
     // Match contra el padrón (foto de agosto: todo el padrón se tomó como AL DÍA).
     let fila = null, validado = false;
@@ -1185,6 +1186,126 @@ function buildRouter() {
     res.setHeader("Content-Disposition", 'attachment; filename="socios.csv"');
     res.send(head.join(",") + "\n" + rows.join("\n"));
   }));
+  // ─── Ficha 360 del hincha + "buscar parecidos" + segmentos guardados ───────────
+  // Estado en el club: el Portal de Socios (ITTI) manda; si no responde se usa lo que Olimpistas
+  // ya sabía (padrón) y se marca "sin confirmar". Nunca se inventa un estado.
+  async function estadoClubDe(socio) {
+    const base = { es_socio_olimpia: !!socio.es_socio_olimpia, plan_club: socio.plan_club || "" };
+    const ced = soloDigitos(socio.cedula);
+    if (!ced) return { ...base, fuente: "ninguna", confirmado: false, motivo: "sin_cedula" };
+    if (!tutiApi.habilitado()) return { ...base, fuente: "padron", confirmado: false, motivo: "deshabilitado" };
+    const v = await tutiApi.consultarSocio(ced);
+    if (v.ok && v.encontrado) {
+      const s = v.socio;
+      if (s.plan && s.plan !== socio.plan_club) store.updateSocio(socio.id, { plan_club: s.plan }).catch(() => {}); // copia de lectura
+      return { ...base, plan_club: s.plan || base.plan_club, fuente: "portal", confirmado: true, encontrado: true,
+        status: s.status, al_dia: s.alDia, deuda: s.deuda, numero_socio: s.numeroSocio, debito_automatico: s.debitoAutomatico };
+    }
+    if (v.ok) return { ...base, fuente: "portal", confirmado: true, encontrado: false, nota: "No figura como titular (la API no trae adherentes de un plan familiar)." };
+    return { ...base, fuente: "padron", confirmado: false, motivo: v.motivo };
+  }
+  const FILTROS_SEGMENTO = ["paisIso", "tier", "validoSocio", "sinFoto", "canjes", "pujas", "gasto", "ciudad", "q"];
+  function limpiarFiltros(f) {
+    const out = {}, src = f && typeof f === "object" ? f : {};
+    if (typeof src.paisIso === "string" && /^[A-Za-z]{2}$/.test(src.paisIso)) out.paisIso = src.paisIso.toUpperCase();
+    if (typeof src.tier === "string" && tierBySlug(src.tier)) out.tier = src.tier;
+    for (const k of ["validoSocio", "sinFoto"]) if (src[k] === true) out[k] = true;
+    for (const k of ["canjes", "pujas", "gasto"]) if (typeof src[k] === "boolean") out[k] = src[k];
+    for (const k of ["ciudad", "q"]) if (typeof src[k] === "string" && src[k].trim()) out[k] = src[k].trim().slice(0, 80);
+    return out;
+  }
+  r.get("/admin/socios/:id/360", requireAdmin, wrap(async (req, res) => {
+    const socio = await store.getSocioById(req.params.id);
+    if (!socio) throw httpError(404, "Socio no encontrado");
+    const [membresia, historial, pedidos, ahorro, canjes, pujasRaw, actualizaciones, club] = await Promise.all([
+      store.getMembresia(socio.id),
+      store.listMembresias ? store.listMembresias(socio.id) : [],
+      store.listPedidos ? store.listPedidos({ socioId: socio.id, limit: 100 }) : [],
+      store.resumenAhorroSocio ? store.resumenAhorroSocio(socio.id) : { mes: 0, anio: 0, total: 0, canjes_mes: 0 },
+      store.canjesDeSocio ? store.canjesDeSocio(socio.id, 30) : [],
+      store.pujasDeSocio ? store.pujasDeSocio(socio.id, 30) : [],
+      store.listActualizaciones ? store.listActualizaciones({ socioId: socio.id, limit: 30 }) : [],
+      estadoClubDe(socio),
+    ]);
+    const tier = (membresia && membresia.tier_slug) || "olimpista";
+    const resultado = (p) => p.estado === "activa" ? "en_vivo" : (p.adjudicado_a || p.ganador_id) === socio.id ? (p.pago_estado === "pagado" ? "pagado" : "gano_sin_pagar") : "no_gano";
+    const pujas = pujasRaw.map((p) => ({ subasta_id: p.subasta_id, titulo: p.titulo, mejor_oferta: p.mejor_oferta, pujas: p.pujas, ultima: p.ultima, resultado: resultado(p) }));
+    const pagados = pedidos.filter((p) => p.estado === "pagado");
+    const bloqueo = socio.subastas_bloqueo_hasta && new Date(socio.subastas_bloqueo_hasta).getTime() > Date.now() ? socio.subastas_bloqueo_hasta : null;
+
+    // Línea de tiempo (lo más nuevo primero): alta, membresías, pagos, canjes, pujas, validaciones.
+    const eventos = [{ tipo: "alta", titulo: "Se registró", detalle: "", fecha: socio.creado }];
+    for (const m of historial) eventos.push({ tipo: "membresia", titulo: "Nivel " + ((tierBySlug(m.tier_slug) || {}).nombre || m.tier_slug), detalle: m.estado, fecha: m.inicio });
+    for (const p of pagados) eventos.push({ tipo: "pago", titulo: "Pagó " + (p.concepto || "un pedido"), detalle: "₲ " + Number(p.monto || 0).toLocaleString("es-PY"), fecha: p.pagado_en || p.creado });
+    for (const c of canjes) eventos.push({ tipo: "canje", titulo: "Usó un beneficio" + (c.beneficio ? ": " + c.beneficio : ""), detalle: [c.comercio, c.ahorro ? "ahorró ₲ " + Number(c.ahorro).toLocaleString("es-PY") : ""].filter(Boolean).join(" · "), fecha: c.creado });
+    for (const p of pujas) eventos.push({ tipo: "puja", titulo: "Pujó en " + (p.titulo || "un lote"), detalle: "mejor oferta ₲ " + Number(p.mejor_oferta).toLocaleString("es-PY") + " · " + p.resultado.replace(/_/g, " "), fecha: p.ultima });
+    for (const a of actualizaciones.filter((x) => x.tipo !== "alta")) eventos.push({ tipo: "validacion", titulo: a.tipo === "socio_claim" ? "Pidió validar que es socio" : "Actualización: " + a.tipo, detalle: a.estado || "", fecha: a.creado || a.creada });
+    if (bloqueo) eventos.push({ tipo: "suspension", titulo: "Suspendido de las subastas", detalle: "hasta " + fechaCorta(bloqueo), fecha: bloqueo });
+    eventos.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+
+    res.json({
+      socio: { id: socio.id, nombre: socio.nombre, apellido: socio.apellido, email: socio.email, cedula: socio.cedula, pais: socio.pais, pais_iso: socio.pais_iso,
+        ciudad: socio.ciudad, creado: socio.creado, ultima_actividad: socio.ultima_actividad || null, es_socio_olimpia: !!socio.es_socio_olimpia,
+        plan_club: club.plan_club || "", tier, tiene_foto: !!socio.foto },
+      indicadores: {
+        gasto_total: socio.gasto_total || 0, pagos: pagados.length, ahorro_mes: ahorro.mes, ahorro_anio: ahorro.anio, ahorro_total: ahorro.total,
+        canjes: canjes.length, lotes_pujados: pujas.length, lotes_ganados: pujas.filter((p) => p.resultado === "pagado" || p.resultado === "gano_sin_pagar").length,
+      },
+      estado_club: club,
+      suspension_subastas: bloqueo,
+      canjes, pujas,
+      // Llegan con sus sprints (puntos, peñas) o con los endpoints nuevos de Tuti (abono).
+      puntos: null, pena: null, abono: null,
+      eventos: eventos.slice(0, 60),
+    });
+  }));
+  // "Buscar parecidos": por PERFIL (mismo país y nivel) o por HÁBITO (mismo nivel y mismo uso de la
+  // plataforma: canjes, pujas, gasto). Devuelve cuántos hay y los filtros, listos para guardar.
+  r.get("/admin/socios/:id/parecidos", requireAdmin, wrap(async (req, res) => {
+    const socio = await store.getSocioById(req.params.id);
+    if (!socio) throw httpError(404, "Socio no encontrado");
+    const por = req.query.por === "habito" ? "habito" : "perfil";
+    const m = await store.getMembresia(socio.id);
+    const tier = (m && m.tier_slug) || "olimpista";
+    let filtros;
+    if (por === "perfil") {
+      filtros = { tier };
+      if (socio.pais_iso) filtros.paisIso = String(socio.pais_iso).toUpperCase();
+      if (socio.es_socio_olimpia) filtros.validoSocio = true;
+    } else {
+      const [canjes, pujas] = await Promise.all([store.canjesDeSocio(socio.id, 1), store.pujasDeSocio(socio.id, 1)]);
+      filtros = { tier, canjes: canjes.length > 0, pujas: pujas.length > 0, gasto: (socio.gasto_total || 0) > 0 };
+    }
+    const TOPE = 5000;
+    const items = await store.filtrarSocios({ ...filtros, excluirId: socio.id, limit: TOPE });
+    res.json({ por, filtros, total: items.length, tope: items.length >= TOPE,
+      muestra: items.slice(0, 10).map((s) => ({ id: s.id, nombre: [s.nombre, s.apellido].filter(Boolean).join(" "), email: s.email, pais_iso: s.pais_iso, tier_slug: s.tier_slug })) });
+  }));
+  r.get("/admin/segmentos", requireAdmin, wrap(async (_req, res) => {
+    res.json({ items: store.listSegmentos ? await store.listSegmentos() : [] });
+  }));
+  r.post("/admin/segmentos", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    const nombre = String((req.body && req.body.nombre) || "").trim();
+    if (nombre.length < 2 || nombre.length > 80) throw httpError(400, "Poné un nombre de 2 a 80 caracteres");
+    const filtros = limpiarFiltros(req.body && req.body.filtros);
+    if (!Object.keys(filtros).length) throw httpError(400, "El segmento no tiene filtros");
+    const seg = await store.crearSegmento({ nombre, filtros, por: req.adminUser });
+    const total = (await store.filtrarSocios({ ...filtros, limit: 5000 })).length;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "segmento:guardar", targetId: seg.id, detalle: nombre + " (" + total + ")", por: req.adminUser });
+    res.status(201).json({ ok: true, segmento: seg, total });
+  }));
+  r.get("/admin/segmentos/:id/socios", requireAdmin, wrap(async (req, res) => {
+    const seg = (await store.listSegmentos()).find((s) => s.id === req.params.id);
+    if (!seg) throw httpError(404, "Segmento no encontrado");
+    const items = await store.filtrarSocios({ ...limpiarFiltros(seg.filtros), limit: 500 });
+    res.json({ segmento: { id: seg.id, nombre: seg.nombre, filtros: seg.filtros }, total: items.length, items });
+  }));
+  r.delete("/admin/segmentos/:id", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    await store.deleteSegmento(req.params.id);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "segmento:borrar", targetId: req.params.id, por: req.adminUser });
+    res.json({ ok: true });
+  }));
+
   // Dar de baja → revertir a Olimpista gratis (el reembolso real se hace en Metrepay).
   r.post("/admin/socios/:id/baja", requireAdmin, requirePerm("socios.write"), wrap(async (req, res) => {
     const socio = await store.getSocioById(req.params.id);
@@ -2006,6 +2127,11 @@ function buildRouter() {
   }));
 
   // ─── Red de Beneficios (socio): beneficios aplicables a SU nivel ──
+  // Billetera de Ahorro: lo que ahorró este mes y en el año (mes calendario en hora de Paraguay).
+  r.get("/beneficios/ahorro", auth.requireSocio, wrap(async (req, res) => {
+    const a = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id) : { mes: 0, anio: 0, total: 0, canjes_mes: 0 };
+    res.json({ mes: a.mes, anio: a.anio, total: a.total, canjes_mes: a.canjes_mes });
+  }));
   r.get("/beneficios", auth.requireSocio, wrap(async (req, res) => {
     const [m, sFull] = await Promise.all([store.getMembresia(req.socio.id), store.getSocioById(req.socio.id).catch(() => null)]);
     const tier = (m && m.tier_slug) || "olimpista";
@@ -2014,7 +2140,7 @@ function buildRouter() {
     // Orden: desbloqueados primero (lo tuyo) y, dentro de eso, local-first (comercio de tu ciudad).
     const esLocal = (x) => (ciudad && String(x.comercio_ciudad || "").toLowerCase() === ciudad) ? 1 : 0;
     items = items.slice().sort((a, b) => ((b.desbloqueado ? 1 : 0) - (a.desbloqueado ? 1 : 0)) || (esLocal(b) - esLocal(a)));
-    const ahorro = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id).catch(() => ({ mes: 0, total: 0 })) : { mes: 0, total: 0 };
+    const ahorro = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id).catch(() => ({ mes: 0, anio: 0, total: 0 })) : { mes: 0, anio: 0, total: 0 };
     const codigo = (sFull && sFull.ref_codigo) || "";
     res.json({ tier, ciudad: (sFull && sFull.ciudad) || "", codigo, items, ahorro });
   }));

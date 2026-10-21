@@ -255,11 +255,19 @@ function createPgStore({ databaseUrl }) {
       if (f.paisIso) conds.push(sql`s.pais_iso = ${String(f.paisIso).toUpperCase()}`);
       if (f.validoSocio) conds.push(sql`s.es_socio_olimpia = true`);
       if (f.sinFoto) conds.push(sql`(s.foto IS NULL OR s.foto = '')`);
+      if (f.canjes === true) conds.push(sql`EXISTS (SELECT 1 FROM canjes c WHERE c.socio_id = s.id)`);
+      if (f.canjes === false) conds.push(sql`NOT EXISTS (SELECT 1 FROM canjes c WHERE c.socio_id = s.id)`);
+      if (f.pujas === true) conds.push(sql`EXISTS (SELECT 1 FROM pujas p WHERE p.socio_id = s.id)`);
+      if (f.pujas === false) conds.push(sql`NOT EXISTS (SELECT 1 FROM pujas p WHERE p.socio_id = s.id)`);
+      if (f.gasto === true) conds.push(sql`s.gasto_total > 0`);
+      if (f.gasto === false) conds.push(sql`s.gasto_total = 0`);
+      if (f.ciudad) conds.push(sql`lower(s.ciudad) = ${String(f.ciudad).toLowerCase()}`);
+      if (f.excluirId) conds.push(sql`s.id <> ${f.excluirId}`);
       if (f.tier) conds.push(sql`coalesce(m.tier_slug, 'olimpista') = ${f.tier}`);
       if (f.q) { const term = "%" + String(f.q).toLowerCase() + "%"; conds.push(sql`(lower(s.email) LIKE ${term} OR lower(coalesce(s.nombre,'')) LIKE ${term} OR lower(coalesce(s.apellido,'')) LIKE ${term} OR coalesce(s.cedula,'') LIKE ${term})`); }
       const where = conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`));
       return sql`
-        SELECT s.id, s.nombre, s.apellido, s.email, s.cedula, s.pais, s.pais_iso, s.es_socio_olimpia,
+        SELECT s.id, s.nombre, s.apellido, s.email, s.cedula, s.pais, s.pais_iso, s.ciudad, s.es_socio_olimpia, s.gasto_total, s.ultima_actividad,
                (s.foto IS NOT NULL AND s.foto <> '') AS tiene_foto, coalesce(m.tier_slug,'olimpista') AS tier_slug, s.creado
         FROM socios s
         LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
@@ -410,13 +418,42 @@ function createPgStore({ databaseUrl }) {
       return c;
     },
     async ultimoCanje(socioId, beneficioId) { const [c] = await sql`SELECT * FROM canjes WHERE socio_id = ${socioId} AND beneficio_id = ${beneficioId} ORDER BY creado DESC LIMIT 1`; return c || null; },
+    // ── Billetera de ahorro, Ficha 360 y segmentos (migración 0004) ──
+    // Mes y año CALENDARIO en hora de Paraguay (antes se usaba el mes UTC: lo gastado entre las
+    // 21:00 y la medianoche del último día del mes contaba en el mes siguiente).
     async resumenAhorroSocio(socioId) {
       const [r] = await sql`SELECT
         coalesce(SUM(ahorro), 0)::bigint AS total,
-        coalesce(SUM(ahorro) FILTER (WHERE creado >= date_trunc('month', now())), 0)::bigint AS mes
+        coalesce(SUM(ahorro) FILTER (WHERE creado >= date_trunc('month', now() AT TIME ZONE 'America/Asuncion') AT TIME ZONE 'America/Asuncion'), 0)::bigint AS mes,
+        coalesce(SUM(ahorro) FILTER (WHERE creado >= date_trunc('year', now() AT TIME ZONE 'America/Asuncion') AT TIME ZONE 'America/Asuncion'), 0)::bigint AS anio,
+        (COUNT(*) FILTER (WHERE creado >= date_trunc('month', now() AT TIME ZONE 'America/Asuncion') AT TIME ZONE 'America/Asuncion'))::int AS canjes_mes
         FROM canjes WHERE socio_id = ${socioId}`;
-      return { mes: Number(r.mes), total: Number(r.total) };
+      return { mes: Number(r.mes), anio: Number(r.anio), total: Number(r.total), canjes_mes: r.canjes_mes };
     },
+    // Última actividad (el llamador ya limita la frecuencia: a lo sumo 1 vez por hora y socio).
+    async tocarActividad(socioId) { await sql`UPDATE socios SET ultima_actividad = now() WHERE id = ${socioId}`; return true; },
+    async canjesDeSocio(socioId, limit = 20) {
+      return sql`SELECT c.id, c.creado, c.monto, c.ahorro, b.titulo AS beneficio, co.nombre AS comercio
+        FROM canjes c LEFT JOIN beneficios b ON b.id = c.beneficio_id LEFT JOIN comercios co ON co.id = c.comercio_id
+        WHERE c.socio_id = ${socioId} ORDER BY c.creado DESC LIMIT ${limit}`;
+    },
+    // Una fila por lote en el que pujó: su mejor oferta, cuándo fue la última y cómo terminó.
+    async pujasDeSocio(socioId, limit = 20) {
+      return sql`SELECT s.id AS subasta_id, s.titulo, s.estado, s.puja_actual, s.ganador_id, s.adjudicado_a, s.pago_estado,
+          MAX(p.monto)::int AS mejor_oferta, COUNT(*)::int AS pujas, MAX(p.creado) AS ultima
+        FROM pujas p JOIN subastas s ON s.id = p.subasta_id WHERE p.socio_id = ${socioId}
+        GROUP BY s.id ORDER BY MAX(p.creado) DESC LIMIT ${limit}`;
+    },
+    async crearSegmento({ nombre, filtros, por }) {
+      const id = uid("seg");
+      const [s] = await sql`INSERT INTO segmentos_guardados (id, nombre, filtros, creado_por) VALUES (${id}, ${nombre}, ${JSON.stringify(filtros || {})}, ${por || "admin"}) RETURNING *`;
+      return { ...s, filtros: filtros || {} };
+    },
+    async listSegmentos() {
+      const filas = await sql`SELECT * FROM segmentos_guardados ORDER BY creado DESC LIMIT 200`;
+      return filas.map((s) => { let f = {}; try { f = JSON.parse(s.filtros || "{}"); } catch (e) {} return { ...s, filtros: f }; });
+    },
+    async deleteSegmento(id) { await sql`DELETE FROM segmentos_guardados WHERE id = ${id}`; return true; },
     // Auditoría del panel.
     async logAccionAdmin({ accion, targetId, detalle, por } = {}) {
       try {
@@ -743,9 +780,13 @@ function createPgStore({ databaseUrl }) {
       return p || null;
     },
     async marcarCumplido(id) {
-      const [p] = await sql`UPDATE pedidos_pago SET cumplido_en = now(), cumplimiento_desde = NULL
-        WHERE id = ${id} AND cumplido_en IS NULL RETURNING *`;
-      return p || null;
+      return sql.begin(async (tx) => {
+        const [p] = await tx`UPDATE pedidos_pago SET cumplido_en = now(), cumplimiento_desde = NULL WHERE id = ${id} AND cumplido_en IS NULL RETURNING *`;
+        if (!p) return null;
+        // El gasto del socio suma UNA vez por pedido (el UPDATE de arriba solo lo gana una llamada).
+        if (p.socio_id) await tx`UPDATE socios SET gasto_total = gasto_total + ${p.monto}, ultima_actividad = now() WHERE id = ${p.socio_id}`;
+        return p;
+      });
     },
     async liberarCumplimiento(id) {
       await sql`UPDATE pedidos_pago SET cumplimiento_desde = NULL WHERE id = ${id} AND cumplido_en IS NULL`;
@@ -753,8 +794,12 @@ function createPgStore({ databaseUrl }) {
     },
     // pagado → reversado, atómico. Devuelve la fila solo si este llamado hizo la transición.
     async marcarReversado(id) {
-      const [p] = await sql`UPDATE pedidos_pago SET estado = 'reversado' WHERE id = ${id} AND estado = 'pagado' RETURNING *`;
-      return p || null;
+      return sql.begin(async (tx) => {
+        const [p] = await tx`UPDATE pedidos_pago SET estado = 'reversado' WHERE id = ${id} AND estado = 'pagado' RETURNING *`;
+        if (!p) return null;
+        if (p.socio_id && p.cumplido_en) await tx`UPDATE socios SET gasto_total = GREATEST(0, gasto_total - ${p.monto}) WHERE id = ${p.socio_id}`;
+        return p;
+      });
     },
     // Para la conciliación: pedidos con hash de Pagopar que siguen pendientes (el webhook pudo
     // perderse) y pedidos pagados cuya entrega quedó a medias.

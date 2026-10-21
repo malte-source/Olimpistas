@@ -65,3 +65,11 @@ Archivos `migraciones/NNNN_nombre.sql`, en orden. Cada una corre una vez y queda
 - Admin: `POST /api/admin/subastas/:id/extender {horas}` y `/segundo`; decisiones en `GET/PUT /api/admin/decisiones` (registrar exige `decisiones.write`, hoy solo `owner`).
 - Regla de deuda (decisión `deuda`): por defecto **no se bloquea a nadie**. `cualquier` bloquea con deuda en Tuti; `mas_2_cuotas` necesita la variable `CUOTA_SOCIO_GS`. Si Tuti no responde se deja pujar.
 - Scheduler horario: `gcloud scheduler jobs create http <nombre> --schedule="0 * * * *" --uri=<URL>/api/cron/horario --http-method=POST --headers="x-cron-token=<CRON_SECRET>" --location=southamerica-east1`.
+
+## Billetera de Ahorro y Ficha 360 (Sprint 1)
+
+- `GET /api/beneficios/ahorro` → `{mes, anio, total, canjes_mes}` en **mes y año calendario de Paraguay** (antes el mes era UTC).
+- `GET /api/admin/socios/:id/360` (cualquier admin): indicadores, estado en el club (**en vivo** desde el Portal de Socios; si no responde, "sin confirmar" con lo del padrón), canjes, pujas por lote, suspensión y línea de tiempo. Puntos, peña y abono salen `null` hasta sus sprints.
+- `GET /api/admin/socios/:id/parecidos?por=perfil|habito` y `GET/POST/DELETE /api/admin/segmentos` (guardar y borrar exigen `campanas.write`).
+- `socios.gasto_total` lo suma la entrega del pedido (una vez por pedido) y la reversión lo descuenta; `ultima_actividad` se toca a lo sumo una vez por hora; `plan_club` es una copia de lectura del plan de ITTI (Olimpistas no escribe nada allá).
+- Migración 0004 es aditiva; recalcula `gasto_total` con lo ya pagado.

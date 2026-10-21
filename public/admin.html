@@ -141,6 +141,10 @@
     .sub-preview-precio strong{display:block;font-size:15px;color:var(--blanco);font-variant-numeric:tabular-nums}
     .sub-preview-cta{display:block;width:100%;text-align:center;background:linear-gradient(120deg,var(--oro2),var(--oro));color:#1a1500;font-weight:800;font-size:12px;padding:8px;border-radius:8px}
     .mini{font-size:13px;color:var(--gris);margin:10px 0 4px;border-top:1px solid var(--linea);padding-top:10px}
+    .ind-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;margin:12px 0}
+    .ind{border:1px solid var(--linea);border-radius:10px;padding:10px}.ind-v{font-weight:800;font-size:15px}.ind-l{font-size:11px;color:var(--gris);margin-top:2px}
+    .tl{margin:6px 0 0;padding:0;list-style:none;max-height:240px;overflow:auto}.tl li{padding:6px 0 6px 12px;border-left:2px solid var(--linea);font-size:13px}.tl li small{display:block;color:var(--gris)}
+    .parec{border:1px solid var(--linea);border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
     .ok{color:var(--verde);font-size:13px;min-height:16px}
 
     /* ── Componentes UI (toast / confirm / info) ── */
@@ -1251,6 +1255,7 @@
           '<button class="close" data-cerrar>×</button>' +
           '<h3>' + esc([s.nombre, s.apellido].filter(Boolean).join(" ") || "Socio") + '</h3>' +
           '<p class="muted" style="margin:0">' + esc(s.email || "") + ' · <span class="pill">' + esc(TIER[tierAct] || tierAct) + '</span>' + (s.es_socio_olimpia ? ' · ✓ socio Olimpia' : '') + '</p>' +
+          '<div id="f360"><p class="muted" style="font-size:13px">Cargando ficha 360…</p></div>' +
           (s.foto ? '<div style="text-align:center;margin:12px 0"><img src="' + esc(s.foto) + '" alt="" style="max-width:150px;max-height:150px;border-radius:12px;border:1px solid var(--linea)" /></div>' : '') +
           '<div class="fgrid">' + fld("fNombre", "Nombre", s.nombre) + fld("fApellido", "Apellido", s.apellido) + fld("fEmail", "Email", s.email, true) + fld("fCedula", "Cédula", s.cedula) + fld("fIso", "ISO país", s.pais_iso) + fld("fCiudad", "Ciudad", s.ciudad) + fld("fPais", "País", s.pais) + '</div>' +
           '<p class="ok" id="fOk"></p>' +
@@ -1275,7 +1280,45 @@
           : ((s.foto && puede("moderacion")) ? '<div class="row-actions"><button class="btn btn-sm btn-no" data-quitarfoto="' + esc(s.id) + '">🖼 Quitar foto</button></div>' : '')) +
           '<div class="mini">Historial de membresías</div>' + hist +
           '<div class="mini">Pedidos de pago</div>' + peds;
+        cargar360(id);
       } catch (e) { $("fichaBox").innerHTML = '<button class="close" data-cerrar>×</button><p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // Ficha 360: cinco indicadores, estado en el club (en vivo o "sin confirmar") y línea de tiempo.
+    var ultimoParecido = null;
+    async function cargar360(id) {
+      var box = $("f360"); if (!box) return;
+      try {
+        var d = await api("/admin/socios/" + encodeURIComponent(id) + "/360");
+        var i = d.indicadores || {}, ec = d.estado_club || {};
+        var gsA = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); };
+        var club = ec.confirmado
+          ? (ec.encontrado === false ? "No figura como titular" : (ec.status || "") + (ec.al_dia ? " · al día" : " · NO al día") + (ec.deuda ? " · debe " + gsA(ec.deuda) : ""))
+          : "Sin confirmar" + (ec.es_socio_olimpia ? " · figura en el padrón" : "");
+        function ind(l, v) { return '<div class="ind"><div class="ind-v">' + esc(v) + '</div><div class="ind-l">' + esc(l) + '</div></div>'; }
+        var tl = (d.eventos || []).map(function (e) { return '<li><b>' + esc(e.titulo) + '</b>' + (e.detalle ? '<small>' + esc(e.detalle) + '</small>' : '') + '<small>' + esc(fmtFecha(e.fecha)) + '</small></li>'; }).join("");
+        box.innerHTML =
+          '<div class="ind-grid">' + ind("Gastó en Olimpistas", gsA(i.gasto_total)) + ind("Ahorró este año", gsA(i.ahorro_anio)) + ind("Beneficios usados", i.canjes) + ind("Lotes en que pujó", i.lotes_pujados) + ind("Estado en el club", club) + '</div>' +
+          (d.suspension_subastas ? '<p class="err" style="font-size:13px;margin:4px 0">Suspendido de las subastas hasta ' + esc(fmtFecha(d.suspension_subastas)) + '</p>' : '') +
+          (ec.plan_club ? '<p class="muted" style="font-size:12px;margin:4px 0">Plan del club: ' + esc(ec.plan_club) + (ec.numero_socio ? ' · N.º ' + esc(ec.numero_socio) : '') + '</p>' : '') +
+          '<div class="mini">Línea de tiempo</div><ul class="tl">' + (tl || '<li>Sin actividad</li>') + '</ul>' +
+          '<div class="mini">Hinchas parecidos</div>' +
+          '<div class="row-actions"><button class="btn btn-sm btn-ghost" data-parec="perfil" data-sid="' + esc(id) + '">Por perfil</button><button class="btn btn-sm btn-ghost" data-parec="habito" data-sid="' + esc(id) + '">Por hábito</button></div>' +
+          '<div id="f360par"></div>';
+      } catch (e) { box.innerHTML = '<p class="err" style="font-size:13px">No se pudo cargar la ficha 360: ' + esc(e.message) + '</p>'; }
+    }
+    async function buscarParecidos(id, por) {
+      var out = $("f360par"); if (!out) return;
+      out.innerHTML = '<p class="muted" style="font-size:13px">Buscando…</p>';
+      try {
+        var r = await api("/admin/socios/" + encodeURIComponent(id) + "/parecidos?por=" + encodeURIComponent(por));
+        ultimoParecido = { por: por, filtros: r.filtros };
+        var etiqueta = { tier: "nivel", paisIso: "país", validoSocio: "validó que es socio", canjes: "usa beneficios", pujas: "puja en subastas", gasto: "pagó algo" };
+        var f = Object.keys(r.filtros).map(function (k) { var v = r.filtros[k]; return esc(etiqueta[k] || k) + (v === true ? "" : v === false ? ": no" : ": " + esc(TIER[v] || v)); }).join(" · ");
+        out.innerHTML = '<div class="parec"><b>' + r.total + (r.tope ? "+" : "") + ' hinchas parecidos</b> <span class="muted">(' + (por === "perfil" ? "por perfil" : "por hábito") + ')</span>' +
+          '<div class="muted" style="margin:4px 0">' + f + '</div>' +
+          (r.muestra || []).map(function (m) { return '<div>• ' + esc(m.nombre || m.email) + ' <span class="muted">' + esc(m.pais_iso || "") + '</span></div>'; }).join("") +
+          (puede("campanas.write") && r.total ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" data-guardarseg="1">Guardar como segmento</button></div>' : "") + '</div>';
+      } catch (e) { out.innerHTML = '<p class="err" style="font-size:13px">' + esc(e.message) + '</p>'; }
     }
     async function guardarFicha(id) {
       var body = { nombre: $("fNombre").value, apellido: $("fApellido").value, email: $("fEmail").value, cedula: $("fCedula").value, ciudad: $("fCiudad").value, pais: $("fPais").value, pais_iso: $("fIso").value };
@@ -1436,6 +1479,14 @@
         var r = await confirmar("Vuelve a Olimpista gratis. El reembolso real se hace en Metrepay.", { titulo: "Dar de baja", ok: "Dar de baja", danger: true, input: true, placeholder: "Motivo (opcional)" });
         if (!r.ok) return;
         try { await api("/admin/socios/" + encodeURIComponent(bj.dataset.baja) + "/baja", { method: "POST", body: { motivo: r.val } }); abrirFicha(bj.dataset.baja); cargarReportes(); cargarCuadre(); cargarAcciones(); toast("Socio dado de baja"); }
+        catch (err) { toast(err.message, "err"); }
+        return;
+      }
+      var pr = e.target.closest("button[data-parec]"); if (pr) { buscarParecidos(pr.dataset.sid, pr.dataset.parec); return; }
+      var gs2 = e.target.closest("button[data-guardarseg]"); if (gs2 && ultimoParecido) {
+        var rs = await confirmar("Se guarda el grupo con estos filtros para usarlo en campañas.", { titulo: "Guardar segmento", ok: "Guardar", input: true, placeholder: "Nombre del segmento" });
+        if (!rs.ok) return;
+        try { var sg = await api("/admin/segmentos", { method: "POST", body: { nombre: rs.val, filtros: ultimoParecido.filtros } }); toast("Segmento guardado (" + sg.total + " hinchas)"); }
         catch (err) { toast(err.message, "err"); }
         return;
       }

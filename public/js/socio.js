@@ -846,9 +846,13 @@
     const ah = r.ahorro || { mes: 0, total: 0 }, ciudad = r.ciudad || "";
     const paga = r.tier === "premium" ? '<div class="ba-paga">Tu Plus rinde — mirá cuánto te ahorra</div>'
       : r.tier === "socio" ? '<div class="ba-paga">El mejor ahorro, por ser Socio del Decano</div>' : "";
-    const ahorroCard = '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_ahorro_mes") + '</div>' +
-      '<div class="ba-monto">' + gs(ah.mes) + '</div>' +
-      '<div class="ba-nota">' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
+    // Billetera de Ahorro: lo del mes grande, lo del año a la derecha y una nota de uso.
+    const anioNum = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
+    const notaMes = ah.canjes_mes ? ah.canjes_mes + " " + (ah.canjes_mes === 1 ? T("m_ben_canje_uno") : T("m_ben_canje_n")) : T("m_ben_canje_ninguno");
+    const ahorroCard = '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
+      '<div class="ba-fila"><div><div class="ba-sub">' + T("m_ben_ahorro_mes") + '</div><div class="ba-monto">' + gs(ah.mes) + '</div></div>' +
+      '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
+      '<div class="ba-nota">' + notaMes + ' · ' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
     const cod = r.codigo ? '<div class="ben-codigo">' + T("m_ben_codigo") + ': <b>' + esc(String(r.codigo).toUpperCase()) + '</b></div>' : "";
     const cards = items.length ? items.map(function (b) { return cardBeneficio(b, ciudad); }).join("") : vacio(T("m_ben_vacio"));
     view().innerHTML = '<div class="section" style="border:none;padding-top:8px">' + ahorroCard + cod +
