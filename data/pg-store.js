@@ -36,7 +36,7 @@ function _enc(row) {
   return { ...row, opciones: Array.isArray(ops) ? ops : [] };
 }
 
-function createPgStore({ databaseUrl }) {
+function createPgStore({ databaseUrl, debug }) {
   // prepare:false → requerido por el pooler de Supabase en modo transacción (PgBouncer).
   // ssl:'require'  → Supabase exige TLS.
   // connect_timeout:10 → si el pooler está saturado, falla rápido en vez de colgar el request.
@@ -60,7 +60,7 @@ function createPgStore({ databaseUrl }) {
   // reutilizarla después sale ECONNRESET. 1800s (30min) recicla la conexión DESDE el
   // cliente antes de que el servidor tenga chance de hacerlo por su cuenta.
   const DB_MAX_LIFETIME = Number(process.env.DB_MAX_LIFETIME || 1800);
-  const sqlRaw = postgres(databaseUrl, { max: DB_POOL_MAX, idle_timeout: 20, max_lifetime: DB_MAX_LIFETIME, connect_timeout: 10, prepare: false, ssl: process.env.DB_SSL === "disable" ? false : "require" });
+  const sqlRaw = postgres(databaseUrl, { max: DB_POOL_MAX, idle_timeout: 20, max_lifetime: DB_MAX_LIFETIME, connect_timeout: 10, prepare: false, ssl: process.env.DB_SSL === "disable" ? false : "require", ...(debug ? { debug } : {}) });
 
   // ── Plazo máximo por consulta (caída del 2026-08-09) ───────────────────────
   // `connect_timeout` sólo cubre el momento de conectar: una vez conectada, una consulta
@@ -87,9 +87,22 @@ function createPgStore({ databaseUrl }) {
   // como fragmento cuando así se usa. Si nunca se ejecuta sola (porque era un fragmento),
   // cancelarla no hace nada dañino: `cancel()` es un no-op una vez que el canceller ya se
   // usó o nunca se necesitó.
+  //
+  // BUG (2026-10-21, hallado al probar peñas en staging): este envoltorio hacía `query.then(...)` sobre CADA
+  // plantilla, y en postgres.js `.then` EJECUTA la consulta. Con los fragmentos anidados (`${where}`) eso
+  // mandaba cada fragmento como una consulta suelta: `WHERE p.estado = $1` (error de sintaxis, inofensivo) o
+  // un fragmento VACÍO (`sql\`\``) que dejaba colgada la conexión en el pooler de Supabase y, una tras otra, agotaba
+  // el pool. En producción no se notaba: los fragmentos con filtro fallaban al instante por sintaxis y casi ninguna
+  // consulta quedaba con un fragmento vacío como único filtro. Ahora el plazo se arma recién cuando alguien ESPERA la consulta (await / .then / .catch /
+  // .finally): un fragmento nunca se espera, así que nunca se ejecuta.
   function conPlazo(query) {
-    const t = setTimeout(() => { try { query.cancel(); } catch (e) { /* la conexión ya no existe */ } }, DB_TIMEOUT_MS);
-    query.then(() => clearTimeout(t), () => clearTimeout(t));
+    const thenOriginal = query.then;
+    query.then = function (alExito, alError) {
+      const t = setTimeout(() => { try { query.cancel(); } catch (e) { /* la conexión ya no existe */ } }, DB_TIMEOUT_MS);
+      const p = thenOriginal.call(query);
+      p.then(() => clearTimeout(t), () => clearTimeout(t));
+      return p.then(alExito, alError);
+    };
     return query;
   }
   const sql = new Proxy(sqlRaw, {

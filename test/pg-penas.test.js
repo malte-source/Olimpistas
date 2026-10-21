@@ -150,3 +150,29 @@ test("contrato pg ↔ memoria: mismo flujo de fondo, mismo resultado", opts, asy
   assert.deepStrictEqual(salidas[0], salidas[1]);
   assert.deepStrictEqual(salidas[0].slice(0, 9), [true, false, true, true, false, 6000, true, "ya_resuelto", true]);
 });
+
+test("pg: una consulta con fragmentos anidados manda UNA sola sentencia (los fragmentos no se ejecutan sueltos)", opts, async () => {
+  // Regresión del 2026-10-21: el envoltorio de plazo hacía .then() en cada plantilla, y eso ejecutaba cada
+  // fragmento (`WHERE ...`, o uno vacío) como una consulta aparte. En el pooler de Supabase el fragmento vacío colgaba la conexión.
+  const enviadas = [];
+  process.env.DB_POOL_MAX = "1"; // una sola conexión: la sentencia de arranque se cuenta una vez y se descarta con el calentamiento
+  const st = require("../data/pg-store").createPgStore({ databaseUrl: urlDe(nombreDb), debug: (_c, q) => enviadas.push(q.replace(/\s+/g, " ").trim()) });
+  delete process.env.DB_POOL_MAX;
+  try {
+    await st.listDecisiones();
+    const medir = async (nombre, f, esperadas = 1) => {
+      enviadas.length = 0; await f();
+      assert.strictEqual(enviadas.length, esperadas, nombre + " mandó " + enviadas.length + " sentencias: " + JSON.stringify(enviadas.map((s) => s.slice(0, 40))));
+    };
+    await medir("listPenas() sin filtros (fragmento vacío)", () => st.listPenas());
+    await medir("listPenas({estado})", () => st.listPenas({ estado: "verificada" }));
+    await medir("listPenas({id, estado})", () => st.listPenas({ id: "x", estado: "pendiente" }));
+    await medir("listPedidos sin filtros", () => st.listPedidos({}));
+    await medir("filtrarSocios con varios filtros", () => st.filtrarSocios({ tier: "premium", canjes: true, gasto: false, limit: 5 }));
+    // y un await de verdad sigue teniendo plazo: una consulta lenta se cancela
+    process.env.DB_TIMEOUT_MS = "300";
+    const lento = require("../data/pg-store").createPgStore({ databaseUrl: urlDe(nombreDb) });
+    delete process.env.DB_TIMEOUT_MS;
+    try { await assert.rejects(() => lento._sql`SELECT pg_sleep(5)`, /cancel|timeout|57014/i); } finally { await lento._sql.end({ timeout: 2 }).catch(() => {}); }
+  } finally { await st._sql.end({ timeout: 3 }).catch(() => {}); }
+});
