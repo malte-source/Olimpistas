@@ -3071,6 +3071,40 @@ function buildRouter() {
     res.json({ ok: true, conversacion: c });
   }));
 
+  // ─── Centro de ayuda: tutoriales y preguntas frecuentes por perfil (contenido estático en data/ayuda.json) ───
+  // Los perfiles del club (CD, Marketing, Comercial, Operaciones, Atención, Admin) solo se ven con sesión del panel.
+  const AYUDA = require("./data/ayuda.json");
+  async function esSesionAdmin(req) {
+    try {
+      const token = req.headers["x-admin-token"] || "";
+      if (token && store.getAdminSession && (await store.getAdminSession(token))) return true;
+      const key = req.headers["x-admin-key"] || "";
+      if (key) { const kb = Buffer.from(key); return ADMIN_KEYS.some((a) => { const ab = Buffer.from(a.key); return ab.length === kb.length && crypto.timingSafeEqual(ab, kb); }); }
+    } catch (e) { /* sin sesión */ }
+    return false;
+  }
+  r.get("/ayuda", wrap(async (req, res) => {
+    const club = await esSesionAdmin(req);
+    const visibles = AYUDA.aud.filter((a) => club || !a.club);
+    const pedida = String(req.query.aud || "");
+    if (pedida && !AYUDA.aud.some((a) => a.id === pedida)) throw httpError(404, "Perfil de ayuda desconocido");
+    if (pedida && !visibles.some((a) => a.id === pedida)) throw httpError(403, "Esta ayuda es del equipo del club: entrá al panel para verla");
+    const aud = pedida || visibles[0].id;
+    const delPerfil = (x) => x.aud.includes(aud);
+    const cat = String(req.query.cat || "todas");
+    const q = String(req.query.q || "").trim().toLowerCase().slice(0, 80);
+    const coincide = (x) => !q || JSON.stringify(x).toLowerCase().includes(q);
+    const cuenta = (id) => AYUDA.tuts.filter((x) => x.aud.includes(id)).length + AYUDA.faqs.filter((x) => x.aud.includes(id)).length;
+    const base = [...AYUDA.tuts, ...AYUDA.faqs].filter(delPerfil);
+    res.setHeader("Cache-Control", "no-store"); // depende de si hay sesión del panel
+    res.json({
+      aud: visibles.map((a) => ({ id: a.id, label: a.label, grupo: a.grupo, desc: a.desc, tile: a.tile, n: cuenta(a.id) })),
+      categorias: Object.entries(AYUDA.cats).filter(([id]) => base.some((x) => x.cat === id)).map(([id, label]) => ({ id, label })),
+      tuts: AYUDA.tuts.filter((x) => delPerfil(x) && (cat === "todas" || x.cat === cat) && coincide(x)),
+      faqs: AYUDA.faqs.filter((x) => delPerfil(x) && (cat === "todas" || x.cat === cat) && coincide(x)),
+    });
+  }));
+
   return r;
 }
 

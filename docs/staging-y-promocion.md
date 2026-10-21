@@ -103,3 +103,25 @@ Archivos `migraciones/NNNN_nombre.sql`, en orden. Cada una corre una vez y queda
 - **Reporte para sponsors** (`GET /api/admin/comercios/estadisticas.csv`, permiso `export`): por comercio, ciudad y nivel.
 - Panel del comercio (`/comercio`): pestañas **Validar** (con escaneo por cámara donde el navegador trae `BarcodeDetector`; si no, se pega el texto del QR) y **Mi comercio**.
 - **Pendiente / límites conocidos:** el código fijo del socio (su código de invitación) sigue aceptándose en caja para no romper a los comercios actuales; es la vía más fácil de suplantar una identidad y conviene apagarla cuando todos usen el QR. La decisión `base` (beneficios por nivel o por plan del club) solo implementa `por_nivel`: `por_plan` necesita un campo de planes en las ofertas que el paquete no define.
+
+## Panel por rol, Decisiones, Atención con IA y Centro de ayuda (Sprint 5)
+
+**Roles y secciones**
+- Roles nuevos: `cd` (Comisión Directiva, **solo lectura**), `comercial`, `operaciones`. Los roles históricos (`finanzas`, `soporte`, `lectura`) no cambian: ven todo y escriben solo con permiso.
+- Los roles **restringidos** (`cd`, `marketing`, `comercial`, `operaciones`) entran únicamente a las secciones de la matriz (`VER_POR_ROL` en `lib/admin-auth.js`) y el servidor **niega por defecto** toda ruta `/admin/*` que no esté mapeada a una sección. Una ruta nueva sin mapear queda cerrada para ellos hasta que se agregue a `SECCION_DE_SEGMENTO` (hay un test que lo cubre).
+- Permisos de escritura más finos: `subastas.write`, `beneficios.write`, `puntos.write`, `penas.write`, `atencion.write` (antes casi todo colgaba de `contenido.write`). `marketing` conserva lo que ya hacía. El canje del fondo de peñas lo aprueba `pagos.write` **o** `penas.write`.
+- La CD **no ve datos personales de hinchas** (sin la sección Hinchas ni la búsqueda): ve el tablero agregado y las decisiones.
+- Nuevos: `GET /api/admin/tablero` (agregados, sin datos personales), `/integraciones` (solo estado, jamás valores de claves) y `/roles` (matriz, solo `owner`). Pantallas: Decisiones, Atención, Integraciones y "Quién ve y quién edita qué".
+- **Sin migración** para roles: `admin_usuarios.rol` es texto libre.
+
+**Atención con IA** (migración `0008_atencion`)
+- Variables: `ANTHROPIC_API_KEY` (**una clave aparte para staging, con tope de gasto en la consola de Anthropic**), `ATENCION_MODELO` (por defecto `claude-haiku-5-5`), `ATENCION_TOPE_DIARIO` (mensajes por hincha y día, 40), `ATENCION_RAFAGA` (por minuto, 8), `GHL_WHATSAPP_URL` (para que la respuesta de una persona salga por WhatsApp).
+- Sin `ANTHROPIC_API_KEY`, o si la API falla, el asistente **responde por palabras clave** y lo deja en el log (`atención: respaldo por palabra clave`). Nunca deriva solo ante algo que no entendió (no inunda la bandeja si cae la API).
+- La IA se llama **en el servidor** (`lib/atencion.js`, fetch directo a la API de Messages con tool use, máx. 400 tokens y 8 vueltas). Las reglas fijas están **en código**, no en el prompt: las herramientas solo operan sobre el hincha de la sesión (no reciben ids), una herramienta apagada no se ofrece ni se ejecuta, y `liberar_lugar` exige que el último mensaje del hincha sea una confirmación.
+- `liberar_lugar` está **apagada y no se puede encender** hasta que existan los endpoints de Tuti para el abono. Estado de socio: `sin confirmar` si Tuti no responde (se usa el mismo `estadoClubDe` que la ficha 360).
+- Una persona que responde toma la conversación (la IA calla); **Resolver** la devuelve a la IA y deja el evento en la ficha 360. Una conversación abierta por hincha y canal (índice único). El mismo motor atiende a WhatsApp: `procesarMensajeAtencion({ socio, texto, canal: 'whatsapp' })`; **falta enchufar el webhook de GoHighLevel** (cuando se conecte GHL).
+- Indicadores: conversaciones del día, % resuelto solo por la IA (7 días), primera respuesta de una persona, abiertas con persona.
+
+**Centro de ayuda**
+- `/ayuda` + `GET /api/ayuda?aud=&cat=&q=`. El contenido (28 tutoriales y 28 preguntas) se exporta **tal cual** del prototipo con `node scripts/exportar-ayuda.js "<Centro de Ayuda Olimpistas.dc.html>"` a `data/ayuda.json`. Se guarda en `data/` y no en `public/data/` (como pedía el paquete) para poder **filtrar por perfil**: los seis perfiles del club solo se ven con sesión del panel.
+- El texto del prototipo conserva cifras "a confirmar" (vencimiento de puntos, plazo de 72 h, fondo de 10 %): coinciden con los valores por defecto de Decisiones; cuando la CD decida otra cosa hay que actualizar el prototipo y volver a exportar.

@@ -213,6 +213,7 @@
       <a class="nav-link" data-area="dashboard" href="#/dashboard"><span class="ic">📊</span> Dashboard</a>
       <div class="sb-label">Gestión</div>
       <a class="nav-link" data-area="socios" href="#/socios"><span class="ic">👤</span> Socios</a>
+      <a class="nav-link" data-area="atencion" href="#/atencion"><span class="ic">💬</span> Atención <span class="pill pill-warn" id="atBadge" hidden style="margin-left:4px;font-size:11px"></span></a>
       <a class="nav-link" data-area="pagos" href="#/pagos"><span class="ic">💳</span> Pagos</a>
       <a class="nav-link" data-area="campanas" href="#/campanas"><span class="ic">📣</span> Campañas</a>
       <a class="nav-link" data-area="contenido" href="#/contenido"><span class="ic">🎁</span> Contenido</a>
@@ -220,6 +221,7 @@
       <div class="sb-label">Sistema</div>
       <a class="nav-link" data-area="sistema" href="#/sistema"><span class="ic">🛠️</span> Sistema</a>
       <div class="sb-spacer"></div>
+      <a class="nav-link" href="/ayuda" target="_blank" rel="noopener"><span class="ic">❓</span> Ayuda</a>
       <a class="nav-link sb-salir" id="salir"><span class="ic">↩</span> Salir</a>
     </aside>
 
@@ -275,6 +277,24 @@
           <h2>🗂️ Padrón Olimpia <span id="padronStats" class="muted" style="font-size:13px;font-weight:400"></span></h2>
           <div class="search-row"><input id="padronQ" type="search" placeholder="cédula, nombre, email o nº socio…" /><button class="btn btn-sm" id="padronBtn">Buscar</button></div>
           <div id="padronWrap"></div>
+        </section>
+
+        <!-- ÁREA: ATENCIÓN -->
+        <section class="area" id="area-atencion" hidden>
+          <h2>💬 Atención a hinchas</h2>
+          <p class="hint">El asistente con IA atiende a los hinchas por la app. Cuando piden una persona, o el tema no se puede resolver, la conversación llega acá. Mientras está con una persona, la IA no contesta.</p>
+          <div class="cards" id="atCards"><p class="loading">Cargando…</p></div>
+          <div class="search-row" style="gap:8px;flex-wrap:wrap;margin-top:6px" id="atFiltros">
+            <button class="btn btn-sm" data-atf="">Todas</button>
+            <button class="btn btn-sm btn-ghost" data-atf="humano">Con una persona</button>
+            <button class="btn btn-sm btn-ghost" data-atf="ia">Con la IA</button>
+            <button class="btn btn-sm btn-ghost" data-atf="resuelta">Resueltas</button>
+          </div>
+          <div id="atLista"><p class="loading">Cargando…</p></div>
+          <div id="atDetalle"></div>
+          <h2>⚙️ Qué puede hacer el asistente</h2>
+          <p class="hint">Cada interruptor habilita o deshabilita una acción del asistente. Las reglas fijas no se pueden cambiar.</p>
+          <div id="atConfig"><p class="loading">Cargando…</p></div>
         </section>
 
         <!-- ÁREA: PAGOS -->
@@ -539,8 +559,8 @@
     }
 
     // ── Navegación por áreas (router por hash + carga perezosa) ──
-    var AREAS = ["dashboard", "socios", "pagos", "campanas", "contenido", "decisiones", "sistema"];
-    var AREA_TITLE = { dashboard: "📊 Dashboard", socios: "👤 Socios", pagos: "💳 Pagos", campanas: "📣 Campañas", contenido: "🎁 Contenido", decisiones: "🗳️ Decisiones", sistema: "🛠️ Sistema" };
+    var AREAS = ["dashboard", "socios", "atencion", "pagos", "campanas", "contenido", "decisiones", "sistema"];
+    var AREA_TITLE = { dashboard: "📊 Dashboard", socios: "👤 Socios", atencion: "💬 Atención", pagos: "💳 Pagos", campanas: "📣 Campañas", contenido: "🎁 Contenido", decisiones: "🗳️ Decisiones", sistema: "🛠️ Sistema" };
     // Loaders que se disparan la PRIMERA vez que se abre cada área (no todo de golpe al entrar).
     var AREA_LOADERS = {
       dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount],
@@ -554,6 +574,7 @@
         if (veSeccion("penas")) cargarPenasAdmin();
         if (veSeccion("puntos")) cargarPuntosAdmin();
       }],
+      atencion: [cargarAtencion, cargarAtencionConfig],
       decisiones: [cargarDecisiones],
       sistema: [cargarIntegraciones, cargarUsuarios, cargarMatrizRoles, cargarSelfies, cargarAcciones],
     };
@@ -786,6 +807,99 @@
         $("tabIngresos").innerHTML = pc.length ? '<div class="mini">Ingresos por concepto (total)</div><div class="row-actions">' + pc.map(function (x) { return '<span class="pill">' + esc(x.tipo) + ' · ' + gs(x.monto) + ' (' + nf(x.n) + ')</span>'; }).join("") + '</div>' : "";
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
+
+    // ── Atención: bandeja, conversación y configuración del asistente ──
+    var atFiltro = "", atAbierta = null;
+    function hace(iso) {
+      var s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+      if (s < 60) return "recién"; if (s < 3600) return Math.round(s / 60) + " min"; if (s < 86400) return Math.round(s / 3600) + " h"; return Math.round(s / 86400) + " d";
+    }
+    var AT_ESTADO = { ia: { l: "IA", c: "" }, humano: { l: "Con una persona", c: "pill-warn" }, resuelta: { l: "Resuelta", c: "pill-ok" } };
+    async function cargarAtencion() {
+      var box = $("atLista"); if (!box || !veSeccion("atencion")) return;
+      try {
+        var d = await api("/admin/atencion" + (atFiltro ? "?estado=" + atFiltro : ""));
+        var ind = d.indicadores || {}, c = function (n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + '</div></div>'; };
+        $("atCards").innerHTML = c(Number(ind.hoy || 0).toLocaleString("es-PY"), "Conversaciones hoy") + c(ind.pct_ia == null ? "—" : ind.pct_ia + " %", "Resueltas solo por la IA (7 días)") +
+          c(ind.primera_resp_min == null ? "—" : ind.primera_resp_min + " min", "Primera respuesta de una persona") + c(Number(ind.abiertas_humano || 0).toLocaleString("es-PY"), "Abiertas con una persona");
+        var b = $("atBadge"); if (b) { b.hidden = !ind.abiertas_humano; b.textContent = ind.abiertas_humano || ""; }
+        if (!(d.items || []).length) { box.innerHTML = '<p class="empty">No hay conversaciones' + (atFiltro ? " en este estado" : " todavía") + '.</p>'; return; }
+        box.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Hincha</th><th>Canal</th><th>Motivo / último mensaje</th><th>Estado</th><th>Hace</th><th></th></tr></thead><tbody>' + d.items.map(function (x) {
+          var e = AT_ESTADO[x.estado] || AT_ESTADO.ia, nom = [x.socio_nombre, x.socio_apellido].filter(Boolean).join(" ") || "Sin cuenta";
+          return '<tr data-id="' + esc(x.id) + '"><td data-l="Hincha"><b>' + esc(nom) + '</b>' + (x.socio_ciudad ? '<br><span class="muted" style="font-size:12px">' + esc(x.socio_ciudad) + '</span>' : '') + '</td>' +
+            '<td data-l="Canal"><span class="pill">' + (x.canal === "whatsapp" ? "WhatsApp" : "App") + '</span></td>' +
+            '<td data-l="Motivo">' + esc((x.motivo || x.ultimo || "").slice(0, 90)) + '</td>' +
+            '<td data-l="Estado"><span class="pill ' + e.c + '">' + esc(e.l) + '</span></td><td data-l="Hace"><span class="muted">' + esc(hace(x.actualizado)) + '</span></td>' +
+            '<td><button class="btn btn-sm" data-atabrir="' + esc(x.id) + '">Abrir</button></td></tr>';
+        }).join("") + '</tbody></table></div>';
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function abrirConversacionAdmin(id) {
+      var box = $("atDetalle"); atAbierta = id;
+      try {
+        var d = await api("/admin/atencion/" + encodeURIComponent(id)), c = d.conversacion, w = puede("atencion.write");
+        var e = AT_ESTADO[c.estado] || AT_ESTADO.ia, s = d.socio;
+        var burbujas = d.mensajes.map(function (m) {
+          if (m.de === "sistema") return '<div class="muted" style="text-align:center;font-size:12px;margin:6px 0">' + esc(m.texto) + '</div>';
+          if (m.de === "tarjeta") return '<div class="muted" style="text-align:center;font-size:12px;margin:6px 0">▣ ' + esc(m.texto) + '</div>';
+          var yo = m.de === "hincha", hu = m.de === "humano";
+          var et = yo ? ((s && s.nombre) || "Hincha") : hu ? ((m.meta && m.meta.agente) || "Persona del club") : "Asistente · IA";
+          return '<div style="display:flex;flex-direction:column;align-items:' + (yo ? "flex-start" : "flex-end") + ';margin:8px 0"><span class="muted" style="font-size:11px">' + esc(et) + ' · ' + esc(fmtFecha(m.creado)) + '</span>' +
+            '<div style="max-width:80%;padding:9px 13px;border-radius:14px;border:1px solid var(--linea);' + (hu ? 'background:var(--verde-bg)' : yo ? 'background:var(--card2,#1b1b1b)' : '') + '">' + esc(m.texto) + '</div></div>';
+        }).join("");
+        box.innerHTML = '<div style="border:1px solid var(--linea);border-radius:12px;padding:14px;margin-top:14px">' +
+          '<div class="row-actions" style="justify-content:space-between;align-items:flex-start"><div><b>' + esc(s ? [s.nombre, s.apellido].filter(Boolean).join(" ") : "Sin cuenta") + '</b> <span class="pill ' + e.c + '">' + esc(e.l) + '</span>' +
+          '<div class="muted" style="font-size:12px">' + esc(s ? (TIER[s.tier] || s.tier) + (s.ciudad ? " · " + s.ciudad : "") : "") + ' · ' + (c.canal === "whatsapp" ? "WhatsApp" : "App") + '</div></div>' +
+          (s ? '<button class="btn btn-sm btn-ghost" data-ficha="' + esc(s.id) + '">Ver ficha 360</button>' : '') + '</div>' +
+          (c.resumen ? '<div class="hint" style="margin:10px 0"><b>Resumen de la IA:</b> ' + esc(c.resumen) + '</div>' : '') +
+          '<div style="max-height:340px;overflow-y:auto;margin:8px 0" id="atMsgs">' + burbujas + '</div>' +
+          (c.estado !== "resuelta" && w ? '<textarea id="atTexto" rows="2" maxlength="1000" placeholder="Escribí tu respuesta (le llega al hincha por el mismo canal)" style="width:100%"></textarea>' +
+            '<div class="row-actions" style="margin-top:8px"><button class="btn" data-atresp="' + esc(c.id) + '">Responder</button><button class="btn btn-ghost" data-atres="' + esc(c.id) + '">Resolver y devolver a la IA</button></div>' :
+            (c.estado === "resuelta" ? '<p class="muted">Esta conversación está resuelta.</p>' : '')) + '</div>';
+        var m = $("atMsgs"); if (m) m.scrollTop = m.scrollHeight;
+        box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (err) { box.innerHTML = '<p class="err">' + esc(err.message) + '</p>'; }
+    }
+    async function cargarAtencionConfig() {
+      var box = $("atConfig"); if (!box || !veSeccion("atencion")) return;
+      try {
+        var d = await api("/admin/atencion/config"), w = puede("atencion.write");
+        box.innerHTML = '<p class="hint">Modelo: <b>' + esc(d.modelo) + '</b> · ' + (d.ia_conectada ? '<span class="pill pill-ok">IA conectada</span>' : '<span class="pill pill-warn">Sin clave de IA: responde por palabras clave</span>') + '</p>' +
+          d.items.map(function (i) {
+            return '<label style="display:flex;gap:12px;align-items:flex-start;border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin:8px 0;' + (i.disponible ? '' : 'opacity:.7') + '">' +
+              '<input type="checkbox" style="width:auto;margin-top:4px" data-atcfg="' + esc(i.clave) + '"' + (i.activo ? ' checked' : '') + (w && i.disponible ? '' : ' disabled') + ' />' +
+              '<span><b>' + esc(i.nombre) + '</b><br><span class="muted" style="font-size:13px">' + esc(i.descripcion) + (i.disponible ? '' : ' · <b>Todavía no disponible:</b> ' + esc(i.motivo_no_disponible || "")) + '</span></span></label>';
+          }).join("") +
+          '<div class="mini">Reglas fijas (no se pueden cambiar)</div><ul style="margin:6px 0 0 18px;color:var(--gris);font-size:13px">' + d.reglas_fijas.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join("") + '</ul>';
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    document.addEventListener("click", async function (e) {
+      var f = e.target.closest && e.target.closest("[data-atf]");
+      if (f) { atFiltro = f.dataset.atf; var bs = document.querySelectorAll("#atFiltros button"); for (var i = 0; i < bs.length; i++) bs[i].classList.toggle("btn-ghost", bs[i] !== f); cargarAtencion(); return; }
+      var ab = e.target.closest && e.target.closest("[data-atabrir]"); if (ab) { abrirConversacionAdmin(ab.dataset.atabrir); return; }
+      var fb = e.target.closest && e.target.closest("#atDetalle button[data-ficha]"); if (fb) { abrirFicha(fb.dataset.ficha); return; }
+      var rp = e.target.closest && e.target.closest("[data-atresp]");
+      if (rp) {
+        var t = ($("atTexto") || {}).value || ""; if (!t.trim()) { toast("Escribí la respuesta", "err"); return; }
+        try { var r = await api("/admin/atencion/" + encodeURIComponent(rp.dataset.atresp) + "/responder", { method: "POST", body: { texto: t } });
+          toast(r.entregado === false ? "Guardada, pero no se pudo entregar por WhatsApp" : "Respuesta enviada", r.entregado === false ? "err" : undefined); abrirConversacionAdmin(rp.dataset.atresp); cargarAtencion(); }
+        catch (err) { toast(err.message, "err"); }
+        return;
+      }
+      var rs = e.target.closest && e.target.closest("[data-atres]");
+      if (rs) {
+        try {
+          if (!(await confirmar("La conversación se cierra y el asistente vuelve a atender al hincha en su próximo mensaje.", { titulo: "Resolver conversación", ok: "Resolver" })).ok) return;
+          await api("/admin/atencion/" + encodeURIComponent(rs.dataset.atres) + "/resolver", { method: "POST" });
+          toast("Conversación resuelta"); abrirConversacionAdmin(rs.dataset.atres); cargarAtencion();
+        } catch (err) { toast(err.message, "err"); }
+      }
+    });
+    document.addEventListener("change", async function (e) {
+      var k = e.target.dataset && e.target.dataset.atcfg; if (!k) return;
+      try { await api("/admin/atencion/config", { method: "PUT", body: { clave: k, activo: e.target.checked } }); toast(e.target.checked ? "Acción activada" : "Acción desactivada"); }
+      catch (err) { e.target.checked = !e.target.checked; toast(err.message, "err"); }
+    });
 
     // ── Decisiones de la CD ──
     var DEC_OPC = {
