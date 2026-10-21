@@ -965,13 +965,20 @@ function buildRouter() {
     const i = p.indexOf(":"); return i > 0 ? { nombre: p.slice(0, i), key: p.slice(i + 1) } : { nombre: "admin", key: p };
   });
   if (process.env.ADMIN_KEY) ADMIN_KEYS.push({ nombre: "admin", key: process.env.ADMIN_KEY });
+  // Roles restringidos (CD, marketing, comercial, operaciones): solo entran a las secciones que les corresponden.
+  const pasaSeccion = (req, res, next) => {
+    const ruta = (req.originalUrl || req.url || "").split("?")[0].replace(/^\/api(?=\/)/, "");
+    const a = adminAuth.accesoRuta(req.adminRole, ruta);
+    if (a.ok) return next();
+    return res.status(403).json({ error: req.adminRole === "cd" ? "La Comisión Directiva no tiene acceso a esta sección" : "Tu rol no tiene acceso a esta sección" });
+  };
   const requireAdmin = async (req, res, next) => {
     res.setHeader("Cache-Control", "no-store"); // NUNCA cachear datos admin (ni en CDN ni navegador)
     try {
       const token = req.headers["x-admin-token"] || "";
       if (token && store.getAdminSession) {
         const s = await store.getAdminSession(token);
-        if (s) { req.adminUser = s.usuario; req.adminRole = s.rol; req.adminId = s.admin_id; return next(); }
+        if (s) { req.adminUser = s.usuario; req.adminRole = s.rol; req.adminId = s.admin_id; return pasaSeccion(req, res, next); }
       }
       const key = req.headers["x-admin-key"] || ""; // break-glass → owner
       if (key) {
@@ -988,8 +995,9 @@ function buildRouter() {
     } catch (e) { return res.status(500).json({ error: "Error de autenticación" }); }
   };
   // Permiso por rol (la seguridad real). Las lecturas no lo usan; las escrituras sí.
-  const requirePerm = (perm) => (req, res, next) => {
-    if (adminAuth.can(req.adminRole, perm)) return next();
+  const requirePerm = (...perms) => (req, res, next) => {
+    if (perms.some((p) => adminAuth.can(req.adminRole, p))) return next();
+    if (req.adminRole === "cd") return res.status(403).json({ error: "La Comisión Directiva ve esta sección en solo lectura" });
     return res.status(403).json({ error: "No tenés permiso para esta acción" });
   };
   // Cache corto para reportes pesados (evita re-correr agregados en cada carga del panel).
@@ -1015,7 +1023,13 @@ function buildRouter() {
   }));
   r.get("/admin/whoami", requireAdmin, wrap(async (req, res) => {
     const rol = req.adminRole || "owner";
-    res.json({ usuario: req.adminUser, rol, areas: adminAuth.AREAS_POR_ROL[rol] || adminAuth.AREAS_POR_ROL.owner, perms: adminAuth.PERMS_POR_ROL[rol] || [] });
+    res.json({
+      usuario: req.adminUser, rol,
+      areas: adminAuth.AREAS_POR_ROL[rol] || adminAuth.AREAS_POR_ROL.owner,
+      secciones: adminAuth.seccionesVisibles(rol),
+      solo_lectura: adminAuth.SOLO_LECTURA.includes(rol),
+      perms: adminAuth.PERMS_POR_ROL[rol] || [],
+    });
   }));
   // Gestión de usuarios (solo owner).
   r.get("/admin/usuarios", requireAdmin, requirePerm("usuarios"), wrap(async (_req, res) => {
@@ -1177,6 +1191,67 @@ function buildRouter() {
       statsCacheEdadSeg: _statsTs ? Math.round((Date.now() - _statsTs) / 1000) : null,
       emailVerif: process.env.EMAIL_VERIF === "off" ? "off" : "on",
       rev: process.env.K_REVISION || null,
+    });
+  }));
+  // Tablero del club: lo que mira la Comisión Directiva de un vistazo (todo agregado, sin datos personales).
+  r.get("/admin/tablero", requireAdmin, wrap(async (_req, res) => {
+    res.json(await memoAdmin("tablero", 30000, async () => {
+      const seguro = async (fn, vacio) => { try { return await fn(); } catch (e) { return vacio; } };
+      const [total, est, pagos, subastas, puntos, penas, beneficios, decs] = await Promise.all([
+        seguro(() => (store.contarTotal ? store.contarTotal() : 0), 0),
+        seguro(() => (store.estadisticasAdmin ? store.estadisticasAdmin() : { embudo: {}, membresias: [], tiempo: {} }), { embudo: {}, membresias: [], tiempo: {} }),
+        seguro(() => (store.pagosRecibidos ? store.pagosRecibidos() : { totales: {}, porConcepto: [] }), { totales: {}, porConcepto: [] }),
+        seguro(() => (store.listSubastasPublicas ? store.listSubastasPublicas() : []), []),
+        seguro(() => (store.resumenPuntos ? store.resumenPuntos() : {}), {}),
+        seguro(() => (store.listPenas ? store.listPenas() : []), []),
+        seguro(() => (store.listBeneficios ? store.listBeneficios() : []), []),
+        seguro(() => (store.listDecisiones ? store.listDecisiones() : []), []),
+      ]);
+      const pagantes = (est.membresias || []).reduce((a, m) => a + (Number(m.pagados) || 0), 0);
+      const canjesPena = await seguro(() => (store.canjesPendientesPena ? store.canjesPendientesPena() : []), []);
+      return {
+        hinchas: { total: Number(total) || 0, hoy: (est.tiempo || {}).hoy || 0, ayer: (est.tiempo || {}).ayer || 0, pagantes, socios_validados: (est.embudo || {}).valido_socio || 0 },
+        ingresos: { hoy: (pagos.totales || {}).hoy || 0, d7: (pagos.totales || {}).d7 || 0, d30: (pagos.totales || {}).d30 || 0, total: (pagos.totales || {}).total || 0, por_concepto: pagos.porConcepto || [] },
+        subastas: {
+          activas: (subastas || []).filter((s) => s.estado === "activa").length,
+          sin_pagar: (subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && s.pago_estado !== "pagado").length,
+          pausadas: (subastas || []).filter((s) => s.estado === "pausada").length,
+        },
+        puntos: { pasivo: puntos.pasivo || 0, socios_con_saldo: puntos.socios_con_saldo || 0, canjes_pendientes: puntos.canjes_pendientes || 0 },
+        penas: { total: (penas || []).length, verificadas: (penas || []).filter((p) => p.estado === "verificada" || p.estado === "activa").length, canjes_pendientes: (canjesPena || []).length },
+        beneficios: { publicados: (beneficios || []).filter((b) => b.estado === "aprobado").length, por_aprobar: (beneficios || []).filter((b) => b.estado === "borrador").length },
+        decisiones: { total: Object.keys(DECISIONES).length, tomadas: (decs || []).filter((d) => DECISIONES[d.clave]).length },
+        generado: new Date().toISOString(),
+      };
+    }));
+  }));
+  // Integraciones: qué está conectado y qué no (solo estado; nunca valores ni claves).
+  r.get("/admin/integraciones", requireAdmin, wrap(async (_req, res) => {
+    const hay = (...vars) => vars.every((v) => !!process.env[v]);
+    const simulado = process.env.ENTORNO === "staging";
+    const estado = (ok, simul) => (ok ? "conectado" : simul && simulado ? "simulado" : "sin_conectar");
+    res.json({
+      entorno: process.env.ENTORNO || "produccion",
+      items: [
+        { id: "tuti", nombre: "Tuti (padrón de socios)", detalle: "Valida la cédula contra el padrón del club.", estado: estado(hay("TUTI_API_KEY", "TUTI_MERCHANT_KEY"), true) },
+        { id: "pagopar", nombre: "Pagopar (cobros)", detalle: "Tarjetas, transferencias y billeteras.", estado: estado(hay("PAGOPAR_PUBLIC_TOKEN", "PAGOPAR_PRIVATE_TOKEN"), true) },
+        { id: "email", nombre: "Correo (Resend)", detalle: "Verificación, avisos y recibos.", estado: estado(hay("RESEND_API_KEY"), true) },
+        { id: "ghl", nombre: "GoHighLevel", detalle: "Sincronía de contactos y campañas.", estado: estado(hay("GHL_WEBHOOK_URL")) },
+        { id: "ia", nombre: "Atención con IA", detalle: "Asistente de atención a hinchas.", estado: estado(hay("ANTHROPIC_API_KEY")) },
+        { id: "alertas", nombre: "Alertas operativas", detalle: "Avisos cuando algo falla.", estado: estado(hay("ALERT_WEBHOOK_URL") || hay("ALERT_EMAIL")) },
+        { id: "cron", nombre: "Tareas programadas", detalle: "Plazos de subastas, conciliación y puntos.", estado: estado(hay("CRON_SECRET")) },
+      ],
+    });
+  }));
+  // Roles: matriz de quién ve y quién edita cada sección (para que el club audite los accesos).
+  r.get("/admin/roles", requireAdmin, requirePerm("usuarios"), wrap(async (_req, res) => {
+    const secciones = adminAuth.SECCIONES;
+    res.json({
+      secciones,
+      roles: adminAuth.ROLES.map((rol) => ({
+        rol, restringido: adminAuth.RESTRINGIDOS.includes(rol), solo_lectura: adminAuth.SOLO_LECTURA.includes(rol),
+        ve: adminAuth.seccionesVisibles(rol), perms: adminAuth.PERMS_POR_ROL[rol] || [],
+      })),
     });
   }));
   // Cuadre de pagos (conciliación pedidos / membresías pagas / Metrepay).
@@ -1371,14 +1446,16 @@ function buildRouter() {
     }
     return out;
   };
+  const PERM_ENTIDAD = { sorteos: "subastas.write", subastas: "subastas.write", comercios: "beneficios.write", beneficios: "beneficios.write" };
   const crudEntidad = (nombre, o) => {
+    const permEscritura = PERM_ENTIDAD[nombre] || "contenido.write";
     r.get(`/admin/${nombre}`, requireAdmin, wrap(async (_req, res) => res.json({ items: await o.list() })));
-    r.post(`/admin/${nombre}`, requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    r.post(`/admin/${nombre}`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
       const item = await o.crear(limpiarCampos(req.body, o.campos));
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: nombre + ":crear", targetId: item && item.id, por: req.adminUser });
       res.status(201).json({ ok: true, item });
     }));
-    r.patch(`/admin/${nombre}/:id`, requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    r.patch(`/admin/${nombre}/:id`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
       const d = limpiarCampos(req.body, o.campos);
       if (!Object.keys(d).length) throw httpError(400, "Nada para actualizar");
       const item = await o.update(req.params.id, d);
@@ -1386,7 +1463,7 @@ function buildRouter() {
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: nombre + ":editar", targetId: req.params.id, por: req.adminUser });
       res.json({ ok: true, item });
     }));
-    r.delete(`/admin/${nombre}/:id`, requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    r.delete(`/admin/${nombre}/:id`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
       const ok = await o.del(req.params.id);
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: nombre + ":borrar", targetId: req.params.id, por: req.adminUser });
       res.json({ ok });
@@ -1399,7 +1476,7 @@ function buildRouter() {
   crudEntidad("comercios", { list: () => store.listComercios(), crear: (d) => store.crearComercio(d), update: (id, d) => store.updateComercio(id, d), del: (id) => store.deleteComercio(id), campos: { nombre: "text", rubro: "text", ciudad: "text", direccion: "text", contacto: "text", logo: "text", estado: "text" } });
   // ── Admin: aprobar o rechazar ofertas de comercios, y el reporte para sponsors ──
   // Se registra ANTES del CRUD genérico: con `estado` en el cuerpo resuelve la oferta; sin él, cede el paso al CRUD.
-  r.patch("/admin/beneficios/:id", requireAdmin, requirePerm("contenido.write"), (req, res, next) => (!req.body || req.body.estado === undefined) ? next("route") : next(), wrap(async (req, res) => {
+  r.patch("/admin/beneficios/:id", requireAdmin, requirePerm("beneficios.write"), (req, res, next) => (!req.body || req.body.estado === undefined) ? next("route") : next(), wrap(async (req, res) => {
     const estado = String(req.body.estado);
     if (!["aprobado", "rechazado"].includes(estado)) throw httpError(400, "Estado inválido (aprobado | rechazado)");
     const motivo = String(req.body.motivo || "").replace(/[<>]/g, "").trim().slice(0, 200);
@@ -1448,7 +1525,7 @@ function buildRouter() {
   r.get("/admin/sorteos/:id/participantes", requireAdmin, wrap(async (req, res) => {
     res.json({ items: store.listParticipantesSorteo ? await store.listParticipantesSorteo(req.params.id) : [] });
   }));
-  r.post("/admin/sorteos/:id/ganador", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/sorteos/:id/ganador", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const parts = store.listParticipantesSorteo ? await store.listParticipantesSorteo(req.params.id) : [];
     if (!parts.length) throw httpError(400, "Este sorteo no tiene participantes");
     const g = parts[Math.floor(Math.random() * parts.length)];
@@ -2006,7 +2083,7 @@ function buildRouter() {
   }));
 
   // ── Admin de subastas: poner en vivo / cerrar / ver pujas (además del CRUD) ──
-  r.post("/admin/subastas/:id/publicar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/publicar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (!s.titulo || !(s.precio_inicial > 0)) throw httpError(400, "Faltan datos: título y precio inicial");
@@ -2018,7 +2095,7 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:publicar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
   }));
-  r.post("/admin/subastas/:id/despublicar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/despublicar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado === "cerrada") throw httpError(409, "La subasta ya cerró; no se puede volver a borrador");
@@ -2030,7 +2107,7 @@ function buildRouter() {
   // Pausar/reanudar: frena la puja y la esconde del home + hub SIN cerrarla (no se
   // elige ganador ni se avisa a nadie) — válvula de seguridad durante una subasta en
   // vivo. Al reanudar, el reloj se corre exactamente lo que estuvo en pausa.
-  r.post("/admin/subastas/:id/pausar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/pausar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado !== "activa") throw httpError(409, "Solo se puede pausar una subasta en vivo");
@@ -2039,7 +2116,7 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:pausar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
   }));
-  r.post("/admin/subastas/:id/reanudar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/reanudar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado !== "pausada") throw httpError(409, "La subasta no está pausada");
@@ -2050,7 +2127,7 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:reanudar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
   }));
-  r.post("/admin/subastas/:id/programar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/programar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (!s.titulo || !(s.precio_inicial > 0)) throw httpError(400, "Faltan datos: título y precio inicial");
@@ -2061,7 +2138,7 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:programar", targetId: s.id, detalle: t.toISOString(), por: req.adminUser });
     res.json({ ok: true, item });
   }));
-  r.post("/admin/subastas/:id/cerrar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/cerrar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     const item = (await store.cerrarSubasta(s.id, { plazoHoras: (await plazosHoras()).r1 })) || s;
@@ -2071,7 +2148,7 @@ function buildRouter() {
     res.json({ ok: true, item });
   }));
   // Extender el plazo de pago (horas, 1 a 168). Si ya había vencido o el lote no tenía plazo, cuenta desde ahora.
-  r.post("/admin/subastas/:id/extender", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/extender", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const horas = Math.round(Number(req.body && req.body.horas) || 24);
     if (!(horas >= 1 && horas <= 168)) throw httpError(400, "Las horas deben estar entre 1 y 168");
     const s = await store.getSubasta(req.params.id);
@@ -2083,7 +2160,7 @@ function buildRouter() {
     res.json({ ok: true, item: { id: item.id, pago_vence: item.pago_vence, ronda: item.ronda } });
   }));
   // Pasar al segundo postor ahora (sin esperar el vencimiento). Suspende al primero igual que un vencimiento.
-  r.post("/admin/subastas/:id/segundo", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/segundo", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     const r0 = await resolverVencimientoSubasta(s.id, { forzar: true, por: req.adminUser });
@@ -2214,7 +2291,7 @@ function buildRouter() {
     const reglas = await reglasPuntos();
     res.json({ items: Object.entries(REGLAS_META).map(([clave, m]) => ({ clave, titulo: m.t, fuente: m.fuente, quien: m.quien, pendiente: !!m.pendiente, puntos: (reglas[clave] || {}).puntos || 0, activa: !!(reglas[clave] || {}).activa })) });
   }));
-  r.put("/admin/puntos/reglas", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.put("/admin/puntos/reglas", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
     const b = req.body || {};
     if (!REGLAS_META[b.clave]) throw httpError(404, "Regla desconocida");
     const patch = {};
@@ -2242,12 +2319,12 @@ function buildRouter() {
     if (!parcial && p.costo === undefined) throw httpError(400, "Poné el costo en puntos");
     return p;
   };
-  r.post("/admin/puntos/premios", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/puntos/premios", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
     const p = await store.crearPremio(limpiarPremio(req.body || {}, false));
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:premio-crear", targetId: p.id, detalle: p.titulo, por: req.adminUser });
     res.status(201).json({ ok: true, premio: p });
   }));
-  r.patch("/admin/puntos/premios/:id", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.patch("/admin/puntos/premios/:id", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
     const patch = limpiarPremio(req.body || {}, true);
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const p = await store.updatePremio(req.params.id, patch);
@@ -2259,7 +2336,7 @@ function buildRouter() {
     res.json({ items: await store.listCanjesPremio({ estado: req.query.estado || undefined }) });
   }));
   // Entregar (avisa al hincha) o cancelar (devuelve los puntos y el stock) un canje pendiente.
-  r.patch("/admin/puntos/canjes/:id", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.patch("/admin/puntos/canjes/:id", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
     const estado = String(req.body && req.body.estado);
     if (!["entregado", "cancelado"].includes(estado)) throw httpError(400, "Estado inválido (entregado | cancelado)");
     const out = await store.resolverCanjePremio(req.params.id, { estado });
@@ -2272,7 +2349,7 @@ function buildRouter() {
     res.json({ ok: true, estado: out.canje.estado });
   }));
   r.get("/admin/puntos/misiones", requireAdmin, wrap(async (_req, res) => { res.json({ items: await store.listMisiones(30), semana_actual: semanaIso() }); }));
-  r.post("/admin/puntos/misiones", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/puntos/misiones", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
     const b = req.body || {};
     const semana = String(b.semana || ""), pregunta = String(b.pregunta || "").replace(/[<>]/g, "").trim();
     const opciones = Array.isArray(b.opciones) ? b.opciones.map((o) => String(o).replace(/[<>]/g, "").trim().slice(0, 60)).filter(Boolean) : [];
@@ -2287,7 +2364,7 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:mision-crear", targetId: m.id, detalle: semana, por: req.adminUser });
     res.status(201).json({ ok: true, mision: m });
   }));
-  r.patch("/admin/puntos/misiones/:id", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.patch("/admin/puntos/misiones/:id", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
     if (typeof (req.body && req.body.activa) !== "boolean") throw httpError(400, "Indicá activa: true o false");
     const m = await store.updateMision(req.params.id, { activa: req.body.activa });
     if (!m) throw httpError(404, "Misión no encontrada");
@@ -2476,7 +2553,7 @@ function buildRouter() {
     }
     return { usuario: u.usuario, urlClave, correo };
   }
-  r.post("/admin/penas/:id/verificar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/penas/:id/verificar", requireAdmin, requirePerm("penas.write"), wrap(async (req, res) => {
     const pena = await store.getPena(req.params.id);
     if (!pena) throw httpError(404, "Peña no encontrada");
     const p = await store.updatePena(pena.id, { estado: "verificada" });
@@ -2486,14 +2563,14 @@ function buildRouter() {
     // Si no hay correo válido, el admin recibe el link para pasárselo a la comisión por otro medio.
     res.json({ ok: true, pena: { id: p.id, slug: p.slug, estado: p.estado }, usuario: acceso.usuario, correo_enviado: acceso.correo, ...(acceso.correo ? {} : { url_clave: acceso.urlClave }) });
   }));
-  r.post("/admin/penas/:id/acceso", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/penas/:id/acceso", requireAdmin, requirePerm("penas.write"), wrap(async (req, res) => {
     const pena = await store.getPena(req.params.id);
     if (!pena || pena.estado !== "verificada") throw httpError(409, "Solo se reenvía el acceso de una peña verificada");
     const acceso = await enviarAccesoPena(pena, { renovar: true });
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:acceso", targetId: pena.id, detalle: pena.nombre, por: req.adminUser });
     res.json({ ok: true, usuario: acceso.usuario, correo_enviado: acceso.correo, ...(acceso.correo ? {} : { url_clave: acceso.urlClave }) });
   }));
-  r.post("/admin/penas/:id/estado", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/penas/:id/estado", requireAdmin, requirePerm("penas.write"), wrap(async (req, res) => {
     const estado = String(req.body?.estado || "");
     if (!["verificada", "pausada"].includes(estado)) throw httpError(400, "Estado inválido (verificada | pausada)");
     const pena = await store.getPena(req.params.id);
@@ -2505,7 +2582,7 @@ function buildRouter() {
     res.json({ ok: true, pena: { id: p.id, estado: p.estado } });
   }));
   // Aprobar (resta del saldo) o rechazar un canje pedido por una peña.
-  r.post("/admin/penas/canje/:id", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
+  r.post("/admin/penas/canje/:id", requireAdmin, requirePerm("pagos.write", "penas.write"), wrap(async (req, res) => {
     const aprobar = !(req.body && req.body.rechazar === true);
     const out = await store.resolverCanjePena(req.params.id, { aprobar });
     if (!out.ok) {
@@ -2636,7 +2713,7 @@ function buildRouter() {
 
   // ─── Panel de validación del COMERCIO (Red de Beneficios) ─────────────────────
   // Alta de acceso (admin): setea usuario+contraseña del comercio para su panel.
-  r.post("/admin/comercios/:id/acceso", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/comercios/:id/acceso", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
     const usuario = String(req.body?.usuario || "").toLowerCase().trim();
     const password = String(req.body?.password || "");
     if (usuario.length < 3) throw httpError(400, "Usuario inválido (mín. 3)");

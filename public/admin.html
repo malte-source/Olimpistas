@@ -216,6 +216,7 @@
       <a class="nav-link" data-area="pagos" href="#/pagos"><span class="ic">💳</span> Pagos</a>
       <a class="nav-link" data-area="campanas" href="#/campanas"><span class="ic">📣</span> Campañas</a>
       <a class="nav-link" data-area="contenido" href="#/contenido"><span class="ic">🎁</span> Contenido</a>
+      <a class="nav-link" data-area="decisiones" href="#/decisiones"><span class="ic">🗳️</span> Decisiones</a>
       <div class="sb-label">Sistema</div>
       <a class="nav-link" data-area="sistema" href="#/sistema"><span class="ic">🛠️</span> Sistema</a>
       <div class="sb-spacer"></div>
@@ -229,6 +230,7 @@
         <span id="adminWho" class="muted" style="font-size:12px;white-space:nowrap"></span>
       </div>
       <div class="main-inner">
+        <p class="hint" id="soloLecturaBanner" hidden style="background:var(--card2,#1b1b1b);border-radius:10px;padding:10px 14px;margin:0 0 14px">👁️ Estás en <b>modo lectura</b>: podés ver todo lo de tu rol, pero los cambios los hace el equipo del club.</p>
 
         <!-- ÁREA: DASHBOARD -->
         <section class="area" id="area-dashboard">
@@ -239,6 +241,10 @@
             <div class="stat"><div class="n" id="stSubSinPagar">—</div><div class="l">🔨 Subastas ganadas sin pagar</div></div>
             <div class="stat"><div class="n" id="stSubPausadas">—</div><div class="l">⏸ Subastas pausadas</div></div>
           </div>
+          <h2>🏟️ Tablero del club</h2>
+          <p class="hint">Un vistazo a cómo va el club: hinchas, ingresos, subastas, puntos, peñas y comercios. Son números agregados, sin datos personales.</p>
+          <div class="cards" id="tabCards"><p class="loading">Cargando…</p></div>
+          <div id="tabIngresos"></div>
           <h2>🩺 Salud del sistema</h2>
           <div class="cards" id="saludCards"><p class="loading">Cargando…</p></div>
           <h2>📊 Reportes</h2>
@@ -312,6 +318,7 @@
 
         <!-- ÁREA: CONTENIDO -->
         <section class="area" id="area-contenido" hidden>
+          <div data-sec="contenido,subastas,estadio">
           <h2>🎁 Sorteos, preventas y contenido</h2>
           <div class="search-row" style="gap:8px">
             <select id="crudSel" style="flex:0 0 auto;width:auto"><option value="sorteos">Sorteos</option><option value="preventas">Preventas</option><option value="subastas">Subastas</option><option value="encuestas">Encuestas</option><option value="contenido">Contenido</option></select>
@@ -319,20 +326,28 @@
           </div>
           <div id="crudForm"></div>
           <div id="crudList"><p class="loading">Cargando…</p></div>
+          </div>
 
+          <div data-sec="penas">
           <h2>Peñas</h2>
           <p class="hint">Solicitudes para <b>verificar</b>, ranking y canjes del fondo que esperan tu aprobación.</p>
           <div id="penasWrap"><p class="loading">Cargando…</p></div>
+          </div>
 
+          <div data-sec="beneficios">
           <h2>Ofertas de comercios</h2>
           <p class="hint">Las ofertas que cargan los comercios esperan acá: <b>aprobá y publicá</b> o <b>rechazá</b> con el motivo (lo ve el comercio). El reporte para sponsors cruza canjes, ahorro y ventas por comercio, ciudad y nivel.</p>
           <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">⬇ Reporte para sponsors (mes en curso)</button></div>
           <div id="ofertasWrap"><p class="loading">Cargando…</p></div>
+          </div>
 
+          <div data-sec="puntos">
           <h2>Puntos</h2>
           <p class="hint">Reglas de acumulación, catálogo de canje, misión semanal y canjes por entregar. Los puntos vencen tras 12 meses sin actividad (decisión del club).</p>
           <div id="puntosWrap"><p class="loading">Cargando…</p></div>
+          </div>
 
+          <div data-sec="contenido">
           <h2>Cola de Actualización (socios)</h2>
           <p class="hint">Datos capturados en el onboarding. Verificá contra el padrón y <b>Unificá</b> para volcarlos a la base oficial, o <b>Rechazá</b>.</p>
           <div class="search-row" style="margin-bottom:10px">
@@ -346,15 +361,31 @@
             <button class="btn btn-sm" id="actCargar">Cargar</button>
           </div>
           <div id="actWrap"><p class="loading">Cargando…</p></div>
+          </div>
+        </section>
+
+        <!-- ÁREA: DECISIONES -->
+        <section class="area" id="area-decisiones" hidden>
+          <h2>🗳️ Decisiones de la Comisión Directiva</h2>
+          <p class="hint">Cada decisión cambia cómo funciona la app. Mientras no se registre una, rige el <b>valor por defecto</b>. Queda anotado quién decidió y cuándo.</p>
+          <div id="decWrap"><p class="loading">Cargando…</p></div>
         </section>
 
         <!-- ÁREA: SISTEMA -->
         <section class="area" id="area-sistema" hidden>
+          <div data-sec="integraciones">
+            <h2>🔌 Integraciones</h2>
+            <p class="hint">Qué está conectado y qué falta. Acá solo se ve el estado; las claves viven en el servidor.</p>
+            <div class="cards" id="integWrap"><p class="loading">Cargando…</p></div>
+          </div>
           <div id="usuariosBox">
             <h2>👤 Usuarios del panel <button class="btn btn-sm" id="usuNuevo" style="font-size:12px;font-weight:700">➕ Nuevo usuario</button></h2>
             <p class="hint">Cuentas con usuario + contraseña y rol. Cada uno ve y puede solo lo de su rol. El log de auditoría registra quién hace qué.</p>
             <div id="usuForm"></div>
             <div id="usuWrap"><p class="loading">Cargando…</p></div>
+            <h2>🔐 Quién ve y quién edita qué</h2>
+            <p class="hint">Matriz de accesos por rol. <b>Ver</b> = entra a la sección. <b>Editar</b> = puede cambiar datos ahí.</p>
+            <div id="matrizWrap"><p class="loading">Cargando…</p></div>
           </div>
 
           <h2>🖼️ Moderación de selfies</h2>
@@ -382,12 +413,13 @@
     var TIER_ORDEN_FICHA = ["socio", "premium", "kids", "olimpista"]; // de mayor a menor, para los botones de la ficha
 
     // Identidad de la sesión (se llena con /admin/whoami). Default FAIL-CLOSED (sin permisos) hasta saber.
-    var ADMIN_ROL = "", ADMIN_PERMS = [], ADMIN_AREAS = ["dashboard"];
+    var ADMIN_ROL = "", ADMIN_PERMS = [], ADMIN_AREAS = ["dashboard"], ADMIN_SECCIONES = ["tablero"], ADMIN_SOLO_LECTURA = false;
+    function veSeccion() { for (var i = 0; i < arguments.length; i++) { if (ADMIN_ROL === "owner" || ADMIN_SECCIONES.indexOf(arguments[i]) > -1) return true; } return false; }
     function puede(perm) { return ADMIN_ROL === "owner" || ADMIN_PERMS.indexOf("*") > -1 || ADMIN_PERMS.indexOf(perm) > -1; }
     // Limpia identidad + estado de tablas/listas para que NO se filtre data entre sesiones de distinto rol.
     function resetAdminState() {
-      ADMIN_ROL = ""; ADMIN_PERMS = []; ADMIN_AREAS = ["dashboard"];
-      crudItems = []; ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura"]; areaLoaded = {};
+      ADMIN_ROL = ""; ADMIN_PERMS = []; ADMIN_AREAS = ["dashboard"]; ADMIN_SECCIONES = ["tablero"]; ADMIN_SOLO_LECTURA = false;
+      crudItems = []; ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura", "cd", "comercial", "operaciones"]; areaLoaded = {};
       ["usuWrap", "segWrap", "searchWrap", "metreWrap", "abWrap", "actWrap", "padronWrap", "selfiesWrap", "accWrap", "campWrap", "crudList", "pendWrap"].forEach(function (id) {
         var c = $(id); if (c) { c.innerHTML = ""; try { delete c._tbl; delete c._tblInit; } catch (e) {} }
       });
@@ -507,16 +539,23 @@
     }
 
     // ── Navegación por áreas (router por hash + carga perezosa) ──
-    var AREAS = ["dashboard", "socios", "pagos", "campanas", "contenido", "sistema"];
-    var AREA_TITLE = { dashboard: "📊 Dashboard", socios: "👤 Socios", pagos: "💳 Pagos", campanas: "📣 Campañas", contenido: "🎁 Contenido", sistema: "🛠️ Sistema" };
+    var AREAS = ["dashboard", "socios", "pagos", "campanas", "contenido", "decisiones", "sistema"];
+    var AREA_TITLE = { dashboard: "📊 Dashboard", socios: "👤 Socios", pagos: "💳 Pagos", campanas: "📣 Campañas", contenido: "🎁 Contenido", decisiones: "🗳️ Decisiones", sistema: "🛠️ Sistema" };
     // Loaders que se disparan la PRIMERA vez que se abre cada área (no todo de golpe al entrar).
     var AREA_LOADERS = {
-      dashboard: [cargarSalud, cargarReportes, cargarRevCount],
+      dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount],
       socios: [],                                 // búsqueda/segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
       campanas: [cargarEmailMetricas, cargarCampanas, cargarGhl],
-      contenido: [cargarCrud, cargarActualizaciones, cargarOfertasAdmin, cargarPenasAdmin, cargarPuntosAdmin],
-      sistema: [cargarUsuarios, cargarSelfies, cargarAcciones],
+      contenido: [function () {
+        if (veSeccion("contenido", "subastas", "estadio")) cargarCrud();
+        if (veSeccion("contenido")) cargarActualizaciones();
+        if (veSeccion("beneficios")) cargarOfertasAdmin();
+        if (veSeccion("penas")) cargarPenasAdmin();
+        if (veSeccion("puntos")) cargarPuntosAdmin();
+      }],
+      decisiones: [cargarDecisiones],
+      sistema: [cargarIntegraciones, cargarUsuarios, cargarMatrizRoles, cargarSelfies, cargarAcciones],
     };
     var areaLoaded = {};
     function navTo(area) {
@@ -537,6 +576,7 @@
         resetAdminState();                        // limpia identidad/tablas de la sesión anterior
         var who = await api("/admin/whoami");   // identidad + rol + áreas/permisos (y valida la sesión)
         ADMIN_ROL = who.rol || "lectura"; ADMIN_PERMS = who.perms || []; ADMIN_AREAS = (who.areas && who.areas.length) ? who.areas : ["dashboard"];
+        ADMIN_SECCIONES = who.secciones || ["tablero"]; ADMIN_SOLO_LECTURA = !!who.solo_lectura;
         showDash();
         aplicarRol();
         $("adminWho").textContent = (who.usuario || "") + " · " + ADMIN_ROL;
@@ -556,9 +596,19 @@
       var links = document.querySelectorAll(".nav-link[data-area]");
       for (var i = 0; i < links.length; i++) { links[i].style.display = (ADMIN_AREAS.indexOf(links[i].dataset.area) > -1) ? "" : "none"; }
       var us = $("usuariosBox"); if (us) us.style.display = puede("usuarios") ? "" : "none";
+      var bloques = document.querySelectorAll("[data-sec]");
+      for (var b = 0; b < bloques.length; b++) { bloques[b].style.display = veSeccion.apply(null, bloques[b].dataset.sec.split(",")) ? "" : "none"; }
+      var bus = document.querySelector(".tsearch"); if (bus) bus.style.display = veSeccion("hinchas") ? "" : "none";
+      var ban = $("soloLecturaBanner"); if (ban) ban.hidden = !ADMIN_SOLO_LECTURA;
+      var sel = $("crudSel");
+      if (sel) {
+        if (sel._orig == null) sel._orig = sel.innerHTML; else sel.innerHTML = sel._orig;
+        var SEC_CRUD = { sorteos: "subastas", subastas: "subastas", preventas: "estadio", contenido: "contenido", encuestas: "contenido" };
+        for (var o = sel.options.length - 1; o >= 0; o--) { if (!veSeccion(SEC_CRUD[sel.options[o].value] || "contenido")) sel.remove(o); }
+      }
       // Botones de acción a nivel sección (los por-fila se gatean al renderizar).
       var setVis = function (id, ok) { var el = $(id); if (el) el.style.display = ok ? "" : "none"; };
-      setVis("crudNuevo", puede("contenido.write"));
+      setVis("crudNuevo", puedeCrud());
       setVis("campLanzar", puede("campanas.write"));
       setVis("ghlSync", puede("campanas.write"));
       setVis("segExport", puede("export"));   // export de PII de socios
@@ -716,8 +766,94 @@
       } catch (e) { $("abWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
 
+    // ── Tablero del club ──
+    async function cargarTablero() {
+      var box = $("tabCards"); if (!box) return;
+      var gs = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); }, nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
+      try {
+        var d = await api("/admin/tablero");
+        var c = function (n, l, sub) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + (sub ? '<br><span class="muted" style="font-size:12px">' + esc(sub) + '</span>' : '') + '</div></div>'; };
+        box.innerHTML =
+          c(nf(d.hinchas.total), "Hinchas registrados", "hoy +" + nf(d.hinchas.hoy) + " · ayer +" + nf(d.hinchas.ayer)) +
+          c(nf(d.hinchas.pagantes), "Membresías pagas", nf(d.hinchas.socios_validados) + " socios validados") +
+          c(gs(d.ingresos.d30), "Ingresos · 30 días", "7 días " + gs(d.ingresos.d7)) +
+          c(nf(d.subastas.activas), "Subastas en vivo", nf(d.subastas.sin_pagar) + " ganadas sin pagar") +
+          c(nf(d.puntos.pasivo), "Puntos en circulación", nf(d.puntos.canjes_pendientes) + " canjes por entregar") +
+          c(nf(d.penas.verificadas) + " / " + nf(d.penas.total), "Peñas verificadas", nf(d.penas.canjes_pendientes) + " canjes de fondo pendientes") +
+          c(nf(d.beneficios.publicados), "Beneficios publicados", nf(d.beneficios.por_aprobar) + " ofertas por aprobar") +
+          c(nf(d.decisiones.tomadas) + " / " + nf(d.decisiones.total), "Decisiones tomadas", "el resto rige por defecto");
+        var pc = (d.ingresos.por_concepto || []);
+        $("tabIngresos").innerHTML = pc.length ? '<div class="mini">Ingresos por concepto (total)</div><div class="row-actions">' + pc.map(function (x) { return '<span class="pill">' + esc(x.tipo) + ' · ' + gs(x.monto) + ' (' + nf(x.n) + ')</span>'; }).join("") + '</div>' : "";
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
+    // ── Decisiones de la CD ──
+    var DEC_OPC = {
+      deuda: { no_bloquear: "No bloquear a nadie", mas_2_cuotas: "Bloquear con más de 2 cuotas", cualquier: "Bloquear con cualquier deuda" },
+      plazo: { "72_48": "72 h + 48 h", "48_24": "48 h + 24 h" },
+      base: { por_nivel: "Por nivel", por_plan: "Por plan del club", ambos: "Ambos" },
+      pct: { "10": "10 %", "15": "15 %" },
+      venc: { "12_meses": "Vencen a los 12 meses", no_vencen: "No vencen" },
+      oro: { no_publicar: "No publicar", habilita_futbol: "Habilitar fútbol" },
+    };
+    async function cargarDecisiones() {
+      var box = $("decWrap"); if (!box) return;
+      try {
+        var d = await api("/admin/decisiones"), w = puede("decisiones.write");
+        box.innerHTML = (d.items || []).map(function (x) {
+          var lbl = DEC_OPC[x.clave] || {};
+          var chips = x.opciones.map(function (o) {
+            var on = o === x.valor;
+            return '<button class="btn btn-sm ' + (on ? "" : "btn-ghost") + '" ' + (w && !on ? 'data-decv="' + esc(x.clave) + '" data-val="' + esc(o) + '"' : 'disabled') + ' aria-pressed="' + on + '">' + esc(lbl[o] || o) + (o === x.defecto ? ' <span class="muted" style="font-size:11px">(por defecto)</span>' : '') + '</button>';
+          }).join("");
+          var estado = x.decidido ? '<span class="pill pill-ok">Decidido</span> <span class="muted" style="font-size:12px">por ' + esc(x.decidido_por || "—") + (x.decidido_en ? ' · ' + esc(fmtFecha(x.decidido_en)) : '') + '</span>' : '<span class="pill pill-warn">Sin decidir</span> <span class="muted" style="font-size:12px">rige el valor por defecto</span>';
+          return '<div class="card-row" style="border:1px solid var(--linea);border-radius:10px;padding:12px;margin:10px 0"><b>' + esc(x.pregunta) + '</b><div style="margin:6px 0">' + estado + '</div><div class="row-actions">' + chips + '</div></div>';
+        }).join("") + (w ? "" : '<p class="hint">Las decisiones las registra el equipo del club; acá las podés consultar.</p>');
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    document.addEventListener("click", async function (e) {
+      var b = e.target.closest && e.target.closest("[data-decv]"); if (!b) return;
+      var lbl = (DEC_OPC[b.dataset.decv] || {})[b.dataset.val] || b.dataset.val;
+      try {
+        if (!(await confirmar("Se aplica enseguida en la app: «" + lbl + "». Queda registrado a tu nombre.", { titulo: "Registrar decisión", ok: "Registrar" })).ok) return;
+        await api("/admin/decisiones/" + encodeURIComponent(b.dataset.decv), { method: "PUT", body: { valor: b.dataset.val } });
+        toast("Decisión registrada"); cargarDecisiones();
+      } catch (err) { toast(err.message, "err"); }
+    });
+
+    // ── Integraciones y matriz de roles ──
+    async function cargarIntegraciones() {
+      var box = $("integWrap"); if (!box || !veSeccion("integraciones")) return;
+      try {
+        var d = await api("/admin/integraciones");
+        var E = { conectado: { l: "Conectado", c: "pill-ok" }, simulado: { l: "Simulado (pruebas)", c: "" }, sin_conectar: { l: "Sin conectar", c: "pill-warn" } };
+        box.innerHTML = (d.items || []).map(function (i) {
+          var e = E[i.estado] || E.sin_conectar;
+          return '<div class="stat" style="text-align:left"><div class="l" style="font-weight:700">' + esc(i.nombre) + '</div><div style="margin:6px 0"><span class="pill ' + e.c + '">' + e.l + '</span></div><div class="muted" style="font-size:12px">' + esc(i.detalle) + '</div></div>';
+        }).join("");
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function cargarMatrizRoles() {
+      var box = $("matrizWrap"); if (!box || !puede("usuarios")) return;
+      try {
+        var d = await api("/admin/roles");
+        var SEC = { tablero: "Tablero", decisiones: "Decisiones", hinchas: "Hinchas", atencion: "Atención", campanas: "Campañas", beneficios: "Beneficios", puntos: "Puntos", penas: "Peñas", subastas: "Subastas", estadio: "Estadio", integraciones: "Integraciones", roles: "Roles", contenido: "Contenido", pagos: "Pagos" };
+        var EDITA = { decisiones: "decisiones.write", hinchas: "socios.write", atencion: "atencion.write", campanas: "campanas.write", beneficios: "beneficios.write", puntos: "puntos.write", penas: "penas.write", subastas: "subastas.write", estadio: "contenido.write", contenido: "contenido.write", pagos: "pagos.write", roles: "usuarios" };
+        var head = '<tr><th>Rol</th>' + d.secciones.map(function (s) { return '<th>' + esc(SEC[s] || s) + '</th>'; }).join("") + '</tr>';
+        var rows = d.roles.map(function (r) {
+          var todo = r.perms.indexOf("*") > -1;
+          return '<tr><td data-l="Rol"><b>' + esc(r.rol) + '</b><br><span class="muted" style="font-size:11px">' + esc(ROL_DESC[r.rol] || "") + '</span></td>' + d.secciones.map(function (s) {
+            var ve = r.ve.indexOf(s) > -1, ed = ve && (todo || (EDITA[s] && r.perms.indexOf(EDITA[s]) > -1));
+            return '<td data-l="' + esc(SEC[s] || s) + '" style="text-align:center">' + (ed ? '<span title="Ve y edita" style="color:var(--verde)">✎</span>' : ve ? '<span title="Solo ve" class="muted">👁</span>' : '<span class="muted">·</span>') + '</td>';
+          }).join("") + '</tr>';
+        }).join("");
+        box.innerHTML = '<div style="overflow-x:auto"><table>' + head + rows + '</table></div><p class="hint">✎ ve y edita · 👁 solo ve · · sin acceso. Los roles Comisión Directiva, Marketing, Comercial y Operaciones solo entran a lo marcado.</p>';
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
     // ── Gestión de usuarios del panel (solo owner) ──
-    var ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura"];
+    var ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura", "cd", "comercial", "operaciones"];
+    var ROL_DESC = { owner: "Todo, incluido usuarios y decisiones", finanzas: "Pagos, cuadre y socios", marketing: "Campañas, contenido, beneficios y puntos", soporte: "Atención a socios y moderación", lectura: "Solo mirar (sin exportar datos)", cd: "Comisión Directiva: tablero y decisiones, solo lectura", comercial: "Comercios, beneficios y peñas", operaciones: "Subastas, estadio y atención" };
     async function cargarUsuarios() {
       if (!puede("usuarios")) return;
       $("usuForm").innerHTML = "";
@@ -735,7 +871,7 @@
     }
     function formUsuario(item) {
       item = item || {}; var esNuevo = !item.id;
-      var roles = ROLES_ADMIN.map(function (rr) { return '<option value="' + rr + '"' + (item.rol === rr ? ' selected' : '') + '>' + rr + '</option>'; }).join("");
+      var roles = ROLES_ADMIN.map(function (rr) { return '<option value="' + rr + '"' + (item.rol === rr ? ' selected' : '') + '>' + rr + (ROL_DESC[rr] ? ' — ' + ROL_DESC[rr] : '') + '</option>'; }).join("");
       $("usuForm").innerHTML = '<div class="fgrid">' +
         '<div><label>Usuario</label><input id="uf_usuario" value="' + esc(item.usuario || "") + '"' + (esNuevo ? '' : ' disabled') + ' /></div>' +
         '<div><label>Nombre</label><input id="uf_nombre" value="' + esc(item.nombre || "") + '" /></div>' +
@@ -778,14 +914,16 @@
         campos: [["titulo", "Título (interno)", "text"], ["pregunta", "Pregunta", "text"], ["tipo", "Tipo", ["opcion", "texto"]], ["opciones", "Opciones (separadas por | )", "text"], ["nivel_min", "Quién responde (nivel)", "tier"], ["estado", "Estado", ["borrador", "activa", "cerrada"]]], encuesta: true },
     };
     var crudActual = "sorteos", crudItems = [];
+    // Cada entidad se edita con su permiso (subastas/sorteos, beneficios/comercios, o contenido en general).
+    function puedeCrud() { return puede(({ sorteos: "subastas.write", subastas: "subastas.write" })[crudActual] || "contenido.write"); }
     async function cargarCrud() {
-      crudActual = $("crudSel").value; $("crudForm").innerHTML = "";
+      crudActual = $("crudSel").value; $("crudForm").innerHTML = ""; var nv = $("crudNuevo"); if (nv) nv.style.display = puedeCrud() ? "" : "none";
       try {
         var r = await api("/admin/" + crudActual);
         crudItems = r.items || [];
         var cfg = CRUDCFG[crudActual];
         if (!crudItems.length) { $("crudList").innerHTML = '<p class="empty">Sin ' + cfg.t.toLowerCase() + ' aún. Creá con ➕ Nuevo.</p>'; return; }
-        var w = puede("contenido.write");
+        var w = puedeCrud();
         var rows = crudItems.map(function (x) {
           var parts = cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-parts="' + esc(x.id) + '">Participantes</button>' : "";
           var sub = "";
@@ -1300,7 +1438,7 @@
     async function cargarOfertasAdmin() {
       var box = $("ofertasWrap"); if (!box) return;
       try {
-        var d = await api("/admin/beneficios"), w = puede("contenido.write");
+        var d = await api("/admin/beneficios"), w = puede("beneficios.write");
         var pend = d.items.filter(function (b) { return b.estado === "borrador"; });
         var rech = d.items.filter(function (b) { return b.estado === "rechazado"; }).slice(0, 5);
         var PARA = { todos: "Todos", "premium,socio": "Plus y Socio", socio: "Solo socios" };
@@ -1321,7 +1459,7 @@
       try {
         var rs = await Promise.all([api("/admin/puntos/resumen"), api("/admin/puntos/reglas"), api("/admin/puntos/premios"), api("/admin/puntos/canjes?estado=pendiente"), api("/admin/puntos/misiones")]);
         var res = rs[0], reglas = rs[1].items, premios = rs[2].items, canjes = rs[3].items, mis = rs[4];
-        var w = puede("contenido.write"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
+        var w = puede("puntos.write"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
         var html = '<div style="background:#0a0a0a;color:#fff;border-radius:12px;padding:14px;margin:8px 0"><div style="font-size:12px;opacity:.7">PASIVO DE PUNTOS (lo que el club debe en premios)</div><b style="font-size:24px">' + nf(res.pasivo) + ' pts</b> <span style="opacity:.7">· ' + nf(res.socios_con_saldo) + ' hinchas con saldo · ' + nf(res.canjes_pendientes) + ' canjes por entregar</span></div>';
         html += '<div class="mini">Reglas de acumulación</div>' + reglas.map(function (r) {
           return '<div class="row-actions" style="justify-content:space-between;align-items:center;border-bottom:1px solid var(--linea);padding:6px 0;opacity:' + (r.activa ? 1 : .55) + '"><span><b>' + esc(r.titulo) + '</b> <span class="muted" style="font-size:12px">' + esc(r.fuente) + ' · ' + esc(r.quien) + (r.pendiente ? ' · espera datos de Tuti' : '') + '</span></span><span>' +
@@ -1357,7 +1495,7 @@
       try {
         var d = await api("/admin/penas");
         var gsA = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); };
-        var w = puede("contenido.write"), wp = puede("pagos.write");
+        var w = puede("penas.write"), wp = puede("pagos.write") || puede("penas.write");
         var pend = d.items.filter(function (p) { return p.estado === "pendiente"; });
         var ok = d.items.filter(function (p) { return p.estado !== "pendiente"; });
         var html = "";
