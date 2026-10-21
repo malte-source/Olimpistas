@@ -101,6 +101,17 @@ app.use((req, _res, next) => {
   next();
 });
 
+// ── Entorno de pruebas (ENTORNO=staging) ─────────────────────────────────────
+// Misma imagen y mismo código que producción; solo cambia esto: nunca se indexa, se ve un
+// cartel permanente y el robots.txt lo cierra. Sin credenciales de email/Tuti/Pagopar los
+// módulos ya quedan en modo simulado, así que acá no se envía ni se cobra nada real.
+const STAGING = process.env.ENTORNO === "staging";
+const CARTEL_STAGING = '<div id="cartelPruebas" style="position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#b45309;color:#fff;font:700 12px/1 system-ui,sans-serif;text-align:center;padding:6px 8px;letter-spacing:.04em;pointer-events:none">ENTORNO DE PRUEBAS · nada de esto es real</div>';
+if (STAGING) {
+  app.use((_req, res, next) => { res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive"); next(); });
+  app.get("/robots.txt", (_req, res) => res.type("text/plain").send("User-agent: *\nDisallow: /\n"));
+}
+
 const PUBLIC = path.join(__dirname, "public");
 
 // Cache-busting AUTOMÁTICO de assets estáticos: Cloud Run inyecta K_REVISION (cambia
@@ -216,6 +227,7 @@ const sendPage = (file, lang) => (req, res) => {
     if (lang === "en") html = html.replace('<html lang="es">', '<html lang="en">');
     const extra = (ANALYTICS || "") + (file === "index.html" ? JSONLD : "");
     html = html.replace("</head>", extra + "\n</head>");
+    if (STAGING) html = html.replace("</body>", CARTEL_STAGING + "\n</body>");
     html = html.replace(/\?v=\d+/g, "?v=" + BUILD_ID); // cache-busting automático (ver BUILD_ID)
     _pageCache[key] = html;
   }

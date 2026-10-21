@@ -149,3 +149,12 @@ test("cron: token incorrecto, vacío, de otro largo o ausente → 401; el correc
     assert.notStrictEqual((await llamar("secreto-de-cron-de-prueba")).status, 401, "el token correcto pasa la puerta");
   } finally { srv.close(); }
 });
+
+test("producción (sin ENTORNO=staging): ni cartel de pruebas ni noindex", async () => {
+  const srv = await servir();
+  try {
+    const r = await fetch(`http://127.0.0.1:${srv.address().port}/`);
+    assert.ok(!(await r.text()).includes("cartelPruebas"));
+    assert.ok(!(r.headers.get("x-robots-tag") || "").includes("noindex"));
+  } finally { srv.close(); }
+});
