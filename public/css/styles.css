@@ -858,16 +858,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; margin: 0; gap: 0;
     display: flex; justify-content: space-around; flex-wrap: nowrap; border-radius: 0;
     padding: 8px 4px max(8px, env(safe-area-inset-bottom));
-    background: var(--oli-900); border: none; border-top: 1px solid rgba(255,255,255,.15); }
-  .tab { flex: 1 1 0; min-width: 0; min-height: 56px; flex-direction: column; gap: 0; padding: 10px 2px; border: none;
+    background: rgba(10,10,10,.88); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: none; border-top: 1px solid rgba(255,255,255,.15); }
+  .tab { flex: 1 1 0; min-width: 0; min-height: 56px; flex-direction: column; gap: 0; padding: 9px 2px 6px; border: none;
     border-radius: 14px; background: transparent; color: rgba(255,255,255,.55); }
-  /* En mobile el texto no se VE (solo íconos) pero SIGUE en el árbol de accesibilidad
-     (visually-hidden, no display:none) → el lector de pantalla nombra cada tab. */
-  .tab span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-  .tab .tab-ic { width: 31px; height: 31px; }
+  /* Etiqueta de 11 px bajo el ícono de 24 px (700 si está activa); la píldora de 56 × 30 va detrás del ícono. */
+  .tab span { display: block; margin-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .tab .tab-ic { width: 24px; height: 24px; margin-top: 5px; }
   .tab:hover { color: rgba(255,255,255,.55); border-color: transparent; }
   .tab.active { background: rgba(255,255,255,.12); color: #fff; font-weight: 400; }
-  .tab.active .tab-ic { width: 33px; height: 33px; }
+  .tab.active span { font-weight: 700; }
   .wrap { padding-bottom: 88px; } /* deja lugar para la barra inferior */
   .topbar { gap: 10px; }
   /* #hola era el nombre viejo de este elemento (renombrado a .me/#me) — la regla
@@ -1094,12 +1093,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .tab:active { transform: scale(.94); }
 .tab-ind { display: none; }
 @media (max-width: 640px) {
-  .tab-ind { display: block; position: absolute; top: 8px; left: 0; height: 40px; width: 52px; border-radius: 14px;
+  .tab-ind { display: block; position: absolute; top: 12px; left: 0; height: 30px; width: 56px; border-radius: 15px;
     background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
     transition: transform .28s cubic-bezier(.34,1.4,.5,1); pointer-events: none; z-index: 0; }
   .tabs .tab { position: relative; z-index: 1; }
   .tab.active { background: transparent; }
-  .tab.active .tab-ic { transform: scale(1.06); }
+  .tab.active .tab-ic { transform: none; }
 }
 
 /* ─── Encuestas (Fan Survey) — card en Inicio ─── */
@@ -1180,3 +1179,40 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .ctl-seg-b { border: 0; background: transparent; color: var(--text-secondary); font: 600 13.5px/1 inherit; padding: 10px 16px; border-radius: 10px; cursor: pointer; min-height: 40px; }
 .ctl-seg-b[aria-checked="true"] { background: var(--action-primary-bg); color: var(--action-primary-text); }
 .ctl-seg-b:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* ─── Inicio: widgets (grilla auto-fill de 160 px, radio 26) ─── */
+.wg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.wg { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 148px; padding: 16px; border-radius: 26px; text-align: left;
+  background: var(--surface-card); border: 1px solid var(--border-default); color: var(--text-primary); font: inherit; cursor: pointer; overflow: hidden;
+  transition: transform .15s cubic-bezier(.34,1.4,.5,1), border-color .15s, box-shadow .15s; }
+.wg:hover { transform: translateY(-2px); border-color: var(--text-secondary); box-shadow: 0 10px 30px -14px rgba(0,0,0,.35); }
+.wg:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.wg-2 { grid-column: span 2; }
+.wg-eb { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-secondary); }
+.wg-num { font: 600 34px/1.05 var(--display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.wg-sub { font-size: 13px; color: var(--text-secondary); }
+.wg-sub b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.wg-nota { margin-top: auto; font-size: 12.5px; color: var(--text-secondary); }
+.wg-t { font: 600 17px/1.2 var(--display); letter-spacing: -.01em; }
+.wg-ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; color: #fff; margin: 2px 0; }
+.wg-ring { --p: 0; width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; margin: 2px 0;
+  background: conic-gradient(var(--oro) calc(var(--p) * 1%), var(--overlay-medium) 0); position: relative; }
+.wg-ring::before { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--surface-card); }
+.wg-ring b { position: relative; font: 600 19px/1 var(--display); font-variant-numeric: tabular-nums; }
+.wg-negro { background: #0a0a0a; border-color: #0a0a0a; color: #fff; }
+.wg-negro:hover { border-color: #55534e; }
+.wg-fr { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: repeating-linear-gradient(90deg, #fff 0 18px, #0a0a0a 18px 36px); }
+@media (max-width: 340px) { .wg-2 { grid-column: span 1; } }
+@media (prefers-reduced-motion: reduce) { .wg { transition: none; } }
+@media (max-width: 560px) and (min-width: 341px) { .wg-negro { grid-column: span 2; min-height: 120px; } }
+
+/* ─── Hojas (bottom sheets): en el móvil los diálogos suben desde abajo (radio 28, manija, 320 ms) ─── */
+@keyframes hojaFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hojaSube { from { transform: translateY(100%); } to { transform: none; } }
+@media (max-width: 640px) {
+  .oli-modal-bg { align-items: flex-end; padding: 0; background: rgba(0,0,0,.45); animation: hojaFade .2s ease both; }
+  .oli-modal { max-width: none; border: 0; border-radius: 28px 28px 0 0; padding: 30px 20px max(24px, env(safe-area-inset-bottom)); max-height: 92vh; overflow-y: auto; position: relative;
+    animation: hojaSube .32s cubic-bezier(.2,.8,.2,1) both; }
+  .oli-modal::before { content: ""; position: absolute; top: 9px; left: 50%; width: 38px; height: 5px; margin-left: -19px; border-radius: 3px; background: var(--border-default); }
+}
+@media (prefers-reduced-motion: reduce) { .oli-modal-bg, .oli-modal { animation: none; } }

@@ -162,7 +162,7 @@
       const act = bar && bar.querySelector(".tab.active");
       if (!bar || !ind || !act) return;
       const br = bar.getBoundingClientRect(), ar = act.getBoundingClientRect();
-      ind.style.transform = "translateX(" + Math.round(ar.left - br.left + ar.width / 2 - 26) + "px)";
+      ind.style.transform = "translateX(" + Math.round(ar.left - br.left + ar.width / 2 - 28) + "px)";
     });
   }
 
@@ -175,11 +175,14 @@
     const s = SESSION.socio;
     const nombre = esc((String(s.nombre || s.email || "").trim().split(" ")[0]) || "Olimpista");
     view().innerHTML = skeleton(2);
-    const [subsR, sorteosR, preventasR, encsR] = await Promise.all([
+    const [subsR, sorteosR, preventasR, encsR, ahorroR, puntosR, penasR] = await Promise.all([
       api("/subastas").catch(() => ({ items: [] })),
       api("/sorteos").catch(() => ({ items: [] })),
       api("/preventas").catch(() => ({ items: [] })),
       api("/encuestas").catch(() => ({ items: [] })),
+      api("/beneficios/ahorro").catch(() => null),
+      api("/puntos").catch(() => null),
+      api("/penas").catch(() => null),
     ]);
     const subaViva = (subsR.items || []).find((x) => x.estado === "activa");
     const sorteosActivos = (sorteosR.items || []).filter((sor) => sor.estado === "activa");
@@ -222,7 +225,8 @@
       <p class="lead">${T("m_ini_p")}</p>
       ${destacado}
       <p class="eyebrow-ini">${T("m_ini_mis_cosas")}</p>
-      <div class="ini-feed"><div id="progreso"></div>${cosas.join("")}</div>
+      <div class="wg-grid">${widgetsInicio(ahorroR, puntosR, penasR)}</div>
+      <div class="ini-feed" style="margin-top:14px"><div id="progreso"></div>${cosas.join("")}</div>
       <p class="eyebrow-ini">${T("m_ini_club")}</p>
       ${enc ? encuestaCard(enc) : ""}
       <div class="ini-feed">${club.join("")}</div>
@@ -239,6 +243,43 @@
     if (esc2) esc2.onclick = () => esc2.dataset.tier === "socio" ? validarSocioModal() : mostrarUpsell(esc2.dataset.tier, T("m_ini_escalon_p"));
     const card = view().querySelector(".enc-card");
     if (card && enc) bindEncuesta(card, enc);
+  }
+  // ─── Widgets de Inicio: billetera de ahorro, puntos, peña y carnet. Cada uno aparece solo si su dato cargó. ───
+  function widgetsInicio(ahorro, puntos, penas) {
+    const w = [];
+    if (ahorro) {
+      w.push(`<button type="button" class="wg wg-2" data-goto="beneficios" aria-label="${T("m_wg_ahorro")}">
+        <span class="wg-eb">${T("m_wg_ahorro")}</span>
+        <span class="wg-num">${gs(ahorro.mes || 0)}</span>
+        <span class="wg-sub">${T("m_wg_ahorro_mes")} · ${T("m_wg_ahorro_anio")} <b>${gs(ahorro.anio || 0)}</b></span>
+        <span class="wg-nota">${ahorro.canjes_mes ? (ahorro.canjes_mes + " " + T(ahorro.canjes_mes === 1 ? "m_wg_canje" : "m_wg_canjes")) : T("m_wg_ahorro_vacio")}</span>
+      </button>`);
+    }
+    if (puntos) {
+      const pct = Math.max(0, Math.min(100, Number(puntos.escalon && puntos.escalon.pct) || 0));
+      w.push(`<button type="button" class="wg" data-goto="puntos" aria-label="${T("tab_puntos")}">
+        <span class="wg-eb">${T("tab_puntos")}</span>
+        <span class="wg-ring" style="--p:${pct}"><b>${Number(puntos.saldo || 0).toLocaleString(LOC)}</b></span>
+        <span class="wg-sub">${esc((puntos.escalon && puntos.escalon.nombre) || "")}</span>
+      </button>`);
+    }
+    const items = penas && Array.isArray(penas.items) ? penas.items : null;
+    if (items) {
+      const mia = items.find((p) => p.es_tuya);
+      w.push(`<button type="button" class="wg" data-goto="descubrir" data-seg="penas" aria-label="${T("m_wg_pena")}">
+        <span class="wg-eb">${T("m_wg_pena")}</span>
+        <span class="wg-ic" style="background:#C2410C">${icon("users", { size: 18 })}</span>
+        <span class="wg-t">${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</span>
+        <span class="wg-sub">${mia ? "#" + mia.ranking + " · " + mia.altas + " " + T(mia.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</span>
+      </button>`);
+    }
+    w.push(`<button type="button" class="wg wg-negro" data-goto="carnet" aria-label="${T("tab_carnet")}">
+      <span class="wg-eb" style="color:#D9B65A">${T("tab_carnet")}</span>
+      <span class="wg-ic" style="background:rgba(255,255,255,.14)">${icon("qr-code", { size: 18 })}</span>
+      <span class="wg-t" style="color:#fff">${T("m_wg_carnet")}</span>
+      <span class="wg-fr" aria-hidden="true"></span>
+    </button>`);
+    return w.join("");
   }
   // Misma tarjeta de producto que el banner de la landing (mismas clases .destacado*).
   function destacadoSubasta(subaViva) {
