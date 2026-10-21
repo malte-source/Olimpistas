@@ -1399,6 +1399,77 @@ function createPgStore({ databaseUrl, debug }) {
       }
       return { id: e.id, titulo: e.titulo, pregunta: e.pregunta, tipo: e.tipo, total, conteo, textos };
     },
+
+    // ── Atención: conversaciones, mensajes, herramientas del asistente y tope diario ──
+    // Una sola conversación abierta por hincha y canal (índice único parcial): dos mensajes simultáneos comparten conversación.
+    async abrirConversacionAtencion({ socioId, canal = "app" }) {
+      const [nueva] = await sql`INSERT INTO atencion_conversaciones ${sql({ id: uid("atc"), socio_id: socioId || null, canal })} ON CONFLICT DO NOTHING RETURNING *`;
+      if (nueva) return nueva;
+      const [abierta] = await sql`SELECT * FROM atencion_conversaciones WHERE socio_id = ${socioId} AND canal = ${canal} AND estado <> 'resuelta' ORDER BY creado DESC LIMIT 1`;
+      return abierta || null;
+    },
+    async listConversacionesDeSocio(socioId, limit = 10) {
+      return sql`SELECT * FROM atencion_conversaciones WHERE socio_id = ${socioId} ORDER BY creado DESC LIMIT ${Math.min(Number(limit) || 10, 50)}`;
+    },
+    async getConversacionAtencion(id) { const [c] = await sql`SELECT * FROM atencion_conversaciones WHERE id = ${id}`; return c || null; },
+    async getConversacionAbiertaAtencion(socioId, canal = "app") {
+      const [c] = await sql`SELECT * FROM atencion_conversaciones WHERE socio_id = ${socioId} AND canal = ${canal} AND estado <> 'resuelta' ORDER BY creado DESC LIMIT 1`;
+      return c || null;
+    },
+    async updateConversacionAtencion(id, patch) {
+      const d = {}; for (const k of ["motivo", "resumen", "asignado_a", "humano_responde_en"]) if (patch[k] !== undefined) d[k] = patch[k];
+      const [c] = Object.keys(d).length
+        ? await sql`UPDATE atencion_conversaciones SET ${sql(d)}, actualizado = now() WHERE id = ${id} RETURNING *`
+        : await sql`UPDATE atencion_conversaciones SET actualizado = now() WHERE id = ${id} RETURNING *`;
+      return c || null;
+    },
+    async cambiarEstadoAtencion(id, { desde, a, patch = {} }) {
+      const d = { estado: a }; for (const k of ["motivo", "resumen", "asignado_a", "derivada_en", "humano_responde_en", "resuelta_en"]) if (patch[k] !== undefined) d[k] = patch[k];
+      const [c] = await sql`UPDATE atencion_conversaciones SET ${sql(d)}, actualizado = now() WHERE id = ${id} AND estado IN ${sql(desde)} RETURNING *`;
+      return c || null;
+    },
+    async addMensajeAtencion({ conversacionId, de, texto, meta }) {
+      return sql.begin(async (tx) => {
+        const [c] = await tx`UPDATE atencion_conversaciones SET actualizado = now() WHERE id = ${conversacionId} RETURNING id`;
+        if (!c) return null;
+        const [m] = await tx`INSERT INTO atencion_mensajes ${tx({ id: uid("atm"), conversacion_id: conversacionId, de, texto: String(texto), meta: meta == null ? null : (typeof meta === "string" ? meta : JSON.stringify(meta)) })} RETURNING *`;
+        return m;
+      });
+    },
+    async listMensajesAtencion(conversacionId, { limit = 100 } = {}) {
+      const n = Math.min(Number(limit) || 100, 500);
+      return sql`SELECT * FROM (SELECT * FROM atencion_mensajes WHERE conversacion_id = ${conversacionId} ORDER BY creado DESC, id DESC LIMIT ${n}) t ORDER BY creado, id`;
+    },
+    async listBandejaAtencion({ estado, limit = 100 } = {}) {
+      const n = Math.min(Number(limit) || 100, 300);
+      const cuerpo = (filtro) => sql`SELECT c.*, s.nombre AS socio_nombre, s.apellido AS socio_apellido, s.ciudad AS socio_ciudad,
+          (SELECT m.texto FROM atencion_mensajes m WHERE m.conversacion_id = c.id AND m.de IN ('hincha','ia','humano') ORDER BY m.creado DESC, m.id DESC LIMIT 1) AS ultimo,
+          (SELECT count(*)::int FROM atencion_mensajes m WHERE m.conversacion_id = c.id) AS n_mensajes
+        FROM atencion_conversaciones c LEFT JOIN socios s ON s.id = c.socio_id ${filtro} ORDER BY c.actualizado DESC LIMIT ${n}`;
+      return estado ? cuerpo(sql`WHERE c.estado = ${estado}`) : cuerpo(sql``);
+    },
+    async indicadoresAtencion({ desdeDia, desde7 }) {
+      const [a] = await sql`SELECT count(*) FILTER (WHERE creado >= ${desdeDia})::int AS hoy, count(*)::int AS semana,
+          count(*) FILTER (WHERE derivada_en IS NULL)::int AS solo_ia,
+          round(avg(extract(epoch FROM (humano_responde_en - derivada_en)) / 60) FILTER (WHERE humano_responde_en IS NOT NULL AND derivada_en IS NOT NULL))::int AS primera_resp_min
+        FROM atencion_conversaciones WHERE creado >= ${desde7}`;
+      const [b] = await sql`SELECT count(*)::int AS n FROM atencion_conversaciones WHERE estado = 'humano'`;
+      return { hoy: a.hoy, semana: a.semana, solo_ia: a.solo_ia, primera_resp_min: a.primera_resp_min == null ? null : Number(a.primera_resp_min), abiertas_humano: b.n };
+    },
+    async getAtencionConfig() {
+      const base = { consultar_cuenta: true, listar_beneficios: true, liberar_lugar: false, abrir_pago_subasta: true, derivar_a_humano: true };
+      for (const f of await sql`SELECT clave, activo FROM atencion_config`) base[f.clave] = !!f.activo;
+      return base;
+    },
+    async setAtencionConfig(clave, activo) {
+      const [f] = await sql`INSERT INTO atencion_config (clave, activo) VALUES (${clave}, ${!!activo}) ON CONFLICT (clave) DO UPDATE SET activo = EXCLUDED.activo RETURNING clave, activo`;
+      return { clave: f.clave, activo: !!f.activo };
+    },
+    async incrementarUsoAtencion(socioId, dia) {
+      const [u] = await sql`INSERT INTO atencion_uso (socio_id, dia, mensajes) VALUES (${socioId}, ${dia}, 1)
+        ON CONFLICT (socio_id, dia) DO UPDATE SET mensajes = atencion_uso.mensajes + 1 RETURNING mensajes`;
+      return u.mensajes;
+    },
   };
 }
 

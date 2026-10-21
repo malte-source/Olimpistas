@@ -1215,6 +1215,86 @@ function createMemoryStore({ filePath = null } = {}) {
     async deleteAdminSession(token) { db.admin_sesiones = db.admin_sesiones.filter((s) => s.token !== token); persist(); },
     async deleteAdminSessionsByUser(adminId) { db.admin_sesiones = db.admin_sesiones.filter((s) => s.admin_id !== adminId); persist(); },
     async purgarAdminSesionesVencidas() { var n = Date.now(); db.admin_sesiones = db.admin_sesiones.filter((s) => new Date(s.expira).getTime() > n); persist(); },
+
+    // ── Atención: conversaciones, mensajes, herramientas del asistente y tope diario ──
+    // Una sola conversación abierta (no resuelta) por hincha y canal: abrir dos veces devuelve la misma.
+    async abrirConversacionAtencion({ socioId, canal = "app" }) {
+      db.atencion_conv = db.atencion_conv || [];
+      if (socioId) {
+        const abierta = db.atencion_conv.find((c) => c.socio_id === socioId && c.canal === canal && c.estado !== "resuelta");
+        if (abierta) return abierta;
+      }
+      const ahora = nowIso();
+      const c = { id: uid("atc"), socio_id: socioId || null, canal, estado: "ia", motivo: "", resumen: "", asignado_a: null, derivada_en: null, humano_responde_en: null, resuelta_en: null, creado: ahora, actualizado: ahora };
+      db.atencion_conv.push(c); persist(); return c;
+    },
+    async listConversacionesDeSocio(socioId, limit = 10) {
+      return (db.atencion_conv || []).filter((c) => c.socio_id === socioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit);
+    },
+    async getConversacionAtencion(id) { return (db.atencion_conv || []).find((c) => c.id === id) || null; },
+    async getConversacionAbiertaAtencion(socioId, canal = "app") { return (db.atencion_conv || []).find((c) => c.socio_id === socioId && c.canal === canal && c.estado !== "resuelta") || null; },
+    async updateConversacionAtencion(id, patch) {
+      const c = (db.atencion_conv || []).find((x) => x.id === id); if (!c) return null;
+      for (const k of ["motivo", "resumen", "asignado_a", "humano_responde_en"]) if (patch[k] !== undefined) c[k] = patch[k];
+      c.actualizado = nowIso(); persist(); return c;
+    },
+    // Cambio de estado atómico: solo si la conversación está hoy en alguno de los estados `desde`. null = otro ya la movió.
+    async cambiarEstadoAtencion(id, { desde, a, patch = {} }) {
+      const c = (db.atencion_conv || []).find((x) => x.id === id);
+      if (!c || !desde.includes(c.estado)) return null;
+      c.estado = a;
+      for (const k of ["motivo", "resumen", "asignado_a", "derivada_en", "humano_responde_en", "resuelta_en"]) if (patch[k] !== undefined) c[k] = patch[k];
+      c.actualizado = nowIso(); persist(); return c;
+    },
+    async addMensajeAtencion({ conversacionId, de, texto, meta }) {
+      const c = (db.atencion_conv || []).find((x) => x.id === conversacionId); if (!c) return null;
+      const m = { id: uid("atm"), conversacion_id: conversacionId, de, texto: String(texto), meta: meta == null ? null : (typeof meta === "string" ? meta : JSON.stringify(meta)), creado: nowIso() };
+      (db.atencion_msg = db.atencion_msg || []).push(m); c.actualizado = m.creado; persist(); return m;
+    },
+    async listMensajesAtencion(conversacionId, { limit = 100 } = {}) {
+      return (db.atencion_msg || []).filter((m) => m.conversacion_id === conversacionId).slice(-Math.min(Number(limit) || 100, 500));
+    },
+    async listBandejaAtencion({ estado, limit = 100 } = {}) {
+      const msgs = db.atencion_msg || [];
+      return (db.atencion_conv || []).filter((c) => !estado || c.estado === estado)
+        .sort((a, b) => String(b.actualizado).localeCompare(String(a.actualizado))).slice(0, Math.min(Number(limit) || 100, 300))
+        .map((c) => {
+          const s = c.socio_id ? db.socios.find((x) => x.id === c.socio_id) : null;
+          const propios = msgs.filter((m) => m.conversacion_id === c.id);
+          const ult = propios.filter((m) => ["hincha", "ia", "humano"].includes(m.de)).slice(-1)[0];
+          return { ...c, socio_nombre: s ? s.nombre || null : null, socio_apellido: s ? s.apellido || null : null, socio_ciudad: s ? s.ciudad || null : null, ultimo: ult ? ult.texto : null, n_mensajes: propios.length };
+        });
+    },
+    async indicadoresAtencion({ desdeDia, desde7 }) {
+      const todas = db.atencion_conv || [];
+      const sem = todas.filter((c) => c.creado >= desde7);
+      const tiempos = sem.filter((c) => c.derivada_en && c.humano_responde_en).map((c) => (new Date(c.humano_responde_en) - new Date(c.derivada_en)) / 60000);
+      return {
+        hoy: todas.filter((c) => c.creado >= desdeDia).length,
+        semana: sem.length,
+        solo_ia: sem.filter((c) => !c.derivada_en).length,
+        primera_resp_min: tiempos.length ? Math.round(tiempos.reduce((a, x) => a + x, 0) / tiempos.length) : null,
+        abiertas_humano: todas.filter((c) => c.estado === "humano").length,
+      };
+    },
+    async getAtencionConfig() {
+      const base = { consultar_cuenta: true, listar_beneficios: true, liberar_lugar: false, abrir_pago_subasta: true, derivar_a_humano: true };
+      for (const f of (db.atencion_cfg || [])) base[f.clave] = !!f.activo;
+      return base;
+    },
+    async setAtencionConfig(clave, activo) {
+      db.atencion_cfg = db.atencion_cfg || [];
+      const f = db.atencion_cfg.find((x) => x.clave === clave);
+      if (f) f.activo = !!activo; else db.atencion_cfg.push({ clave, activo: !!activo });
+      persist(); return { clave, activo: !!activo };
+    },
+    // Suma 1 al contador diario del hincha y devuelve el total (atómico: sirve de tope de gasto).
+    async incrementarUsoAtencion(socioId, dia) {
+      db.atencion_uso = db.atencion_uso || [];
+      let u = db.atencion_uso.find((x) => x.socio_id === socioId && x.dia === dia);
+      if (!u) { u = { socio_id: socioId, dia, mensajes: 0 }; db.atencion_uso.push(u); }
+      u.mensajes++; persist(); return u.mensajes;
+    },
   };
 }
 

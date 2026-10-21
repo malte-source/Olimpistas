@@ -28,6 +28,7 @@ const { baseUrl } = require("./lib/url");
 const { urlImagen } = require("./lib/imagen-subasta");
 const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib/puntos");
 const carnetLib = require("./lib/carnet");
+const atencionLib = require("./lib/atencion");
 const { periodo } = require("./lib/periodo");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
@@ -1352,6 +1353,11 @@ function buildRouter() {
     for (const c of canjes) eventos.push({ tipo: "canje", titulo: "Usó un beneficio" + (c.beneficio ? ": " + c.beneficio : ""), detalle: [c.comercio, c.ahorro ? "ahorró ₲ " + Number(c.ahorro).toLocaleString("es-PY") : ""].filter(Boolean).join(" · "), fecha: c.creado });
     for (const p of pujas) eventos.push({ tipo: "puja", titulo: "Pujó en " + (p.titulo || "un lote"), detalle: "mejor oferta ₲ " + Number(p.mejor_oferta).toLocaleString("es-PY") + " · " + p.resultado.replace(/_/g, " "), fecha: p.ultima });
     for (const a of actualizaciones.filter((x) => x.tipo !== "alta")) eventos.push({ tipo: "validacion", titulo: a.tipo === "socio_claim" ? "Pidió validar que es socio" : "Actualización: " + a.tipo, detalle: a.estado || "", fecha: a.creado || a.creada });
+    const atenciones = store.listConversacionesDeSocio ? await store.listConversacionesDeSocio(socio.id, 10) : [];
+    for (const c of atenciones) {
+      eventos.push({ tipo: "atencion", titulo: "Escribió a Atención" + (c.canal === "whatsapp" ? " (WhatsApp)" : ""), detalle: c.motivo || (c.derivada_en ? "Pasó a una persona" : "Lo atendió el asistente"), fecha: c.creado });
+      if (c.resuelta_en) eventos.push({ tipo: "atencion", titulo: "Atención resuelta", detalle: c.motivo || "", fecha: c.resuelta_en });
+    }
     if (bloqueo) eventos.push({ tipo: "suspension", titulo: "Suspendido de las subastas", detalle: "hasta " + fechaCorta(bloqueo), fecha: bloqueo });
     eventos.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
 
@@ -2041,6 +2047,40 @@ function buildRouter() {
   // El ganador paga ONLINE (Pagopar) para confirmar el lote — la entrega recién se
   // coordina por privado (WhatsApp) después de acreditado el pago (ver cumplirPedidoPagado).
   // Mismo manejo de cédula que /membresia/unirse: Pagopar la exige, se pide una sola vez.
+  // Arma (o reutiliza) el pedido del lote ganado y pide el link de pago. { falta_cedula } si todavía no hay documento.
+  async function iniciarPagoSubasta(socio, s, cedulaIngresada) {
+    const sFull = await store.getSocioById(socio.id).catch(() => null);
+    let documento = soloDigitos((sFull && sFull.cedula) || "");
+    const cedulaBody = soloDigitos(cedulaIngresada || "");
+    if (!documento && cedulaBody) {
+      if (cedulaBody.length < 5 || cedulaBody.length > 12) throw httpError(400, "Número de cédula inválido");
+      if (store.getSocioByCedula) {
+        const otra = await store.getSocioByCedula(cedulaBody);
+        if (otra && otra.id !== socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
+      }
+      try { await store.updateSocio(socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
+      catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta"); }
+    }
+    if (!documento) return { falta_cedula: true };
+
+    // Reusar el pedido pendiente si el ganador ya había iniciado el pago antes (evita
+    // duplicar pedidos en PAGOPAR si reintenta o vuelve a entrar a la página).
+    const existente = store.getPedidoPorSubasta ? await store.getPedidoPorSubasta(s.id) : null;
+    const pedido = (existente && existente.estado === "pendiente" && existente.socio_id === socio.id)
+      ? existente
+      : await store.createPedidoPago({ socioId: socio.id, concepto: `Subasta: ${s.titulo}`, monto: s.puja_actual, moneda: BRAND.monedaCod, subastaId: s.id });
+
+    const pago = await pagopar.crearPedido({
+      pedidoId: pedido.id, monto: s.puja_actual, concepto: pedido.concepto,
+      comprador: {
+        email: socio.email,
+        nombre: [socio.nombre, sFull && sFull.apellido].filter(Boolean).join(" ") || socio.nombre,
+        documento, telefono: (sFull && (sFull.whatsapp || sFull.telefono)) || "",
+      },
+    });
+    await store.updatePedidoPago(pedido.id, { ref_externa: pago.hash });
+    return { pago };
+  }
   r.post("/subastas/:id/pagar", auth.requireSocio, wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
@@ -2049,37 +2089,7 @@ function buildRouter() {
     // Sin pago_vence = lote anterior a esta función: sin plazo (se resuelve a mano desde el admin).
     if (s.pago_vence && new Date(s.pago_vence).getTime() < Date.now()) throw httpError(409, "El plazo de pago de este lote venció.");
 
-    const sFull = await store.getSocioById(req.socio.id).catch(() => null);
-    let documento = soloDigitos((sFull && sFull.cedula) || "");
-    const cedulaBody = soloDigitos(req.body?.cedula || "");
-    if (!documento && cedulaBody) {
-      if (cedulaBody.length < 5 || cedulaBody.length > 12) throw httpError(400, "Número de cédula inválido");
-      if (store.getSocioByCedula) {
-        const otra = await store.getSocioByCedula(cedulaBody);
-        if (otra && otra.id !== req.socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
-      }
-      try { await store.updateSocio(req.socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
-      catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta"); }
-    }
-    if (!documento) return res.json({ falta_cedula: true });
-
-    // Reusar el pedido pendiente si el ganador ya había iniciado el pago antes (evita
-    // duplicar pedidos en PAGOPAR si reintenta o vuelve a entrar a la página).
-    const existente = store.getPedidoPorSubasta ? await store.getPedidoPorSubasta(s.id) : null;
-    const pedido = (existente && existente.estado === "pendiente" && existente.socio_id === req.socio.id)
-      ? existente
-      : await store.createPedidoPago({ socioId: req.socio.id, concepto: `Subasta: ${s.titulo}`, monto: s.puja_actual, moneda: BRAND.monedaCod, subastaId: s.id });
-
-    const pago = await pagopar.crearPedido({
-      pedidoId: pedido.id, monto: s.puja_actual, concepto: pedido.concepto,
-      comprador: {
-        email: req.socio.email,
-        nombre: [req.socio.nombre, sFull && sFull.apellido].filter(Boolean).join(" ") || req.socio.nombre,
-        documento, telefono: (sFull && (sFull.whatsapp || sFull.telefono)) || "",
-      },
-    });
-    await store.updatePedidoPago(pedido.id, { ref_externa: pago.hash });
-    res.json({ pago });
+    res.json(await iniciarPagoSubasta(req.socio, s, req.body && req.body.cedula));
   }));
 
   // ── Admin de subastas: poner en vivo / cerrar / ver pujas (además del CRUD) ──
@@ -2881,6 +2891,184 @@ function buildRouter() {
         numero: "OLI-" + req.socio.id.replace(/\D/g, "").slice(0, 8).padStart(8, "0"),
       },
     });
+  }));
+
+  // ─── Atención: asistente con IA + bandeja del club ───────────────────────────
+  // El hincha escribe en la app (o por WhatsApp, que entra a la misma función con canal='whatsapp'); el asistente
+  // contesta con la API de Anthropic en el servidor. Si la IA falla, responde por palabras clave. Si pide una
+  // persona, la conversación pasa a la bandeja y la IA calla hasta que se resuelva.
+  const diaPy = (d) => new Date((d ? new Date(d).getTime() : Date.now()) - 3 * 3600000).toISOString().slice(0, 10);
+  const _atRafaga = new Map();   // hincha → marcas de tiempo (ráfaga por minuto)
+  function atRafagaOk(id) {
+    const n = Date.now(), max = Number(process.env.ATENCION_RAFAGA) || 8;
+    const v = (_atRafaga.get(id) || []).filter((x) => n - x < 60000);
+    if (v.length >= max) { _atRafaga.set(id, v); return false; }
+    v.push(n); _atRafaga.set(id, v);
+    if (_atRafaga.size > 5000) for (const [k, a] of _atRafaga) if (!a.length || n - a[a.length - 1] > 60000) _atRafaga.delete(k);
+    return true;
+  }
+  const llamarIA = () => (process.env.ANTHROPIC_API_KEY
+    ? (p) => atencionLib.llamarAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY, modelo: atencionLib.MODELO(), system: p.system, messages: p.messages, tools: p.tools, maxTokens: p.max_tokens })
+    : null);
+  const msgPublico = (m) => { let meta = null; try { meta = m.meta ? JSON.parse(m.meta) : null; } catch (e) { meta = null; } return { id: m.id, de: m.de, texto: m.texto, meta, creado: m.creado }; };
+
+  // Lo que el asistente sabe del hincha que escribe (nunca de otro).
+  async function cuentaParaAtencion(socio) {
+    const full = (await store.getSocioById(socio.id)) || socio;
+    const [m, ahorro, saldo, pujas, club] = await Promise.all([
+      store.getMembresia(socio.id),
+      store.resumenAhorroSocio ? store.resumenAhorroSocio(socio.id).catch(() => ({ mes: 0, anio: 0 })) : { mes: 0, anio: 0 },
+      store.saldoPuntos ? store.saldoPuntos(socio.id) : 0,
+      store.pujasDeSocio ? store.pujasDeSocio(socio.id, 5) : [],
+      estadoClubDe(full),
+    ]);
+    const pena = full.pena_id && store.getPena ? await store.getPena(full.pena_id).catch(() => null) : null;
+    const tier = (m && m.tier_slug) || "olimpista", t = tierBySlug(tier) || {}, plus = tierBySlug("premium") || {};
+    const bloqueo = full.subastas_bloqueo_hasta && new Date(full.subastas_bloqueo_hasta).getTime() > Date.now() ? full.subastas_bloqueo_hasta : null;
+    const resultado = (p) => p.estado === "activa" ? "en_vivo" : (p.adjudicado_a || p.ganador_id) === socio.id ? (p.pago_estado === "pagado" ? "pagado" : "ganaste_sin_pagar") : "no_ganaste";
+    return {
+      nombre: full.nombre || "", nivel: t.nombre || tier, plan_club: club.plan_club || "", ciudad: full.ciudad || "", pais: full.pais || "",
+      puntos: saldo, escalon: escalonDe(saldo).nombre, ahorro_mes: ahorro.mes || 0, ahorro_anio: ahorro.anio || 0,
+      pena: pena ? pena.nombre : null,
+      abono: "todavía no disponible en la app", credito: "todavía no disponible en la app",
+      subastas: { lotes: pujas.map((p) => ({ titulo: p.titulo, mejor_oferta: p.mejor_oferta, resultado: resultado(p) })), bloqueado_hasta: bloqueo, puede_pujar: !bloqueo },
+      estado_socio: club.confirmado ? (club.encontrado === false ? "no figura como titular" : club.al_dia === false ? "con un pago pendiente" : "al día") : "sin confirmar",
+      plus: { precio_anio_gs: plus.precioAnio || 0, beneficios: plus.beneficios || [] },
+    };
+  }
+  function ejecutoresAtencion({ socio, conv }) {
+    return {
+      consultar_cuenta: async () => ({ resultado: await cuentaParaAtencion(socio) }),
+      listar_beneficios: async () => {
+        const m = await store.getMembresia(socio.id);
+        const items = store.beneficiosParaNivel ? await store.beneficiosParaNivel((m && m.tier_slug) || "olimpista") : [];
+        return { resultado: items.slice(0, 15).map((b) => ({ titulo: b.titulo, comercio: b.comercio_nombre || "", valor: b.valor || "", puede_usarlo: !!b.desbloqueado })) };
+      },
+      abrir_pago_subasta: async () => {
+        const pujas = store.pujasDeSocio ? await store.pujasDeSocio(socio.id, 30) : [];
+        const ganado = pujas.find((p) => p.estado === "cerrada" && (p.adjudicado_a || p.ganador_id) === socio.id && p.pago_estado !== "pagado");
+        if (!ganado) return { resultado: { ok: false, motivo: "no_tenes_lotes_para_pagar" } };
+        const s = await store.getSubasta(ganado.subasta_id);
+        if (!s) return { resultado: { ok: false, motivo: "lote_no_encontrado" } };
+        if (s.pago_vence && new Date(s.pago_vence).getTime() < Date.now()) return { resultado: { ok: false, motivo: "plazo_vencido", detalle: "El plazo de pago venció: lo resuelve una persona del club." } };
+        const r0 = await iniciarPagoSubasta(socio, s, null);
+        if (r0.falta_cedula) return { resultado: { ok: false, motivo: "falta_cedula" }, tarjeta: { tipo: "pago_subasta", titulo: "Completá tu cédula para pagar el lote", url: baseUrl() + "/socio" } };
+        return { resultado: { ok: true, lote: s.titulo, monto: s.puja_actual }, tarjeta: { tipo: "pago_subasta", titulo: "Pagar «" + s.titulo + "»", url: r0.pago.urlPago } };
+      },
+      derivar_a_humano: async ({ motivo }) => {
+        const mot = String(motivo || "").replace(/[<>]/g, "").trim().slice(0, 200) || "Sin motivo";
+        const [m, full] = await Promise.all([store.getMembresia(socio.id), store.getSocioById(socio.id)]);
+        const nivel = (tierBySlug((m && m.tier_slug) || "olimpista") || {}).nombre || "Olimpista";
+        const c = await store.cambiarEstadoAtencion(conv.id, { desde: ["ia"], a: "humano", patch: { motivo: mot, resumen: mot + " · " + nivel + " · " + ((full && full.ciudad) || "sin ciudad"), derivada_en: new Date().toISOString() } });
+        if (c) alertar("atencion:" + conv.id, "Un hincha pide hablar con una persona", [socio.nombre, conv.canal, mot].filter(Boolean).join(" · "));
+        return { resultado: { ok: true, derivado: true }, tarjeta: { tipo: "derivado", titulo: "Te paso con una persona del club" } };
+      },
+    };
+  }
+  // Mismo motor para la app y para WhatsApp (GHL): quien llama pone el canal.
+  async function procesarMensajeAtencion({ socio, texto, canal = "app" }) {
+    const conv = await store.abrirConversacionAtencion({ socioId: socio.id, canal });
+    const nuevos = [await store.addMensajeAtencion({ conversacionId: conv.id, de: "hincha", texto })];
+    if (conv.estado === "humano") return { conversacion: conv, nuevos, via: "humano" };
+    const [historial, config] = await Promise.all([store.listMensajesAtencion(conv.id, { limit: 30 }), store.getAtencionConfig()]);
+    const out = await atencionLib.responder({
+      historial, config, ejecutores: ejecutoresAtencion({ socio, conv }), llamar: llamarIA(),
+      log: (...a) => log.warn({ detalle: a.map(String).join(" ") }, "atención"),
+    });
+    nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "ia", texto: out.texto, meta: { via: out.via } }));
+    for (const tj of out.tarjetas) nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "tarjeta", texto: tj.titulo, meta: tj }));
+    return { conversacion: await store.getConversacionAtencion(conv.id), nuevos, via: out.via };
+  }
+
+  r.get("/atencion/chat", auth.requireSocio, wrap(async (req, res) => {
+    const [ultima] = store.listConversacionesDeSocio ? await store.listConversacionesDeSocio(req.socio.id, 1) : [];
+    const reciente = ultima && (ultima.estado !== "resuelta" || Date.now() - new Date(ultima.resuelta_en || ultima.actualizado).getTime() < 10 * 60000);
+    const m = await store.getMembresia(req.socio.id);
+    const sugerencias = atencionLib.sugerenciasPara({ tier: (m && m.tier_slug) || "olimpista", esSocio: !!req.socio.es_socio_olimpia });
+    const mensajes = reciente ? (await store.listMensajesAtencion(ultima.id, { limit: 60 })).map(msgPublico) : [];
+    res.json({ conversacion: reciente ? { id: ultima.id, estado: ultima.estado, canal: ultima.canal } : null, mensajes, sugerencias, ia: !!process.env.ANTHROPIC_API_KEY });
+  }));
+  r.post("/atencion/chat", auth.requireSocio, wrap(async (req, res) => {
+    const texto = String((req.body && req.body.texto) || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim();
+    if (!texto) throw httpError(400, "Escribí tu consulta");
+    if (texto.length > atencionLib.MAX_TEXTO) throw httpError(400, "El mensaje es muy largo (máximo " + atencionLib.MAX_TEXTO + " caracteres)");
+    if (!atRafagaOk(req.socio.id)) throw httpError(429, "Vas muy rápido. Esperá un momento y volvé a escribir.");
+    const tope = Number(process.env.ATENCION_TOPE_DIARIO) || 40;
+    if ((await store.incrementarUsoAtencion(req.socio.id, diaPy())) > tope) throw httpError(429, "Llegaste al máximo de mensajes de hoy. Escribinos mañana.");
+    const out = await procesarMensajeAtencion({ socio: req.socio, texto, canal: "app" });
+    res.json({ estado: out.conversacion.estado, conversacion_id: out.conversacion.id, mensajes: out.nuevos.map(msgPublico) });
+  }));
+
+  // Admin · Atención
+  const AT_VACIO = { hoy: 0, semana: 0, solo_ia: 0, primera_resp_min: null, abiertas_humano: 0 };
+  r.get("/admin/atencion", requireAdmin, wrap(async (req, res) => {
+    const estado = ["ia", "humano", "resuelta"].includes(req.query.estado) ? req.query.estado : undefined;
+    const ahora = Date.now();
+    const [items, ind] = await Promise.all([
+      store.listBandejaAtencion({ estado, limit: 100 }),
+      store.indicadoresAtencion({ desdeDia: new Date(diaPy() + "T03:00:00.000Z").toISOString(), desde7: new Date(ahora - 7 * 86400000).toISOString() }).catch(() => AT_VACIO),
+    ]);
+    res.json({
+      items,
+      indicadores: { hoy: ind.hoy, pct_ia: ind.semana ? Math.round((ind.solo_ia / ind.semana) * 100) : null, primera_resp_min: ind.primera_resp_min, abiertas_humano: ind.abiertas_humano },
+    });
+  }));
+  const configAtencion = async () => {
+    const cfg = await store.getAtencionConfig();
+    return {
+      items: atencionLib.CLAVES.map((k) => ({ clave: k, nombre: atencionLib.HERRAMIENTAS[k].nombre, descripcion: atencionLib.HERRAMIENTAS[k].descripcion, activo: !!cfg[k], disponible: atencionLib.HERRAMIENTAS[k].disponible, motivo_no_disponible: atencionLib.HERRAMIENTAS[k].motivo_no_disponible || null })),
+      reglas_fijas: atencionLib.REGLAS_FIJAS, modelo: atencionLib.MODELO(), ia_conectada: !!process.env.ANTHROPIC_API_KEY,
+    };
+  };
+  r.get("/admin/atencion/config", requireAdmin, wrap(async (_req, res) => { res.json(await configAtencion()); }));
+  r.put("/admin/atencion/config", requireAdmin, requirePerm("atencion.write"), wrap(async (req, res) => {
+    const clave = String((req.body && req.body.clave) || ""), activo = !!(req.body && req.body.activo);
+    if (!atencionLib.CLAVES.includes(clave)) throw httpError(404, "Acción desconocida");
+    if (activo && !atencionLib.HERRAMIENTAS[clave].disponible) throw httpError(409, "Todavía no está disponible: " + (atencionLib.HERRAMIENTAS[clave].motivo_no_disponible || ""));
+    await store.setAtencionConfig(clave, activo);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "atencion:config", targetId: clave, detalle: activo ? "activada" : "desactivada", por: req.adminUser });
+    res.json(await configAtencion());
+  }));
+  r.get("/admin/atencion/:id", requireAdmin, wrap(async (req, res) => {
+    const c = await store.getConversacionAtencion(req.params.id);
+    if (!c) throw httpError(404, "Conversación no encontrada");
+    const [mensajes, socio, m] = await Promise.all([store.listMensajesAtencion(c.id, { limit: 200 }), c.socio_id ? store.getSocioById(c.socio_id) : null, c.socio_id ? store.getMembresia(c.socio_id) : null]);
+    res.json({
+      conversacion: c, mensajes: mensajes.map(msgPublico),
+      socio: socio ? { id: socio.id, nombre: socio.nombre, apellido: socio.apellido, ciudad: socio.ciudad || "", tier: (m && m.tier_slug) || "olimpista" } : null,
+    });
+  }));
+  r.post("/admin/atencion/:id/responder", requireAdmin, requirePerm("atencion.write"), wrap(async (req, res) => {
+    const texto = String((req.body && req.body.texto) || "").replace(/[<>]/g, "").trim();
+    if (!texto) throw httpError(400, "Escribí la respuesta");
+    if (texto.length > 1000) throw httpError(400, "La respuesta es muy larga (máximo 1000 caracteres)");
+    let c = await store.getConversacionAtencion(req.params.id);
+    if (!c) throw httpError(404, "Conversación no encontrada");
+    if (c.estado === "resuelta") throw httpError(409, "La conversación ya está resuelta");
+    const ahora = new Date().toISOString();
+    if (c.estado === "ia") { // una persona toma la conversación: la IA calla
+      c = (await store.cambiarEstadoAtencion(c.id, { desde: ["ia"], a: "humano", patch: { motivo: c.motivo || "Una persona del club tomó la conversación", derivada_en: ahora } })) || (await store.getConversacionAtencion(c.id));
+    }
+    await store.updateConversacionAtencion(c.id, { asignado_a: req.adminUser, ...(c.humano_responde_en ? {} : { humano_responde_en: ahora }) });
+    const msg = await store.addMensajeAtencion({ conversacionId: c.id, de: "humano", texto, meta: { agente: req.adminUser } });
+    let entregado = true;
+    if (c.canal === "whatsapp") { // la respuesta sale por el mismo canal: GHL
+      entregado = false;
+      const url = (process.env.GHL_WHATSAPP_URL || "").trim();
+      if (/^https:\/\//i.test(url) && c.socio_id) {
+        const s = await store.getSocioById(c.socio_id);
+        entregado = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversacion_id: c.id, telefono: (s && (s.whatsapp || s.telefono)) || "", texto }) }).then((x) => x.ok).catch(() => false);
+      }
+    }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "atencion:responder", targetId: c.id, por: req.adminUser });
+    res.status(201).json({ ok: true, mensaje: msgPublico(msg), entregado });
+  }));
+  r.post("/admin/atencion/:id/resolver", requireAdmin, requirePerm("atencion.write"), wrap(async (req, res) => {
+    const c = await store.cambiarEstadoAtencion(req.params.id, { desde: ["ia", "humano"], a: "resuelta", patch: { resuelta_en: new Date().toISOString() } });
+    if (!c) throw httpError(409, "La conversación no existe o ya estaba resuelta");
+    await store.addMensajeAtencion({ conversacionId: c.id, de: "sistema", texto: "La conversación se cerró. El asistente vuelve a atenderte." });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "atencion:resolver", targetId: c.id, por: req.adminUser });
+    res.json({ ok: true, conversacion: c });
   }));
 
   return r;
