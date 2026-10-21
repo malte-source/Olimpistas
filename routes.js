@@ -477,6 +477,11 @@ function buildRouter() {
     for (const key of ["avisos_subastas", "avisos_sorteos", "avisos_contenido"]) {
       if (typeof b[key] === "boolean") patch[key] = b[key];
     }
+    // Apariencia: auto (sigue al dispositivo) | claro | oscuro.
+    if (b.tema !== undefined) {
+      if (!["auto", "claro", "oscuro"].includes(b.tema)) throw httpError(400, "Apariencia inválida (auto, claro u oscuro)");
+      patch.tema = b.tema;
+    }
     // Peña: sumarse a una peña verificada, o dejarla (null / "").
     if (b.pena_id !== undefined) {
       if (b.pena_id === null || b.pena_id === "") patch.pena_id = null;

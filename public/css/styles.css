@@ -1174,3 +1174,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .atc-panel { width: 100vw; border-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .atc-panel, .atc-fab { transition: none; } .atc-typing i { animation: none; opacity: .6; } }
+
+/* Control segmentado (Apariencia): radio de 14, píldora activa con el relleno interno del tema */
+.ctl-seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--overlay-soft); border: 1px solid var(--border-default); max-width: 100%; }
+.ctl-seg-b { border: 0; background: transparent; color: var(--text-secondary); font: 600 13.5px/1 inherit; padding: 10px 16px; border-radius: 10px; cursor: pointer; min-height: 40px; }
+.ctl-seg-b[aria-checked="true"] { background: var(--action-primary-bg); color: var(--action-primary-text); }
+.ctl-seg-b:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }

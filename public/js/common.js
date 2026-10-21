@@ -49,6 +49,22 @@ window.OLI = (function () {
     try { localStorage.setItem("oli_theme", t); } catch (e) {}
     document.documentElement.setAttribute("data-theme", t);
   }
+  // Preferencia guardada en la cuenta (socios.tema): null = nunca eligió (todo como siempre), 'auto' = sigue al
+  // dispositivo, 'claro' | 'oscuro' = explícita. Se aplica al entrar y acompaña al hincha entre dispositivos.
+  const _mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
+  let _pref = null;
+  function aplicarPref() {
+    if (_pref === "claro") setTheme("light");
+    else if (_pref === "oscuro") setTheme("dark");
+    else if (_pref === "auto") setTheme(_mq && _mq.matches ? "light" : "dark");
+    document.dispatchEvent(new CustomEvent("oli-theme"));
+  }
+  if (_mq && _mq.addEventListener) _mq.addEventListener("change", () => { if (_pref === "auto") aplicarPref(); });
+  function themePref() { return _pref; }
+  function setThemePref(p, guardar) {
+    _pref = p; aplicarPref();
+    if (guardar) api("/perfil", { method: "PATCH", body: { tema: p } }).catch(() => {});
+  }
   // Luna/sol: representan el DESTINO del toggle (igual que el texto) — si ahora
   // está claro, muestra luna ("pasar a oscuro"); si está oscuro, muestra sol.
   const MOON_ICON = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
@@ -68,7 +84,9 @@ window.OLI = (function () {
       btn.setAttribute("aria-label", label);
     };
     paint();
-    btn.addEventListener("click", () => { setTheme(theme() === "light" ? "dark" : "light"); paint(); });
+    // El botón de la barra es un atajo: elige claro/oscuro explícito y lo guarda en la cuenta (si hay sesión).
+    btn.addEventListener("click", () => { setThemePref(theme() === "light" ? "oscuro" : "claro", window.__oliSesion === true); paint(); });
+    document.addEventListener("oli-theme", paint);
   }
 
   // ── Íconos — F1.2 "Iconografía": 40 SVG de línea (grilla 24, trazo 1.5, currentColor) que
@@ -611,5 +629,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, initThemeToggle, icon };
+  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon };
 })();

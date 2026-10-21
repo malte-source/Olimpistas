@@ -62,6 +62,8 @@
     if (!SESSION) { location.href = "/"; return; }
     CONFIG = await api("/config").catch(() => ({ paises: [] }));
     perfilPunto = { lat: SESSION.socio.lat ?? null, lng: SESSION.socio.lng ?? null };
+    window.__oliSesion = true; // desde acá, cambiar la apariencia también se guarda en la cuenta
+    if (SESSION.socio.tema) OLI.setThemePref(SESSION.socio.tema, false);
     renderHeader();
     document.getElementById("logoutBtn").onclick = logout;
     OLI.initThemeToggle("themeSw");
@@ -532,6 +534,14 @@
         </div>
 
         <div class="perfil-avisos">
+          <h3 style="margin:0 0 4px">${T("m_tema_h")}</h3>
+          <p class="lead" style="margin-bottom:12px">${T("m_tema_p")}</p>
+          <div class="ctl-seg" role="radiogroup" aria-label="${T("m_tema_h")}" id="temaSeg">
+            ${[["auto", T("m_tema_auto")], ["claro", T("m_tema_claro")], ["oscuro", T("m_tema_oscuro")]].map(([v, l]) => `<button type="button" role="radio" class="ctl-seg-b" data-tema="${v}" aria-checked="${(OLI.themePref() || (OLI.theme() === "light" ? "claro" : "oscuro")) === v}">${l}</button>`).join("")}
+          </div>
+        </div>
+
+        <div class="perfil-avisos">
           <h3 style="margin:0 0 4px">${T("m_avisos_h")}</h3>
           <p class="lead" style="margin-bottom:12px">${T("m_avisos_p")}</p>
           ${avisos.map((a) => `<label class="casa-toggle" for="${a.key}">
@@ -545,6 +555,10 @@
     document.getElementById("f_foto").onclick = () => fotoModal(subirFoto);
     document.getElementById("btnGeo").onclick = usarUbicacion;
     campos.forEach((c) => { document.getElementById("f_" + c.key).onclick = () => entrarEdicionPerfil(c); });
+    document.querySelectorAll("#temaSeg [data-tema]").forEach((b) => b.onclick = () => {
+      OLI.setThemePref(b.dataset.tema, true);
+      document.querySelectorAll("#temaSeg [data-tema]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+    });
     avisos.forEach((a) => { document.getElementById(a.key).onchange = (e) => guardarAviso(a.key, e.target.checked); });
     const cancelBtn = document.getElementById("btnCancelarMembresia");
     if (cancelBtn) cancelBtn.onclick = () => confirmarCancelarMembresia(cancelBtn);
