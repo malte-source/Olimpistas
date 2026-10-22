@@ -1,4 +1,5 @@
 /* common.js — helpers compartidos entre landing y área de socio. */
+const _OLI_SCRIPT = document.currentScript;
 window.OLI = (function () {
   async function api(path, opts = {}) {
     const res = await fetch("/api" + path, {
@@ -41,11 +42,12 @@ window.OLI = (function () {
   // Carga diferida del mapa (MapLibre + globe.js): una sola vez, devuelve la misma promesa a quien la pida.
   // Ni la landing ni la app del hincha lo bajan hasta que hace falta un mapa.
   let _mapaP = null;
+  const VER = ((_OLI_SCRIPT && _OLI_SCRIPT.src.split("?v=")[1]) || "x").replace(/[^\w.-]/g, "");
   function cargarMapa() {
     if (_mapaP) return _mapaP;
     const css = (href) => new Promise((res) => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.onload = res; l.onerror = res; document.head.appendChild(l); });
     const js = (src) => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-    _mapaP = (async () => { await css("/assets/vendor/maplibre-gl.css"); await js("/assets/vendor/maplibre-gl.js"); await js("/js/geo-arcos.js?v=92"); await js("/js/globe.js?v=92"); })().catch((e) => { _mapaP = null; throw e; });
+    _mapaP = (async () => { await css("/assets/vendor/maplibre-gl.css"); await js("/assets/vendor/maplibre-gl.js"); await js("/js/geo-arcos.js?v=" + VER); await js("/js/globe.js?v=" + VER); })().catch((e) => { _mapaP = null; throw e; });
     return _mapaP;
   }
   function setCurrency(c) { _cur = c; try { localStorage.setItem("oli_cur", c); } catch (e) {} }

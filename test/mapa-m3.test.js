@@ -100,3 +100,12 @@ test("el globo dibuja los caminos y la landing trae el deslizador del tiempo", (
   assert.match(leer("js/landing.js"), /function iniciarTiempo\(gl\)/);
   assert.deepStrictEqual((g.match(/b08d2e|c9a227/gi) || []), [], "sin oro");
 });
+
+test("los scripts del mapa se piden con la versión del deploy (la de common.js), no con un número fijo que se queda viejo en caché", () => {
+  const c = leer("js/common.js");
+  assert.match(c, /document\.currentScript/);
+  assert.match(c, /globe\.js\?v=" \+ VER/);
+  assert.match(c, /geo-arcos\.js\?v=" \+ VER/);
+  assert.ok(!/(globe|geo-arcos)\.js\?v=\d+/.test(c), "sin versión fija");
+  assert.match(c, /replace\(\/\[\^\w\.-\]\/g/, "la versión se limpia sin tocar las letras");
+});
