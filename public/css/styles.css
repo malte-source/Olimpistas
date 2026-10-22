@@ -1469,7 +1469,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 @media (prefers-reduced-motion: reduce) { .ptr.on span { animation: none; } }
 
 /* Mapa del mundo: botonera de vistas, leyenda y lista accesible de países (handoff v3 · M2.4 y M2.5). */
-.globo-vista { position: absolute; top: 8px; left: 8px; z-index: 3; display: inline-flex; width: auto; padding: 3px; gap: 2px; border-radius: 999px; background: rgba(10,10,10,.86); border: 1px solid rgba(255,255,255,.15); }
+.globo-vista { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 3; display: inline-flex; width: auto; padding: 3px; gap: 2px; border-radius: 999px; background: rgba(10,10,10,.86); border: 1px solid rgba(255,255,255,.15); }
 .globo-vista .ctl-seg-b { color: rgba(255,255,255,.8); background: transparent; border: 0; padding: 7px 12px; border-radius: 999px; font: inherit; font-size: var(--t-13); font-weight: 600; cursor: pointer; white-space: nowrap; }
 .globo-vista .ctl-seg-b[aria-checked="true"] { background: #fff; color: #0a0a0a; }
 .globo-vista .ctl-seg-b:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -1484,6 +1484,6 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .mapa-lista li strong { color: #fff; font-variant-numeric: tabular-nums; }
 @media (max-width: 900px) {
   .globo { height: 70vh; max-height: 620px; }
-  .globo-vista { top: 6px; left: 6px; }
+  .globo-vista { top: 6px; }
   .globo-vista .ctl-seg-b { padding: 6px 10px; }
 }
