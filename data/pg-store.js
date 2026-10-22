@@ -160,6 +160,7 @@ function createPgStore({ databaseUrl, debug }) {
   // Cache en memoria para listas públicas que cambian poco (sorteos/contenido/preventas):
   // bajo carga de lanzamiento le sacan presión al pool del DB. TTL corto + bust en escritura.
   const _cache = {};
+  let _colsSesion = null; // columnas de socios sin la foto (se lee una vez; ver getSession)
   const cacheado = async (clave, ttl, fn) => {
     const c = _cache[clave];
     if (c && Date.now() - c.t < ttl) return c.v;
@@ -719,14 +720,25 @@ function createPgStore({ databaseUrl, debug }) {
         VALUES (${token}, ${socioId}, ${expiraIso}) RETURNING *`;
       return s;
     },
+    // La sesión se consulta en CADA request autenticado: no trae la foto (un data URL de hasta 800 KB). En su lugar
+    // devuelve `tiene_foto`; quien necesite la imagen la pide con getSocioFoto. Las columnas se leen una vez del catálogo
+    // (así una columna nueva entra sola); si eso falla se cae a so.* (más pesado, pero correcto).
     async getSession(token) {
+      if (!_colsSesion) _colsSesion = sql`SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'socios' ORDER BY ordinal_position`
+        .then((r) => r.map((x) => x.column_name).filter((c) => c !== "foto")).catch(() => { _colsSesion = null; return null; });
+      const cols = await _colsSesion;
+      const cuerpo = cols && cols.length ? sql`${sql(cols.map((c) => "so." + c))}, (so.foto IS NOT NULL AND so.foto <> '') AS tiene_foto` : sql`so.*`;
       const [row] = await sql`
-        SELECT s.token, s.socio_id, s.expira, so.*
+        SELECT s.token, s.socio_id, s.expira, ${cuerpo}
         FROM sesiones s JOIN socios so ON so.id = s.socio_id
         WHERE s.token = ${token} AND s.expira > now() LIMIT 1`;
       if (!row) return null;
       const { token: t, socio_id, expira, ...socio } = row;
       return { session: { token: t, socio_id, expira }, socio };
+    },
+    async getSocioFoto(id) {
+      const [r] = await sql`SELECT foto FROM socios WHERE id = ${id} LIMIT 1`;
+      return (r && r.foto) || "";
     },
     async deleteSession(token) {
       await sql`DELETE FROM sesiones WHERE token = ${token}`;
@@ -917,6 +929,9 @@ function createPgStore({ databaseUrl, debug }) {
       return sql.begin(async (tx) => {
         const [pv] = await tx`SELECT * FROM preventas WHERE id = ${preventaId} FOR UPDATE`;
         if (!pv) return null;
+        // Tope por persona y por preventa (reservas vivas): sin esto, una persona acapara el cupo reservando de a 4 sin parar.
+        const [{ vivas }] = await tx`SELECT COALESCE(SUM(cantidad), 0)::int AS vivas FROM reservas WHERE preventa_id = ${preventaId} AND socio_id = ${socioId} AND estado <> 'cancelada'`;
+        if (vivas + cantidad > 4) return { error: "limite", vivas };
         if (pv.stock < cantidad) return { error: "sin_stock" };
         await tx`UPDATE preventas SET stock = stock - ${cantidad} WHERE id = ${preventaId}`;
         const id = uid("res");
@@ -930,9 +945,33 @@ function createPgStore({ databaseUrl, debug }) {
       const [r] = await sql`SELECT * FROM reservas WHERE id = ${id} LIMIT 1`;
       return r || null;
     },
+    // Confirma una reserva pagada. Si el cupo ya se liberó por falta de pago a tiempo (cancelada), intenta
+    // volver a tomarlo; si ya no hay stock devuelve { error: "sin_stock" } para que se reembolse.
     async confirmarReserva(id) {
-      const [r] = await sql`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`;
-      return r || null;
+      return sql.begin(async (tx) => {
+        const [r] = await tx`SELECT * FROM reservas WHERE id = ${id} FOR UPDATE`;
+        if (!r) return null;
+        if (r.estado !== "cancelada") { const [u] = await tx`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`; return u; }
+        const [pv] = await tx`SELECT * FROM preventas WHERE id = ${r.preventa_id} FOR UPDATE`;
+        if (!pv || pv.stock < r.cantidad) return { error: "sin_stock", reserva: r };
+        await tx`UPDATE preventas SET stock = stock - ${r.cantidad} WHERE id = ${r.preventa_id}`;
+        const [u] = await tx`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`;
+        return u;
+      });
+    },
+    // Libera el cupo de las reservas que quedaron sin pagar pasadas `horas` (la ventana de Pagopar es de 3 días).
+    // Devuelve cuántas liberó. SKIP LOCKED: dos corridas del cron a la vez no se pisan.
+    async liberarReservasVencidas({ horas = 75, limit = 200 } = {}) {
+      return sql.begin(async (tx) => {
+        const rs = await tx`SELECT id, preventa_id, cantidad FROM reservas
+          WHERE estado = 'pendiente_pago' AND creado < now() - make_interval(hours => ${horas})
+          ORDER BY creado LIMIT ${limit} FOR UPDATE SKIP LOCKED`;
+        for (const r of rs) {
+          await tx`UPDATE reservas SET estado = 'cancelada' WHERE id = ${r.id}`;
+          await tx`UPDATE preventas SET stock = stock + ${r.cantidad} WHERE id = ${r.preventa_id}`;
+        }
+        return rs.length;
+      });
     },
     // Reversión: cancela la reserva y repone el stock (transacción).
     async cancelarReservaYreponer(id) {

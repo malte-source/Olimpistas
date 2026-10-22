@@ -1018,9 +1018,13 @@ function createMemoryStore({ filePath = null } = {}) {
         db.sesiones = db.sesiones.filter(s => s.token !== token); persist();
         return null;
       }
-      const socio = db.socios.find(s => s.id === sess.socio_id) || null;
-      return socio ? { session: sess, socio } : null;
+      const full = db.socios.find(s => s.id === sess.socio_id) || null;
+      if (!full) return null;
+      const { foto, ...socio } = full; // igual que Postgres: la sesión no carga la foto; tiene_foto la reemplaza
+      socio.tiene_foto = !!foto;
+      return { session: sess, socio };
     },
+    async getSocioFoto(id) { const s = db.socios.find(x => x.id === id); return (s && s.foto) || ""; },
     async deleteSession(token) {
       db.sesiones = db.sesiones.filter(s => s.token !== token); persist();
     },
@@ -1118,6 +1122,8 @@ function createMemoryStore({ filePath = null } = {}) {
     async reservarPreventa(preventaId, socioId, cantidad) {
       const pv = db.preventas.find(p => p.id === preventaId);
       if (!pv) return null;
+      const vivas = (db.reservas || []).filter((x) => x.preventa_id === preventaId && x.socio_id === socioId && x.estado !== "cancelada").reduce((a, x) => a + x.cantidad, 0);
+      if (vivas + cantidad > 4) return { error: "limite", vivas };
       if (pv.stock < cantidad) return { error: "sin_stock" };
       pv.stock -= cantidad;
       const r = { id: uid("res"), preventa_id: preventaId, socio_id: socioId, cantidad, estado: "pendiente_pago", creado: nowIso() };
@@ -1128,8 +1134,26 @@ function createMemoryStore({ filePath = null } = {}) {
     async confirmarReserva(id) {
       const r = (db.reservas || []).find(x => x.id === id);
       if (!r) return null;
+      if (r.estado === "cancelada") {
+        const pv = db.preventas.find((p) => p.id === r.preventa_id);
+        if (!pv || pv.stock < r.cantidad) return { error: "sin_stock", reserva: r };
+        pv.stock -= r.cantidad;
+      }
       r.estado = "pagada"; persist();
       return r;
+    },
+    async liberarReservasVencidas({ horas = 75, limit = 200 } = {}) {
+      const corte = Date.now() - horas * 3600000;
+      let n = 0;
+      for (const r of (db.reservas || [])) {
+        if (n >= limit) break;
+        if (r.estado !== "pendiente_pago" || new Date(r.creado).getTime() >= corte) continue;
+        r.estado = "cancelada"; n++;
+        const pv = db.preventas.find((p) => p.id === r.preventa_id);
+        if (pv) pv.stock += r.cantidad;
+      }
+      if (n) persist();
+      return n;
     },
     async cancelarReservaYreponer(id) {
       const r = (db.reservas || []).find(x => x.id === id);

@@ -70,7 +70,7 @@ migraciones y el checklist de promoción están en [`docs/staging-y-promocion.md
 
 Regla de oro del deploy: nunca `--env-vars-file` ni `--set-env-vars`; cambian o borran la
 configuración del servicio. `deploy.ps1` reproduce la configuración existente. Para escalar
-(CDN, pooler, fotos en Cloud Storage) ver [`SCALING.md`](SCALING.md).
+(CDN, pooler, fotos en Cloud Storage) ver [`SCALING.md`](SCALING.md); las cifras medidas de carga y de campañas están en [`docs/capacidad.md`](docs/capacidad.md) (herramienta: `setup/carga.js`, solo contra staging).
 
 ## Integraciones
 

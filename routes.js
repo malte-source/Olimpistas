@@ -88,7 +88,7 @@ function perfilProgreso(socio) {
   let hechos = 0;
   const faltantes = [];
   for (const c of PERFIL_CAMPOS) {
-    const lleno = socio && String(socio[c.key] || "").trim() !== "";
+    const lleno = socio && (String(socio[c.key] || "").trim() !== "" || (c.key === "foto" && !!socio.tiene_foto));
     if (lleno) hechos += c.peso;
     else faltantes.push({ key: c.key, label: c.label });
   }
@@ -457,10 +457,15 @@ function buildRouter() {
     res.json({ ok: true });
   }));
 
+  // req.socio (la sesión) no trae la foto para no arrastrarla en cada request; las pantallas que la muestran la piden acá.
+  async function conFoto(socio) {
+    const foto = store.getSocioFoto ? await store.getSocioFoto(socio.id) : socio.foto;
+    return { ...socio, foto: foto || "" };
+  }
   r.get("/auth/yo", auth.requireSocio, wrap(async (req, res) => {
     const membresia = await store.getMembresia(req.socio.id);
     const referidos = store.contarReferidos ? await store.contarReferidos(req.socio.id).catch(() => 0) : 0;
-    res.json({ socio: req.socio, membresia, progreso: perfilProgreso(req.socio), referidos });
+    res.json({ socio: await conFoto(req.socio), membresia, progreso: perfilProgreso(req.socio), referidos });
   }));
 
   // Ranking de referidores ("la hinchada que más suma"). Público, cacheado liviano.
@@ -482,7 +487,7 @@ function buildRouter() {
 
   // ─── Perfil (enriquecimiento + barra de progreso) ────────────────────────────
   r.get("/perfil", auth.requireSocio, wrap(async (req, res) => {
-    res.json({ socio: req.socio, progreso: perfilProgreso(req.socio) });
+    res.json({ socio: await conFoto(req.socio), progreso: perfilProgreso(req.socio) });
   }));
 
   // Autocompletar de ciudades (público): por prefijo, sin acentos, por población. Tope de 10.
@@ -771,7 +776,14 @@ function buildRouter() {
       return { membresia };
     }
     if (pedido.reserva_id && store.confirmarReserva) {
-      await store.confirmarReserva(pedido.reserva_id);
+      const conf = await store.confirmarReserva(pedido.reserva_id);
+      if (conf && conf.error === "sin_stock") {
+        // El pago llegó después de que se liberó el cupo (no se pagó a tiempo) y ya no quedan entradas.
+        log.error({ pedidoId: pedido.id, reservaId: pedido.reserva_id, socioId: pedido.socio_id }, "pago recibido por una reserva liberada y sin stock");
+        alertar("preventa:pago-sin-stock:" + pedido.id, "Pago recibido por entradas que ya no hay — REEMBOLSAR",
+          "Pedido " + pedido.id + " · ₲ " + Number(pedido.monto || 0).toLocaleString("es-PY") + " · la reserva se liberó por falta de pago a tiempo y las entradas se agotaron. Reembolsar por Pagopar.");
+        return { huerfano: true };
+      }
       try {
         const reserva = store.getReserva ? await store.getReserva(pedido.reserva_id) : null;
         const preventa = reserva && store.getPreventa ? await store.getPreventa(reserva.preventa_id) : null;
@@ -933,6 +945,13 @@ function buildRouter() {
   // Configurar en Cloud Scheduler: POST https://www.olimpistas.com/api/cron/diario con header
   // x-cron-token = CRON_SECRET, frecuencia diaria. Reemplaza correr los scripts a mano.
   // Tarea horaria (Cloud Scheduler): vence plazos de pago de subastas + conciliación de pagos.
+  // Entradas reservadas que no se pagaron dentro de la ventana de Pagopar (3 días + margen) vuelven al stock.
+  async function liberarReservas() {
+    if (!store.liberarReservasVencidas) return 0;
+    const n = await store.liberarReservasVencidas({ horas: Number(process.env.RESERVA_HORAS) || 75 });
+    if (n) log.info({ liberadas: n }, "reservas de preventa liberadas por falta de pago");
+    return n;
+  }
   r.post("/cron/horario", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
     if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
@@ -941,6 +960,7 @@ function buildRouter() {
     try { out.subastas = await procesarPlazosSubastas(); } catch (e) { out.subastas = { error: true }; log.error({ err: e.message }, "cron horario: plazos"); }
     try { out.pagos = await conciliarPagos(); } catch (e) { out.pagos = { error: true }; log.error({ err: e.message }, "cron horario: pagos"); }
     try { out.campanas = await campanasLib.procesarLote({ store, log: () => {} }); } catch (e) { out.campanas = { error: true }; log.error({ err: e.message }, "cron horario: campañas"); }
+    try { out.reservasLiberadas = await liberarReservas(); } catch (e) { out.reservasLiberadas = { error: true }; log.error({ err: e.message }, "cron horario: reservas"); }
     res.json(out);
   }));
   r.post("/cron/conciliar-pagos", wrap(async (req, res) => {
@@ -2885,7 +2905,9 @@ function buildRouter() {
     const cantidad = Math.max(1, Math.min(4, parseInt(req.body?.cantidad || "1", 10)));
     const reserva = await store.reservarPreventa(preventa.id, req.socio.id, cantidad);
     if (reserva?.error === "sin_stock") throw httpError(409, "No hay stock suficiente");
-    res.json({ ok: true, reserva });
+    if (reserva?.error === "limite") throw httpError(409, "Ya tenés el máximo de 4 entradas para esta preventa");
+    await store.confirmarReserva(reserva.id); // reserva sin cobro: queda confirmada (no se libera por falta de pago)
+    res.json({ ok: true, reserva: { ...reserva, estado: "pagada" } });
   }));
 
   // ─── Comprar entradas de una preventa (PAGO por PAGOPAR) ──────────────────────
@@ -2906,6 +2928,7 @@ function buildRouter() {
     const reserva = await store.reservarPreventa(preventa.id, req.socio.id, cantidad);
     if (!reserva) throw httpError(404, "Preventa no encontrada");
     if (reserva.error === "sin_stock") throw httpError(409, "No hay stock suficiente");
+    if (reserva.error === "limite") throw httpError(409, "Ya tenés el máximo de 4 entradas para esta preventa");
 
     const modoPrueba = !!process.env.PAGOPAR_TEST_KEY && req.body?.testPagopar === process.env.PAGOPAR_TEST_KEY;
     const cobrar = precioUnit > 0 && pagopar.habilitado && (process.env.PAGOPAR_PREVENTAS_LIVE === "1" || modoPrueba);
@@ -3132,7 +3155,7 @@ function buildRouter() {
         socioId: req.socio.id,
         nombre: [req.socio.nombre, req.socio.apellido].filter(Boolean).join(" ") || req.socio.email,
         iso: req.socio.pais_iso || "",
-        foto: req.socio.foto || "",
+        foto: (store.getSocioFoto ? await store.getSocioFoto(req.socio.id) : req.socio.foto) || "",
         tier: tier?.nombre || membresia.tier_slug,
         tierSlug: membresia.tier_slug,
         color: tier?.color || "#000",
