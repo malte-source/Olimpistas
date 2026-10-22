@@ -1511,3 +1511,18 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .ben-pin { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; border: 2px solid #ffffff; background: #0a0a0a; color: #ffffff; font: inherit; font-size: var(--t-12); font-weight: 700; line-height: 1.1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .ben-pin.lock { background: #3a3a3c; opacity: .9; }
 .ben-pin:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+
+/* ── Tanda 2 · usabilidad y contraste ── */
+/* Texto blanco sobre el oro daba 3.1:1 (no llega a 4.5); la tinta da 6.3:1. */
+.btn-valor, .tier-ribbon.oro, .destacado-cta { color: #0a0a0a; }
+/* El oro claro como texto solo se lee sobre fondo oscuro: el token de valor cambia con el modo. */
+.sub-lbl { color: var(--text-value); }
+/* En pantallas bajas (celular horizontal, teclado abierto) el modal no debe quedar cortado: scrollea adentro. */
+.modal { max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; }
+/* Aviso persistente de pago en proceso (no se pierde como un toast). */
+.aviso-pago { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 60; max-width: 520px; margin: 0 auto;
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--negro-2); color: var(--blanco);
+  border: 1px solid var(--linea); border-radius: var(--r-12); box-shadow: var(--sombra); font-size: var(--t-15); }
+.aviso-pago span { flex: 1; }
+.aviso-pago-x { background: none; border: 0; color: var(--gris); font-size: var(--t-22); line-height: 1; min-width: 44px; min-height: 44px; cursor: pointer; border-radius: var(--r-12); }
+.aviso-pago-x:hover { color: var(--blanco); }

@@ -1,16 +1,32 @@
 /* common.js — helpers compartidos entre landing y área de socio. */
 const _OLI_SCRIPT = document.currentScript;
 window.OLI = (function () {
+  // Mensajes de red en el idioma del visitante (common.js carga antes que i18n, se resuelve al usarlos).
+  const _msgRed = (k, es) => { try { const t = window.OLI_I18N && window.OLI_I18N.t(k); if (t && t !== k) return t; } catch (e) {} return es; };
+  // Una llamada que nunca responde no debe dejar la pantalla colgada: corta a los 25 s (opts.timeout lo cambia).
   async function api(path, opts = {}) {
-    const res = await fetch("/api" + path, {
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
-      ...opts,
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-    });
+    const { timeout, ...resto } = opts;
+    const ctl = new AbortController();
+    const reloj = setTimeout(() => ctl.abort(), timeout || 25000);
+    let res;
+    try {
+      res = await fetch("/api" + path, {
+        credentials: "include",
+        signal: ctl.signal,
+        headers: { "Content-Type": "application/json", ...(resto.headers || {}) },
+        ...resto,
+        body: resto.body ? JSON.stringify(resto.body) : undefined,
+      });
+    } catch (e) {
+      const err = new Error(e && e.name === "AbortError" ? _msgRed("err_lento", "Tardó demasiado en responder. Probá de nuevo.") : _msgRed("err_red", "Sin conexión. Revisá tu internet y probá de nuevo."));
+      err.red = true; throw err;
+    } finally { clearTimeout(reloj); }
     let data = null;
     try { data = await res.json(); } catch { /* sin cuerpo */ }
-    if (!res.ok) throw new Error((data && data.error) || `Error ${res.status}`);
+    if (!res.ok) {
+      const err = new Error((data && data.error) || (res.status >= 500 ? _msgRed("err_servidor", "Tuvimos un problema de nuestro lado. Probá de nuevo en un momento.") : `Error ${res.status}`));
+      err.status = res.status; throw err;
+    }
     return data;
   }
 
@@ -196,6 +212,12 @@ window.OLI = (function () {
 
   async function yo() {
     try { return await api("/auth/yo"); } catch { return null; }
+  }
+  // Como yo(), pero distingue "no hay sesión" (401: sesion null) de "no pude preguntar" (sin red / 5xx: error).
+  // Así una caída momentánea no te saca de tu cuenta ni te muestra la página como si no estuvieras adentro.
+  async function yoEstado() {
+    try { return { sesion: await api("/auth/yo"), error: null }; }
+    catch (e) { return e && (e.status === 401 || e.status === 403) ? { sesion: null, error: null } : { sesion: null, error: e || new Error("error") }; }
   }
 
   // Genera un QR (data URL) si el generador está disponible.
@@ -674,5 +696,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, storyMapaImagen, compartirStory, currency, setCurrency, cargarMapa, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
+  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, yoEstado, makeQR, carnet, carnetImagen, storyImagen, storyMapaImagen, compartirStory, currency, setCurrency, cargarMapa, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
 })();

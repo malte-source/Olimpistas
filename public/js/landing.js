@@ -15,7 +15,7 @@
 
   async function init() {
     CONFIG = await api("/config");
-    SESSION = await yo();
+    SESSION = (await window.OLI.yoEstado()).sesion;
     await initIdiomaMoneda();
     document.getElementById("heroTitle").textContent = fld(CONFIG.brand, "lema");
     document.getElementById("heroSub").textContent = fld(CONFIG.brand, "bajada");

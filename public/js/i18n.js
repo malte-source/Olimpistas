@@ -189,7 +189,7 @@ window.OLI_I18N = (function () {
       m_preventas_h: "Preventa de entradas", m_preventas_p: "Comprá antes que nadie.",
       m_reservar: "Reservar", m_reserva_ok: "Reserva confirmada ✓", m_en_preventa: "en preventa", m_desde: "Desde",
       m_carnet_h: "Mi carnet digital", m_carnet_p: "Tu identidad de Olimpista, con QR de verificación.",
-      m_carnet_no: "Carnet no disponible", m_pago_ok: "¡Pago confirmado!", m_pago_pendiente: "Tu pago se está procesando. Te avisamos apenas se confirme.", m_cedula_pago: "Ingresá tu número de cédula para procesar el pago:", m_anio: "año",
+      m_carnet_no: "Carnet no disponible", err_red: "Sin conexión. Revisá tu internet y probá de nuevo.", err_lento: "Tardó demasiado en responder. Probá de nuevo.", err_servidor: "Tuvimos un problema de nuestro lado. Probá de nuevo en un momento.", err_reintentar: "Reintentar", m_cerrar: "Cerrar", m_sub_confirmar_t: "Confirmá tu puja", m_sub_confirmar_si: "Sí, pujar", m_sub_confirmar: "Vas a pujar {monto}. Una puja no se puede retirar. ¿Confirmás?", err_cuenta_titulo: "No pudimos abrir tu cuenta", m_pago_ok: "¡Pago confirmado!", m_pago_pendiente: "Tu pago se está procesando. Te avisamos apenas se confirme.", m_cedula_pago: "Ingresá tu número de cédula para procesar el pago:", m_anio: "año",
     },
     en: {
       nav_login: "Log in", nav_join: "Join free", nav_account: "My account", nav_back: "Back",
@@ -377,7 +377,7 @@ window.OLI_I18N = (function () {
       m_preventas_h: "Ticket presale", m_preventas_p: "Buy before anyone else.",
       m_reservar: "Reserve", m_reserva_ok: "Reservation confirmed ✓", m_en_preventa: "in presale", m_desde: "From",
       m_carnet_h: "My digital card", m_carnet_p: "Your Olimpista identity, with a verification QR.",
-      m_carnet_no: "Card unavailable", m_pago_ok: "Payment confirmed!", m_pago_pendiente: "Your payment is being processed. We'll let you know once it's confirmed.", m_cedula_pago: "Enter your ID (cédula) number to process the payment:", m_anio: "year",
+      m_carnet_no: "Card unavailable", err_red: "No connection. Check your internet and try again.", err_lento: "It took too long to respond. Try again.", err_servidor: "We had a problem on our side. Try again in a moment.", err_reintentar: "Try again", m_cerrar: "Close", m_sub_confirmar_t: "Confirm your bid", m_sub_confirmar_si: "Yes, bid", m_sub_confirmar: "You're about to bid {monto}. A bid can't be withdrawn. Confirm?", err_cuenta_titulo: "We couldn't open your account", m_pago_ok: "Payment confirmed!", m_pago_pendiente: "Your payment is being processed. We'll let you know once it's confirmed.", m_cedula_pago: "Enter your ID (cédula) number to process the payment:", m_anio: "year",
     },
   };
 
