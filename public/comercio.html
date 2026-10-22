@@ -5,126 +5,174 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Panel del comercio — Olimpistas</title>
   <meta name="robots" content="noindex" />
-  <meta name="theme-color" content="#0b0b0f" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <script src="/js/tema.js"></script>
+  <link rel="stylesheet" href="/assets/fonts/fonts.css" />
+  <link rel="stylesheet" href="/css/styles.css?v=89" />
   <style>
-    :root{--negro:#0a0a0e;--panel:#14141c;--panel2:#1b1b25;--linea:rgba(201,162,39,.16);
-      --oro:#c9a227;--oro2:#e7c64b;--blanco:#f3efe4;--gris:#8f8f9b;--verde:#37b26b;--rojo:#e94560;--ambar:#e0a23b;
-      --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
-    *{box-sizing:border-box} body{margin:0;background:var(--negro);color:var(--blanco);font-family:var(--sans);line-height:1.5}
-    .wrap{max-width:520px;margin:0 auto;padding:22px 16px 60px}
-    header{text-align:center;padding:16px 0 22px}
-    .wm{font-weight:900;letter-spacing:.3em;font-size:14px;color:var(--oro2);text-transform:uppercase}
-    .stripes{height:5px;width:100px;margin:10px auto;border-radius:3px;background:repeating-linear-gradient(90deg,#fff 0 10px,#000 10px 20px);opacity:.85}
-    h1{font-size:20px;font-weight:900;margin:6px 0 2px}
-    h2{font-size:15px;margin:22px 0 10px}
-    .muted{color:var(--gris);font-size:14px}
-    .card{background:var(--panel);border:1px solid var(--linea);border-radius:16px;padding:18px}
-    label{display:block;font-size:12px;color:var(--gris);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px}
-    input,select{width:100%;font-family:inherit;font-size:16px;padding:13px;border-radius:11px;background:var(--panel2);color:var(--blanco);border:1px solid var(--linea)}
-    input.cod{font-family:var(--mono);letter-spacing:.06em}
-    .btn{width:100%;border:0;font-family:inherit;font-weight:900;font-size:16px;padding:15px;border-radius:12px;cursor:pointer;margin-top:16px;
-      background:linear-gradient(135deg,var(--oro2),var(--oro));color:#1a1500;text-transform:uppercase;letter-spacing:.03em}
-    .btn:active{transform:translateY(1px)} .btn:disabled{opacity:.55}
-    .btn.ghost{background:transparent;border:1px solid var(--linea);color:var(--blanco);font-weight:700;text-transform:none;letter-spacing:0}
-    .btn.sm{width:auto;padding:8px 14px;font-size:13px;margin:0}
-    .err{color:#ffa8b6;font-size:13px;margin-top:10px;min-height:16px} .ok{color:#7fe3a6;font-size:13px;margin-top:10px}
-    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-    .topbar .n{font-weight:800}
-    .seg{display:flex;gap:6px;background:var(--panel);border:1px solid var(--linea);border-radius:12px;padding:4px;margin-bottom:14px}
-    .seg button{flex:1;border:0;background:transparent;color:var(--gris);font:inherit;font-weight:800;padding:10px;border-radius:9px;cursor:pointer}
-    .seg button.on{background:var(--panel2);color:var(--blanco)}
-    .res{margin-top:16px;border-radius:14px;padding:16px;text-align:center;animation:pop .2s ease}
-    @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-    .res.ok{background:rgba(55,178,107,.12);border:1px solid rgba(55,178,107,.5)}
-    .res.no{background:rgba(233,69,96,.12);border:1px solid rgba(233,69,96,.5)}
-    .res .big{font-size:20px;font-weight:900;display:block;margin-bottom:4px}
-    .res.ok .big{color:#7fe3a6} .res.no .big{color:#ffa8b6}
-    .res small{color:var(--gris);font-size:13px}
-    .res .ah{font-size:22px;font-weight:900;color:var(--oro2);margin-top:8px}
-    .badge{display:inline-block;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;padding:3px 10px;border-radius:999px;background:#0a0a0e;color:var(--oro2);border:1px solid var(--linea)}
-    .kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .kpi{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:14px}
-    .kpi b{display:block;font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums} .kpi span{font-size:12px;color:var(--gris)}
-    .mix{display:flex;flex-direction:column;gap:8px}
-    .mix div{display:grid;grid-template-columns:90px 1fr 34px;gap:8px;align-items:center;font-size:13px}
-    .mix i{display:block;height:8px;border-radius:4px;background:var(--oro2)}
-    .oferta{border:1px solid var(--linea);border-radius:12px;padding:12px;margin-top:8px}
-    .oferta .t{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-    .pill{font-size:10.5px;font-weight:900;letter-spacing:.05em;border-radius:999px;padding:3px 9px;white-space:nowrap}
-    .pill.pend{background:rgba(224,162,59,.15);color:var(--ambar)} .pill.pub{background:rgba(55,178,107,.15);color:#7fe3a6} .pill.rech{background:rgba(233,69,96,.15);color:#ffa8b6} .pill.paus{background:var(--panel2);color:var(--gris)}
-    .visor{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
-    .visor video{flex:1;object-fit:cover;width:100%}
-    .hide{display:none !important} /* al final y con !important: .visor (display:flex) no puede pisarlo */
-    .visor .barra{padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:#000;text-align:center;color:#fff}
+    /* Panel del comercio · sobre styles.css (roles --surface-*, --text-*, --action-*) · prefijo .com- */
+    body { background: var(--surface-grouped); color: var(--text-primary); min-height: 100vh; }
+    .hide { display: none !important; }
+    .com-head { background: #0a0a0a; color: #fff; padding-top: env(safe-area-inset-top); }
+    .com-head-in { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 14px; padding: 22px 20px 20px; }
+    .com-head-tx { flex: 1; min-width: 0; }
+    .com-eb { display: block; font-size: var(--t-11); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--oro-claro); }
+    .com-head h1 { margin: 4px 0 2px; font: 600 var(--t-28)/1.1 var(--display); letter-spacing: -.03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .com-head p { margin: 0; font-size: var(--t-13); color: #a8a6a1; }
+    .com-escudo { height: 52px; width: auto; flex: none; display: block; }
+    .com-salir { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; cursor: pointer; padding: 0; }
+    .com-salir:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    @media (hover: hover) and (pointer: fine) { .com-salir:hover { background: rgba(255,255,255,.12); } }
+    .com-fr { height: 6px; background: repeating-linear-gradient(90deg, #fff 0 18px, #0a0a0a 18px 36px); }
+    .com-wrap { max-width: 1080px; margin: 0 auto; padding: 18px 16px calc(40px + env(safe-area-inset-bottom)); }
+    .com-login { max-width: 420px; margin: 4vh auto 0; }
+
+    .com-card { background: var(--surface-card); border-radius: var(--r-22); padding: 18px; }
+    .com-card + .com-card { margin-top: 12px; }
+    .com-h { font-size: var(--t-13); font-weight: 600; color: var(--text-secondary); padding: 0 16px 6px; margin: 22px 0 0; }
+    .com-muted { color: var(--text-secondary); font-size: var(--t-13); line-height: 1.45; }
+    .com-lbl { display: block; font-size: var(--t-13); font-weight: 600; color: var(--text-secondary); margin: 14px 0 6px; }
+    .com-lbl:first-child { margin-top: 0; }
+    .com-card input, .com-card select { width: 100%; font: inherit; font-size: 16px; padding: 13px 14px; border-radius: var(--r-14); background: var(--surface-input); color: var(--text-primary); border: 1px solid var(--border-default); }
+    .com-card input:focus-visible, .com-card select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+    .com-card input.cod { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .06em; }
+    .com-card .btn { margin-top: 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 18px; font-size: var(--t-15); }
+    .com-card .btn:hover, .com-head .com-salir:hover { transform: none; }
+    .com-card .btn-sm { margin-top: 0; padding: 9px 16px; }
+    .com-msg { font-size: var(--t-13); margin-top: 10px; min-height: 16px; color: var(--text-error); }
+    .com-msg.ok { color: var(--text-success); }
+
+    .com-seg-wrap { margin-bottom: 14px; }
+    .com-seg-wrap .ctl-seg { display: flex; width: 100%; }
+    .com-seg-wrap .ctl-seg-b { flex: 1; }
+    .com-vistas { display: block; }
+    @media (min-width: 960px) {
+      .com-seg-wrap { display: none; }
+      .com-vistas { display: grid; grid-template-columns: minmax(340px, 5fr) 7fr; gap: 20px; align-items: start; }
+      .com-vistas #vValidar.hide, .com-vistas #vMi.hide { display: block !important; }
+      .com-wrap { padding-top: 26px; }
+    }
+
+    .com-res { margin-top: 16px; border-radius: var(--r-22); padding: 16px; display: flex; gap: 14px; align-items: flex-start; animation: dcPop .22s var(--ease) both; }
+    .com-res.ok { background: color-mix(in srgb, var(--text-success) 14%, var(--surface-card)); }
+    .com-res.no { background: color-mix(in srgb, var(--text-error) 14%, var(--surface-card)); }
+    .com-res-ic { width: 44px; height: 44px; }
+    .com-res.ok .com-res-ic { color: var(--text-success); }
+    .com-res.no .com-res-ic { color: var(--text-error); }
+    .com-res-tx { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .com-big { font: 600 var(--t-20)/1.2 var(--display); letter-spacing: -.02em; }
+    .com-who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--t-15); }
+    .com-av { width: 28px; height: 28px; border-radius: 50%; background: var(--action-primary-bg); color: var(--action-primary-text); display: grid; place-items: center; font-weight: 700; font-size: var(--t-12); flex: none; }
+    .com-res small { color: var(--text-secondary); font-size: var(--t-13); line-height: 1.4; }
+    .com-ah { font: 600 var(--t-17)/1.2 var(--display); }
+    .com-badge { display: inline-block; font-size: var(--t-11); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: var(--r-pill); background: var(--card2); color: var(--text-primary); }
+
+    .com-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .com-kpi { background: var(--surface-card); border-radius: var(--r-22); padding: 16px; }
+    .com-kpi b { display: block; font: 600 var(--t-22)/1.1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .com-kpi span { font-size: var(--t-13); color: var(--text-secondary); }
+    .com-mix { display: flex; flex-direction: column; gap: 10px; }
+    .com-mix div { display: grid; grid-template-columns: 90px 1fr 34px; gap: 8px; align-items: center; font-size: var(--t-13); }
+    .com-mix i { display: block; height: 8px; border-radius: 4px; background: var(--action-primary-bg); }
+    .com-mix b { text-align: right; font-variant-numeric: tabular-nums; }
+    .com-oferta { padding: 14px 16px; }
+    .com-oferta + .com-oferta { border-top: 1px solid var(--sep); }
+    .com-oferta .t { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .com-oferta .t b { font-size: var(--t-15); }
+    .com-pill { font-size: var(--t-11); font-weight: 700; letter-spacing: .05em; border-radius: var(--r-pill); padding: 3px 9px; white-space: nowrap; background: var(--card2); color: var(--text-secondary); }
+    .com-pill.pub { background: color-mix(in srgb, var(--text-success) 16%, var(--surface-card)); color: var(--text-success); }
+    .com-pill.rech { background: color-mix(in srgb, var(--text-error) 16%, var(--surface-card)); color: var(--text-error); }
+    .com-pill.pend { background: transparent; border: 1px solid var(--border-default); color: var(--text-primary); }
+
+    .com-visor { position: fixed; inset: 0; background: #000; z-index: 50; display: flex; flex-direction: column; }
+    .com-visor video { flex: 1; object-fit: cover; width: 100%; }
+    .com-visor .barra { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); background: #000; text-align: center; color: #fff; }
+    .com-visor .btn { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.4); }
+    @media (prefers-reduced-motion: reduce) { .com-res { animation: none; } }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="wm">Olimpistas</div><div class="stripes"></div>
-      <h1>Panel del comercio</h1>
-      <p class="muted">Validá los beneficios de la Red del Decano</p>
-    </header>
+  <header class="com-head">
+    <div class="com-head-in">
+      <div class="com-head-tx">
+        <span class="com-eb">Panel del comercio</span>
+        <h1 id="comTitulo">Red de Beneficios</h1>
+        <p id="comSub">Validá los beneficios de la Red del Decano</p>
+      </div>
+      <img class="com-escudo" src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" />
+      <button type="button" class="com-salir hide" id="salir" aria-label="Salir"><svg class="ic" width="20" height="20"><use href="/assets/icons.svg#i-salir"/></svg></button>
+    </div>
+    <div class="com-fr" aria-hidden="true"></div>
+  </header>
 
+  <main class="com-wrap">
     <!-- LOGIN -->
-    <div class="card" id="loginCard">
-      <label>Usuario</label>
+    <div class="com-card com-login" id="loginCard">
+      <label class="com-lbl" for="usuario">Usuario</label>
       <input id="usuario" autocomplete="username" autocapitalize="none" />
-      <label>Contraseña</label>
+      <label class="com-lbl" for="password">Contraseña</label>
       <input id="password" type="password" autocomplete="current-password" />
-      <button class="btn" id="loginBtn">Entrar</button>
-      <div class="err" id="loginErr"></div>
+      <button class="btn btn-block" id="loginBtn">Entrar</button>
+      <div class="com-msg" id="loginErr" role="alert"></div>
     </div>
 
     <!-- PANEL -->
     <div id="panel" class="hide">
-      <div class="topbar"><span class="n" id="comNombre"></span><button class="btn ghost sm" id="salir">Salir</button></div>
-      <div class="seg"><button class="on" data-vista="validar">Validar</button><button data-vista="mi">Mi comercio</button></div>
-
-      <!-- VALIDAR -->
-      <div id="vValidar">
-        <div class="card">
-          <label>Beneficio a canjear</label>
-          <select id="benSel"></select>
-          <label>Monto de la compra (opcional)</label>
-          <input id="monto" type="number" inputmode="numeric" placeholder="₲ 0" />
-          <button class="btn" id="escanearBtn">Escanear carnet</button>
-          <p class="muted" style="margin:12px 0 0;font-size:13px">Pedile al hincha que abra su carnet en la app: el QR cambia cada minuto.</p>
-          <label>Código del socio o texto del QR (si no se puede escanear)</label>
-          <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" autocomplete="off" />
-          <button class="btn ghost" id="validarBtn" style="margin-top:12px">Validar canje</button>
-          <div class="err" id="valErr"></div>
-          <div id="res"></div>
+      <div class="com-seg-wrap">
+        <div class="ctl-seg" role="radiogroup" aria-label="Vista" id="seg">
+          <button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-vista="validar">Validar</button>
+          <button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-vista="mi">Mi comercio</button>
         </div>
       </div>
 
-      <!-- MI COMERCIO -->
-      <div id="vMi" class="hide">
-        <p class="muted" id="periodo" style="margin:0 0 10px"></p>
-        <div class="kpis" id="kpis"></div>
-        <h2>Canjes por nivel</h2>
-        <div class="card"><div class="mix" id="mix"></div></div>
-        <div style="margin-top:12px"><button class="btn ghost sm" id="csvBtn">Descargar canjes (CSV)</button></div>
-
-        <h2>Cargar una oferta nueva</h2>
-        <div class="card">
-          <p class="muted" style="margin:0 0 4px;font-size:13px">El club la revisa antes de publicarla.</p>
-          <label>Título</label><input id="ofTitulo" maxlength="100" placeholder="Ej. 10% en protectores solares" />
-          <label>Beneficio</label><input id="ofValor" maxlength="30" placeholder="10%  ·  2x1  ·  Gratis el envío" />
-          <label>Para quién</label>
-          <select id="ofPara"><option value="todos">Todos los Olimpistas</option><option value="plus">Plus y Socio</option><option value="socio">Solo socios</option></select>
-          <label>Ahorro estimado en ₲ (si no es un %)</label><input id="ofAhorro" type="number" inputmode="numeric" min="0" placeholder="Opcional" />
-          <label>Cupo (cantidad de canjes)</label><input id="ofStock" type="number" inputmode="numeric" min="0" placeholder="Opcional: sin tope" />
-          <button class="btn" id="ofEnviar">Enviar para aprobación</button>
-          <div class="err" id="ofMsg"></div>
+      <div class="com-vistas">
+        <!-- VALIDAR -->
+        <div id="vValidar">
+          <div class="com-card">
+            <label class="com-lbl" for="benSel">Beneficio a canjear</label>
+            <select id="benSel"></select>
+            <label class="com-lbl" for="monto">Monto de la compra (opcional)</label>
+            <input id="monto" type="number" inputmode="numeric" placeholder="₲ 0" />
+            <button class="btn btn-block" id="escanearBtn"><svg class="ic" width="20" height="20"><use href="/assets/icons.svg#i-qr"/></svg> Escanear carnet</button>
+            <p class="com-muted" style="margin:12px 0 0">Pedile al hincha que abra su carnet en la app: el QR cambia cada minuto.</p>
+            <label class="com-lbl" for="codigo">Código del socio o texto del QR (si no se puede escanear)</label>
+            <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" autocomplete="off" />
+            <button class="btn btn-ghost btn-block" id="validarBtn" style="margin-top:12px">Validar canje</button>
+            <div class="com-msg" id="valErr" role="alert"></div>
+            <div id="res" aria-live="polite"></div>
+          </div>
         </div>
-        <h2>Mis ofertas</h2>
-        <div id="ofertas"></div>
+
+        <!-- MI COMERCIO -->
+        <div id="vMi" class="hide">
+          <p class="com-muted" id="periodo" style="margin:0 0 10px 4px"></p>
+          <div class="com-kpis" id="kpis"></div>
+          <div class="com-h">Canjes por nivel</div>
+          <div class="com-card"><div class="com-mix" id="mix"></div></div>
+          <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" id="csvBtn">Descargar canjes (CSV)</button></div>
+
+          <div class="com-h">Cargar una oferta nueva</div>
+          <div class="com-card">
+            <p class="com-muted" style="margin:0 0 4px">El club la revisa antes de publicarla.</p>
+            <label class="com-lbl" for="ofTitulo">Título</label><input id="ofTitulo" maxlength="100" placeholder="Ej. 10% en protectores solares" />
+            <label class="com-lbl" for="ofValor">Beneficio</label><input id="ofValor" maxlength="30" placeholder="10%  ·  2x1  ·  Gratis el envío" />
+            <label class="com-lbl" for="ofPara">Para quién</label>
+            <select id="ofPara"><option value="todos">Todos los Olimpistas</option><option value="plus">Plus y Socio</option><option value="socio">Solo socios</option></select>
+            <label class="com-lbl" for="ofAhorro">Ahorro estimado en ₲ (si no es un %)</label><input id="ofAhorro" type="number" inputmode="numeric" min="0" placeholder="Opcional" />
+            <label class="com-lbl" for="ofStock">Cupo (cantidad de canjes)</label><input id="ofStock" type="number" inputmode="numeric" min="0" placeholder="Opcional: sin tope" />
+            <button class="btn btn-block" id="ofEnviar">Enviar para aprobación</button>
+            <div class="com-msg" id="ofMsg" role="alert"></div>
+          </div>
+          <div class="com-h">Mis ofertas</div>
+          <div id="ofertas"></div>
+        </div>
       </div>
     </div>
-  </div>
+  </main>
 
-  <div class="visor hide" id="visor"><video id="video" playsinline muted></video><div class="barra"><div id="visorMsg" style="margin-bottom:10px">Apuntá al QR del carnet</div><button class="btn ghost sm" id="visorCerrar">Cancelar</button></div></div>
+  <div class="com-visor hide" id="visor"><video id="video" playsinline muted></video><div class="barra"><div id="visorMsg" style="margin-bottom:10px">Apuntá al QR del carnet</div><button class="btn btn-sm" id="visorCerrar">Cancelar</button></div></div>
 
   <script>
   (function(){
@@ -134,6 +182,19 @@
     function gs(n){ return "₲ " + Number(n||0).toLocaleString("es-PY"); }
     function tok(){ try{ return localStorage.getItem(TK) || ""; }catch(e){ return ""; } }
     function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+    function ic(id, cls){ return '<svg class="ic '+cls+'"><use href="/assets/icons.svg#i-'+id+'"/></svg>'; }
+    // Avisos breves sin diálogos del sistema: hoja (móvil) / diálogo (escritorio) con las mismas clases .oli-modal de styles.css.
+    function aviso(titulo, texto){
+      var prev = document.activeElement, bg = document.createElement("div");
+      bg.className = "oli-modal-bg";
+      bg.innerHTML = '<div class="oli-modal" role="alertdialog" aria-modal="true" aria-labelledby="avTit"><h3 id="avTit">'+esc(titulo)+'</h3><p class="muted" style="margin:6px 0 16px">'+esc(texto)+'</p><button class="btn btn-block" data-cerrar>Entendido</button></div>';
+      function cerrar(){ document.removeEventListener("keydown", tecla, true); bg.remove(); if(prev && prev.focus) prev.focus(); }
+      function tecla(e){ if(e.key === "Escape"){ e.preventDefault(); cerrar(); } }
+      bg.addEventListener("click", function(e){ if(e.target === bg) cerrar(); });
+      bg.querySelector("[data-cerrar]").addEventListener("click", cerrar);
+      document.addEventListener("keydown", tecla, true);
+      document.body.appendChild(bg); bg.querySelector("[data-cerrar]").focus();
+    }
 
     async function api(path, opts){
       opts = opts || {};
@@ -156,10 +217,10 @@
     $("password").addEventListener("keydown", function(e){ if(e.key === "Enter") $("loginBtn").click(); });
     $("salir").addEventListener("click", function(){ try{ localStorage.removeItem(TK); }catch(e){} location.reload(); });
 
-    // ── Vistas ──
-    document.querySelector(".seg").addEventListener("click", function(e){
+    // ── Vistas (en el móvil se alternan; en escritorio se ven las dos lado a lado) ──
+    $("seg").addEventListener("click", function(e){
       var b = e.target.closest("button[data-vista]"); if(!b) return;
-      document.querySelectorAll(".seg button").forEach(function(x){ x.classList.toggle("on", x === b); });
+      document.querySelectorAll("#seg button").forEach(function(x){ x.setAttribute("aria-checked", String(x === b)); });
       $("vValidar").classList.toggle("hide", b.dataset.vista !== "validar");
       $("vMi").classList.toggle("hide", b.dataset.vista !== "mi");
       if(b.dataset.vista === "mi") cargarMiComercio();
@@ -168,13 +229,16 @@
     async function entrarPanel(){
       try{
         var j = await api("/comercio/beneficios");
-        $("comNombre").textContent = (j.comercio && j.comercio.nombre) || "Comercio";
+        var nombre = (j.comercio && j.comercio.nombre) || "Comercio";
+        $("comTitulo").textContent = nombre; $("comSub").textContent = "Red de Beneficios · Club Olimpia";
         var items = j.items || [];
         $("benSel").innerHTML = items.length
           ? items.map(function(b){ return '<option value="'+esc(b.id)+'">'+esc(b.titulo)+' ('+esc(b.valor||"")+')</option>'; }).join("")
           : '<option value="">Sin beneficios publicados</option>';
         $("loginCard").classList.add("hide");
         $("panel").classList.remove("hide");
+        $("salir").classList.remove("hide");
+        cargarMiComercio(); // en escritorio las dos vistas conviven
       }catch(e){ /* token inválido → seguir en login */ }
     }
 
@@ -183,6 +247,7 @@
       limite:"Ya usó este beneficio hace poco (límite).", nivel_no_aplica:"Su nivel no incluye este beneficio.", agotado:"Se agotó el cupo de este beneficio.",
       qr_vencido:"El QR venció. Pedile que espere a que cambie y lo muestre de nuevo.", qr_invalido:"QR no válido. Pedile que abra el carnet en la app.",
       qr_usado:"Ese QR ya se usó. Pedile que espere al siguiente (cambia cada minuto)."};
+    function quien(s){ var n = String(s.nombre||"?"); return '<div class="com-who"><span class="com-av">'+esc(n.trim().charAt(0).toUpperCase())+'</span><b>'+esc(n)+'</b><span class="com-badge">'+(LBL[s.tier]||esc(s.tier))+'</span></div>'; }
     async function validar(valor){
       $("valErr").textContent = ""; $("res").innerHTML = "";
       var btn = $("validarBtn"); btn.disabled = true;
@@ -193,17 +258,15 @@
           token: esQr ? v : undefined, codigo: esQr ? undefined : v, beneficioId: $("benSel").value, monto: Number($("monto").value)||0
         }});
         if(j.ok){
-          var ah = j.ahorro ? '<div class="ah">El socio ahorró '+gs(j.ahorro)+'</div>' : "";
-          var cupo = (j.stock != null) ? '<small> · Quedan '+j.stock+' en el cupo.</small>' : "";
-          $("res").innerHTML = '<div class="res ok"><span class="big">✓ Canje aprobado</span>'+
-            '<div><b>'+esc(j.socio.nombre)+'</b> <span class="badge">'+ (LBL[j.socio.tier]||esc(j.socio.tier)) +'</span></div>'+
-            '<small>"'+esc(j.beneficio)+'" registrado.</small>'+cupo+ah+'</div>';
+          var ah = j.ahorro ? '<div class="com-ah">El socio ahorró '+gs(j.ahorro)+'</div>' : "";
+          var cupo = (j.stock != null) ? ' Quedan '+j.stock+' en el cupo.' : "";
+          $("res").innerHTML = '<div class="com-res ok">'+ic("check-circulo-f","com-res-ic")+'<div class="com-res-tx"><span class="com-big">Canje aprobado</span>'+quien(j.socio)+
+            '<small>"'+esc(j.beneficio)+'" registrado.'+cupo+'</small>'+ah+'</div></div>';
           $("codigo").value = ""; $("monto").value = "";
         }else{
           var msg = MOTIVOS[j.motivo] || "No se pudo validar.";
           var extra = (j.motivo==="nivel_no_aplica" && j.requiere) ? ' Invitalo a subir a '+(LBL[j.requiere]||esc(j.requiere))+'.' : "";
-          var who = j.socio ? '<div><b>'+esc(j.socio.nombre)+'</b> <span class="badge">'+(LBL[j.socio.tier]||esc(j.socio.tier))+'</span></div>' : "";
-          $("res").innerHTML = '<div class="res no"><span class="big">✗ No aplica</span>'+who+'<small>'+msg+extra+'</small></div>';
+          $("res").innerHTML = '<div class="com-res no">'+ic("error-circulo-f","com-res-ic")+'<div class="com-res-tx"><span class="com-big">No aplica</span>'+(j.socio ? quien(j.socio) : "")+'<small>'+msg+extra+'</small></div></div>';
         }
       }catch(e){ $("valErr").textContent = e.message; }
       btn.disabled = false;
@@ -249,34 +312,34 @@
         var e = r[0], ofertas = r[1].ofertas || [];
         $("periodo").textContent = "Período: " + e.periodo;
         $("kpis").innerHTML = [["Canjes", e.canjes], ["Ahorro entregado", gs(e.ahorro)], ["Ventas con carnet", gs(e.ventas)], ["Ticket promedio", gs(e.ticket_promedio)]]
-          .map(function(k){ return '<div class="kpi"><b>'+esc(k[1])+'</b><span>'+esc(k[0])+'</span></div>'; }).join("");
+          .map(function(k){ return '<div class="com-kpi"><b>'+esc(k[1])+'</b><span>'+esc(k[0])+'</span></div>'; }).join("");
         var max = Math.max.apply(null, [1].concat((e.mix||[]).map(function(m){ return m.canjes; })));
         $("mix").innerHTML = (e.mix||[]).length ? e.mix.map(function(m){
           return '<div><span>'+esc(LBL[m.nivel]||m.nivel)+'</span><i style="width:'+Math.round(m.canjes/max*100)+'%"></i><b>'+m.canjes+'</b></div>';
-        }).join("") : '<span class="muted">Todavía no hay canjes este mes.</span>';
-        $("ofertas").innerHTML = ofertas.length ? ofertas.map(function(o){
-          var est = o.estado === "borrador" ? '<span class="pill pend">ESPERA APROBACIÓN</span>' : o.estado === "rechazado" ? '<span class="pill rech">RECHAZADA</span>' : (o.activo ? '<span class="pill pub">PUBLICADA</span>' : '<span class="pill paus">EN PAUSA</span>');
+        }).join("") : '<span class="com-muted">Todavía no hay canjes este mes.</span>';
+        $("ofertas").innerHTML = ofertas.length ? '<div class="grupo">'+ofertas.map(function(o){
+          var est = o.estado === "borrador" ? '<span class="com-pill pend">ESPERA APROBACIÓN</span>' : o.estado === "rechazado" ? '<span class="com-pill rech">RECHAZADA</span>' : (o.activo ? '<span class="com-pill pub">PUBLICADA</span>' : '<span class="com-pill">EN PAUSA</span>');
           var cupo = o.stock != null ? ' · cupo: '+o.stock : "";
-          var motivo = (o.estado === "rechazado" && o.motivo_rechazo) ? '<div class="err" style="margin:6px 0 0">Motivo: '+esc(o.motivo_rechazo)+'</div>' : "";
-          var acc = o.estado === "aprobado" ? '<button class="btn ghost sm" style="margin-top:8px" data-pausa="'+esc(o.id)+'" data-a="'+(o.activo?0:1)+'">'+(o.activo?"Pausar":"Reanudar")+'</button>' : "";
-          return '<div class="oferta"><div class="t"><b>'+esc(o.titulo)+'</b>'+est+'</div><div class="muted" style="font-size:13px">'+esc(o.valor)+cupo+'</div>'+motivo+acc+'</div>';
-        }).join("") : '<p class="muted">Todavía no cargaste ofertas.</p>';
-      }catch(err){ $("kpis").innerHTML = '<div class="err">'+esc(err.message)+'</div>'; }
+          var motivo = (o.estado === "rechazado" && o.motivo_rechazo) ? '<div class="com-msg" style="margin:6px 0 0;min-height:0">Motivo: '+esc(o.motivo_rechazo)+'</div>' : "";
+          var acc = o.estado === "aprobado" ? '<button class="btn btn-ghost btn-sm" style="margin-top:10px" data-pausa="'+esc(o.id)+'" data-a="'+(o.activo?0:1)+'">'+(o.activo?"Pausar":"Reanudar")+'</button>' : "";
+          return '<div class="com-oferta"><div class="t"><b>'+esc(o.titulo)+'</b>'+est+'</div><div class="com-muted">'+esc(o.valor)+cupo+'</div>'+motivo+acc+'</div>';
+        }).join("")+'</div>' : '<p class="com-muted" style="padding:0 16px">Todavía no cargaste ofertas.</p>';
+      }catch(err){ $("kpis").innerHTML = '<div class="com-msg">'+esc(err.message)+'</div>'; }
     }
     $("ofertas").addEventListener("click", async function(e){
       var b = e.target.closest("button[data-pausa]"); if(!b) return;
       try{ await api("/comercio/beneficios/"+encodeURIComponent(b.dataset.pausa), { method:"PATCH", body:{ activo: b.dataset.a === "1" } }); cargarMiComercio(); entrarPanel(); }
-      catch(err){ $("ofMsg").className = "err"; $("ofMsg").textContent = err.message; }
+      catch(err){ aviso("No se pudo cambiar la oferta", err.message); }
     });
     $("ofEnviar").addEventListener("click", async function(){
-      var m = $("ofMsg"); m.className = "err"; m.textContent = "";
+      var m = $("ofMsg"); m.className = "com-msg"; m.textContent = "";
       var body = { titulo:$("ofTitulo").value, valor:$("ofValor").value, para:$("ofPara").value };
       if($("ofAhorro").value !== "") body.ahorro_estimado = Number($("ofAhorro").value);
       if($("ofStock").value !== "") body.stock = Number($("ofStock").value);
       try{
         await api("/comercio/beneficios", { method:"POST", body:body });
         ["ofTitulo","ofValor","ofAhorro","ofStock"].forEach(function(id){ $(id).value = ""; });
-        m.className = "ok"; m.textContent = "Listo: el club la revisa y te avisamos por correo cuando se publique.";
+        m.className = "com-msg ok"; m.textContent = "Listo: el club la revisa y te avisamos por correo cuando se publique.";
         cargarMiComercio();
       }catch(err){ m.textContent = err.message; }
     });
@@ -286,7 +349,7 @@
         if(!r.ok) throw new Error("No se pudo descargar");
         var blob = await r.blob(), a = document.createElement("a");
         a.href = URL.createObjectURL(blob); a.download = "canjes.csv"; a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 3000);
-      }catch(err){ alert(err.message); }
+      }catch(err){ aviso("No se pudo descargar", err.message); }
     });
 
     // Arranque: si ya hay token, ir directo al panel.
