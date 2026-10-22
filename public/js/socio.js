@@ -59,7 +59,14 @@
   const vacio = (txt) => `<div class="empty"><div class="empty-ic">${icon("calendar", { size: 36 })}</div><p>${txt}</p></div>`;
 
   async function init() {
-    SESSION = await yo();
+    const est = await OLI.yoEstado();
+    if (est.error) {
+      // Sin red o servidor caído: no es "no tenés sesión". Mostramos reintentar en vez de mandarte al inicio.
+      view().innerHTML = `<div class="empty" role="alert"><h3>${esc(T("err_cuenta_titulo"))}</h3><p class="muted">${esc(est.error.message)}</p><button class="btn" id="btnReintentarInit">${esc(T("err_reintentar"))}</button></div>`;
+      document.getElementById("btnReintentarInit").onclick = () => init();
+      return;
+    }
+    SESSION = est.sesion;
     if (!SESSION) { location.href = "/"; return; }
     CONFIG = await api("/config").catch(() => ({ paises: [] }));
     perfilPunto = { lat: SESSION.socio.lat ?? null, lng: SESSION.socio.lng ?? null };
@@ -101,7 +108,15 @@
         try { const r = await api("/pagos/estado?hash=" + encodeURIComponent(pagoHash)); confirmado = !!r.pagado; } catch (e) {}
         if (!confirmado) await new Promise((res) => setTimeout(res, 2500));
       }
-      toast(confirmado ? T("m_pago_ok") : T("m_pago_pendiente"));
+      if (confirmado) toast(T("m_pago_ok"));
+      else {
+        // Un toast de 2,6 s se pierde: el pago puede tardar minutos, así que el aviso queda hasta que lo cierres.
+        const av = document.createElement("div");
+        av.className = "aviso-pago"; av.setAttribute("role", "status");
+        av.innerHTML = `<span>${esc(T("m_pago_pendiente"))}</span><button type="button" class="aviso-pago-x" aria-label="${esc(T("m_cerrar"))}">×</button>`;
+        av.querySelector("button").onclick = () => av.remove();
+        document.body.appendChild(av);
+      }
       history.replaceState({}, "", "/miembro");
       SESSION = await yo();
     }
@@ -1441,6 +1456,14 @@
         const monto = Math.round(Number(input.value) || 0);
         const min = Number(customBtn.dataset.montoMin) || 0;
         if (monto < min) { toast(T("m_sub_monto_bajo") + " " + gs(min)); return; }
+        // Una puja no se retira: si la cifra es mucho mayor al mínimo (típico "un cero de más"), pedimos confirmar.
+        if (min > 0 && monto >= min * 3) {
+          const { root, close } = OLI.modal(`<h3>${esc(T("m_sub_confirmar_t"))}</h3><p class="muted">${esc(T("m_sub_confirmar").replace("{monto}", gs(monto)))}</p>
+            <div class="pf-cancel-acts"><button type="button" class="btn btn-ghost" data-no>${esc(T("m_cancelar_no"))}</button><button type="button" class="btn" data-si>${esc(T("m_sub_confirmar_si"))}</button></div>`);
+          root.querySelector("[data-no]").onclick = close;
+          root.querySelector("[data-si]").onclick = () => { close(); pujar(id, monto); };
+          return;
+        }
         pujar(id, monto);
       });
     }
@@ -1469,8 +1492,15 @@
     document.getElementById("subPuj").textContent = r.pujadores;
     document.getElementById("subMia").textContent = r.miPuja ? gs(r.miPuja) : "—";
     document.getElementById("subFeed").innerHTML = feedHtml(r.feed);
+    // El detalle se refresca solo cada pocos segundos: si estás tipeando un monto propio, no se lo borramos.
+    const inp = document.getElementById("subCustomInput");
+    const tipeo = inp && !document.getElementById("subCustomForm").hidden ? { v: inp.value, foco: document.activeElement === inp } : null;
     document.getElementById("subAcciones").innerHTML = accionesHtml(r, cerrada);
     bindPujas(s.id);
+    if (tipeo) {
+      const f2 = document.getElementById("subCustomForm"), t2 = document.getElementById("subCustomToggle"), i2 = document.getElementById("subCustomInput");
+      if (f2 && i2) { f2.hidden = false; if (t2) t2.hidden = true; i2.value = tipeo.v; if (tipeo.foco) i2.focus(); }
+    }
     const clock = document.getElementById("subClock"); if (clock) clock.classList.toggle("urg", cd.urg);
     const antisnipe = document.getElementById("subAntisnipe"); if (antisnipe) antisnipe.style.display = cerrada ? "none" : "";
     if (cerrada) {
@@ -1485,14 +1515,20 @@
     el.textContent = cd.fin ? T("m_sub_cerrada") : cd.txt;
     const clock = document.getElementById("subClock"); if (clock) clock.classList.toggle("urg", cd.urg);
   }
+  let pujando = false; // un toque doble no debe mandar dos pujas
   async function pujar(id, monto) {
+    if (pujando) return;
+    pujando = true;
+    cv().querySelectorAll(".sub-puja, #subCustomBtn").forEach((b) => { b.disabled = true; });
     try {
       const r = await api("/subastas/" + id + "/pujar", { method: "POST", body: { monto } });
       hap();
       toast(r.extendida ? T("m_sub_extendido") : T("m_sub_vas_ganando"));
       try { window.OLI.track && window.OLI.track("Puja", null, { value: monto }); } catch (e) {}
     } catch (e) { toast(e.message); }
+    pujando = false;
     try { const d = await api("/subastas/" + id + "?liviano=1"); actualizarDetalle(d); } catch (e) {}
+    cv().querySelectorAll(".sub-puja, #subCustomBtn").forEach((b) => { b.disabled = false; });
   }
 
   // ─── Carnet digital (mismo componente que la landing, color por nivel) ───────
