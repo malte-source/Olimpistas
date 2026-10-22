@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <script src="/js/tema.js"></script>
   <link rel="stylesheet" href="/assets/fonts/fonts.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=93" />
+  <link rel="stylesheet" href="/css/styles.css?v=94" />
   <style>
     /* Panel del club · interfaz nativa sobre styles.css (roles --surface-*, --text-*, --action-*; sin paleta propia).
        Lo que choca con styles.css lleva prefijo .adm-; botones, .grupo, .interruptor y .ctl-seg son los globales. */
@@ -421,7 +421,7 @@
           <div data-sec="contenido,subastas,estadio">
           <h2>Sorteos, preventas y contenido</h2>
           <div class="search-row" style="gap:8px">
-            <select id="crudSel" style="flex:0 0 auto;width:auto"><option value="sorteos">Sorteos</option><option value="preventas">Preventas</option><option value="subastas">Subastas</option><option value="encuestas">Encuestas</option><option value="contenido">Contenido</option></select>
+            <select id="crudSel" style="flex:0 0 auto;width:auto"><option value="sorteos">Sorteos</option><option value="preventas">Preventas</option><option value="subastas">Subastas</option><option value="encuestas">Encuestas</option><option value="comercios">Comercios</option><option value="contenido">Contenido</option></select>
             <button class="btn btn-sm" id="crudNuevo">Nuevo</button>
           </div>
           <div id="crudForm"></div>
@@ -721,7 +721,7 @@
       var sel = $("crudSel");
       if (sel) {
         if (sel._orig == null) sel._orig = sel.innerHTML; else sel.innerHTML = sel._orig;
-        var SEC_CRUD = { sorteos: "subastas", subastas: "subastas", preventas: "estadio", contenido: "contenido", encuestas: "contenido" };
+        var SEC_CRUD = { sorteos: "subastas", subastas: "subastas", preventas: "estadio", contenido: "contenido", encuestas: "contenido", comercios: "beneficios" };
         for (var o = sel.options.length - 1; o >= 0; o--) { if (!veSeccion(SEC_CRUD[sel.options[o].value] || "contenido")) sel.remove(o); }
       }
       // Botones de acción a nivel sección (los por-fila se gatean al renderizar).
@@ -1118,6 +1118,11 @@
         estado: function (x) { return { borrador: { l: "Borrador", c: "" }, programada: { l: "Programada", c: "pill-warn" }, activa: { l: "En vivo", c: "pill-ok" }, pausada: { l: "Pausada", c: "pill-warn" }, cerrada: { l: "Cerrada", c: "" } }[x.estado] || { l: x.estado, c: "" }; },
         info: function (x) { var extra = (x.estado === "programada" && x.inicia) ? "arranca " + new Date(x.inicia).toLocaleString("es-PY") + " · " : ""; return extra + (TIER[x.nivel_min] || x.nivel_min) + " · desde ₲" + Number(x.precio_inicial || 0).toLocaleString("es-PY") + (Number(x.puja_actual) > Number(x.precio_inicial) ? " · actual ₲" + Number(x.puja_actual).toLocaleString("es-PY") : ""); },
         campos: [["titulo", "Título", "text"], ["descripcion", "Descripción", "text"], ["emoji", "Emoji", "text"], ["imagen", "Imagen", "imagen"], ["nivel_min", "Quién puja (nivel mínimo)", "tier"], ["precio_inicial", "Precio inicial (₲)", "number"], ["incremento", "Incremento (₲)", "number"], ["duracion_horas", "Duración (horas)", "number"]], subasta: true },
+       comercios: { t: "Comercios", comercio: true, lbl: function (x) { return x.nombre; },
+         estado: function (x) { return x.estado === "activo" ? { l: "Activo", c: "pill-ok" } : { l: x.estado || "—", c: "pill-warn" }; },
+         info: function (x) { return [x.rubro, x.ciudad].filter(Boolean).join(" · ") + (x.lat != null ? " · ubicado" : " · sin ubicación") + (x.usuario ? " · acceso: " + x.usuario : " · sin acceso al portal"); },
+         campos: [["nombre", "Nombre", "text"], ["rubro", "Rubro", "text"], ["ciudad", "Ciudad", "text"], ["direccion", "Dirección", "text"], ["contacto", "Contacto (correo o teléfono)", "text"], ["logo", "Logo", "imagen"], ["estado", "Estado", ["activo", "inactivo"]],
+           ["mapa_url", "Link de Google Maps del local (ubica el comercio en el mapa)", "text"], ["lat", "Latitud (se completa con el link)", "text"], ["lng", "Longitud", "text"]] },
       encuestas: { t: "Encuestas",
         lbl: function (x) { return x.titulo || x.pregunta; },
         estado: function (x) { return { borrador: { l: "Borrador", c: "" }, activa: { l: "Activa", c: "pill-ok" }, cerrada: { l: "Cerrada", c: "" } }[x.estado] || { l: x.estado, c: "" }; },
@@ -1170,12 +1175,28 @@
             else encb += '<button class="btn btn-sm btn-ghost adm-neg" data-enccer="' + esc(x.id) + '">Cerrar</button>';
             encb += '<button class="btn btn-sm btn-ghost" data-encres="' + esc(x.id) + '">Resultados</button>';
           }
-          var acc = w ? ('<button class="btn btn-sm btn-ghost" data-edit="' + esc(x.id) + '">Editar</button>' + parts + sub + encb + (cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-gana="' + esc(x.id) + '">Ganador</button>' : '') + '<button class="btn btn-sm btn-ghost adm-neg" data-del="' + esc(x.id) + '">Borrar</button>') : (parts + sub + encb);
+          var comb = "";
+          if (cfg.comercio) comb = '<button class="btn btn-sm btn-ghost" data-comacc="' + esc(x.id) + '">Acceso</button><a class="btn btn-sm btn-ghost" href="/comercio" target="_blank" rel="noopener">Ver como</a>';
+          var acc = w ? ('<button class="btn btn-sm btn-ghost" data-edit="' + esc(x.id) + '">Editar</button>' + parts + sub + encb + comb + (cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-gana="' + esc(x.id) + '">Ganador</button>' : '') + '<button class="btn btn-sm btn-ghost adm-neg" data-del="' + esc(x.id) + '">Borrar</button>') : (parts + sub + encb);
           var estadoPill = cfg.estado ? '<span class="pill ' + (cfg.estado(x).c || "") + '" style="margin-right:8px">' + esc(cfg.estado(x).l) + '</span>' : "";
           return '<tr><td data-l="Item"><strong>' + esc(cfg.lbl(x) || "—") + '</strong><br>' + estadoPill + '<span class="muted">' + esc(cfg.info(x)) + '</span></td><td data-l=""><div class="row-actions" style="flex-wrap:wrap">' + acc + '</div></td></tr>';
         }).join("");
         $("crudList").innerHTML = '<table class="adm-tabla"><tbody>' + rows + '</tbody></table>';
       } catch (e) { $("crudList").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // Usuario y contraseña con los que un comercio entra a su portal (/comercio). La contraseña solo se guarda cifrada.
+    function accesoComercio(id) {
+      var it = crudItems.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+      infoModal("Acceso del comercio", '<p class="muted" style="margin:6px 0 12px">Con esto entra <b>' + esc(it.nombre) + '</b> a ' + esc(location.origin) + '/comercio. Elegí una contraseña de al menos 6 caracteres y pasásela por un canal seguro.</p>' +
+        '<div class="fgrid"><div class="full"><label>Usuario</label><input id="ca_u" autocomplete="off" value="' + esc(it.usuario || "") + '" /></div><div class="full"><label>Contraseña nueva</label><input id="ca_p" type="text" autocomplete="off" /></div></div>' +
+        '<p class="err" id="ca_err"></p><div class="row-actions"><button class="btn" id="ca_ok">Guardar acceso</button></div>');
+      $("ca_ok").onclick = async function () {
+        try {
+          await api("/admin/comercios/" + encodeURIComponent(id) + "/acceso", { method: "POST", body: { usuario: $("ca_u").value, password: $("ca_p").value } });
+          $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; $("uiModalBg").onclick = null;
+          toast("Acceso guardado"); cargarCrud();
+        } catch (e) { $("ca_err").textContent = e.message; }
+      };
     }
     // Valores sugeridos al CREAR (no al editar): igual al default real que aplica el
     // servidor si se deja vacío, para que el form no mienta con un campo vacío.
@@ -2051,6 +2072,7 @@
       else if (b.dataset.segundo) pasarAlSegundo(b.dataset.segundo);
       else if (b.dataset.pujas) verPujasSubasta(b.dataset.pujas);
       else if (b.dataset.link) verLinkSubasta(b.dataset.link);
+      else if (b.dataset.comacc) accesoComercio(b.dataset.comacc);
       else if (b.dataset.encact) cambiarEstadoEncuesta(b.dataset.encact, "activa");
       else if (b.dataset.enccer) cambiarEstadoEncuesta(b.dataset.enccer, "cerrada");
       else if (b.dataset.encres) verResultadosEncuesta(b.dataset.encres);

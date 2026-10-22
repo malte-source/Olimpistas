@@ -421,8 +421,8 @@ function createPgStore({ databaseUrl, debug }) {
     async getComercio(id) { const [c] = await sql`SELECT * FROM comercios WHERE id = ${id} LIMIT 1`; return c || null; },
     async crearComercio(d = {}) {
       const id = uid("com");
-      const [c] = await sql`INSERT INTO comercios (id, nombre, rubro, logo, direccion, ciudad, contacto, estado)
-        VALUES (${id}, ${d.nombre || ""}, ${d.rubro || ""}, ${d.logo || ""}, ${d.direccion || ""}, ${d.ciudad || ""}, ${d.contacto || ""}, ${d.estado || "activo"}) RETURNING *`;
+      const [c] = await sql`INSERT INTO comercios (id, nombre, rubro, logo, direccion, ciudad, contacto, estado, lat, lng)
+        VALUES (${id}, ${d.nombre || ""}, ${d.rubro || ""}, ${d.logo || ""}, ${d.direccion || ""}, ${d.ciudad || ""}, ${d.contacto || ""}, ${d.estado || "activo"}, ${d.lat != null ? d.lat : null}, ${d.lng != null ? d.lng : null}) RETURNING *`;
       return c;
     },
     async updateComercio(id, patch) { const [c] = await sql`UPDATE comercios SET ${sql(patch)} WHERE id = ${id} RETURNING *`; return c || null; },
@@ -443,7 +443,7 @@ function createPgStore({ databaseUrl, debug }) {
     // Devuelve TODOS los beneficios activos/vigentes con flag desbloqueado + nivel_min (para
     // mostrarle al socio lo suyo Y lo bloqueado como gancho de upsell).
     async beneficiosParaNivel(tier) {
-      const rows = await sql`SELECT b.*, c.nombre AS comercio_nombre, c.rubro AS comercio_rubro, c.logo AS comercio_logo, c.ciudad AS comercio_ciudad
+      const rows = await sql`SELECT b.*, c.nombre AS comercio_nombre, c.rubro AS comercio_rubro, c.logo AS comercio_logo, c.ciudad AS comercio_ciudad, c.lat AS comercio_lat, c.lng AS comercio_lng
         FROM beneficios b JOIN comercios c ON c.id = b.comercio_id
         WHERE b.activo = true AND b.estado = 'aprobado' AND c.estado = 'activo'
           AND (b.vigencia_desde IS NULL OR b.vigencia_desde <= now()::date)

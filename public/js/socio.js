@@ -1209,6 +1209,52 @@
         (bloqueados.length ? '<div><div class="grupo-h">' + T("m_ben_subi_h") + '</div><div class="grupo">' + bloqueados.map((x) => fila(x, true)).join("") + '</div></div>' : "") +
       '</div></div>';
     view().querySelectorAll("[data-ben]").forEach((el) => el.addEventListener("click", () => abrirBeneficio(items.find((x) => x.id === el.dataset.ben), TL)));
+    iniciarBeneficiosMapa(items, TL);
+  }
+  // Beneficios cerca tuyo: el segmentado Lista / Mapa solo aparece si hay comercios con ubicación. El valor ("15%") va en una píldora negra;
+  // los que tu nivel todavía no alcanza llevan candado y abren la invitación a subir de nivel.
+  function iniciarBeneficiosMapa(items, TL) {
+    const conUbic = items.filter((x) => x.comercio_lat != null && x.comercio_lng != null);
+    const cols = view().querySelector(".ben-cols");
+    if (!conUbic.length || !cols) return;
+    const barra = document.createElement("div");
+    barra.className = "ctl-seg ben-vista"; barra.setAttribute("role", "radiogroup");
+    barra.innerHTML = `<button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-v="lista">${T("m_ben_lista")}</button><button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-v="mapa">${T("m_ben_mapa")}</button>`;
+    const caja = document.createElement("div"); caja.className = "ben-mapa-wrap"; caja.hidden = true;
+    caja.innerHTML = `<div class="ben-mapa" id="benMapa"></div><button type="button" class="btn btn-ghost ben-cerca" id="benCerca">${T("m_ben_cerca")}</button>`;
+    cols.parentNode.insertBefore(barra, cols); cols.parentNode.insertBefore(caja, cols);
+    let mapa = null, marcadores = [];
+    const armar = async () => {
+      if (mapa) { mapa.resize(); return; }
+      try { await OLI.cargarMapa(); } catch (e) { return; }
+      const ML = window.maplibregl; if (!ML) return;
+      mapa = new ML.Map({ container: "benMapa", style: ESTILO_CALLE, center: [Number(conUbic[0].comercio_lng), Number(conUbic[0].comercio_lat)], zoom: 12, attributionControl: { compact: true }, cooperativeGestures: true });
+      mapa.addControl(new ML.NavigationControl({ showCompass: false }), "top-right");
+      const bounds = new ML.LngLatBounds();
+      conUbic.forEach((b) => {
+        const el = document.createElement("button"); el.type = "button";
+        el.className = "ben-pin" + (b.desbloqueado ? "" : " lock");
+        el.innerHTML = (b.desbloqueado ? "" : OLI.ic("candado", 12) + " ") + esc(b.valor || "");
+        el.setAttribute("aria-label", (b.comercio_nombre || "") + " · " + (b.valor || ""));
+        el.addEventListener("click", (ev) => { ev.stopPropagation(); abrirBeneficio(b, TL); });
+        const lngLat = [Number(b.comercio_lng), Number(b.comercio_lat)];
+        marcadores.push(new ML.Marker({ element: el, anchor: "bottom" }).setLngLat(lngLat).addTo(mapa));
+        bounds.extend(lngLat);
+      });
+      if (conUbic.length > 1) mapa.fitBounds(bounds, { padding: 50, maxZoom: 14, duration: 0 });
+      document.getElementById("benCerca").onclick = () => {
+        if (!navigator.geolocation) return toast(T("m_geo_no"));
+        toast(T("m_ben_ubicando"));
+        navigator.geolocation.getCurrentPosition((pos) => mapa.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 14 }), () => toast(T("m_geo_err")), { timeout: 8000, maximumAge: 600000 });
+      };
+    };
+    barra.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-v]"); if (!b) return;
+      barra.querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+      const mapaVista = b.dataset.v === "mapa";
+      cols.hidden = mapaVista; caja.hidden = !mapaVista;
+      if (mapaVista) armar();
+    });
   }
   // Hoja con el detalle del beneficio: usarlo (mostrar el QR en caja) o subir de nivel.
   function abrirBeneficio(b, TL) {
