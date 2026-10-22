@@ -934,7 +934,7 @@
       var box = $("atConfig"); if (!box || !veSeccion("atencion")) return;
       try {
         var d = await api("/admin/atencion/config"), w = puede("atencion.write");
-        box.innerHTML = '<p class="hint">Modelo: <b>' + esc(d.modelo) + '</b> · ' + (d.ia_conectada ? '<span class="pill pill-ok">IA conectada</span>' : '<span class="pill pill-warn">Sin clave de IA: responde por palabras clave</span>') + '</p>' +
+        box.innerHTML = '<p class="hint">Modelo: <b>' + esc(d.modelo) + '</b>' + (d.proveedor ? ' (' + esc(d.proveedor) + ')' : '') + ' · ' + (d.ia_conectada ? '<span class="pill pill-ok">IA conectada</span>' : '<span class="pill pill-warn">Sin clave de IA (Gemini): responde por palabras clave</span>') + '</p>' +
           '<div class="grupo adm-grupo">' + d.items.map(function (i) {
             return '<div class="grupo-fila"' + (i.disponible ? '' : ' style="opacity:.7"') + '><span class="grupo-tx"><b>' + esc(i.nombre) + '</b><small>' + esc(i.descripcion) + (i.disponible ? '' : ' · Todavía no disponible: ' + esc(i.motivo_no_disponible || "")) + '</small></span>' +
               '<button type="button" class="interruptor" role="switch" aria-checked="' + (!!i.activo) + '" aria-label="' + esc(i.nombre) + '" data-atcfg="' + esc(i.clave) + '"' + (w && i.disponible ? '' : ' disabled') + '></button></div>';
