@@ -7,6 +7,7 @@ process.env.NODE_ENV = "test";
 process.env.ADMIN_KEY = "clave-admin-de-prueba";
 process.env.CRON_SECRET = "secreto-de-cron-de-prueba";
 process.env.CAMPANAS_PAUSA_MS = "0";
+process.env.CAMPANAS_ACTIVAS = "1";
 delete process.env.GHL_WHATSAPP_URL;
 
 const { test, before, after } = require("node:test");
@@ -193,4 +194,28 @@ test("permisos: marketing puede lanzar; lectura solo mira; sin sesión no entra;
   assert.strictEqual((await api("/admin/campanas/enviar", { metodo: "POST", h: hMarketing, cuerpo })).status, 201);
   assert.strictEqual((await api("/cron/campanas", { metodo: "POST" })).status, 401);
   assert.strictEqual((await api("/cron/campanas", { metodo: "POST", h: { "x-cron-token": "secreto-de-cron-de-prueba" } })).status, 200);
+});
+
+test("interruptor general: sin CAMPANAS_ACTIVAS no se prueba ni se envía nada y el cron no manda, pero se puede armar y ver la vista previa", async () => {
+  const marca = marcaUnica();
+  await socios(marca, [{}, {}]);
+  const j = await (await enviar(marca, { total_esperado: 2 })).json(); // armada con las campañas activas
+  delete process.env.CAMPANAS_ACTIVAS;
+  try {
+    assert.strictEqual((await api("/admin/campanas/plantillas", { h: OWNER }).then((r) => r.json())).activas, false);
+    assert.strictEqual((await api("/admin/campanas/vista-previa", { metodo: "POST", h: OWNER, cuerpo: textoOk })).status, 200, "la vista previa sigue");
+    assert.strictEqual((await api("/admin/campanas/audiencia", { metodo: "POST", h: OWNER, cuerpo: { canal: "email", filtros: { q: marca } } })).status, 200);
+    for (const [ruta, cuerpo] of [["/admin/campanas/enviar", { nombre: "x", canal: "email", ...textoOk, filtros: { q: marca }, total_esperado: 2 }], ["/admin/campanas/prueba", { ...textoOk, a: "yo@ejemplo.com" }]]) {
+      const r = await api(ruta, { metodo: "POST", h: OWNER, cuerpo });
+      assert.strictEqual(r.status, 403, ruta);
+      assert.match((await r.json()).error, /todavía no están activas/);
+    }
+    const r = await campanas.procesarLote({ store, enviarEmail: async () => { throw new Error("apagado: no debería enviar"); } });
+    assert.strictEqual(r.pausado, true);
+    assert.strictEqual(r.enviados, 0);
+    const d = await (await api("/admin/campanas/" + j.id, { h: OWNER })).json();
+    assert.strictEqual(d.conteo.pendiente, 2, "lo armado queda esperando");
+  } finally { process.env.CAMPANAS_ACTIVAS = "1"; }
+  const r2 = await campanas.procesarLote({ store, enviarEmail: async () => ({ ok: true }) });
+  assert.ok(r2.enviados >= 2, "al encender el interruptor, sale");
 });

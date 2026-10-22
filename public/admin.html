@@ -385,6 +385,7 @@
 
           <h2 style="margin-top:34px">Nueva campaña</h2>
           <p class="hint">Elegí a quién va, por dónde, qué decir y mirá cómo queda antes de enviar. Quien se dio de baja de novedades nunca la recibe, y el envío sale por tandas (podés cancelar lo que todavía no salió).</p>
+          <p class="hint" id="cmpOff" hidden><span class="pill pill-warn">Desactivadas</span> Las campañas todavía no están activas: podés armar el mensaje y ver cómo queda, pero no probar ni enviar. Se encienden cuando el club lo decida.</p>
           <div class="cmp" id="cmpBox">
             <div class="fgrid">
               <div><label for="cmpAud">A quién</label><select id="cmpAud"></select></div>
@@ -1498,7 +1499,9 @@
       ["cmpPruebaBtn", "cmpEnviarBtn", "cmpPruebaA"].forEach(function (id) { var el = $(id); if (el) el.style.display = escribe ? "" : "none"; });
       try {
         var r = await Promise.all([api("/admin/campanas/plantillas"), api("/admin/segmentos")]);
-        CMP.plantillas = r[0].items || []; CMP.wa = !!r[0].whatsapp_conectado;
+        CMP.plantillas = r[0].items || []; CMP.wa = !!r[0].whatsapp_conectado; CMP.activas = !!r[0].activas;
+        $("cmpOff").hidden = CMP.activas;
+        ["cmpPruebaBtn", "cmpEnviarBtn"].forEach(function (id) { var el = $(id); if (el) { el.disabled = !CMP.activas; el.title = CMP.activas ? "" : "Las campañas todavía no están activas"; } });
         var segs = (r[1].items || []);
         $("cmpAud").innerHTML = '<option value="">Elegí a quién…</option><option value="todos">Todos los hinchas</option>' +
           '<optgroup label="Por nivel">' + CMP.tipos.map(function (x) { return '<option value="tier:' + x[0] + '">' + esc(x[1]) + '</option>'; }).join("") + '</optgroup>' +

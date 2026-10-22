@@ -1632,7 +1632,7 @@ function buildRouter() {
   const camposDe = (body) => { const v = campanasLib.validarCampos(body); if (!v.ok) throw httpError(400, v.error); return v.campos; };
   const SOCIO_MUESTRA = { id: "muestra", nombre: "Marcos", tier_slug: "premium" };
   r.get("/admin/campanas/plantillas", requireAdmin, wrap(async (_req, res) => {
-    res.json({ items: campanasLib.PLANTILLAS, whatsapp_conectado: whatsappConectado(), limites: { asunto: campanasLib.MAX_ASUNTO, titulo: campanasLib.MAX_TITULO, cuerpo: campanasLib.MAX_CUERPO } });
+    res.json({ items: campanasLib.PLANTILLAS, activas: campanasLib.activas(), whatsapp_conectado: whatsappConectado(), limites: { asunto: campanasLib.MAX_ASUNTO, titulo: campanasLib.MAX_TITULO, cuerpo: campanasLib.MAX_CUERPO } });
   }));
   r.post("/admin/campanas/vista-previa", requireAdmin, wrap(async (req, res) => {
     const c = camposDe(req.body || {});
@@ -1645,7 +1645,9 @@ function buildRouter() {
     const { reciben, excluidos } = campanasLib.clasificarAudiencia(socios, canal);
     res.json({ canal, total: socios.length, reciben: reciben.length, excluidos, whatsapp_conectado: whatsappConectado() });
   }));
+  const exigirActivas = () => { if (!campanasLib.activas()) throw httpError(403, "Las campañas todavía no están activas. Podés armarlas y ver la vista previa; se encienden cuando el club lo decida."); };
   r.post("/admin/campanas/prueba", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    exigirActivas();
     const b = req.body || {};
     if (b.canal === "whatsapp") throw httpError(400, "La prueba por WhatsApp se hace desde GoHighLevel. Probá el texto con la vista previa.");
     const a = String(b.a || "").trim().toLowerCase();
@@ -1656,6 +1658,7 @@ function buildRouter() {
     res.json({ ok: !!(out && out.ok), modo: out && out.modo });
   }));
   r.post("/admin/campanas/enviar", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    exigirActivas();
     const b = req.body || {};
     const canal = b.canal === "whatsapp" ? "whatsapp" : "email";
     if (canal === "whatsapp" && !whatsappConectado()) throw httpError(400, "WhatsApp no está conectado todavía (falta GHL_WHATSAPP_URL).");
