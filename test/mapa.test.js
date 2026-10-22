@@ -95,8 +95,8 @@ test("/api/flags no entrega nombre ni ciudad: solo la posición difuminada de la
   const { socio } = await r.json();
   await store.updateSocio(socio.id, { lat: -25.2937, lng: -57.6359, ciudad: "Asunción", mostrar_exacto: true });
   const j = await (await fetch(url + "/api/flags?bbox=-58,-26,-57,-25&limit=40")).json();
-  assert.ok(j.flags.length >= 1, "debería haber al menos una bandera");
-  for (const f of j.flags) assert.deepStrictEqual(Object.keys(f).sort(), ["lat", "lng"]);
+  // /flags quedó desactivado por privacidad (casas sin k-anonimato): responde vacío; las zonas salen de /api/mapa/celdas
+  assert.deepStrictEqual(j.flags, []);
   const texto = JSON.stringify(j);
   assert.ok(!/Marcos|Asunci/.test(texto));
 });

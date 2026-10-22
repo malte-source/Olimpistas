@@ -300,7 +300,9 @@ function buildRouter() {
     if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n)))
       throw httpError(400, "bbox inválido (se espera minLng,minLat,maxLng,maxLat)");
     const [minLng, minLat, maxLng, maxLat] = parts;
-    const raw = await store.flagsEnBBox({ minLng, minLat, maxLng, maxLat, limit: req.query.limit });
+    // DESACTIVADO por privacidad: devolvía casas con un desfase fijo y sin k-anonimato (se podía recorrer el mapa en teselas).
+    // La app usa /api/mapa/celdas. Se deja la ruta (responde vacío) para no romper cachés de versiones viejas del navegador.
+    const raw = [];
     // Privacidad: NUNCA exponer el domicilio exacto en público. Difuminamos la coordenada
     // ~150m con un offset determinístico por socio (estable, no salta) y mostramos solo el
     // ni nombre ni ciudad: solo una bandera. El punto exacto solo lo ve el propio socio en su perfil.
@@ -316,14 +318,21 @@ function buildRouter() {
 
   // Barrios en hexágonos H3 con k-anonimato (lib/h3.js): reemplaza a /flags, que queda unas versiones más para no romper a nadie.
   // Pública a propósito: no lleva ids ni nombres, y una celda con menos de K hinchas no se entrega.
+  let _celdasGlobal = null;
   r.get("/mapa/celdas", wrap(async (req, res) => {
     const p = String(req.query.bbox || "").split(",").map(Number);
     if (p.length !== 4 || p.some((n) => !Number.isFinite(n))) throw httpError(400, "bbox inválido (se espera minLng,minLat,maxLng,maxLat)");
     const [minLng, minLat, maxLng, maxLat] = p;
     if (minLng >= maxLng || minLat >= maxLat || maxLng - minLng > 2 || maxLat - minLat > 2) throw httpError(400, "Acercate más: el recuadro es demasiado grande para dibujar barrios.");
-    const puntos = await store.puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat });
+    // Se agrupa y se aplica el k-anonimato sobre TODOS los puntos (caché 5 min) y recién después se recorta por recuadro. Si se agrupara
+    // solo lo que cae dentro del recuadro, deslizar el borde mostraría cuándo aparece o desaparece una celda y delataría a cada persona.
+    if (!_celdasGlobal || Date.now() - _celdasGlobal.t > (process.env.NODE_ENV === "test" ? 0 : 300000)) {
+      const todos = await store.puntosPublicosEnBBox({ minLng: -180, minLat: -90, maxLng: 180, maxLat: 90, limit: 50000 });
+      _celdasGlobal = { t: Date.now(), v: h3lib.celdasAnonimas(todos).map((c) => { const [la, lo] = h3lib.centro(c.c); return { ...c, la, lo }; }) };
+    }
+    const dentro = _celdasGlobal.v.filter((c) => c.lo >= minLng && c.lo <= maxLng && c.la >= minLat && c.la <= maxLat).slice(0, 2000).map(({ c, n, r: rr }) => ({ c, n, r: rr }));
     res.setHeader("Cache-Control", "public, max-age=60");
-    res.json({ k: h3lib.K, celdas: h3lib.celdasAnonimas(puntos).slice(0, 2000) });
+    res.json({ k: h3lib.K, celdas: dentro });
   }));
 
   // Para "Compartir mi bandera": cuántos olimpistas REALES hay en tu ciudad y en tu país (sin la rampa ni el agregado de demo).
@@ -948,10 +957,11 @@ function buildRouter() {
     // (INSERT ON CONFLICT) → si el cron corre 2 veces el mismo día, o falla a mitad y
     // reintenta, cada socio recibe el correo UNA sola vez. Sin esto = spam + gasto de cuota.
     const puede = store.reservarNotificacion ? (clave) => store.reservarNotificacion(clave) : async () => true;
-    try { out.subastas = await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron subastas"); }
-    try { out.pagos = await conciliarPagos(); } catch (e) { log.error({ err: e.message }, "cron conciliación de pagos"); }
-    try { out.plazosSubastas = await procesarPlazosSubastas(); } catch (e) { log.error({ err: e.message }, "cron plazos de subastas"); }
-    try { out.puntos = await procesarPuntosDiario(); } catch (e) { log.error({ err: e.message }, "cron puntos"); }
+    const falla = (paso) => (e) => { log.error({ err: e.message }, "cron " + paso); alertar("cron:diario:" + paso, "Falló un paso del cron diario: " + paso, String(e && e.message)); };
+    try { out.subastas = await cerrarYnotificarSubastas(); } catch (e) { falla("subastas")(e); }
+    try { out.pagos = await conciliarPagos(); } catch (e) { falla("conciliación de pagos")(e); }
+    try { out.plazosSubastas = await procesarPlazosSubastas(); } catch (e) { falla("plazos de subastas")(e); }
+    try { out.puntos = await procesarPuntosDiario(); } catch (e) { falla("puntos")(e); }
     try {
       const cumples = store.cumplenHoy ? await store.cumplenHoy() : [];
       for (const s of cumples) {
@@ -1002,12 +1012,13 @@ function buildRouter() {
   // que ambos lo leen de la query. NO afecta los correos transaccionales (pagos, seguridad).
   async function procesarBaja(u) {
     const id = mailer.unsubValido ? mailer.unsubValido(u) : null;
-    if (id) { try { await store.updateSocio(id, { marketing_baja: true, marketing_baja_en: new Date().toISOString() }); } catch (e) {} }
+    // Si no se pudo guardar, el error sube (500): NO se le dice "listo, te diste de baja" a quien va a seguir recibiendo correos.
+    if (id) await store.updateSocio(id, { marketing_baja: true, marketing_baja_en: new Date().toISOString() });
     return !!id;
   }
   r.post("/baja", wrap(async (req, res) => {
     await procesarBaja(req.query.u || (req.body && req.body.u));
-    res.status(200).json({ ok: true }); // one-click: siempre 200
+    res.status(200).json({ ok: true }); // one-click (RFC 8058): 200 cuando quedó guardada; 5xx si no, para que el cliente de correo reintente
   }));
   r.get("/baja", wrap(async (req, res) => {
     const ok = await procesarBaja(req.query.u);
@@ -1336,7 +1347,7 @@ function buildRouter() {
   // Export CSV de los pagos Metrepay (contabilidad).
   r.get("/admin/export/pagos.csv", requireAdmin, requirePerm("export"), wrap(async (_req, res) => {
     const items = store.listActualizaciones ? await store.listActualizaciones({ tipo: "pago_metrepay", limit: 2000 }) : [];
-    const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const q = csvCelda; // neutraliza = + - @ (inyección de fórmulas en Excel)
     const head = ["fecha", "pagador", "cedula_o_tel", "nivel", "estado", "notas"];
     const rows = items.map((a) => [a.creado, [a.nombre, a.apellido].filter(Boolean).join(" "), a.email, a.tier_pretendido, a.estado, a.notas].map(q).join(","));
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -1352,7 +1363,7 @@ function buildRouter() {
   r.get("/admin/export/socios.csv", requireAdmin, requirePerm("export"), wrap(async (req, res) => {
     const f = { tier: req.query.tier || undefined, paisIso: req.query.pais || undefined, validoSocio: req.query.validoSocio === "1", sinFoto: req.query.sinFoto === "1", q: req.query.q || undefined, limit: 5000 };
     const items = store.filtrarSocios ? await store.filtrarSocios(f) : [];
-    const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const q = csvCelda; // neutraliza = + - @ (inyección de fórmulas en Excel)
     const head = ["nombre", "apellido", "email", "cedula", "pais", "pais_iso", "tier", "socio_olimpia", "tiene_foto", "creado"];
     const rows = items.map((s) => [s.nombre, s.apellido, s.email, s.cedula, s.pais, s.pais_iso, s.tier_slug, s.es_socio_olimpia ? "si" : "no", s.tiene_foto ? "si" : "no", s.creado].map(q).join(","));
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -1798,6 +1809,7 @@ function buildRouter() {
   r.post("/admin/pedidos/:id/rechazar", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
     const pedido = await store.getPedidoPago(req.params.id);
     if (!pedido) throw httpError(404, "Pedido no encontrado");
+    if (pedido.estado !== "pendiente") throw httpError(409, "Solo se puede rechazar un pedido pendiente (este está " + pedido.estado + "): lo ya cobrado se revierte desde el reembolso, no desde acá.");
     await store.updatePedidoPago(pedido.id, { estado: "rechazado" });
     res.json({ ok: true });
   }));
@@ -1983,13 +1995,16 @@ function buildRouter() {
     try {
       const pend = store.subastasSinNotificar ? await store.subastasSinNotificar() : [];
       for (const s of pend) {
+        let enviado = true;
         try {
           const ganador = await store.getSocioById(s.ganador_id);
           const urlSubasta = urlLote(s);
           if (ganador && mailer.enviarSubastaGanador) {
             const limitePago = s.pago_vence || null; // fijado al cerrar, según la decisión del club (72 h por defecto)
             const horas = limitePago ? Math.max(1, Math.round((new Date(limitePago).getTime() - Date.now()) / 3600000)) : undefined;
-            await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago, horas }).catch(() => {});
+            const r0 = await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago, horas }).catch((e) => ({ ok: false, error: e && e.message }));
+            enviado = !!(r0 && r0.ok !== false);
+            if (!enviado) alertar("subasta:aviso:fallo:" + s.id, "No se pudo avisar al ganador de una subasta", `"${s.titulo}" → ${ganador.email}. Se reintenta en el próximo barrido; mientras tanto avisale a mano: el plazo de pago corre.`);
           }
           // Avisar AL EQUIPO (no solo al ganador): así saben que hay un ganador, aunque
           // recién escriban por WhatsApp cuando el pago esté confirmado (ver
@@ -2002,8 +2017,9 @@ function buildRouter() {
               `"${s.titulo}" → ganador: ${ganador.nombre || ganador.email} · ${monto} · email: ${ganador.email}`
             );
           }
-        } catch (e) { /* seguir con las demás */ }
-        await store.marcarSubastaNotificada(s.id);
+        } catch (e) { enviado = false; log.error({ err: e && e.message, subasta: s.id }, "aviso al ganador de subasta"); }
+        // Solo se da por avisado si el correo salió: si falló, el próximo barrido lo reintenta (antes quedaba "notificado" sin enviar).
+        if (enviado) await store.marcarSubastaNotificada(s.id);
       }
       return pend.length;
     } catch (e) { log.error({ err: e.message }, "subastas notificar"); return 0; }
@@ -2201,6 +2217,9 @@ function buildRouter() {
     await chequearDeudaPuja(req.socio);
     const monto = Math.round(Number(req.body && req.body.monto) || 0);
     if (!monto) throw httpError(400, "Monto inválido");
+    // Tope: una puja absurda (p. ej. 2.147.483.647) no la supera nadie, desborda el integer de la base y traba el lote.
+    const TOPE_PUJA = Math.min(Number(process.env.PUJA_MAX) || 200000000, 2000000000);
+    if (monto < 0 || monto > TOPE_PUJA) throw httpError(400, "Monto fuera de rango: la puja máxima es ₲ " + TOPE_PUJA.toLocaleString("es-PY"));
     const out = await store.pujar({ subastaId: s.id, socioId: req.socio.id, monto });
     if (!out.ok) {
       const msg = {
@@ -2273,6 +2292,7 @@ function buildRouter() {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (!s.titulo || !(s.precio_inicial > 0)) throw httpError(400, "Faltan datos: título y precio inicial");
+    if (s.estado === "cerrada" || s.estado === "activa") throw httpError(409, "Este lote está " + (s.estado === "activa" ? "en vivo" : "cerrado") + ": publicarlo de nuevo borraría el ganador y el estado de pago.");
     const horas = Number(s.duracion_horas) || Number(req.body && req.body.horas) || 48;
     const inicia = new Date().toISOString();
     const termina = new Date(Date.now() + horas * 3600 * 1000).toISOString();
@@ -3085,7 +3105,7 @@ function buildRouter() {
     const tier = (m && m.tier_slug) || "olimpista";
     const nivs = ben.niveles === "todos" ? "todos" : String(ben.niveles).split(",").map((x) => x.trim());
     const socioOut = { nombre: [socio.nombre, socio.apellido].filter(Boolean).join(" ") || socio.email, tier };
-    if (!(nivs === "todos" || nivs.indexOf(tier) > -1)) return res.json({ ok: false, motivo: "nivel_no_aplica", socio: socioOut, requiere: (nivs === "todos" ? "olimpista" : nivs[0]) });
+    if (!access.nivelAplica(tier, nivs)) return res.json({ ok: false, motivo: "nivel_no_aplica", socio: socioOut, requiere: (nivs === "todos" ? "olimpista" : nivs[0]) });
     const ahorro = ben.pct ? Math.round(monto * Number(ben.pct) / 100) : (Number(ben.ahorro_estimado) || 0);
     const out = await store.canjearBeneficio({ beneficioId: ben.id, socioId: socio.id, comercioId: req.comercio.id, validadoPor: req.comercio.nombre, monto: monto || null, ahorro: ahorro || null, tierSlug: tier, ventana });
     if (!out.ok) return res.json({ ok: false, motivo: out.motivo, socio: socioOut });

@@ -61,7 +61,9 @@ function createPgStore({ databaseUrl, debug }) {
   // reutilizarla después sale ECONNRESET. 1800s (30min) recicla la conexión DESDE el
   // cliente antes de que el servidor tenga chance de hacerlo por su cuenta.
   const DB_MAX_LIFETIME = Number(process.env.DB_MAX_LIFETIME || 1800);
-  const sqlRaw = postgres(databaseUrl, { max: DB_POOL_MAX, idle_timeout: 20, max_lifetime: DB_MAX_LIFETIME, connect_timeout: 10, prepare: false, ssl: process.env.DB_SSL === "disable" ? false : "require", ...(debug ? { debug } : {}) });
+  // Las columnas `date` (cierre de sorteos, fecha de nacimiento, vigencias) se leen como texto 'AAAA-MM-DD', igual que en memory-store y como
+  // espera todo el código y el frontend. Antes llegaban como objetos Date y `String(cierra).slice(0, 10)` daba "Tue Dec…": ningún sorteo cerraba.
+  const sqlRaw = postgres(databaseUrl, { types: { date: { to: 1082, from: [1082], parse: (x) => x, serialize: (x) => (x instanceof Date ? x.toISOString().slice(0, 10) : x) } }, max: DB_POOL_MAX, idle_timeout: 20, max_lifetime: DB_MAX_LIFETIME, connect_timeout: 10, prepare: false, ssl: process.env.DB_SSL === "disable" ? false : "require", ...(debug ? { debug } : {}) });
 
   // ── Plazo máximo por consulta (caída del 2026-08-09) ───────────────────────
   // `connect_timeout` sólo cubre el momento de conectar: una vez conectada, una consulta
@@ -165,7 +167,7 @@ function createPgStore({ databaseUrl, debug }) {
   };
   const cacheBust = (clave) => { delete _cache[clave]; };
 
-  return {
+  const store = {
     kind: "postgres",
     _sql: sql,
 
@@ -616,7 +618,7 @@ function createPgStore({ databaseUrl, debug }) {
     async contarPorCiudad() {
       return sql`
         SELECT pais_iso, COALESCE(ciudad, '') AS ciudad, COUNT(*)::int AS count,
-               AVG(lat) AS lat, AVG(lng) AS lng
+               CASE WHEN COUNT(*) >= 3 THEN AVG(lat) END AS lat, CASE WHEN COUNT(*) >= 3 THEN AVG(lng) END AS lng
         FROM socios WHERE pais_iso IS NOT NULL AND pais_iso <> '' AND email NOT LIKE ${"%@" + SEED_DOMAIN}
         GROUP BY pais_iso, COALESCE(ciudad, '')
         ORDER BY count DESC LIMIT 600`;
@@ -1623,6 +1625,22 @@ function createPgStore({ databaseUrl, debug }) {
       return u.mensajes;
     },
   };
+
+  // Las listas públicas cacheadas (sorteos, contenido, preventas) se invalidan al escribir: antes el TTL de 30 s era lo único que las
+  // refrescaba y un sorteo recién creado o una reserva de entradas tardaba hasta 30 s en verse.
+  const BUST = {
+    sorteos: ["crearSorteo", "updateSorteo", "deleteSorteo", "participarSorteo"],
+    contenido: ["crearContenido", "updateContenido", "deleteContenido"],
+    preventas: ["crearPreventa", "updatePreventa", "deletePreventa", "reservarPreventa", "confirmarReserva", "cancelarReservaYreponer"],
+  };
+  for (const [clave, metodos] of Object.entries(BUST)) {
+    for (const m of metodos) {
+      const original = store[m];
+      if (typeof original !== "function") continue;
+      store[m] = async (...args) => { try { return await original.apply(store, args); } finally { cacheBust(clave); } };
+    }
+  }
+  return store;
 }
 
 module.exports = { createPgStore };
