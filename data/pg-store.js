@@ -160,6 +160,7 @@ function createPgStore({ databaseUrl, debug }) {
   // Cache en memoria para listas públicas que cambian poco (sorteos/contenido/preventas):
   // bajo carga de lanzamiento le sacan presión al pool del DB. TTL corto + bust en escritura.
   const _cache = {};
+  let _colsSesion = null; // columnas de socios sin la foto (se lee una vez; ver getSession)
   const cacheado = async (clave, ttl, fn) => {
     const c = _cache[clave];
     if (c && Date.now() - c.t < ttl) return c.v;
@@ -719,14 +720,25 @@ function createPgStore({ databaseUrl, debug }) {
         VALUES (${token}, ${socioId}, ${expiraIso}) RETURNING *`;
       return s;
     },
+    // La sesión se consulta en CADA request autenticado: no trae la foto (un data URL de hasta 800 KB). En su lugar
+    // devuelve `tiene_foto`; quien necesite la imagen la pide con getSocioFoto. Las columnas se leen una vez del catálogo
+    // (así una columna nueva entra sola); si eso falla se cae a so.* (más pesado, pero correcto).
     async getSession(token) {
+      if (!_colsSesion) _colsSesion = sql`SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'socios' ORDER BY ordinal_position`
+        .then((r) => r.map((x) => x.column_name).filter((c) => c !== "foto")).catch(() => { _colsSesion = null; return null; });
+      const cols = await _colsSesion;
+      const cuerpo = cols && cols.length ? sql`${sql(cols.map((c) => "so." + c))}, (so.foto IS NOT NULL AND so.foto <> '') AS tiene_foto` : sql`so.*`;
       const [row] = await sql`
-        SELECT s.token, s.socio_id, s.expira, so.*
+        SELECT s.token, s.socio_id, s.expira, ${cuerpo}
         FROM sesiones s JOIN socios so ON so.id = s.socio_id
         WHERE s.token = ${token} AND s.expira > now() LIMIT 1`;
       if (!row) return null;
       const { token: t, socio_id, expira, ...socio } = row;
       return { session: { token: t, socio_id, expira }, socio };
+    },
+    async getSocioFoto(id) {
+      const [r] = await sql`SELECT foto FROM socios WHERE id = ${id} LIMIT 1`;
+      return (r && r.foto) || "";
     },
     async deleteSession(token) {
       await sql`DELETE FROM sesiones WHERE token = ${token}`;

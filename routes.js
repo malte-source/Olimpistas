@@ -88,7 +88,7 @@ function perfilProgreso(socio) {
   let hechos = 0;
   const faltantes = [];
   for (const c of PERFIL_CAMPOS) {
-    const lleno = socio && String(socio[c.key] || "").trim() !== "";
+    const lleno = socio && (String(socio[c.key] || "").trim() !== "" || (c.key === "foto" && !!socio.tiene_foto));
     if (lleno) hechos += c.peso;
     else faltantes.push({ key: c.key, label: c.label });
   }
@@ -457,10 +457,15 @@ function buildRouter() {
     res.json({ ok: true });
   }));
 
+  // req.socio (la sesión) no trae la foto para no arrastrarla en cada request; las pantallas que la muestran la piden acá.
+  async function conFoto(socio) {
+    const foto = store.getSocioFoto ? await store.getSocioFoto(socio.id) : socio.foto;
+    return { ...socio, foto: foto || "" };
+  }
   r.get("/auth/yo", auth.requireSocio, wrap(async (req, res) => {
     const membresia = await store.getMembresia(req.socio.id);
     const referidos = store.contarReferidos ? await store.contarReferidos(req.socio.id).catch(() => 0) : 0;
-    res.json({ socio: req.socio, membresia, progreso: perfilProgreso(req.socio), referidos });
+    res.json({ socio: await conFoto(req.socio), membresia, progreso: perfilProgreso(req.socio), referidos });
   }));
 
   // Ranking de referidores ("la hinchada que más suma"). Público, cacheado liviano.
@@ -482,7 +487,7 @@ function buildRouter() {
 
   // ─── Perfil (enriquecimiento + barra de progreso) ────────────────────────────
   r.get("/perfil", auth.requireSocio, wrap(async (req, res) => {
-    res.json({ socio: req.socio, progreso: perfilProgreso(req.socio) });
+    res.json({ socio: await conFoto(req.socio), progreso: perfilProgreso(req.socio) });
   }));
 
   // Autocompletar de ciudades (público): por prefijo, sin acentos, por población. Tope de 10.
@@ -3150,7 +3155,7 @@ function buildRouter() {
         socioId: req.socio.id,
         nombre: [req.socio.nombre, req.socio.apellido].filter(Boolean).join(" ") || req.socio.email,
         iso: req.socio.pais_iso || "",
-        foto: req.socio.foto || "",
+        foto: (store.getSocioFoto ? await store.getSocioFoto(req.socio.id) : req.socio.foto) || "",
         tier: tier?.nombre || membresia.tier_slug,
         tierSlug: membresia.tier_slug,
         color: tier?.color || "#000",

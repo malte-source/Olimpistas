@@ -1018,9 +1018,13 @@ function createMemoryStore({ filePath = null } = {}) {
         db.sesiones = db.sesiones.filter(s => s.token !== token); persist();
         return null;
       }
-      const socio = db.socios.find(s => s.id === sess.socio_id) || null;
-      return socio ? { session: sess, socio } : null;
+      const full = db.socios.find(s => s.id === sess.socio_id) || null;
+      if (!full) return null;
+      const { foto, ...socio } = full; // igual que Postgres: la sesión no carga la foto; tiene_foto la reemplaza
+      socio.tiene_foto = !!foto;
+      return { session: sess, socio };
     },
+    async getSocioFoto(id) { const s = db.socios.find(x => x.id === id); return (s && s.foto) || ""; },
     async deleteSession(token) {
       db.sesiones = db.sesiones.filter(s => s.token !== token); persist();
     },
