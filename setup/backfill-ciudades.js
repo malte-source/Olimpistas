@@ -23,10 +23,13 @@
   console.log("Los 25 textos sin coincidencia que más hinchas tienen (para revisar a mano):");
   for (const p of sin.slice(0, 25)) console.log(`  ${String(p.n).padStart(6)}  ${p.pais}  ${p.ciudad}`);
 
-  // 2) Con casa elegida pero sin ciudad: la más cercana del mismo país (hasta 60 km).
+  // 2) Con casa elegida pero sin ciudad: la más cercana del mismo país (hasta 60 km). Las ciudades se cargan una vez en memoria.
+  const { masCercana } = require("../lib/ciudades");
+  const porPais = {};
+  for (const c of await sql`SELECT id, pais_iso, lat, lng FROM ciudades`) (porPais[c.pais_iso] = porPais[c.pais_iso] || []).push(c);
   const casas = await sql`SELECT id, upper(pais_iso) AS pais, lat, lng FROM socios WHERE ciudad_id IS NULL AND lat IS NOT NULL AND lng IS NOT NULL`;
   let porCasa = 0;
-  for (const s of casas) { const c = await store.ciudadMasCercana({ lat: s.lat, lng: s.lng, pais: s.pais, maxKm: 60 }); if (!c) continue; porCasa++; if (aplicar) await sql`UPDATE socios SET ciudad_id = ${c.id} WHERE id = ${s.id}`; }
+  for (const s of casas) { const c = masCercana(porPais[s.pais] || [], s.lat, s.lng, 60); if (!c) continue; porCasa++; if (aplicar) await sql`UPDATE socios SET ciudad_id = ${c.id} WHERE id = ${s.id}`; }
   console.log(`Por casa elegida: ${porCasa} de ${casas.length} hinchas sin ciudad tienen una ciudad oficial a menos de 60 km${aplicar ? " (actualizados)" : ""}`);
 
   // 3) Peñas sin ubicación: su ciudad.
