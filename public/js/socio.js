@@ -714,6 +714,7 @@
             <div class="ubic" style="margin-top:12px">
               <button class="btn btn-ghost" id="btnGeo" type="button">${T("m_geo")}</button>
               <button class="btn" id="btnCasa" type="button">${T("m_casa_boton")}</button>
+              <button class="btn btn-ghost" id="btnStoryMapa" type="button">${T("m_story_mapa")}</button>
               <span id="ubicEstado" class="muted">${tienePunto ? T("m_fijado") : T("m_sin_fijar")}</span>
             </div>
             <div id="perfilMapa" class="ob-mapa"><div class="ob-mapa-pin">${icon("map-pin", { size: 28 })}</div></div>
@@ -729,6 +730,17 @@
     const cancelBtn = document.getElementById("btnCancelarMembresia");
     if (cancelBtn) cancelBtn.onclick = () => confirmarCancelarMembresia(cancelBtn);
     document.getElementById("btnCasa").onclick = abrirHojaCasa;
+    document.getElementById("btnStoryMapa").onclick = async (e) => {
+      const b = e.currentTarget; b.disabled = true;
+      try {
+        const m = await api("/perfil/mapa");
+        const n = m.ciudad_n || m.pais_n, lugar = m.ciudad_n ? m.ciudad : m.pais;
+        const caption = n ? T("m_story_mapa_cap").replace("{n}", Number(n).toLocaleString("es-PY")).replace("{lugar}", lugar) : T("m_story_mapa_cap0");
+        const r = await OLI.compartirStory({ tipo: "mapa", nombre: m.nombre, ciudad: m.ciudad, nCiudad: m.ciudad_n, pais: m.pais, nPais: m.pais_n, iso: m.iso, caption });
+        if (r && r.ok === false && !r.cancel) toast(T("m_error_generico"));
+      } catch (err) { toast(err.message); }
+      b.disabled = false;
+    };
     initPerfilMapa();
     if (!s.pais_iso) prefillPaisPorIP();
   }

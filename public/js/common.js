@@ -315,7 +315,7 @@ window.OLI = (function () {
         x.fillStyle = g; x.fillRect(0, 0, W, H);
       }
       x.fillStyle = "rgba(21,19,28,.86)"; x.fillRect(0, 0, W, 300);
-      x.fillStyle = "#b08d2e"; x.fillRect(0, 300, W, 4);
+      x.fillStyle = "#ffffff"; x.fillRect(0, 300, W, 4);
       // Logo OFICIAL (escudo + OLIMPISTAS.com).
       const logo = await _loadImg("/assets/logo-horizontal.svg?v=88");
       if (logo) { const lw = 520, lh = lw * ((logo.height / logo.width) || 0.215); x.drawImage(logo, (W - lw) / 2, 95, lw, lh); }
@@ -325,9 +325,9 @@ window.OLI = (function () {
       const foto = o.foto ? await _loadImg(o.foto) : null;
       x.textAlign = "center";
       if (foto) x.drawImage(foto, cx - r, cy - r, r * 2, r * 2);
-      else { x.fillStyle = "#23232c"; x.fillRect(cx - r, cy - r, r * 2, r * 2); x.fillStyle = "#d9b65a"; x.font = "bold 190px Arial"; x.textBaseline = "middle"; x.fillText((o.nombre || "O").trim().charAt(0).toUpperCase(), cx, cy); x.textBaseline = "alphabetic"; }
+      else { x.fillStyle = "#23232c"; x.fillRect(cx - r, cy - r, r * 2, r * 2); x.fillStyle = "#ffffff"; x.font = "bold 190px Arial"; x.textBaseline = "middle"; x.fillText((o.nombre || "O").trim().charAt(0).toUpperCase(), cx, cy); x.textBaseline = "alphabetic"; }
       x.restore();
-      x.lineWidth = 10; x.strokeStyle = "#b08d2e"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
+      x.lineWidth = 10; x.strokeStyle = "#ffffff"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
       // Banderita en la selfie.
       const iso = (o.iso || "").toLowerCase().trim();
       if (/^[a-z]{2}$/.test(iso)) {
@@ -336,17 +336,67 @@ window.OLI = (function () {
       }
       // Anuncio. (re-centramos: restore() reseteó textAlign a "start")
       x.textAlign = "center"; x.textBaseline = "alphabetic";
-      x.fillStyle = "#d9b65a"; x.font = "700 32px Arial"; try { x.letterSpacing = "8px"; } catch (e) {}
+      x.fillStyle = "#ffffff"; x.font = "700 32px Arial"; try { x.letterSpacing = "8px"; } catch (e) {}
       x.fillText("ME SUMÉ AL DECANO", cx, 990); try { x.letterSpacing = "0px"; } catch (e) {}
       x.fillStyle = "#fff"; x.font = "900 96px Arial"; x.fillText("SOY OLIMPISTA", cx, 1170);
-      x.font = "54px Arial"; x.fillText("🤍 🖤 🤍", cx, 1260);
+      { for (let i = 0; i < 3; i++) { x.fillStyle = i === 1 ? "#141414" : "#f5f5f5"; x.strokeStyle = "#ffffff"; x.lineWidth = 3; x.beginPath(); x.arc(cx - 70 + i * 70, 1240, 22, 0, 6.2832); x.fill(); x.stroke(); } x.fillStyle = "#fff"; }
       x.fillStyle = "#fff"; x.font = "800 56px Arial"; x.fillText(o.nombre || "Olimpista", cx, 1400);
       const lugar = [o.ciudad, o.pais].filter(Boolean).join(", ") || o.pais || "";
-      if (lugar) { x.fillStyle = "#c6c6d0"; x.font = "600 40px Arial"; x.fillText("📍 " + lugar, cx, 1465); }
+      if (lugar) { x.fillStyle = "#c6c6d0"; x.font = "600 40px Arial"; x.fillText(lugar, cx, 1465); }
       // CTA pie.
       x.fillStyle = "rgba(255,255,255,.6)"; x.font = "600 33px Arial"; x.fillText("Sumate al mundo del Decano, estés donde estés", cx, 1670);
-      x.fillStyle = "#d9b65a"; x.font = "800 62px Arial"; x.fillText("www.olimpistas.com", cx, 1755);
+      x.fillStyle = "#ffffff"; x.font = "800 62px Arial"; x.fillText("www.olimpistas.com", cx, 1755);
       x.fillStyle = "rgba(255,255,255,.55)"; x.font = "600 34px Arial"; x.fillText("@olimpistascom · #SoyOlimpista", cx, 1815);
+      return await new Promise((res) => cv.toBlob((b) => res(b), "image/png", 0.92));
+    } catch (e) { return null; }
+  }
+
+  // "Mi bandera": 1080×1920 con el medallón de tu país, cuántos olimpistas reales hay en tu ciudad y en tu país, y la marca.
+  // Sin oro (no es dinero) y sin emojis: franjas de Olimpia, tinta y blanco. No lleva mapa ni casa: solo ciudad y país.
+  async function storyMapaImagen(o) {
+    o = o || {};
+    try {
+      const W = 1080, H = 1920, cx = W / 2;
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const x = cv.getContext("2d");
+      try { await Promise.all([document.fonts.load("700 120px Saira"), document.fonts.load("600 40px Saira")]); } catch (e) {}
+      const F = (peso, px) => peso + " " + px + "px Saira, Arial, sans-serif";
+      x.fillStyle = "#0a0a0a"; x.fillRect(0, 0, W, H);
+      const franjas = (y) => { for (let i = 0; i * 18 < W; i++) { x.fillStyle = i % 2 ? "#0a0a0a" : "#ffffff"; x.fillRect(i * 18, y, 18, 22); } };
+      franjas(0); franjas(H - 22);
+      const escudo = await _loadImg("/assets/escudo-olimpia-blanco.png");
+      if (escudo) { const ew = 190, eh = ew * ((escudo.height / escudo.width) || 1); x.drawImage(escudo, cx - ew / 2, 130, ew, eh); }
+      // Medallón del país: mitad Olimpia, mitad bandera (la misma idea que el globo).
+      const cy = 720, r = 260;
+      x.save(); x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.clip();
+      const tercio = (r * 2) / 3;
+      [["#f5f5f5", 0], ["#141414", 1], ["#f5f5f5", 2]].forEach(([c, i]) => { x.fillStyle = c; x.fillRect(cx - r, cy - r + i * tercio, r, tercio + 1); });
+      const iso = String(o.iso || "").toLowerCase().trim();
+      const fl = /^[a-z]{2}$/.test(iso) ? await _loadImg("/assets/flags/4x3/" + iso + ".svg", true) : null;
+      if (fl) { const t = document.createElement("canvas"); t.width = Math.round(r * 2 * 4 / 3); t.height = r * 2; t.getContext("2d").drawImage(fl, 0, 0, t.width, t.height); x.drawImage(t, (t.width - r) / 2, 0, r, r * 2, cx, cy - r, r, r * 2); }
+      else { x.fillStyle = "#141414"; x.fillRect(cx, cy - r, r, r * 2); }
+      x.restore();
+      x.lineWidth = 16; x.strokeStyle = "rgba(255,255,255,.12)"; x.beginPath(); x.arc(cx, cy, r + 6, 0, 6.2832); x.stroke();
+      x.lineWidth = 10; x.strokeStyle = "#ffffff"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
+      x.beginPath(); x.moveTo(cx, cy - r); x.lineTo(cx, cy + r); x.stroke();
+      // Texto. El número es el de hinchas REALES (sin la rampa del contador); si todavía no hay, se cuenta la historia sin cifra.
+      x.textAlign = "center"; x.textBaseline = "alphabetic";
+      const nf = (n) => Number(n).toLocaleString("es-PY");
+      const nCiudad = Number(o.nCiudad || 0), nPais = Number(o.nPais || 0);
+      const lugar = o.ciudad || o.pais || "";
+      x.fillStyle = "rgba(255,255,255,.75)"; x.font = F(600, 38); try { x.letterSpacing = "10px"; } catch (e) {}
+      x.fillText(nCiudad || nPais ? "SOY UNO DE LOS" : "YA SOY PARTE", cx, 1120); try { x.letterSpacing = "0px"; } catch (e) {}
+      x.fillStyle = "#ffffff";
+      if (nCiudad || nPais) {
+        x.font = F(700, 230); x.fillText(nf(nCiudad || nPais), cx, 1340);
+        x.font = F(600, 62); x.fillText("olimpistas en " + (nCiudad ? o.ciudad : o.pais), cx, 1430);
+        if (nCiudad && nPais && o.pais) { x.fillStyle = "rgba(255,255,255,.6)"; x.font = F(600, 44); x.fillText("y " + nf(nPais) + " en " + o.pais, cx, 1510); }
+      } else {
+        x.font = F(700, 110); x.fillText("DE LA HINCHADA", cx, 1290); x.fillText("MUNDIAL", cx, 1410);
+        if (lugar) { x.fillStyle = "rgba(255,255,255,.6)"; x.font = F(600, 46); x.fillText(lugar, cx, 1500); }
+      }
+      x.fillStyle = "#ffffff"; x.font = F(700, 64); x.fillText("olimpistas.com", cx, 1760);
+      x.fillStyle = "rgba(255,255,255,.6)"; x.font = F(600, 36); x.fillText("#SoyOlimpista", cx, 1825);
       return await new Promise((res) => cv.toBlob((b) => res(b), "image/png", 0.92));
     } catch (e) { return null; }
   }
@@ -355,17 +405,18 @@ window.OLI = (function () {
   // + abre Instagram. Copia el caption al portapapeles. o: {nombre,ciudad,pais,iso,foto,caption,igUrl}
   async function compartirStory(o) {
     o = o || {};
-    const blob = await storyImagen(o);
+    const mapa = o.tipo === "mapa";
+    const blob = mapa ? await storyMapaImagen(o) : await storyImagen(o);
     if (!blob) return { ok: false };
-    const file = new File([blob], "soy-olimpista.png", { type: "image/png" });
+    const file = new File([blob], mapa ? "mi-bandera.png" : "soy-olimpista.png", { type: "image/png" });
     try { if (navigator.clipboard && o.caption) await navigator.clipboard.writeText(o.caption); } catch (e) {}
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: "Soy Olimpista", text: o.caption || "" }); return { ok: true, shared: true }; }
       catch (e) { return { ok: false, cancel: true }; }
     }
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "soy-olimpista.png"; a.click();
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = mapa ? "mi-bandera.png" : "soy-olimpista.png"; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    try { window.open(o.igUrl || "https://instagram.com/olimpistascom", "_blank"); } catch (e) {}
+    if (!mapa) { try { window.open(o.igUrl || "https://instagram.com/olimpistascom", "_blank"); } catch (e) {} }
     return { ok: true, downloaded: true };
   }
 
@@ -623,5 +674,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, cargarMapa, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
+  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, storyMapaImagen, compartirStory, currency, setCurrency, cargarMapa, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
 })();
