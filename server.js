@@ -22,7 +22,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 // Cabeceras de seguridad (helmet) + CSP a medida con TODAS las fuentes que usa
-// la app (tiles Esri, fuentes Google, banderas flagcdn, Plausible, workers del
+// la app (tiles Esri, fuentes Google, Plausible, workers del
 // mapa). Defensa en profundidad junto al escape anti-XSS del front/back.
 // Meta Pixel: solo se enciende si META_PIXEL_ID es un id numérico válido. Si no, queda apagado
 // (no inyecta nada y el CSP no abre dominios de Facebook). Encenderlo = setear la env, sin tocar código.
@@ -35,7 +35,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://plausible.io", ...(PIXEL_ON ? ["https://connect.facebook.net"] : []), ...(GA_ON ? ["https://www.googletagmanager.com"] : [])],
       styleSrc: ["'self'", "'unsafe-inline'"],
       fontSrc: ["'self'", "data:"],
-      imgSrc: ["'self'", "data:", "blob:", "https://flagcdn.com", "https://server.arcgisonline.com", ...(PIXEL_ON ? ["https://www.facebook.com"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com"] : [])],
+      imgSrc: ["'self'", "data:", "blob:", "https://server.arcgisonline.com", ...(PIXEL_ON ? ["https://www.facebook.com"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com"] : [])],
       connectSrc: ["'self'", "https://plausible.io", "https://server.arcgisonline.com", ...(PIXEL_ON ? ["https://www.facebook.com", "https://connect.facebook.net"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com", "https://*.analytics.google.com", "https://www.googletagmanager.com"] : [])],
       workerSrc: ["'self'", "blob:"],
       childSrc: ["'self'", "blob:"],

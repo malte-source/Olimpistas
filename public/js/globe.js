@@ -67,91 +67,27 @@ window.OLI_GLOBE = (function () {
 
   // ── Medallón por país: mitad bandera de Olimpia (blanca/negra/blanca) + mitad país ──
   const _r = (x, a, b, w, h, c) => { x.fillStyle = c; x.fillRect(a, b, w, h + 0.4); };
-  function _star(x, cx, cy, r) {
-    x.beginPath();
-    for (let i = 0; i < 5; i++) {
-      const a1 = -Math.PI / 2 + i * 2 * Math.PI / 5;
-      x.lineTo(cx + r * Math.cos(a1), cy + r * Math.sin(a1));
-      const a2 = a1 + Math.PI / 5;
-      x.lineTo(cx + r * 0.45 * Math.cos(a2), cy + r * 0.45 * Math.sin(a2));
-    }
-    x.closePath(); x.fill();
-  }
-  // Banderas simplificadas (lado derecho del medallón, caja [a,b,w,h]).
-  const FLAG = {
-    PY:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#D52B1E');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#0038A8');},
-    AR:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#74ACDF');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#74ACDF');},
-    UY:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');for(let i=0;i<4;i++)_r(x,a,b+(i*2+1)*h/9,w,h/9,'#0038A8');_r(x,a,b,w*0.5,h*0.5,'#fff');x.fillStyle='#F6D515';x.beginPath();x.arc(a+w*0.25,b+h*0.25,h*0.12,0,7);x.fill();},
-    BO:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#D52B1E');_r(x,a,b+h/3,w,h/3,'#F9E300');_r(x,a,b+2*h/3,w,h/3,'#007934');},
-    GT:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#4997D0');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#4997D0');},
-    DO:(x,a,b,w,h)=>{_r(x,a,b,w/2,h/2,'#002D62');_r(x,a+w/2,b,w/2,h/2,'#CE1126');_r(x,a,b+h/2,w/2,h/2,'#CE1126');_r(x,a+w/2,b+h/2,w/2,h/2,'#002D62');_r(x,a+w*0.42,b,w*0.16,h,'#fff');_r(x,a,b+h*0.42,w,h*0.16,'#fff');},
-    CR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a,b,w,h*0.2,'#002B7F');_r(x,a,b+h*0.8,w,h*0.2,'#002B7F');_r(x,a,b+h*0.35,w,h*0.3,'#CE1126');},
-    PA:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a+w/2,b,w/2,h/2,'#D21034');_r(x,a,b+h/2,w/2,h/2,'#005293');x.fillStyle='#005293';_star(x,a+w*0.25,b+h*0.25,h*0.1);x.fillStyle='#D21034';_star(x,a+w*0.75,b+h*0.75,h*0.1);},
-    NI:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#0067C6');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#0067C6');},
-    HN:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#0073CF');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#0073CF');},
-    SV:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#0F47AF');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#0F47AF');},
-    CU:(x,a,b,w,h)=>{for(let i=0;i<5;i++)_r(x,a,b+i*h/5,w,h/5,i%2?'#fff':'#002A8F');x.fillStyle='#CB1515';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.45,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();x.fillStyle='#fff';_star(x,a+w*0.14,b+h/2,h*0.1);},
-    PR:(x,a,b,w,h)=>{for(let i=0;i<5;i++)_r(x,a,b+i*h/5,w,h/5,i%2?'#fff':'#ED0000');x.fillStyle='#0050A4';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.5,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();x.fillStyle='#fff';_star(x,a+w*0.16,b+h/2,h*0.1);},
-    FR:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#0055A4');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#EF4135');},
-    NL:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#AE1C28');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#21468B');},
-    BE:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#000');_r(x,a+w/3,b,w/3,h,'#FAE042');_r(x,a+2*w/3,b,w/3,h,'#ED2939');},
-    AT:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#ED2939');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#ED2939');},
-    IE:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#169B62');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#FF883E');},
-    PL:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#fff');_r(x,a,b+h/2,w,h/2,'#DC143C');},
-    UA:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#0057B7');_r(x,a,b+h/2,w,h/2,'#FFD700');},
-    RO:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#002B7F');_r(x,a+w/3,b,w/3,h,'#FCD116');_r(x,a+2*w/3,b,w/3,h,'#CE1126');},
-    GR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');for(let i=0;i<5;i++)_r(x,a,b+i*2*h/9,w,h/9,'#0D5EAF');_r(x,a,b,w*0.5,h*0.55,'#0D5EAF');x.fillStyle='#fff';_r(x,a+w*0.18,b,w*0.14,h*0.55,'#fff');_r(x,a,b+h*0.20,w*0.5,h*0.14,'#fff');},
-    CZ:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#fff');_r(x,a,b+h/2,w,h/2,'#D7141A');x.fillStyle='#11457E';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.5,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();},
-    CH:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#D52B1E');_r(x,a+w*0.42,b+h*0.30,w*0.16,h*0.40,'#fff');_r(x,a+w*0.30,b+h*0.42,w*0.40,h*0.16,'#fff');},
-    DK:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#C8102E');_r(x,a+w*0.30,b,w*0.16,h,'#fff');_r(x,a,b+h*0.42,w,h*0.16,'#fff');},
-    FI:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a+w*0.30,b,w*0.16,h,'#003580');_r(x,a,b+h*0.42,w,h*0.16,'#003580');},
-    NO:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#BA0C2F');_r(x,a+w*0.28,b,w*0.20,h,'#fff');_r(x,a,b+h*0.40,w,h*0.20,'#fff');_r(x,a+w*0.33,b,w*0.10,h,'#00205B');_r(x,a,b+h*0.45,w,h*0.10,'#00205B');},
-    GB:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#012169');_r(x,a+w*0.40,b,w*0.20,h,'#fff');_r(x,a,b+h*0.40,w,h*0.20,'#fff');_r(x,a+w*0.44,b,w*0.12,h,'#C8102E');_r(x,a,b+h*0.44,w,h*0.12,'#C8102E');},
-    PT:(x,a,b,w,h)=>{_r(x,a,b,w*0.4,h,'#006600');_r(x,a+w*0.4,b,w*0.6,h,'#FF0000');x.fillStyle='#FFD700';x.beginPath();x.arc(a+w*0.4,b+h/2,h*0.12,0,7);x.fill();},
-    AE:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#009639');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#000');_r(x,a,b,w*0.28,h,'#CE1126');},
-    SA:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#006C35');_r(x,a+w*0.15,b+h*0.60,w*0.6,h*0.06,'#fff');},
-    EG:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#CE1126');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#000');},
-    MA:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#C1272D');x.fillStyle='#006233';_star(x,a+w/2,b+h/2,h*0.18);},
-    NG:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#008751');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#008751');},
-    ZA:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#E03C31');_r(x,a,b+h/2,w,h/2,'#001489');_r(x,a,b+h*0.4,w,h*0.2,'#007749');x.fillStyle='#000';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.4,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();},
-    AO:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#CC092F');_r(x,a,b+h/2,w,h/2,'#000');x.fillStyle='#FFCB00';x.beginPath();x.arc(a+w/2,b+h/2,h*0.1,0,7);x.fill();},
-    CN:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#DE2910');x.fillStyle='#FFDE00';_star(x,a+w*0.35,b+h*0.34,h*0.16);},
-    KR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');const cx=a+w/2,cy=b+h/2,r=h*0.16;x.fillStyle='#0047A0';x.beginPath();x.arc(cx,cy,r,0,7);x.fill();x.fillStyle='#CD2E3A';x.beginPath();x.arc(cx,cy,r,Math.PI,2*Math.PI);x.fill();},
-    IN:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#FF9933');_r(x,a,b+h/3,w,h/3,'#fff');_r(x,a,b+2*h/3,w,h/3,'#138808');x.strokeStyle='#000080';x.lineWidth=2;x.beginPath();x.arc(a+w/2,b+h/2,h*0.08,0,7);x.stroke();},
-    ID:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#CE1126');_r(x,a,b+h/2,w,h/2,'#fff');},
-    TH:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#A51931');_r(x,a,b+h*0.166,w,h*0.166,'#fff');_r(x,a,b+h*0.666,w,h*0.166,'#fff');_r(x,a,b+h*0.333,w,h*0.333,'#2D2A4A');},
-    TW:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#FE0000');_r(x,a,b,w*0.5,h*0.5,'#000095');x.fillStyle='#fff';x.beginPath();x.arc(a+w*0.25,b+h*0.25,h*0.12,0,7);x.fill();},
-    VN:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#DA251D');x.fillStyle='#FFFF00';_star(x,a+w/2,b+h/2,h*0.2);},
-    PH:(x,a,b,w,h)=>{_r(x,a,b,w,h/2,'#0038A8');_r(x,a,b+h/2,w,h/2,'#CE1126');x.fillStyle='#fff';x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.5,b+h/2);x.lineTo(a,b+h);x.closePath();x.fill();x.fillStyle='#FCD116';x.beginPath();x.arc(a+w*0.14,b+h/2,h*0.06,0,7);x.fill();},
-    IL:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a,b+h*0.16,w,h*0.12,'#0038B8');_r(x,a,b+h*0.72,w,h*0.12,'#0038B8');x.strokeStyle='#0038B8';x.lineWidth=h*0.04;x.beginPath();x.arc(a+w/2,b+h/2,h*0.12,0,7);x.stroke();},
-    RU:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#fff');_r(x,a,b+h/3,w,h/3,'#0039A6');_r(x,a,b+2*h/3,w,h/3,'#D52B1E');},
-    DE:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#111');_r(x,a,b+h/3,w,h/3,'#DD0000');_r(x,a,b+2*h/3,w,h/3,'#FFCE00');},
-    VE:(x,a,b,w,h)=>{_r(x,a,b,w,h/3,'#FFCC00');_r(x,a,b+h/3,w,h/3,'#00247D');_r(x,a,b+2*h/3,w,h/3,'#CF142B');},
-    ES:(x,a,b,w,h)=>{_r(x,a,b,w,h*0.25,'#AA151B');_r(x,a,b+h*0.25,w,h*0.5,'#F1BF00');_r(x,a,b+h*0.75,w,h*0.25,'#AA151B');},
-    CO:(x,a,b,w,h)=>{_r(x,a,b,w,h*0.5,'#FCD116');_r(x,a,b+h*0.5,w,h*0.25,'#003893');_r(x,a,b+h*0.75,w,h*0.25,'#CE1126');},
-    EC:(x,a,b,w,h)=>{_r(x,a,b,w,h*0.5,'#FFDD00');_r(x,a,b+h*0.5,w,h*0.25,'#034EA2');_r(x,a,b+h*0.75,w,h*0.25,'#ED1C24');},
-    MX:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#006847');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#CE1126');},
-    IT:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#009246');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#CE2B37');},
-    PE:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#D91023');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#D91023');},
-    CA:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a,b,w*0.28,h,'#FF0000');_r(x,a+w*0.72,b,w*0.28,h,'#FF0000');x.fillStyle='#FF0000';x.beginPath();x.arc(a+w/2,b+h/2,h*0.14,0,7);x.fill();},
-    BR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#009C3B');const cx=a+w/2,cy=b+h/2;x.fillStyle='#FFDF00';x.beginPath();x.moveTo(cx,cy-h*0.36);x.lineTo(a+w*0.92,cy);x.lineTo(cx,cy+h*0.36);x.lineTo(a+w*0.08,cy);x.closePath();x.fill();x.fillStyle='#002776';x.beginPath();x.arc(cx,cy,h*0.16,0,7);x.fill();},
-    JP:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');x.fillStyle='#BC002D';x.beginPath();x.arc(a+w/2,b+h/2,h*0.26,0,7);x.fill();},
-    TR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#E30A17');const cx=a+w*0.52,cy=b+h/2,rr=h*0.22;x.fillStyle='#fff';x.beginPath();x.arc(cx,cy,rr,0,7);x.fill();x.fillStyle='#E30A17';x.beginPath();x.arc(cx+rr*0.5,cy,rr*0.82,0,7);x.fill();},
-    US:(x,a,b,w,h)=>{const n=7;for(let i=0;i<n;i++)_r(x,a,b+i*h/n,w,h/n,i%2?'#fff':'#B22234');_r(x,a,b,w*0.45,h*0.45,'#3C3B6E');},
-    SE:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#006AA7');_r(x,a,b+h*0.4,w,h*0.2,'#FECC00');_r(x,a+w*0.26,b,w*0.18,h,'#FECC00');},
-    AU:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#00247D');x.strokeStyle='#fff';x.lineWidth=h*0.06;x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.45,b+h*0.45);x.moveTo(a+w*0.45,b);x.lineTo(a,b+h*0.45);x.stroke();x.fillStyle='#fff';_star(x,a+w*0.72,b+h*0.72,h*0.14);},
-    NZ:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#00247D');x.strokeStyle='#fff';x.lineWidth=h*0.06;x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.45,b+h*0.45);x.moveTo(a+w*0.45,b);x.lineTo(a,b+h*0.45);x.stroke();x.fillStyle='#CC142B';_star(x,a+w*0.72,b+h*0.55,h*0.12);},
-    CL:(x,a,b,w,h)=>{_r(x,a,b,w,h*0.5,'#fff');_r(x,a,b+h*0.5,w,h*0.5,'#D52B1E');_r(x,a,b,w*0.4,h*0.5,'#0039A6');x.fillStyle='#fff';_star(x,a+w*0.2,b+h*0.25,h*0.13);},
-  };
+  // Banderas de los 250 países: SVG propios (flag-icons, MIT) en /assets/flags/4x3/, bajados de a uno cuando aparece el país.
+  const cargarBandera = (iso) => new Promise((res) => {
+    if (!/^[A-Za-z]{2}$/.test(iso || "")) return res(null);
+    const img = new Image(); img.onload = () => res(img); img.onerror = () => res(null);
+    img.src = "/assets/flags/4x3/" + String(iso).toLowerCase() + ".svg";
+  });
   // Sin bandera propia: el medallón entero es Olimpia (franjas), nunca un color de relleno.
   const franjasOlimpia = (x, a, b, w, h) => { _r(x, a, b, w, h / 3, "#f5f5f5"); _r(x, a, b + h / 3, w, h / 3, "#141414"); _r(x, a, b + 2 * h / 3, w, h / 3, "#f5f5f5"); };
-  function medallonData(iso) {
+  async function medallonData(iso) {
+    const flag = await cargarBandera(iso);
     const S = 128, c = 64, r = 60, top = 4, hh = 120;
     const cv = document.createElement("canvas"); cv.width = cv.height = S;
     const x = cv.getContext("2d");
     x.save(); x.beginPath(); x.arc(c, c, r, 0, Math.PI * 2); x.clip();
     _r(x, 0, top, c, hh / 3, "#f5f5f5"); _r(x, 0, top + hh / 3, c, hh / 3, "#141414"); _r(x, 0, top + 2 * hh / 3, c, hh / 3, "#f5f5f5");
-    (FLAG[iso] || franjasOlimpia)(x, c, top, c, hh);
+    if (flag) {
+      // La bandera (4:3) se escala a la altura del medallón y se recorta al centro de su mitad derecha.
+      const t = document.createElement("canvas"); t.width = Math.round(hh * 4 / 3); t.height = hh;
+      t.getContext("2d").drawImage(flag, 0, 0, t.width, t.height);
+      x.drawImage(t, (t.width - c) / 2, 0, c, hh, c, top, c, hh);
+    } else franjasOlimpia(x, c, top, c, hh);
     x.restore();
     // Aro y divisor blancos con un contorno tenue para que no se pierdan sobre el satélite claro (sin oro: acá no hay dinero).
     const trazos = (ancho) => { x.lineWidth = ancho; x.beginPath(); x.moveTo(c, top); x.lineTo(c, top + hh); x.stroke(); x.beginPath(); x.arc(c, c, r - 1.5, 0, Math.PI * 2); x.stroke(); };
@@ -201,10 +137,11 @@ window.OLI_GLOBE = (function () {
     const UMBRAL_CASAS = 12; // las casas (punto exacto) aparecen recién a nivel calle
 
     // Genera y registra un medallón por país (mitad Olimpia / mitad país).
+    const caminosDe = (paises) => (window.OLI_GEO ? window.OLI_GEO.caminosFC(paises || []) : { type: "FeatureCollection", features: [] });
     function asegurarMedallones(paises) {
       (paises || []).forEach((p) => {
         const id = "pais-" + (p.iso || "");
-        if (p.iso && !map.hasImage(id)) { try { map.addImage(id, medallonData(p.iso), { pixelRatio: 2 }); } catch (e) {} }
+        if (p.iso && !map.hasImage(id)) medallonData(p.iso).then((d) => { if (!map.hasImage(id)) map.addImage(id, d, { pixelRatio: 2 }); }).catch(() => {});
       });
     }
 
@@ -283,6 +220,8 @@ window.OLI_GLOBE = (function () {
     function addLayers() {
       if (map.getSource("ciudades")) return;
       map.addSource("paises", { type: "geojson", data: buildFC(pendPaises || []) });
+      // "Todos los caminos llevan al Defensores": un arco de círculo máximo por país hacia el estadio (solo a zoom bajo).
+      map.addSource("caminos", { type: "geojson", data: caminosDe(pendPaises) });
       map.addSource("ciudades", {
         type: "geojson", data: buildFC(pendCiudades || []),
         cluster: true, clusterMaxZoom: 8, clusterRadius: 52,
@@ -297,6 +236,9 @@ window.OLI_GLOBE = (function () {
 
       // ── Tier 1: PAÍS (mundo) → medallón mitad Olimpia / mitad país. Fade out ~4.2→5 ──
       const fadePais = opa(0, 1, 4.2, 1, 5, 0);
+      map.addLayer({ id: "caminos-linea", type: "line", source: "caminos", layout: { "line-cap": "round" },
+        paint: { "line-color": "#ffffff", "line-opacity": opa(0, 0.4, 4.2, 0.4, 5.2, 0),
+          "line-width": ["interpolate", ["linear"], ["get", "count"], 1, 1, 5000, 1.6, 100000, 2.6, 1000000, 4] } });
       map.addLayer({ id: "pais-badge", type: "symbol", source: "paises",
         layout: { "icon-image": ["concat", "pais-", ["get", "iso"]], "icon-anchor": "bottom", "icon-allow-overlap": true,
           "icon-size": ["interpolate", ["linear"], ["get", "count"], 1, 0.4, 5000, 0.52, 100000, 0.8, 1024501, 1.2] },
@@ -395,7 +337,7 @@ window.OLI_GLOBE = (function () {
       addLayers();
       ready = true;
       if (pendCiudades && map.getSource("ciudades")) map.getSource("ciudades").setData(buildFC(pendCiudades));
-      if (pendPaises && map.getSource("paises")) { asegurarMedallones(pendPaises); map.getSource("paises").setData(buildFC(pendPaises)); }
+      if (pendPaises && map.getSource("paises")) { asegurarMedallones(pendPaises); map.getSource("paises").setData(buildFC(pendPaises)); if (map.getSource("caminos")) map.getSource("caminos").setData(caminosDe(pendPaises)); }
       girar();
     });
 
@@ -415,7 +357,7 @@ window.OLI_GLOBE = (function () {
       },
       setCountries(paises) {
         pendPaises = paises || [];
-        if (ready && map.getSource("paises")) { asegurarMedallones(pendPaises); map.getSource("paises").setData(buildFC(pendPaises)); }
+        if (ready && map.getSource("paises")) { asegurarMedallones(pendPaises); map.getSource("paises").setData(buildFC(pendPaises)); if (map.getSource("caminos")) map.getSource("caminos").setData(caminosDe(pendPaises)); }
         return this;
       },
       pov(p) { if (p) map.flyTo({ center: [p.lng, p.lat], zoom: p.zoom != null ? p.zoom : 2.4, duration: 1600 }); return this; },

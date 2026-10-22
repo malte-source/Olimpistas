@@ -1487,3 +1487,10 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
   .globo-vista { top: 6px; }
   .globo-vista .ctl-seg-b { padding: 6px 10px; }
 }
+
+/* "Mirá cómo crece": deslizador mensual bajo el globo (handoff v3 · M3-F). */
+.globo-tiempo { max-width: 920px; margin: 14px auto 0; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center; color: #fff; }
+.globo-tiempo[hidden] { display: none; }
+.globo-tiempo .btn { margin: 0; padding: 9px 16px; font-size: var(--t-13); color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
+.globo-tiempo input[type="range"] { flex: 1 1 220px; max-width: 420px; accent-color: #ffffff; }
+.globo-tiempo-et { font-size: var(--t-13); font-weight: 600; color: rgba(255,255,255,.85); min-width: 190px; text-transform: capitalize; font-variant-numeric: tabular-nums; }

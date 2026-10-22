@@ -217,6 +217,7 @@
       window.__oliGl = gl;
       iniciarVistasMapa(gl);
       etiquetarMapa(stats.porPais || []);
+      iniciarTiempo(gl);
       focarNuevo();                                            // si recién se inscribió, vuela a su ciudad
     };
 
@@ -242,6 +243,34 @@
       // Si el hincha mueve el mapa a mano, ninguna vista rápida sigue "activa".
       gl.raw.on("dragstart", () => marcar(""));
     }
+    // "Mirá cómo crece": altas acumuladas mes a mes (solo hinchas reales). Reproduce o se arrastra a mano.
+    async function iniciarTiempo(gl) {
+      const caja = document.getElementById("globoTiempo"); if (!caja || caja.dataset.listo) return;
+      let meses; try { meses = (await api("/mapa/historia")).meses || []; } catch (e) { return; }
+      if (meses.length < 2) return;
+      caja.dataset.listo = "1"; caja.hidden = false;
+      const rango = document.getElementById("tiempoRango"), play = document.getElementById("tiempoPlay"), et = document.getElementById("tiempoEt");
+      const loc = LANG === "en" ? "en-US" : "es-PY";
+      rango.max = String(meses.length - 1); rango.value = String(meses.length - 1);
+      const mostrar = (i) => {
+        const m = meses[i];
+        const lista = (stats.porPais || []).filter((p) => m.porPais[p.iso]).map((p) => ({ ...p, count: m.porPais[p.iso] }));
+        gl.setCountries(lista);
+        const nombre = new Date(m.mes + "-01T12:00:00").toLocaleDateString(loc, { month: "long", year: "numeric" });
+        et.textContent = nombre + " · " + m.total.toLocaleString(loc) + " " + T("mapa_reales");
+      };
+      let timer = null;
+      const parar = () => { clearInterval(timer); timer = null; play.textContent = T("mapa_crece_play"); };
+      rango.addEventListener("input", () => { parar(); mostrar(Number(rango.value)); });
+      play.addEventListener("click", () => {
+        if (timer) return parar();
+        let i = Number(rango.value) >= meses.length - 1 ? 0 : Number(rango.value);
+        play.textContent = T("mapa_crece_pausa");
+        mostrar(i); rango.value = String(i);
+        timer = setInterval(() => { i++; if (i >= meses.length) return parar(); rango.value = String(i); mostrar(i); }, 1800);
+      });
+    }
+
     // Descripción del mapa para lectores de pantalla + lista completa de países (la alternativa accesible).
     function etiquetarMapa(lista) {
       const total = (lista || []).reduce((a, p) => a + Number(p.count || 0), 0);
