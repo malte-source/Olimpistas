@@ -136,3 +136,14 @@ test("front: el perfil autocompleta ciudades y el globo muestra las peñas con '
   for (const k of ["mapa_pena", "mapa_pena_buscando", "mapa_pena_ninguna", "mapa_pena_km"]) assert.strictEqual((i18n.match(new RegExp(k + ":", "g")) || []).length, 2, k);
   assert.ok(fs.existsSync(path.join(__dirname, "..", "public", "assets", "escudo-olimpia-blanco.png")));
 });
+
+test("ciudades extra: las ciudades grandes que GeoNames trae sin población (Luque, Hernandarias…) se cargan igual", () => {
+  const fs = require("fs"), path = require("path");
+  const extra = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "ciudades-extra.json"), "utf8"));
+  assert.ok(extra.length >= 4);
+  for (const e of extra) {
+    assert.ok(Number.isInteger(e.id) && e.nombre && /^[A-Z]{2}$/.test(e.pais_iso) && Number.isFinite(e.lat) && Number.isFinite(e.lng), JSON.stringify(e));
+  }
+  assert.ok(extra.some((e) => e.nombre === "Luque" && e.pais_iso === "PY"));
+  assert.match(fs.readFileSync(path.join(__dirname, "..", "setup", "importar-ciudades.js"), "utf8"), /ciudades-extra\.json/);
+});
