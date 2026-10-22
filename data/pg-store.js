@@ -917,6 +917,9 @@ function createPgStore({ databaseUrl, debug }) {
       return sql.begin(async (tx) => {
         const [pv] = await tx`SELECT * FROM preventas WHERE id = ${preventaId} FOR UPDATE`;
         if (!pv) return null;
+        // Tope por persona y por preventa (reservas vivas): sin esto, una persona acapara el cupo reservando de a 4 sin parar.
+        const [{ vivas }] = await tx`SELECT COALESCE(SUM(cantidad), 0)::int AS vivas FROM reservas WHERE preventa_id = ${preventaId} AND socio_id = ${socioId} AND estado <> 'cancelada'`;
+        if (vivas + cantidad > 4) return { error: "limite", vivas };
         if (pv.stock < cantidad) return { error: "sin_stock" };
         await tx`UPDATE preventas SET stock = stock - ${cantidad} WHERE id = ${preventaId}`;
         const id = uid("res");
@@ -930,9 +933,33 @@ function createPgStore({ databaseUrl, debug }) {
       const [r] = await sql`SELECT * FROM reservas WHERE id = ${id} LIMIT 1`;
       return r || null;
     },
+    // Confirma una reserva pagada. Si el cupo ya se liberó por falta de pago a tiempo (cancelada), intenta
+    // volver a tomarlo; si ya no hay stock devuelve { error: "sin_stock" } para que se reembolse.
     async confirmarReserva(id) {
-      const [r] = await sql`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`;
-      return r || null;
+      return sql.begin(async (tx) => {
+        const [r] = await tx`SELECT * FROM reservas WHERE id = ${id} FOR UPDATE`;
+        if (!r) return null;
+        if (r.estado !== "cancelada") { const [u] = await tx`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`; return u; }
+        const [pv] = await tx`SELECT * FROM preventas WHERE id = ${r.preventa_id} FOR UPDATE`;
+        if (!pv || pv.stock < r.cantidad) return { error: "sin_stock", reserva: r };
+        await tx`UPDATE preventas SET stock = stock - ${r.cantidad} WHERE id = ${r.preventa_id}`;
+        const [u] = await tx`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`;
+        return u;
+      });
+    },
+    // Libera el cupo de las reservas que quedaron sin pagar pasadas `horas` (la ventana de Pagopar es de 3 días).
+    // Devuelve cuántas liberó. SKIP LOCKED: dos corridas del cron a la vez no se pisan.
+    async liberarReservasVencidas({ horas = 75, limit = 200 } = {}) {
+      return sql.begin(async (tx) => {
+        const rs = await tx`SELECT id, preventa_id, cantidad FROM reservas
+          WHERE estado = 'pendiente_pago' AND creado < now() - make_interval(hours => ${horas})
+          ORDER BY creado LIMIT ${limit} FOR UPDATE SKIP LOCKED`;
+        for (const r of rs) {
+          await tx`UPDATE reservas SET estado = 'cancelada' WHERE id = ${r.id}`;
+          await tx`UPDATE preventas SET stock = stock + ${r.cantidad} WHERE id = ${r.preventa_id}`;
+        }
+        return rs.length;
+      });
     },
     // Reversión: cancela la reserva y repone el stock (transacción).
     async cancelarReservaYreponer(id) {

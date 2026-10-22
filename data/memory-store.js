@@ -1118,6 +1118,8 @@ function createMemoryStore({ filePath = null } = {}) {
     async reservarPreventa(preventaId, socioId, cantidad) {
       const pv = db.preventas.find(p => p.id === preventaId);
       if (!pv) return null;
+      const vivas = (db.reservas || []).filter((x) => x.preventa_id === preventaId && x.socio_id === socioId && x.estado !== "cancelada").reduce((a, x) => a + x.cantidad, 0);
+      if (vivas + cantidad > 4) return { error: "limite", vivas };
       if (pv.stock < cantidad) return { error: "sin_stock" };
       pv.stock -= cantidad;
       const r = { id: uid("res"), preventa_id: preventaId, socio_id: socioId, cantidad, estado: "pendiente_pago", creado: nowIso() };
@@ -1128,8 +1130,26 @@ function createMemoryStore({ filePath = null } = {}) {
     async confirmarReserva(id) {
       const r = (db.reservas || []).find(x => x.id === id);
       if (!r) return null;
+      if (r.estado === "cancelada") {
+        const pv = db.preventas.find((p) => p.id === r.preventa_id);
+        if (!pv || pv.stock < r.cantidad) return { error: "sin_stock", reserva: r };
+        pv.stock -= r.cantidad;
+      }
       r.estado = "pagada"; persist();
       return r;
+    },
+    async liberarReservasVencidas({ horas = 75, limit = 200 } = {}) {
+      const corte = Date.now() - horas * 3600000;
+      let n = 0;
+      for (const r of (db.reservas || [])) {
+        if (n >= limit) break;
+        if (r.estado !== "pendiente_pago" || new Date(r.creado).getTime() >= corte) continue;
+        r.estado = "cancelada"; n++;
+        const pv = db.preventas.find((p) => p.id === r.preventa_id);
+        if (pv) pv.stock += r.cantidad;
+      }
+      if (n) persist();
+      return n;
     },
     async cancelarReservaYreponer(id) {
       const r = (db.reservas || []).find(x => x.id === id);

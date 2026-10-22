@@ -2014,6 +2014,67 @@
       if (!$("uiModalBg").hidden) { var no = $("uiModalBox").querySelector("[data-no]"); if (no) no.click(); else { $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; } return; }
       if (!$("fichaBg").hidden) cerrarFicha();
     });
+    // A11y de los modales (ficha y confirmar/info): rol de diálogo, foco adentro, Tab que no se escapa y foco que vuelve
+    // a donde estaba. Se engancha a que el modal se muestre u oculte, así cubre todos los que ya existen sin tocarlos.
+    (function () {
+      var FOCOS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      function enganchar(bgId, boxId) {
+        var bg = $(bgId), box = $(boxId); if (!bg || !box) return;
+        var previo = null;
+        box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
+        function armar() {
+          var h = box.querySelector("h2, h3"); if (h) { if (!h.id) h.id = boxId + "Tit"; box.setAttribute("aria-labelledby", h.id); } else box.removeAttribute("aria-labelledby");
+          Array.prototype.forEach.call(box.querySelectorAll("button.close"), function (b) { if (!b.getAttribute("aria-label")) b.setAttribute("aria-label", "Cerrar"); });
+        }
+        new MutationObserver(function () { if (!bg.hidden) armar(); }).observe(box, { childList: true, subtree: true });
+        new MutationObserver(function () {
+          if (!bg.hidden) {
+            if (!previo) previo = document.activeElement;
+            armar();
+            setTimeout(function () { if (bg.hidden || box.contains(document.activeElement)) return; var f = box.querySelectorAll(FOCOS); (f[0] || box).focus && (f[0] || box).focus(); }, 30);
+          } else if (previo) {
+            var p = previo; previo = null;
+            if (p && p.focus && document.contains(p)) { try { p.focus(); } catch (e) {} }
+          }
+        }).observe(bg, { attributes: true, attributeFilter: ["hidden"] });
+        box.setAttribute("tabindex", "-1");
+        bg.addEventListener("keydown", function (e) {
+          if (e.key !== "Tab") return;
+          var f = Array.prototype.filter.call(box.querySelectorAll(FOCOS), function (x) { return x.offsetParent !== null; });
+          if (!f.length) { e.preventDefault(); box.focus(); return; }
+          var a = f[0], z = f[f.length - 1];
+          if (e.shiftKey && (document.activeElement === a || document.activeElement === box)) { e.preventDefault(); z.focus(); }
+          else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+        });
+      }
+      enganchar("uiModalBg", "uiModalBox"); enganchar("fichaBg", "fichaBox");
+    })();
+    // Reintento por área: cuando un panel falla al cargar queda un mensaje de error suelto; le agregamos "Reintentar",
+    // que vuelve a correr los cargadores del área (no hace falta recargar toda la página). Solo a los errores que ocupan
+    // un panel entero (único hijo), no a los de formularios.
+    (function () {
+      var main = document.querySelector("main") || document.body;
+      function areaDe(el) { var a = el.closest && el.closest("[id^='area-']"); return a ? a.id.replace("area-", "") : null; }
+      new MutationObserver(function (muts) {
+        muts.forEach(function (m) {
+          Array.prototype.forEach.call(m.addedNodes, function (n) {
+            var errs = n.nodeType === 1 ? (n.matches && n.matches("p.err") ? [n] : Array.prototype.slice.call(n.querySelectorAll ? n.querySelectorAll("p.err") : [])) : [];
+            errs.forEach(function (p) {
+              var area = areaDe(p);
+              if (!area || !p.parentElement || p.parentElement.children.length !== 1 || p.querySelector("[data-reintentar]")) return;
+              var b = document.createElement("button"); b.type = "button"; b.className = "btn btn-sm btn-ghost"; b.textContent = "Reintentar"; b.setAttribute("data-reintentar", area); b.style.marginLeft = "10px";
+              p.appendChild(b);
+            });
+          });
+        });
+      }).observe(main, { childList: true, subtree: true });
+      document.addEventListener("click", function (e) {
+        var b = e.target.closest && e.target.closest("[data-reintentar]"); if (!b) return;
+        var area = b.getAttribute("data-reintentar"); b.disabled = true; b.textContent = "Reintentando…";
+        (AREA_LOADERS[area] || []).forEach(function (f) { try { f(); } catch (e2) {} });
+        setTimeout(function () { if (b.isConnected) { b.disabled = false; b.textContent = "Reintentar"; } }, 4000);
+      });
+    })();
     // A11y: los <a> que actúan como botones deben ser accesibles por teclado.
     ["toggleKey", "toggleUser", "salir"].forEach(function (id) {
       var el = $(id); if (!el) return;

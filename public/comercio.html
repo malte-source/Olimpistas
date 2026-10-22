@@ -15,6 +15,8 @@
     /* Panel del comercio · sobre styles.css (roles --surface-*, --text-*, --action-*) · prefijo .com- */
     body { background: var(--surface-grouped); color: var(--text-primary); min-height: 100vh; }
     .hide { display: none !important; }
+    .com-paso { margin-top: 14px; padding: 14px; border: 1px solid var(--border-default); border-radius: var(--r-12); background: var(--surface-input); }
+    .com-paso-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .com-head { background: #0a0a0a; color: #fff; padding-top: env(safe-area-inset-top); }
     .com-head-in { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 14px; padding: 22px 20px 20px; }
     .com-head-tx { flex: 1; min-width: 0; }
@@ -143,6 +145,17 @@
             <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" autocomplete="off" />
             <button class="btn btn-ghost btn-block" id="validarBtn" style="margin-top:12px">Validar canje</button>
             <div class="com-msg" id="valErr" role="alert"></div>
+            <!-- Paso del monto: el QR se lee primero y el monto se sabe después, así que se pide acá si no se cargó antes. -->
+            <div id="pasoMonto" class="com-paso hide" role="group" aria-labelledby="pasoMontoTit">
+              <b id="pasoMontoTit">QR leído. ¿De cuánto fue la compra?</b>
+              <label class="com-lbl" for="montoPaso">Monto de la compra (opcional)</label>
+              <input id="montoPaso" type="number" inputmode="numeric" min="0" placeholder="₲ 0" />
+              <div class="com-paso-acc">
+                <button class="btn" id="pasoOk" type="button">Confirmar canje</button>
+                <button class="btn btn-ghost" id="pasoSin" type="button">Sin monto</button>
+                <button class="btn btn-ghost" id="pasoNo" type="button">Cancelar</button>
+              </div>
+            </div>
             <div id="res" aria-live="polite"></div>
           </div>
         </div>
@@ -302,6 +315,23 @@
     }
     $("validarBtn").addEventListener("click", function(){ validar(); });
 
+    // Después de escanear sin monto cargado: se pide el monto antes de registrar el canje (el QR dura un minuto).
+    var qrPendiente = null;
+    function cerrarPaso(){ qrPendiente = null; $("pasoMonto").classList.add("hide"); $("montoPaso").value = ""; }
+    function pedirMonto(qr){
+      qrPendiente = qr; $("montoPaso").value = ""; $("pasoMonto").classList.remove("hide");
+      $("montoPaso").focus();
+    }
+    function confirmarPaso(conMonto){
+      var qr = qrPendiente; if(!qr) return;
+      $("monto").value = conMonto ? String(Math.max(0, Math.round(Number($("montoPaso").value) || 0))) : "";
+      cerrarPaso(); validar(qr);
+    }
+    $("pasoOk").addEventListener("click", function(){ confirmarPaso(true); });
+    $("pasoSin").addEventListener("click", function(){ confirmarPaso(false); });
+    $("pasoNo").addEventListener("click", function(){ cerrarPaso(); $("codigo").value = ""; });
+    $("montoPaso").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); confirmarPaso(true); } });
+
     // ── Escanear el QR del carnet con la cámara (BarcodeDetector; si el navegador no lo trae, se pega el texto) ──
     var stream = null, escaneando = false;
     function cerrarVisor(){
@@ -326,7 +356,7 @@
             try{
               var cs = await det.detect(v);
               var hit = cs.find(function(c){ return /^OLI1\./.test(c.rawValue || ""); });
-              if(hit){ cerrarVisor(); $("codigo").value = hit.rawValue; validar(hit.rawValue); return; }
+              if(hit){ cerrarVisor(); $("codigo").value = hit.rawValue; if(Number($("monto").value) > 0) validar(hit.rawValue); else pedirMonto(hit.rawValue); return; }
             }catch(e){}
             await new Promise(function(r){ setTimeout(r, 250); });
           }
