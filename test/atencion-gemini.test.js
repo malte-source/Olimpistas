@@ -130,6 +130,15 @@ test("cambio de motor a mitad de una consulta: a Anthropic no le llega el campo 
   assert.ok(!Object.keys(bloque).some((k) => k.startsWith("_")), "sin campos internos: Anthropic los rechazaría");
 });
 
+test("lo que está apagado se le avisa al modelo, para que no ofrezca acciones que no tiene (liberar lugar, hoy sin Tuti)", async () => {
+  const llamar = atencion.crearLlamador({ GEMINI_API_KEY: "k" }, async (u, o) => fetchSimulado(u, o));
+  await atencion.responder({ historial: [H("no voy el domingo, liberá mi lugar")], ejecutores: ejecutores(), config: { abrir_pago_subasta: false }, llamar });
+  const sistema = llamadas[0].cuerpo.systemInstruction.parts[0].text;
+  assert.match(sistema, /no podés liberar lugares/);
+  assert.match(sistema, /no podés abrir pagos de subastas/);
+  assert.ok(!/no podés consultar la cuenta/.test(sistema), "lo que sí está activo no se desmiente");
+});
+
 // ── API: el chat del hincha usa Gemini y la bandeja muestra qué motor contestó ───────────────────────────────
 const app = require("../server");
 let srv, url;
