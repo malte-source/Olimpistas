@@ -29,6 +29,7 @@ const { urlImagen } = require("./lib/imagen-subasta");
 const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib/puntos");
 const carnetLib = require("./lib/carnet");
 const atencionLib = require("./lib/atencion");
+const campanasLib = require("./lib/campanas");
 const { periodo } = require("./lib/periodo");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
@@ -876,6 +877,7 @@ function buildRouter() {
     try { await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron horario: cierre"); }
     try { out.subastas = await procesarPlazosSubastas(); } catch (e) { out.subastas = { error: true }; log.error({ err: e.message }, "cron horario: plazos"); }
     try { out.pagos = await conciliarPagos(); } catch (e) { out.pagos = { error: true }; log.error({ err: e.message }, "cron horario: pagos"); }
+    try { out.campanas = await campanasLib.procesarLote({ store, log: () => {} }); } catch (e) { out.campanas = { error: true }; log.error({ err: e.message }, "cron horario: campañas"); }
     res.json(out);
   }));
   r.post("/cron/conciliar-pagos", wrap(async (req, res) => {
@@ -1613,6 +1615,82 @@ function buildRouter() {
     const r0 = await store.recalcularConversion(req.params.id);
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "campana:recalcular", targetId: req.params.id, detalle: r0.convertidos + "/" + r0.enviados, por: req.adminUser });
     res.json({ ok: true, enviados: r0.enviados, convertidos: r0.convertidos });
+  }));
+  // ─── Compositor de campañas (correo / WhatsApp): a quién · por dónde · qué · vista previa · envío por tandas ───
+  // Mandar de verdad lo hace el cron por tandas (lib/campanas.js procesarLote), nunca este request.
+  const whatsappConectado = () => /^https:\/\//i.test(String(process.env.GHL_WHATSAPP_URL || "").trim());
+  async function audienciaDe(body) {
+    let filtros;
+    if (body.segmento_id) {
+      const seg = (await store.listSegmentos()).find((s) => s.id === body.segmento_id);
+      if (!seg) throw httpError(404, "Segmento no encontrado");
+      filtros = limpiarFiltros(seg.filtros);
+    } else filtros = limpiarFiltros(body.filtros);
+    if (!Object.keys(filtros).length && body.todos !== true) throw httpError(400, "Elegí a quién va: un segmento, un filtro o todos los hinchas.");
+    return { filtros, socios: await store.filtrarSocios({ ...filtros, paraEnvio: true }) };
+  }
+  const camposDe = (body) => { const v = campanasLib.validarCampos(body); if (!v.ok) throw httpError(400, v.error); return v.campos; };
+  const SOCIO_MUESTRA = { id: "muestra", nombre: "Marcos", tier_slug: "premium" };
+  r.get("/admin/campanas/plantillas", requireAdmin, wrap(async (_req, res) => {
+    res.json({ items: campanasLib.PLANTILLAS, whatsapp_conectado: whatsappConectado(), limites: { asunto: campanasLib.MAX_ASUNTO, titulo: campanasLib.MAX_TITULO, cuerpo: campanasLib.MAX_CUERPO } });
+  }));
+  r.post("/admin/campanas/vista-previa", requireAdmin, wrap(async (req, res) => {
+    const c = camposDe(req.body || {});
+    const mail = campanasLib.renderEmail(c, SOCIO_MUESTRA);
+    res.json({ asunto: mail.subject, html: mail.html, whatsapp: campanasLib.renderWhatsApp(c, SOCIO_MUESTRA) });
+  }));
+  r.post("/admin/campanas/audiencia", requireAdmin, wrap(async (req, res) => {
+    const canal = (req.body && req.body.canal) === "whatsapp" ? "whatsapp" : "email";
+    const { socios } = await audienciaDe(req.body || {});
+    const { reciben, excluidos } = campanasLib.clasificarAudiencia(socios, canal);
+    res.json({ canal, total: socios.length, reciben: reciben.length, excluidos, whatsapp_conectado: whatsappConectado() });
+  }));
+  r.post("/admin/campanas/prueba", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    const b = req.body || {};
+    if (b.canal === "whatsapp") throw httpError(400, "La prueba por WhatsApp se hace desde GoHighLevel. Probá el texto con la vista previa.");
+    const a = String(b.a || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) throw httpError(400, "Poné un correo válido para la prueba.");
+    const mail = campanasLib.renderEmail(camposDe(b), { ...SOCIO_MUESTRA, id: undefined });
+    const out = await mailer.enviar({ to: a, subject: "[PRUEBA] " + mail.subject, html: mail.html });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "campana:prueba", detalle: a, por: req.adminUser });
+    res.json({ ok: !!(out && out.ok), modo: out && out.modo });
+  }));
+  r.post("/admin/campanas/enviar", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    const b = req.body || {};
+    const canal = b.canal === "whatsapp" ? "whatsapp" : "email";
+    if (canal === "whatsapp" && !whatsappConectado()) throw httpError(400, "WhatsApp no está conectado todavía (falta GHL_WHATSAPP_URL).");
+    const c = camposDe(b);
+    const nombre = String(b.nombre || "").trim().slice(0, 80) || (campanasLib.PLANTILLAS.find((p) => p.id === b.plantilla) || { nombre: "Campaña" }).nombre + " · " + new Date().toLocaleDateString("es-PY");
+    const { filtros, socios } = await audienciaDe(b);
+    const { reciben, excluidos } = campanasLib.clasificarAudiencia(socios, canal);
+    if (!reciben.length) throw httpError(400, "Nadie recibiría esta campaña: todos están dados de baja o sin " + (canal === "whatsapp" ? "teléfono" : "correo") + ".");
+    if (reciben.length > 50000) throw httpError(400, "La audiencia es muy grande (" + reciben.length + "). Dividila con un segmento.");
+    // Seguro contra errores: tiene que coincidir con lo que la pantalla mostró (la audiencia pudo cambiar).
+    if (Number(b.total_esperado) !== reciben.length) throw httpError(409, "La audiencia cambió: ahora son " + reciben.length + " destinatarios. Revisala y confirmá de nuevo.");
+    // Contra el doble clic: la misma campaña, en curso, no se crea dos veces.
+    const enCurso = await store.campanasEnCurso();
+    if (enCurso.some((x) => x.asunto === c.asunto && x.canal === canal && x.total_enviados === reciben.length && Date.now() - new Date(x.creada).getTime() < 10 * 60000)) throw httpError(409, "Esa campaña ya se está enviando.");
+    const camp = await store.crearCampanaEnvio({ nombre, canal, plantilla: String(b.plantilla || ""), ...c, filtros, por: req.adminUser });
+    await store.agregarEnviosPendientes(camp.id, reciben);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "campana:enviar", targetId: camp.id, detalle: nombre + " · " + canal + " · " + reciben.length, por: req.adminUser });
+    res.status(201).json({ ok: true, id: camp.id, total: reciben.length, excluidos });
+  }));
+  r.post("/admin/campanas/:id/cancelar", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    const c = await store.cancelarCampana(req.params.id);
+    if (!c) throw httpError(409, "La campaña no existe o ya terminó.");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "campana:cancelar", targetId: c.id, por: req.adminUser });
+    res.json({ ok: true });
+  }));
+  r.get("/admin/campanas/:id", requireAdmin, wrap(async (req, res) => {
+    const d = await store.getCampanaDetalle(req.params.id);
+    if (!d) throw httpError(404, "Campaña no encontrada");
+    res.json(d);
+  }));
+  // Cloud Scheduler (cada minuto): manda la siguiente tanda de las campañas en curso.
+  r.post("/cron/campanas", wrap(async (req, res) => {
+    const tok = process.env.CRON_SECRET;
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
+    res.json(await campanasLib.procesarLote({ store, log: (...a) => log.info({ detalle: a.map(String).join(" ") }, "campañas") }));
   }));
   // Confirmar un pago (tras verificarlo en la pasarela) → activa la membresía.
   r.post("/admin/pedidos/:id/activar", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
