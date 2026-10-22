@@ -293,7 +293,7 @@ function createPgStore({ databaseUrl, debug }) {
     // Filtro de socios por segmento (tier actual, país, validó socio, sin foto, texto).
     async filtrarSocios(f = {}) {
       const dom = "%@" + SEED_DOMAIN;
-      const lim = Math.min(Number(f.limit) || 500, 5000);
+      const lim = f.paraEnvio ? 200000 : Math.min(Number(f.limit) || 500, 5000);
       const conds = [sql`s.email NOT LIKE ${dom}`];
       if (f.paisIso) conds.push(sql`s.pais_iso = ${String(f.paisIso).toUpperCase()}`);
       if (f.validoSocio) conds.push(sql`s.es_socio_olimpia = true`);
@@ -309,6 +309,12 @@ function createPgStore({ databaseUrl, debug }) {
       if (f.tier) conds.push(sql`coalesce(m.tier_slug, 'olimpista') = ${f.tier}`);
       if (f.q) { const term = "%" + String(f.q).toLowerCase() + "%"; conds.push(sql`(lower(s.email) LIKE ${term} OR lower(coalesce(s.nombre,'')) LIKE ${term} OR lower(coalesce(s.apellido,'')) LIKE ${term} OR coalesce(s.cedula,'') LIKE ${term})`); }
       const where = conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`));
+      // Destinatarios de una campaña: sin tope y con lo que hace falta para decidir si reciben (baja, teléfono). Nunca se devuelve al navegador.
+      if (f.paraEnvio) return sql`
+        SELECT s.id, s.nombre, s.apellido, s.email, s.telefono, s.whatsapp, s.idioma, s.pais_iso, s.marketing_baja, coalesce(m.tier_slug,'olimpista') AS tier_slug
+        FROM socios s
+        LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
+        WHERE ${where} ORDER BY s.creado ASC LIMIT ${lim}`;
       return sql`
         SELECT s.id, s.nombre, s.apellido, s.email, s.cedula, s.pais, s.pais_iso, s.ciudad, s.es_socio_olimpia, s.gasto_total, s.ultima_actividad,
                (s.foto IS NOT NULL AND s.foto <> '') AS tiene_foto, coalesce(m.tier_slug,'olimpista') AS tier_slug, s.creado
@@ -741,6 +747,8 @@ function createPgStore({ databaseUrl, debug }) {
     async listCampanas() {
       return sql`SELECT c.*,
         (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id)::int AS envios,
+        (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id AND e.estado IN ('pendiente','tomado'))::int AS pendientes,
+        (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id AND e.estado = 'fallido')::int AS fallidos,
         (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id AND e.enviado_ok)::int AS enviados_ok,
         (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id AND e.convertido)::int AS convertidos
         FROM campanas c ORDER BY c.creada DESC`;
@@ -751,6 +759,51 @@ function createPgStore({ databaseUrl, debug }) {
         : sql`SELECT * FROM campana_envios WHERE campana_id = ${campanaId} ORDER BY creado ASC`;
     },
     async marcarEnviado(envioId) { await sql`UPDATE campana_envios SET enviado_ok = true WHERE id = ${envioId}`; },
+    // ── Compositor de campañas: envío por tandas ──
+    async crearCampanaEnvio(d) {
+      const [c] = await sql`INSERT INTO campanas (id, nombre, tipo, canal, plantilla, asunto, titulo, cuerpo, cta_texto, cta_url, cta_valor, filtros, estado, creada_por)
+        VALUES (${uid("cmp")}, ${d.nombre}, ${"composer"}, ${d.canal}, ${d.plantilla || ""}, ${d.asunto}, ${d.titulo || ""}, ${d.cuerpo}, ${d.cta_texto || ""}, ${d.cta_url || ""}, ${!!d.cta_valor}, ${d.filtros ? sql.json(d.filtros) : null}, 'enviando', ${d.por || ""})
+        RETURNING *`;
+      return c;
+    },
+    async agregarEnviosPendientes(campanaId, lista) {
+      for (let i = 0; i < lista.length; i += 500) {
+        const filas = lista.slice(i, i + 500).map((s) => ({ id: uid("env"), campana_id: campanaId, socio_id: s.id, email: s.email || "", tier_pretendido: s.tier_slug || "", estado_inicial: s.tier_slug || "olimpista", estado: "pendiente" }));
+        await sql`INSERT INTO campana_envios ${sql(filas)}`;
+      }
+      await sql`UPDATE campanas SET total_enviados = ${lista.length} WHERE id = ${campanaId}`;
+      return lista.length;
+    },
+    async campanasEnCurso() { return sql`SELECT * FROM campanas WHERE estado = 'enviando' ORDER BY creada ASC`; },
+    // Reclama hasta n envíos de forma atómica (dos corridas del cron nunca toman el mismo). Un envío 'tomado' hace más de 10 minutos se reintenta.
+    async tomarPendientesCampana(campanaId, n) {
+      return sql`UPDATE campana_envios SET estado = 'tomado', tomado_en = now() WHERE id IN (
+        SELECT id FROM campana_envios WHERE campana_id = ${campanaId}
+          AND (estado = 'pendiente' OR (estado = 'tomado' AND tomado_en < now() - interval '10 minutes'))
+        ORDER BY id LIMIT ${n} FOR UPDATE SKIP LOCKED) RETURNING *`;
+    },
+    async marcarEnvioResultado(id, { ok, omitido, error } = {}) {
+      if (omitido) return sql`UPDATE campana_envios SET estado = 'omitido', error = ${error || null}, enviado_en = now() WHERE id = ${id}`;
+      return sql`UPDATE campana_envios SET estado = ${ok ? "enviado" : "fallido"}, enviado_ok = ${!!ok}, error = ${ok ? null : (error || "no se pudo enviar")}, enviado_en = now() WHERE id = ${id}`;
+    },
+    async cerrarCampanasTerminadas() {
+      const r = await sql`UPDATE campanas c SET estado = 'enviada', finalizada = now() WHERE c.estado = 'enviando'
+        AND NOT EXISTS (SELECT 1 FROM campana_envios e WHERE e.campana_id = c.id AND e.estado IN ('pendiente','tomado')) RETURNING c.id`;
+      return r.map((x) => x.id);
+    },
+    async cancelarCampana(id) {
+      const [c] = await sql`UPDATE campanas SET estado = 'cancelada', finalizada = now() WHERE id = ${id} AND estado = 'enviando' RETURNING *`;
+      if (!c) return null;
+      await sql`UPDATE campana_envios SET estado = 'omitido', error = 'campaña cancelada' WHERE campana_id = ${id} AND estado = 'pendiente'`;
+      return c;
+    },
+    async getCampanaDetalle(id) {
+      const [c] = await sql`SELECT * FROM campanas WHERE id = ${id}`;
+      if (!c) return null;
+      const filas = await sql`SELECT estado, COUNT(*)::int AS n FROM campana_envios WHERE campana_id = ${id} GROUP BY estado`;
+      const fallos = await sql`SELECT email, error FROM campana_envios WHERE campana_id = ${id} AND estado = 'fallido' ORDER BY enviado_en DESC LIMIT 20`;
+      return { campana: c, conteo: Object.fromEntries(filas.map((f) => [f.estado || "legado", f.n])), fallos };
+    },
     async recalcularConversion(campanaId) {
       await sql`UPDATE campana_envios e SET convertido = true, convertido_en = now()
         FROM membresias m
