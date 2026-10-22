@@ -1494,3 +1494,9 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .globo-tiempo .btn { margin: 0; padding: 9px 16px; font-size: var(--t-13); color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
 .globo-tiempo input[type="range"] { flex: 1 1 220px; max-width: 420px; accent-color: #ffffff; }
 .globo-tiempo-et { font-size: var(--t-13); font-weight: 600; color: rgba(255,255,255,.85); min-width: 190px; text-transform: capitalize; font-variant-numeric: tabular-nums; }
+
+/* "Encontrá tu peña" y el enlace "Sumarme" del popup (handoff v3 · M3-D). */
+.globo-pena { max-width: 920px; margin: 14px auto 0; text-align: center; }
+.globo-pena[hidden] { display: none; }
+.globo-pena .btn { margin: 0; padding: 9px 18px; font-size: var(--t-13); color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
+.maplibregl-popup-content a { display: inline-block; margin-top: 6px; color: #fff; font-size: var(--t-13); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }

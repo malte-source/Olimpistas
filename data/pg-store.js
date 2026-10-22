@@ -10,6 +10,7 @@
 const crypto = require("crypto");
 const postgres = require("postgres");
 
+const ciudadesLib = require("../lib/ciudades");
 const SEED_DOMAIN = "demo.olimpistas.test"; // filas de demo (no cuentan como miembros reales)
 
 function uid(prefix) { return `${prefix}_${crypto.randomBytes(8).toString("hex")}`; }
@@ -635,6 +636,42 @@ function createPgStore({ databaseUrl, debug }) {
           AND lng BETWEEN ${minLng} AND ${maxLng}
           AND lat BETWEEN ${minLat} AND ${maxLat}
         LIMIT ${Math.min(Number(limit) || 600, 1500)}`;
+    },
+    // ── Ciudades normalizadas (GeoNames) ──
+    async importarCiudades(rows) {
+      for (let i = 0; i < rows.length; i += 1000) {
+        const lote = rows.slice(i, i + 1000).map((c) => ({ id: c.id, nombre: c.nombre, nombre_norm: c.nombre_norm, pais_iso: c.pais_iso, lat: c.lat, lng: c.lng, poblacion: c.poblacion || 0 }));
+        await sql`INSERT INTO ciudades ${sql(lote)} ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, nombre_norm = EXCLUDED.nombre_norm,
+          pais_iso = EXCLUDED.pais_iso, lat = EXCLUDED.lat, lng = EXCLUDED.lng, poblacion = EXCLUDED.poblacion`;
+      }
+      return rows.length;
+    },
+    async contarCiudades() { const [r] = await sql`SELECT COUNT(*)::int AS n FROM ciudades`; return r.n; },
+    async buscarCiudades({ q, pais, limit = 10 }) {
+      const n = ciudadesLib.norm(q).replace(/[\\%_]/g, "\\$&");
+      if (n.length < 2) return [];
+      const lim = Math.min(Number(limit) || 10, 20), iso = String(pais || "").toUpperCase();
+      return /^[A-Z]{2}$/.test(iso)
+        ? sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE pais_iso = ${iso} AND nombre_norm LIKE ${n + "%"} ORDER BY poblacion DESC LIMIT ${lim}`
+        : sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE nombre_norm LIKE ${n + "%"} ORDER BY poblacion DESC LIMIT ${lim}`;
+    },
+    async getCiudad(id) { const [c] = await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE id = ${Number(id) || 0}`; return c || null; },
+    async ciudadPorNombre({ nombre, pais }) {
+      const n = ciudadesLib.norm(nombre), iso = String(pais || "").toUpperCase();
+      if (!n) return null;
+      const [c] = /^[A-Z]{2}$/.test(iso)
+        ? await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE pais_iso = ${iso} AND nombre_norm = ${n} ORDER BY poblacion DESC LIMIT 1`
+        : await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE nombre_norm = ${n} ORDER BY poblacion DESC LIMIT 1`;
+      return c || null;
+    },
+    async ciudadMasCercana({ lat, lng, pais, maxKm = 60 }) {
+      const d = maxKm / 111 + 0.05, iso = String(pais || "").toUpperCase();
+      const cand = /^[A-Z]{2}$/.test(iso)
+        ? await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE pais_iso = ${iso} AND lat BETWEEN ${lat - d} AND ${lat + d} AND lng BETWEEN ${lng - d * 1.6} AND ${lng + d * 1.6}`
+        : await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE lat BETWEEN ${lat - d} AND ${lat + d} AND lng BETWEEN ${lng - d * 1.6} AND ${lng + d * 1.6}`;
+      let mejor = null, mejorKm = Infinity;
+      for (const c of cand) { const km = ciudadesLib.distanciaKm(lat, lng, c.lat, c.lng); if (km < mejorKm) { mejor = c; mejorKm = km; } }
+      return mejor && mejorKm <= maxKm ? { ...mejor, km: Math.round(mejorKm * 10) / 10 } : null;
     },
     // Solo posiciones (sin id, nombre ni ciudad) de quienes eligieron mostrarse: alimenta las celdas H3 del mapa público.
     // Altas por mes y país de hinchas reales (sin las filas de demo): alimenta "Mirá cómo crece". Solo totales.

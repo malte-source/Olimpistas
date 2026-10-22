@@ -32,6 +32,7 @@ const atencionLib = require("./lib/atencion");
 const campanasLib = require("./lib/campanas");
 const h3lib = require("./lib/h3");
 const mapaLib = require("./lib/mapa");
+const ciudadesLib = require("./lib/ciudades");
 const { periodo } = require("./lib/periodo");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
@@ -465,6 +466,27 @@ function buildRouter() {
     res.json({ socio: req.socio, progreso: perfilProgreso(req.socio) });
   }));
 
+  // Autocompletar de ciudades (público): por prefijo, sin acentos, por población. Tope de 10.
+  r.get("/ciudades", wrap(async (req, res) => {
+    const items = store.buscarCiudades ? await store.buscarCiudades({ q: String(req.query.q || "").slice(0, 60), pais: req.query.pais, limit: 10 }) : [];
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.json({ items: items.map((c) => ({ id: c.id, nombre: c.nombre, pais_iso: c.pais_iso })) });
+  }));
+  async function asignarCiudad(socio, patch, b) {
+    if (!store.getCiudad) return;
+    const iso = String(patch.pais_iso != null ? patch.pais_iso : (socio.pais_iso || "")).toUpperCase();
+    if (b.ciudad_id != null && b.ciudad_id !== "") {
+      const c = await store.getCiudad(Number(b.ciudad_id));
+      if (c) { patch.ciudad_id = c.id; patch.ciudad = c.nombre; }
+    } else if (typeof patch.ciudad === "string") {
+      if (!patch.ciudad) patch.ciudad_id = null;
+      else { const c = await store.ciudadPorNombre({ nombre: patch.ciudad, pais: iso }); patch.ciudad_id = c ? c.id : null; }
+    } else if (patch.lat != null && patch.lng != null && !socio.ciudad_id) {
+      // Eligió su casa y todavía no tiene ciudad: la más cercana del mismo país (hasta 60 km).
+      const c = await store.ciudadMasCercana({ lat: patch.lat, lng: patch.lng, pais: iso, maxKm: 60 });
+      if (c) { patch.ciudad_id = c.id; if (!socio.ciudad) patch.ciudad = c.nombre; }
+    }
+  }
   r.patch("/perfil", auth.requireSocio, wrap(async (req, res) => {
     const b = req.body || {};
     const patch = {};
@@ -505,6 +527,8 @@ function buildRouter() {
       if (!["auto", "claro", "oscuro"].includes(b.tema)) throw httpError(400, "Apariencia inválida (auto, claro u oscuro)");
       patch.tema = b.tema;
     }
+    // Ciudad oficial (GeoNames): la elegida con el autocompletado, la que coincide con el texto, o la más cercana a su casa.
+    await asignarCiudad(req.socio, patch, b);
     // Peña: sumarse a una peña verificada, o dejarla (null / "").
     if (b.pena_id !== undefined) {
       if (b.pena_id === null || b.pena_id === "") patch.pena_id = null;
@@ -2550,13 +2574,20 @@ function buildRouter() {
   async function penasVerificadas() {
     if (_penasPub && Date.now() - _penasPub.t < 30000) return _penasPub.v;
     const filas = store.listPenas ? await store.listPenas({ estado: "verificada" }) : [];
-    const v = filas.map((p, i) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, socios: p.socios, plus: p.plus, ranking: i + 1 }));
+    const v = filas.map((p, i) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, lat: p.lat != null ? Number(p.lat) : null, lng: p.lng != null ? Number(p.lng) : null, altas: p.altas, socios: p.socios, plus: p.plus, ranking: i + 1 }));
     _penasPub = { t: Date.now(), v };
     return v;
   }
   r.get("/penas", wrap(async (req, res) => {
     const mia = req.socio && req.socio.pena_id;
-    res.json({ items: (await penasVerificadas()).map((p) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, ranking: p.ranking, es_tuya: p.id === mia })), mia: mia || null });
+    // ?cerca=lat,lng → las peñas con ubicación, de la más cercana a la más lejana (con la distancia en km). "Encontrá tu peña".
+    const cerca = String(req.query.cerca || "").split(",").map(Number);
+    const conUbic = cerca.length === 2 && cerca.every(Number.isFinite) && Math.abs(cerca[0]) <= 90 && Math.abs(cerca[1]) <= 180;
+    let items = (await penasVerificadas()).map((p) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, lat: p.lat, lng: p.lng, altas: p.altas, ranking: p.ranking, es_tuya: p.id === mia }));
+    if (conUbic) {
+      items = items.filter((p) => p.lat != null && p.lng != null).map((p) => ({ ...p, distancia_km: Math.round(ciudadesLib.distanciaKm(cerca[0], cerca[1], p.lat, p.lng) * 10) / 10 })).sort((a, b) => a.distancia_km - b.distancia_km).slice(0, 5);
+    }
+    res.json({ items, mia: mia || null });
   }));
   r.get("/penas/:slug", wrap(async (req, res) => {
     const p = (await penasVerificadas()).find((x) => x.slug === String(req.params.slug).toLowerCase());
@@ -2575,7 +2606,9 @@ function buildRouter() {
     if (!PAISES[iso]) throw httpError(400, "País inválido");
     const pendientes = await store.listPenas({ estado: "pendiente" });
     if (pendientes.some((p) => String(p.contacto).toLowerCase() === contacto)) throw httpError(409, "Ya recibimos una solicitud con ese email. Te vamos a escribir.");
-    const p = await store.crearPena({ nombre, ciudad, pais_iso: iso, presidente, contacto });
+    let p = await store.crearPena({ nombre, ciudad, pais_iso: iso, presidente, contacto });
+    // Ubicación de la peña = su ciudad (GeoNames): así aparece en "la peña más cercana" apenas se verifica.
+    try { const c = store.ciudadPorNombre ? await store.ciudadPorNombre({ nombre: ciudad, pais: iso }) : null; if (c) p = (await store.updatePena(p.id, { lat: c.lat, lng: c.lng })) || p; } catch (e) { /* sin ubicación: se carga después */ }
     alertar("pena:solicitud:" + p.id, "Peña nueva para verificar", `${nombre} · ${ciudad} · preside ${presidente} · ${contacto}`);
     res.status(201).json({ ok: true, id: p.id });
   }));

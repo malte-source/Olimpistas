@@ -13,6 +13,7 @@
  */
 
 const fs   = require("fs");
+const ciudadesLib = require("../lib/ciudades");
 const path = require("path");
 const crypto = require("crypto");
 const log = require("../lib/log");
@@ -936,6 +937,27 @@ function createMemoryStore({ filePath = null } = {}) {
         const k = mes + "|" + String(s.pais_iso).toUpperCase(); cuenta.set(k, (cuenta.get(k) || 0) + 1);
       }
       return [...cuenta].map(([k, n]) => { const [mes, iso] = k.split("|"); return { mes, iso, n }; }).sort((a, b) => a.mes.localeCompare(b.mes));
+    },
+    // ── Ciudades normalizadas (GeoNames) ──
+    async importarCiudades(rows) { db.ciudades = db.ciudades || []; for (const c of rows) { const i = db.ciudades.findIndex((x) => x.id === c.id); if (i >= 0) db.ciudades[i] = { ...c }; else db.ciudades.push({ ...c }); } persist(); return rows.length; },
+    async contarCiudades() { return (db.ciudades || []).length; },
+    async buscarCiudades({ q, pais, limit = 10 }) {
+      const n = ciudadesLib.norm(q), iso = String(pais || "").toUpperCase();
+      if (n.length < 2) return [];
+      return (db.ciudades || []).filter((c) => c.nombre_norm.startsWith(n) && (!/^[A-Z]{2}$/.test(iso) || c.pais_iso === iso)).sort((a, b) => b.poblacion - a.poblacion).slice(0, Math.min(Number(limit) || 10, 20)).map(({ id, nombre, pais_iso, lat, lng, poblacion }) => ({ id, nombre, pais_iso, lat, lng, poblacion }));
+    },
+    async getCiudad(id) { const c = (db.ciudades || []).find((x) => x.id === Number(id)); return c ? { id: c.id, nombre: c.nombre, pais_iso: c.pais_iso, lat: c.lat, lng: c.lng, poblacion: c.poblacion } : null; },
+    async ciudadPorNombre({ nombre, pais }) {
+      const n = ciudadesLib.norm(nombre), iso = String(pais || "").toUpperCase();
+      if (!n) return null;
+      const c = (db.ciudades || []).filter((x) => x.nombre_norm === n && (!/^[A-Z]{2}$/.test(iso) || x.pais_iso === iso)).sort((a, b) => b.poblacion - a.poblacion)[0];
+      return c ? { id: c.id, nombre: c.nombre, pais_iso: c.pais_iso, lat: c.lat, lng: c.lng, poblacion: c.poblacion } : null;
+    },
+    async ciudadMasCercana({ lat, lng, pais, maxKm = 60 }) {
+      const iso = String(pais || "").toUpperCase();
+      let mejor = null, mejorKm = Infinity;
+      for (const c of (db.ciudades || [])) { if (/^[A-Z]{2}$/.test(iso) && c.pais_iso !== iso) continue; const km = ciudadesLib.distanciaKm(lat, lng, c.lat, c.lng); if (km < mejorKm) { mejor = c; mejorKm = km; } }
+      return mejor && mejorKm <= maxKm ? { id: mejor.id, nombre: mejor.nombre, pais_iso: mejor.pais_iso, lat: mejor.lat, lng: mejor.lng, poblacion: mejor.poblacion, km: Math.round(mejorKm * 10) / 10 } : null;
     },
     async puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat, limit = 20000 }) {
       const out = [];
