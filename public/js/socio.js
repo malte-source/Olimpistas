@@ -12,7 +12,8 @@
   // deben reflejar la vista actual. Esquema: /miembro, /miembro/carnet,
   // /miembro/beneficios, /miembro/perfil, /miembro/descubrir(/<segmento>)(/subastas/<id>).
   let curTab = "inicio", curSubId = null;
-  const TABS_RUTA = ["inicio", "carnet", "beneficios", "puntos", "perfil", "descubrir"];
+  const TABS_RUTA = ["inicio", "partidos", "carnet", "beneficios", "puntos", "perfil", "descubrir"];
+  const PESTANAS = ["inicio", "partidos", "carnet", "beneficios", "puntos"]; // las 5 de la barra; perfil y descubrir abren con "‹ Inicio"
   const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media", "penas"];
   function parseRuta(pathname) {
     const parts = pathname.replace(/^\/miembro\/?/, "").split("/").filter(Boolean);
@@ -65,20 +66,12 @@
     window.__oliSesion = true; // desde acá, cambiar la apariencia también se guarda en la cuenta
     if (SESSION.socio.tema) OLI.setThemePref(SESSION.socio.tema, false);
     renderHeader();
-    document.getElementById("logoutBtn").onclick = logout;
-    document.getElementById("logoutBtn").setAttribute("aria-label", T("logout"));
-    document.getElementById("ayudaSw").setAttribute("aria-label", T("m_ayuda"));
-    OLI.initThemeToggle("themeSw");
-    // Selector de idioma in-app: muestra el idioma DESTINO y recarga para reaplicar i18n.
-    const langSw = document.getElementById("langSw");
-    if (langSw && window.OLI_I18N) {
-      const cur = OLI_I18N.lang();
-      langSw.textContent = cur === "en" ? "ES" : "EN";
-      langSw.onclick = () => { OLI_I18N.setLang(cur === "en" ? "es" : "en"); location.reload(); };
-    }
+    initEncabezadoMovil();
+    initTirarParaActualizar();
     document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => activar(t.dataset.tab)));
-    const bar = document.querySelector(".topbar");
-    if (bar) { const onScroll = () => bar.classList.toggle("scrolled", window.scrollY > 6); window.addEventListener("scroll", onScroll, { passive: true }); onScroll(); }
+    document.getElementById("mBack").addEventListener("click", (e) => { e.preventDefault(); activar("inicio"); });
+    pintarSideTema();
+    document.addEventListener("oli-theme", pintarSideTema);
     window.addEventListener("resize", moveTabInd, { passive: true });
     // Si la tipografía todavía no había cargado cuando se posicionó la pastilla la
     // primera vez, el ancho de cada pestaña cambia al entrar la fuente — recalcular.
@@ -148,9 +141,13 @@
       const on = t.dataset.tab === tab;
       t.classList.toggle("active", on);
       t.setAttribute("aria-selected", on ? "true" : "false");
+      const u = t.querySelector("use"); if (u) u.setAttribute("href", "/assets/icons.svg#i-" + t.dataset.tab + (on ? "-f" : "")); // ícono relleno en la activa
     });
+    document.body.dataset.tab = tab;
+    const back = document.getElementById("mBack"); if (back) back.hidden = PESTANAS.includes(tab);
     moveTabInd();
-    ({ inicio: vInicio, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio)();
+    const conVista = (fn) => (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? document.startViewTransition(() => { fn(); }) /* sin devolver la promesa: la transición no espera a los datos de la vista */ : fn());
+    conVista(({ inicio: vInicio, partidos: vPartidos, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio));
   }
 
   // Pulido PRO: pill deslizante bajo el tab activo (solo mobile) + borde glass al hacer scroll.
@@ -162,6 +159,7 @@
     requestAnimationFrame(() => {
       const bar = document.getElementById("tabs"), ind = document.getElementById("tabInd");
       const act = bar && bar.querySelector(".tab.active");
+      if (ind) ind.style.opacity = act ? "1" : "0";   // perfil y descubrir no son pestañas
       if (!bar || !ind || !act) return;
       const br = bar.getBoundingClientRect(), ar = act.getBoundingClientRect();
       ind.style.transform = "translateX(" + Math.round(ar.left - br.left + ar.width / 2 - 28) + "px)";
@@ -187,6 +185,7 @@
       api("/penas").catch(() => null),
     ]);
     const subaViva = (subsR.items || []).find((x) => x.estado === "activa");
+    const nivelTxt = "Olimpista " + (TIER_LBL[(SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista"] || "").replace(/^Olimpista$/, "").trim();
     const sorteosActivos = (sorteosR.items || []).filter((sor) => sor.estado === "activa");
 
     // ── Urgente: subasta o sorteo activo, el que cierre antes (hoy solo se miraba
@@ -197,7 +196,7 @@
     candidatos.sort((a, b) => a.cierre - b.cierre);
     const urgente = candidatos[0] || null;
     const urgenteSorteo = urgente && urgente.tipo === "sorteo" ? urgente.data : null;
-    const destacado = !urgente ? "" : urgente.tipo === "subasta" ? destacadoSubasta(urgente.data) : destacadoSorteo(urgente.data);
+    const destacado = !urgente || urgente.tipo === "subasta" ? "" : destacadoSorteo(urgente.data);
 
     // ── Mis cosas: filas, no grid de íconos — sorteos en los que ya participo,
     // el estado de mi perfil, mi carnet, invitar a un amigo. ──
@@ -227,7 +226,7 @@
       <p class="lead">${T("m_ini_p")}</p>
       ${destacado}
       <p class="eyebrow-ini">${T("m_ini_mis_cosas")}</p>
-      <div class="wg-grid">${widgetsInicio(ahorroR, puntosR, penasR)}</div>
+      <div class="wg-grid">${widgetsInicio(ahorroR, puntosR, penasR, subaViva, nivelTxt)}</div>
       <div class="ini-feed" style="margin-top:14px"><div id="progreso"></div>${cosas.join("")}</div>
       <p class="eyebrow-ini">${T("m_ini_club")}</p>
       ${enc ? encuestaCard(enc) : ""}
@@ -246,39 +245,51 @@
     const card = view().querySelector(".enc-card");
     if (card && enc) bindEncuesta(card, enc);
   }
-  // ─── Widgets de Inicio: billetera de ahorro, puntos, peña y carnet. Cada uno aparece solo si su dato cargó. ───
-  function widgetsInicio(ahorro, puntos, penas) {
+  // ─── Widgets de Inicio (04-pantallas): grilla auto-fill de 160 px, radio 26. Cada uno aparece solo si su dato cargó. ───
+  function widgetsInicio(ahorro, puntos, penas, subViva, nivel) {
     const w = [];
+    const anio = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
     if (ahorro) {
       w.push(`<button type="button" class="wg wg-2" data-goto="beneficios" aria-label="${T("m_wg_ahorro")}">
-        <span class="wg-eb">${T("m_wg_ahorro")}</span>
-        <span class="wg-num">${gs(ahorro.mes || 0)}</span>
-        <span class="wg-sub">${T("m_wg_ahorro_mes")} · ${T("m_wg_ahorro_anio")} <b>${gs(ahorro.anio || 0)}</b></span>
+        <span class="wg-cab">${OLI.ic("ahorro", 18)}${T("m_wg_ahorro")}</span>
+        <span class="wg-fila"><span class="wg-izq"><span class="wg-num">${gs(ahorro.mes || 0)}</span><span class="wg-sub">${T("m_wg_ahorro_mes")}</span></span>
+          <span class="wg-der"><b>${gs(ahorro.anio != null ? ahorro.anio : ahorro.total || 0)}</b><small>${T("m_wg_ahorro_en")} ${anio}</small></span></span>
         <span class="wg-nota">${ahorro.canjes_mes ? (ahorro.canjes_mes + " " + T(ahorro.canjes_mes === 1 ? "m_wg_canje" : "m_wg_canjes")) : T("m_wg_ahorro_vacio")}</span>
       </button>`);
     }
     if (puntos) {
       const pct = Math.max(0, Math.min(100, Number(puntos.escalon && puntos.escalon.pct) || 0));
-      w.push(`<button type="button" class="wg" data-goto="puntos" aria-label="${T("tab_puntos")}">
-        <span class="wg-eb">${T("tab_puntos")}</span>
+      w.push(`<button type="button" class="wg wg-pts" data-goto="puntos" aria-label="${T("tab_puntos")}">
+        <span class="wg-cab">${T("tab_puntos")}</span>
         <span class="wg-ring" style="--p:${pct}"><b>${Number(puntos.saldo || 0).toLocaleString(LOC)}</b></span>
-        <span class="wg-sub">${esc((puntos.escalon && puntos.escalon.nombre) || "")}</span>
+        <span class="wg-esc">${T("m_wg_escalon")} ${esc((puntos.escalon && puntos.escalon.nombre) || "")}</span>
+      </button>`);
+    }
+    w.push(`<button type="button" class="wg" data-goto="partidos" aria-label="${T("tab_partidos")}">
+      <span class="wg-eb wg-eb-partido">${T("m_wg_partido")}</span>
+      <span class="wg-t">${T("m_wg_partido_t")}</span>
+      <span class="wg-sub wg-pie">${T("m_wg_partido_p")}</span>
+    </button>`);
+    if (subViva) {
+      w.push(`<button type="button" class="wg wg-2 wg-sub-viva" data-goto="descubrir" data-seg="subastas" aria-label="${esc(subViva.titulo)}">
+        <span class="wg-thumb">${subastaMedia(subViva)}</span>
+        <span class="wg-sv"><span class="wg-vivo">${T("m_sub_envivo")} · ${subViva.pujadores || 0} ${T("m_sub_pujando")}</span><span class="wg-t">${esc(subViva.titulo)}</span><span class="wg-sub">${gs(subViva.puja_actual)} · ${cdTexto(subViva.termina).txt}</span></span>
+        ${OLI.ic("chevron-derecha", 18)}
       </button>`);
     }
     const items = penas && Array.isArray(penas.items) ? penas.items : null;
     if (items) {
       const mia = items.find((p) => p.es_tuya);
       w.push(`<button type="button" class="wg" data-goto="descubrir" data-seg="penas" aria-label="${T("m_wg_pena")}">
-        <span class="wg-eb">${T("m_wg_pena")}</span>
-        <span class="wg-ic" style="background:#C2410C">${icon("users", { size: 18 })}</span>
-        <span class="wg-t">${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</span>
+        <span class="wg-ic" style="background:#C2410C">${OLI.ic("pena", 22)}</span>
+        <span class="wg-t wg-pie">${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</span>
         <span class="wg-sub">${mia ? "#" + mia.ranking + " · " + mia.altas + " " + T(mia.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</span>
       </button>`);
     }
     w.push(`<button type="button" class="wg wg-negro" data-goto="carnet" aria-label="${T("tab_carnet")}">
-      <span class="wg-eb" style="color:#D9B65A">${T("tab_carnet")}</span>
-      <span class="wg-ic" style="background:rgba(255,255,255,.14)">${icon("qr-code", { size: 18 })}</span>
-      <span class="wg-t" style="color:#fff">${T("m_wg_carnet")}</span>
+      ${OLI.ic("qr", 34)}
+      <span class="wg-t wg-pie" style="color:#fff">${T("tab_carnet")}</span>
+      <span class="wg-sub" style="color:#a8a6a1">${esc(nivel || "")}</span>
       <span class="wg-fr" aria-hidden="true"></span>
     </button>`);
     return w.join("");
@@ -411,8 +422,8 @@
     let host = document.getElementById("socioBanner");
     if (!host) {
       host = document.createElement("div"); host.id = "socioBanner";
-      const tabs = document.getElementById("tabs");
-      if (tabs && tabs.parentNode) tabs.parentNode.insertBefore(host, tabs);
+      const vista = view();
+      if (vista && vista.parentNode) vista.parentNode.insertBefore(host, vista);
     }
     // Prioridad 1: ganaste una subasta y falta pagar. Es la única alerta con plata real
     // de por medio — se ve en CUALQUIER pestaña, no solo si entrás a Subastas a mirar.
@@ -476,11 +487,148 @@
     const slug = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
     const inicial = (s.nombre || s.email || "?").trim().charAt(0).toUpperCase();
     const av = s.foto ? `<img src="${s.foto}" alt="" />` : `<span>${inicial}</span>`;
+    const mAv = document.getElementById("mAv"); if (mAv) mAv.innerHTML = av;
+    const su = document.getElementById("sideUser");
+    if (su) su.innerHTML = `<span class="side-av">${av}</span><span class="side-ut"><b>${esc([s.nombre, s.apellido].filter(Boolean).join(" ") || s.email)}</b><small>${TIER_LBL[slug] ? (LANG === "en" ? "Olimpista " : "Olimpista ") + TIER_LBL[slug] : "Olimpista"}</small></span>`;
     const me = document.getElementById("me");
     if (me) me.innerHTML = `
       <div class="me-av">${av}</div>
       <div class="me-txt"><span class="me-hi">${T("m_hola")}</span><strong id="hola">${esc(s.nombre || s.email)}</strong></div>
       <span class="tier-chip tier-chip--${slug}">${TIER_LBL[slug] || "Olimpista"}</span>`;
+  }
+
+  // ─── Encabezado móvil: título de la pestaña (lo toma de la vista), colapso con el scroll y menú del avatar ───
+  function syncHead() {
+    const t = document.getElementById("mTitle"), sub = document.getElementById("mSub");
+    if (!t) return;
+    const h = view().querySelector("h2.ini-hi, .section > h2");
+    const lead = h && h.nextElementSibling && h.nextElementSibling.classList.contains("lead") ? h.nextElementSibling : null;
+    const txt = (h && h.textContent.trim()) || T("tab_" + curTab);
+    if (t.textContent !== txt) t.textContent = txt;
+    const st = lead ? lead.textContent.trim() : "";
+    if (sub.textContent !== st) sub.textContent = st;
+  }
+  function initEncabezadoMovil() {
+    const head = document.getElementById("mHead");
+    if (!head) return;
+    let raf = 0;
+    const quieto = window.matchMedia("(prefers-reduced-motion: reduce)"), escritorio = window.matchMedia("(min-width: 901px)");
+    const onScroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0;
+      // Escritorio: encabezado fijo, sin colapso. Con movimiento reducido: sin interpolación, compacto al pasar de 60 px.
+      const c = escritorio.matches ? 0 : quieto.matches ? (window.scrollY > 60 ? 1 : 0) : Math.min(1, Math.max(0, window.scrollY / 120));
+      head.style.setProperty("--c", c.toFixed(3)); }); };
+    if (escritorio.addEventListener) escritorio.addEventListener("change", onScroll);
+    window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+    let pend = 0;
+    new MutationObserver(() => { if (pend) return; pend = requestAnimationFrame(() => { pend = 0; syncHead(); }); }).observe(view(), { childList: true, subtree: true });
+    syncHead();
+    document.getElementById("mAv").addEventListener("click", abrirMenuCuenta);
+    const su = document.getElementById("sideUser"); if (su) su.addEventListener("click", abrirMenuCuenta);
+  }
+  // Apariencia en la barra lateral (escritorio): mismo control que en Ajustes.
+  function segTema(pref) {
+    return [["auto", T("m_tema_auto")], ["claro", T("m_tema_claro")], ["oscuro", T("m_tema_oscuro")]].map(([v, l]) =>
+      `<button type="button" role="radio" class="ctl-seg-b" data-tema="${v}" aria-checked="${pref === v}">${l}</button>`).join("");
+  }
+  function prefActual() { const p = window.OLITheme ? OLITheme.pref() : "auto"; return p === "light" ? "claro" : p === "dark" ? "oscuro" : "auto"; }
+  function pintarSideTema() {
+    const el = document.getElementById("sideTema"); if (!el) return;
+    el.innerHTML = segTema(prefActual());
+    el.querySelectorAll("[data-tema]").forEach((b) => b.onclick = () => OLI.setThemePref(b.dataset.tema, true));
+  }
+  const sw = (id, on) => `<button type="button" role="switch" class="interruptor" id="${id}" aria-checked="${on}"></button>`;
+  const cuadro = (color, ic) => `<span class="grupo-ic" style="background:${color}"><svg class="ic" width="18" height="18"><use href="/assets/icons.svg#i-${ic}"/></svg></span>`;
+  const chev = '<svg class="ic grupo-chev"><use href="/assets/icons.svg#i-chevron-derecha"/></svg>';
+  function abrirMenuCuenta() {
+    const s = SESSION.socio, slug = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
+    const inicial = (s.nombre || s.email || "?").trim().charAt(0).toUpperCase();
+    const av = s.foto ? `<img src="${s.foto}" alt="" />` : `<span>${inicial}</span>`;
+    const lang = window.OLI_I18N ? OLI_I18N.lang() : "es";
+    const avisos = [["avisos_subastas", T("m_avisos_subastas")], ["avisos_sorteos", T("m_avisos_sorteos")], ["avisos_contenido", T("m_avisos_contenido")]];
+    const { root, close } = OLI.modal(`
+      <div class="aj-user"><div class="aj-av">${av}</div><div class="aj-id"><strong>${esc([s.nombre, s.apellido].filter(Boolean).join(" ") || s.email)}</strong><span>Olimpista ${TIER_LBL[slug] || ""} · ${esc(s.email)}</span></div></div>
+      <div class="grupo-h">${T("m_aj_cuenta")}</div>
+      <div class="grupo">
+        <button type="button" class="grupo-fila" id="ajPerfil">${cuadro("#2F5FD0", "perfil")}<span class="grupo-tx"><b>${T("tab_perfil")}</b></span>${chev}</button>
+        <button type="button" class="grupo-fila" id="ajPena">${cuadro("#C2410C", "pena")}<span class="grupo-tx"><b>${T("m_wg_pena")}</b></span>${chev}</button>
+      </div>
+      <div class="grupo-h">${T("m_tema_h")}</div>
+      <div class="ctl-seg ctl-seg-full" role="radiogroup" aria-label="${T("m_tema_h")}" id="ajTema">${segTema(prefActual())}</div>
+      <div class="grupo-h">${T("m_aj_pref")}</div>
+      <div class="grupo">
+        <button type="button" class="grupo-fila" id="ajLang">${cuadro("#0E7C86", "idioma")}<span class="grupo-tx"><b>${T("m_idioma")}</b></span><span class="grupo-val">${lang === "en" ? "English" : "Español"}</span></button>
+        ${avisos.map(([k, l]) => `<div class="grupo-fila">${cuadro("#D0612F", "avisos")}<span class="grupo-tx"><b>${l}</b></span>${sw("aj_" + k, s[k] !== false)}</div>`).join("")}
+      </div>
+      <div class="grupo-h">${T("m_aj_ayuda")}</div>
+      <div class="grupo">
+        <a class="grupo-fila" href="/ayuda" target="_blank" rel="noopener">${cuadro("#5E5E66", "ayuda")}<span class="grupo-tx"><b>${T("m_ayuda")}</b></span>${chev}</a>
+        <button type="button" class="grupo-fila aj-salir" id="ajSalir">${cuadro("#B3261E", "salir")}<span class="grupo-tx"><b>${T("m_cerrar_sesion")}</b></span></button>
+      </div>`);
+    root.classList.add("aj");
+    root.querySelector("#ajPerfil").onclick = () => { close(); activar("perfil"); };
+    root.querySelector("#ajPena").onclick = () => { close(); descSeg = "penas"; activar("descubrir"); };
+    root.querySelector("#ajLang").onclick = () => { OLI_I18N.setLang(lang === "en" ? "es" : "en"); location.reload(); };
+    root.querySelectorAll("#ajTema [data-tema]").forEach((b) => b.onclick = () => {
+      OLI.setThemePref(b.dataset.tema, true);
+      root.querySelectorAll("#ajTema [data-tema]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+    });
+    avisos.forEach(([k]) => { const el = root.querySelector("#aj_" + k); el.onclick = async () => {
+      const on = el.getAttribute("aria-checked") !== "true"; el.setAttribute("aria-checked", String(on));
+      try { const r = await api("/perfil", { method: "PATCH", body: { [k]: on } }); SESSION.socio = r.socio; }
+      catch (e) { el.setAttribute("aria-checked", String(!on)); toast(e.message); }
+    }; });
+    root.querySelector("#ajSalir").onclick = () => { close(); logout(); };
+  }
+
+  const hap = () => { try { navigator.vibrate && navigator.vibrate(10); } catch (e) {} };
+
+  // ─── Tirar para actualizar (Inicio y Subastas): hasta 70 px de arrastre con resistencia .5, spinner de franjas; recarga los datos de la vista, no la página ───
+  function initTirarParaActualizar() {
+    const ind = document.createElement("div"); ind.className = "ptr"; ind.setAttribute("aria-hidden", "true"); ind.innerHTML = "<span></span>";
+    document.body.appendChild(ind);
+    let y0 = null, dist = 0, cargando = false;
+    const habilitado = () => curTab === "inicio" || (curTab === "descubrir" && descSeg === "subastas" && !curSubId);
+    document.addEventListener("touchstart", (e) => { y0 = (window.scrollY <= 0 && habilitado() && !cargando && e.touches.length === 1) ? e.touches[0].clientY : null; dist = 0; }, { passive: true });
+    document.addEventListener("touchmove", (e) => {
+      if (y0 == null) return;
+      dist = Math.max(0, Math.min(70, (e.touches[0].clientY - y0) * 0.5));
+      if (dist > 0) { ind.style.opacity = String(Math.min(1, dist / 40)); ind.style.transform = "translate(-50%," + dist + "px)"; }
+    }, { passive: true });
+    document.addEventListener("touchend", async () => {
+      if (y0 == null) return; y0 = null;
+      if (dist >= 60 && !cargando) {
+        cargando = true; ind.classList.add("on"); hap();
+        try { SESSION = (await yo()) || SESSION; renderHeader(); await activar(curTab, { fromRoute: true }); } catch (e) {}
+        await new Promise((r) => setTimeout(r, 400)); ind.classList.remove("on"); cargando = false;
+      }
+      ind.style.opacity = "0"; ind.style.transform = "translate(-50%,0)";
+    }, { passive: true });
+  }
+
+  // ─── Partidos: próximo partido, abono (según Tuti) y "No voy · liberar mi lugar". Detrás de TUTI_TICKETERA: mientras Tuti
+  // no exponga los endpoints, la pestaña explica qué viene y no inventa partidos ni asientos. ───
+  async function vPartidos() {
+    const cfg = CONFIG && CONFIG.ticketera ? CONFIG.ticketera : { activa: false, url: "" };
+    const reg = await api("/puntos").then((p) => (p.reglas || []).find((r) => r.clave === "liberar")).catch(() => null);
+    const pts = reg && reg.puntos ? "+" + reg.puntos : "";
+    const chev = icon("chevron-right", { size: 14 });
+    const fila = (color, ic, titulo, sub, extra) => `<div class="grupo-fila"><span class="grupo-ic" style="background:${color}">${OLI.ic(ic, 18)}</span><span class="grupo-tx"><b>${titulo}</b>${sub ? `<small>${sub}</small>` : ""}</span>${extra || ""}</div>`;
+    view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <h2>${T("tab_partidos")}</h2><p class="lead">${T("m_pt_sub")}</p>
+      <div class="pt-grid">
+        <div class="pt-card"><div class="pt-card-in"><span class="pt-eb">${T("m_pt_eb")}</span>
+          <div class="pt-titulo">${T("m_pt_conectando")}</div>
+          <p class="pt-txt">${T("m_pt_txt")}</p></div><div class="pt-fr" aria-hidden="true"></div></div>
+        <div class="pt-col">
+          <div class="grupo">
+            ${fila("#1F4A7A", "liberar", T("m_pt_abono"), T("m_pt_abono_sub"), `<span class="grupo-val">${T("m_pt_pronto")}</span>`)}
+            ${fila("#B3261E", "candado", T("m_pt_liberar"), pts ? pts + " " + T("m_pt_puntos") : "", `<span class="grupo-val">${T("m_pt_pronto")}</span>`)}
+          </div>
+          <p class="pt-nota">${T("m_pt_nota")}</p>
+          ${cfg.url ? `<a class="btn btn-block" href="${esc(cfg.url)}" target="_blank" rel="noopener">${T("m_pt_comprar")}</a>` : ""}
+        </div>
+      </div></div>`;
+    void chev;
   }
 
   // ─── Anillo de progreso (persistente, animado) ───────────────────────────────
@@ -554,7 +702,7 @@
               ${avatar}
               <button type="button" class="foto-btn" id="f_foto">${icon("camera", { size: 14 })} ${T("m_foto_cambiar")}</button>
             </div>
-            <div class="pf-list">
+            <div class="grupo pf-list sin-ic">
               ${campos.map(filaCampo).join("")}
               <div class="pf-campo pf-readonly"><span class="pf-lbl">${T("m_email")}</span><span class="pf-val">${esc(s.email)}</span></div>
             </div>
@@ -563,10 +711,8 @@
           <div class="perfil-casa">
             <h3 style="margin:0 0 4px">${T("m_casa_h")}</h3>
             <p class="lead" style="margin-bottom:12px">${T("m_casa_p")}</p>
-            <label class="casa-toggle" for="f_exacto">
-              <input type="checkbox" id="f_exacto" ${s.mostrar_exacto ? "checked" : ""} />
-              <span><strong>${T("m_exacto_h")}</strong><br><small class="muted">${T("m_exacto_p")}</small></span>
-            </label>
+            <div class="grupo sin-ic"><div class="grupo-fila"><span class="grupo-tx"><b>${T("m_exacto_h")}</b><small>${T("m_exacto_p")}</small></span>
+              <button type="button" role="switch" class="interruptor" id="f_exacto" aria-checked="${!!s.mostrar_exacto}"></button></div></div>
             <div class="ubic" style="margin-top:12px">
               <button class="btn btn-ghost" id="btnGeo" type="button">${T("m_geo")}</button>
               <span id="ubicEstado" class="muted">${tienePunto ? T("m_fijado") : T("m_sin_fijar")}</span>
@@ -576,36 +722,14 @@
           </div>
         </div>
 
-        <div class="perfil-avisos">
-          <h3 style="margin:0 0 4px">${T("m_tema_h")}</h3>
-          <p class="lead" style="margin-bottom:12px">${T("m_tema_p")}</p>
-          <div class="ctl-seg" role="radiogroup" aria-label="${T("m_tema_h")}" id="temaSeg">
-            ${[["auto", T("m_tema_auto")], ["claro", T("m_tema_claro")], ["oscuro", T("m_tema_oscuro")]].map(([v, l]) => `<button type="button" role="radio" class="ctl-seg-b" data-tema="${v}" aria-checked="${(OLI.themePref() || (OLI.theme() === "light" ? "claro" : "oscuro")) === v}">${l}</button>`).join("")}
-          </div>
-        </div>
-
-        <div class="perfil-avisos">
-          <h3 style="margin:0 0 4px">${T("m_avisos_h")}</h3>
-          <p class="lead" style="margin-bottom:12px">${T("m_avisos_p")}</p>
-          ${avisos.map((a) => `<label class="casa-toggle" for="${a.key}">
-            <input type="checkbox" id="${a.key}" ${a.on ? "checked" : ""} />
-            <span><strong>${a.label}</strong></span>
-          </label>`).join("")}
-        </div>
-
         ${puedeCancelar ? `<div class="perfil-cancelar"><button type="button" class="pf-cancel-link" id="btnCancelarMembresia">${T("m_cancelar_membresia")}</button></div>` : ""}
       </div>`;
     document.getElementById("f_foto").onclick = () => fotoModal(subirFoto);
     document.getElementById("btnGeo").onclick = usarUbicacion;
     campos.forEach((c) => { document.getElementById("f_" + c.key).onclick = () => entrarEdicionPerfil(c); });
-    document.querySelectorAll("#temaSeg [data-tema]").forEach((b) => b.onclick = () => {
-      OLI.setThemePref(b.dataset.tema, true);
-      document.querySelectorAll("#temaSeg [data-tema]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
-    });
-    avisos.forEach((a) => { document.getElementById(a.key).onchange = (e) => guardarAviso(a.key, e.target.checked); });
     const cancelBtn = document.getElementById("btnCancelarMembresia");
     if (cancelBtn) cancelBtn.onclick = () => confirmarCancelarMembresia(cancelBtn);
-    document.getElementById("f_exacto").onchange = (e) => guardarCampoPerfil({ mostrar_exacto: e.target.checked }, T("m_casa_ok"));
+    document.getElementById("f_exacto").onclick = (e) => guardarCampoPerfil({ mostrar_exacto: e.currentTarget.getAttribute("aria-checked") !== "true" }, T("m_casa_ok"));
     initPerfilMapa();
     if (!s.pais_iso) prefillPaisPorIP();
   }
@@ -820,33 +944,42 @@
     const esc2 = d.escalon || {};
     const falta = esc2.siguiente ? `${T("m_pts_faltan")} ${nf(esc2.faltan)} ${T("m_pts_para")} ${esc2.siguiente.nombre}` : T("m_pts_top");
     const m = d.mision;
+    // Misión de la semana: tarjeta negra con tres respuestas en píldora (04-pantallas); si ya la hizo, una fila de confirmación.
     const misionHtml = !m ? "" : m.respondida
-      ? `<div class="pts-mision pts-hecha">${icon("check", { size: 16 })} ${m.respondida.correcta ? T("m_pts_mision_ok") : T("m_pts_mision_no")}</div>`
-      : `<div class="pts-mision"><span class="pts-kick">${T("m_pts_mision")} · +${nf(m.puntos)}</span><p>${esc(m.pregunta)}</p>
-          <div class="pts-ops">${m.opciones.map((o, i) => `<button class="pts-op" data-mision="${esc(m.id)}" data-op="${i}">${esc(o)}</button>`).join("")}</div></div>`;
-    const reglasHtml = d.reglas.map((r) => `<div class="pts-fila${r.aplica && r.activa ? "" : " off"}">
-        <span><b>${esc(r.titulo)}</b><small>${esc(r.fuente)} · ${T("m_pts_q_" + r.quien)}${r.pendiente ? " · " + T("m_pts_pronto") : ""}</small></span>
-        <span class="pts-n">${r.activa ? "+" + nf(r.puntos) : "—"}</span></div>`).join("");
+      ? `<div class="pts-hecha">${OLI.ic("check-circulo", 22, true)}<span>${m.respondida.correcta ? T("m_pts_mision_ok") : T("m_pts_mision_no")}</span></div>`
+      : `<div class="pts-m"><span class="pts-m-eb">${T("m_pts_mision")} · +${nf(m.puntos)}</span><p class="pts-m-q">${esc(m.pregunta)}</p>
+          <div class="pts-m-ops">${m.opciones.map((o, i) => `<button type="button" class="pts-m-op" data-mision="${esc(m.id)}" data-op="${i}">${esc(o)}</button>`).join("")}</div></div>`;
+    const fila = (tx, sub, der, off) => `<div class="grupo-fila"${off ? ' style="opacity:.45"' : ""}><span class="grupo-tx"><b>${tx}</b>${sub ? `<small>${sub}</small>` : ""}</span>${der || ""}</div>`;
+    const reglasHtml = d.reglas.map((r) => fila(esc(r.titulo), esc(r.fuente) + " · " + T("m_pts_q_" + r.quien) + (r.pendiente ? " · " + T("m_pts_pronto") : ""),
+      `<span class="pts-n">${r.activa ? "+" + nf(r.puntos) : "—"}</span>`, !(r.aplica && r.activa))).join("");
     const premiosHtml = pr.items.length ? pr.items.map((p) => {
       const txt = p.proximamente ? T("m_pts_pronto") : p.agotado ? T("m_pts_agotado") : p.puede_canjear ? T("m_pts_canjear") : T("m_pts_faltan") + " " + nf(p.faltan);
-      return `<div class="pts-fila"><span><small class="pts-esc">${esc(String(p.escalon).toUpperCase())} · ${nf(p.costo)} PTS</small><b>${esc(p.titulo)}</b>${p.descripcion ? `<small>${esc(p.descripcion)}</small>` : ""}</span>
-        <button class="btn btn-sm${p.puede_canjear ? "" : " btn-ghost"}" data-premio="${esc(p.id)}" ${p.puede_canjear ? "" : "disabled"}>${txt}</button></div>`;
-    }).join("") : `<p class="muted" style="padding:12px 0">${T("m_pts_sin_premios")}</p>`;
-    const movHtml = d.movimientos.length ? d.movimientos.map((x) => `<div class="pts-fila"><span><b>${esc(x.detalle || x.motivo)}</b><small>${fecha(x.creado)}</small></span>
-        <span class="pts-n${x.puntos < 0 ? " neg" : ""}">${x.puntos > 0 ? "+" : "−"}${nf(Math.abs(x.puntos))}</span></div>`).join("") : `<p class="muted" style="padding:12px 0">${T("m_pts_sin_mov")}</p>`;
+      return `<div class="grupo-fila"><span class="grupo-tx"><small class="pts-esc">${esc(String(p.escalon).toUpperCase())} · ${nf(p.costo)} PTS</small><b>${esc(p.titulo)}</b>${p.descripcion ? `<small>${esc(p.descripcion)}</small>` : ""}</span>
+        <button type="button" class="pts-canje${p.puede_canjear ? " on" : ""}" data-premio="${esc(p.id)}" ${p.puede_canjear ? "" : "disabled"}>${txt}</button></div>`;
+    }).join("") : `<div class="grupo-fila"><span class="grupo-tx"><small>${T("m_pts_sin_premios")}</small></span></div>`;
+    const movHtml = d.movimientos.length ? d.movimientos.map((x) => fila(esc(x.detalle || x.motivo), fecha(x.creado),
+      `<span class="pts-n${x.puntos < 0 ? " neg" : ""}">${x.puntos > 0 ? "+" : "−"}${nf(Math.abs(x.puntos))}</span>`)).join("") : `<div class="grupo-fila"><span class="grupo-tx"><small>${T("m_pts_sin_mov")}</small></span></div>`;
     view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      <div class="pts-head"><div class="pts-anillo" style="--p:${Math.round((esc2.pct || 0) * 3.6)}deg"><b>${nf(d.saldo)}</b></div>
-        <div><h2 style="margin:0">${T("m_pts_h")}</h2><p class="muted" style="margin:2px 0">${T("m_pts_escalon")} ${esc(esc2.nombre || "")} · ${falta}</p></div></div>
-      ${misionHtml}
-      <h3 class="pts-h3">${T("m_pts_como")}</h3><div class="pts-lista">${reglasHtml}</div>
-      <h3 class="pts-h3">${T("m_pts_canje")}</h3><div class="pts-lista">${premiosHtml}</div>
-      <h3 class="pts-h3">${T("m_pts_mov")}</h3><div class="pts-lista">${movHtml}</div>
-      ${d.vencen ? `<p class="muted" style="font-size:12.5px;margin-top:14px">${T("m_pts_vencen")}</p>` : ""}
+      <h2>${T("m_pts_h")}</h2><p class="lead">${T("m_pts_escalon")} ${esc(esc2.nombre || "")} · ${falta}</p>
+      <div class="pts-grid">
+        <div class="pts-col">
+          <div class="pts-resumen"><div class="pts-anillo2" style="--p:${Math.max(0, Math.min(100, Number(esc2.pct) || 0))}">${OLI.ic("puntos", 34, true)}</div>
+            <span class="pts-saldo"><b>${nf(d.saldo)}</b><small>${T("m_pts_escalon")} ${esc(esc2.nombre || "")} · ${falta}</small></span></div>
+          ${misionHtml}
+          <div class="grupo-h">${T("m_pts_como")}</div><div class="grupo sin-ic">${reglasHtml}</div>
+        </div>
+        <div class="pts-col">
+          <div class="grupo-h">${T("m_pts_canje")}</div><div class="grupo sin-ic">${premiosHtml}</div>
+          <div class="grupo-h">${T("m_pts_mov")}</div><div class="grupo sin-ic">${movHtml}</div>
+          ${d.vencen ? `<p class="pt-nota" style="margin-top:12px">${T("m_pts_vencen")}</p>` : ""}
+        </div>
+      </div>
     </div>`;
     view().querySelectorAll("[data-mision]").forEach((b) => b.addEventListener("click", async () => {
       view().querySelectorAll("[data-mision]").forEach((x) => { x.disabled = true; });
       try {
         const r = await api("/puntos/mision/" + b.dataset.mision, { method: "POST", body: { opcion: Number(b.dataset.op) } });
+        hap();
         toast(r.correcta ? T("m_pts_mision_ok") + " +" + nf(r.puntos) : T("m_pts_mision_no"));
       } catch (e) { toast(e.message); }
       vPuntos();
@@ -858,7 +991,7 @@
       root.querySelector("#ptsNo").onclick = close;
       root.querySelector("#ptsOk").onclick = async () => {
         root.querySelector("#ptsOk").disabled = true;
-        try { await api("/puntos/premios/" + p.id + "/canjear", { method: "POST" }); close(); toast(T("m_pts_canjeado")); }
+        try { await api("/puntos/premios/" + p.id + "/canjear", { method: "POST" }); hap(); close(); toast(T("m_pts_canjeado")); }
         catch (e) { close(); toast(e.message); }
         vPuntos();
       };
@@ -1012,6 +1145,7 @@
     const items = (r && r.items) || [];
     if (!items.length) { view().innerHTML = benProximamente(); return; } // aún no lanzada → teaser
     const ah = r.ahorro || { mes: 0, total: 0 }, ciudad = r.ciudad || "";
+    const TL = { olimpista: "Olimpista", kids: "Junior", premium: "Plus", socio: "Socio" };
     const paga = r.tier === "premium" ? '<div class="ba-paga">Tu Plus rinde — mirá cuánto te ahorra</div>'
       : r.tier === "socio" ? '<div class="ba-paga">El mejor ahorro, por ser Socio del Decano</div>' : "";
     // Billetera de Ahorro: lo del mes grande, lo del año a la derecha y una nota de uso.
@@ -1022,23 +1156,36 @@
       '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
       '<div class="ba-nota">' + notaMes + ' · ' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
     const cod = r.codigo ? '<div class="ben-codigo">' + T("m_ben_codigo") + ': <b>' + esc(String(r.codigo).toUpperCase()) + '</b></div>' : "";
-    const cards = items.length ? items.map(function (b) { return cardBeneficio(b, ciudad); }).join("") : vacio(T("m_ben_vacio"));
-    view().innerHTML = '<div class="section" style="border:none;padding-top:8px">' + ahorroCard + cod +
-      '<h2 style="margin-top:22px">' + T("m_ben_h") + '</h2>' +
-      '<p class="lead">' + (ciudad ? T("m_ben_p_local").replace("{ciudad}", esc(ciudad)) : T("m_ben_p")) + '</p>' +
-      '<div class="grid-3">' + cards + '</div></div>';
+    const propios = items.filter((x) => x.desbloqueado), bloqueados = items.filter((x) => !x.desbloqueado);
+    // Local primero: el comercio de tu ciudad va arriba dentro de cada grupo.
+    const esLocal = (x) => (ciudad && String(x.comercio_ciudad || "").toLowerCase() === ciudad.toLowerCase()) ? 1 : 0;
+    propios.sort((x, y) => esLocal(y) - esLocal(x));
+    const fila = (x, bloqueado) => '<button type="button" class="grupo-fila ben-fila" data-ben="' + esc(x.id) + '">' +
+      '<span class="ben-val' + (bloqueado ? " lock" : "") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
+      '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + (esLocal(x) && !bloqueado ? ' <span class="ben-loc">' + T("m_ben_tu_ciudad") + '</span>' : "") + '</b><small>' + esc(x.titulo || "") + ' · ' +
+      esc(bloqueado ? (T("m_ben_subi") + " " + (TL[x.nivel_min] || "Plus")) : (x.comercio_ciudad || x.comercio_rubro || "")) + '</small></span>' +
+      (bloqueado ? OLI.ic("candado", 20) : OLI.ic("chevron-derecha", 18)).replace('class="ic"', 'class="ic grupo-chev"') + '</button>';
+    view().innerHTML = '<div class="section" style="border:none;padding-top:8px">' +
+      '<h2>' + T("m_ben_h") + '</h2><p class="lead">' + (ciudad ? T("m_ben_p_local").replace("{ciudad}", esc(ciudad)) : T("m_ben_p")) + '</p>' +
+      ahorroCard + cod +
+      '<div class="ben-cols">' +
+        '<div><div class="grupo-h">' + T("m_ben_para_vos") + '</div>' + (propios.length ? '<div class="grupo">' + propios.map((x) => fila(x, false)).join("") + '</div>' : '<p class="pt-nota">' + T("m_ben_vacio") + '</p>') + '</div>' +
+        (bloqueados.length ? '<div><div class="grupo-h">' + T("m_ben_subi_h") + '</div><div class="grupo">' + bloqueados.map((x) => fila(x, true)).join("") + '</div></div>' : "") +
+      '</div></div>';
+    view().querySelectorAll("[data-ben]").forEach((el) => el.addEventListener("click", () => abrirBeneficio(items.find((x) => x.id === el.dataset.ben), TL)));
   }
-  function cardBeneficio(b, ciudad) {
-    const TL = { olimpista: "Olimpista", kids: "Junior", premium: "Plus", socio: "Socio" };
-    const local = ciudad && String(b.comercio_ciudad || "").toLowerCase() === ciudad.toLowerCase();
-    const cta = b.desbloqueado
-      ? '<span class="chip on" style="margin-top:8px;display:inline-block">' + icon("check", { size: 12 }) + ' ' + T("m_ben_activo") + '</span>'
-      : '<button class="btn btn-ghost" data-upsell-cta="' + esc(b.nivel_min || "premium") + '" data-upsell-ctx="' + esc(T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")) + '" style="margin-top:8px">' + icon("chevron-right", { size: 14 }) + ' ' + T("m_ben_subi") + ' ' + (TL[b.nivel_min] || "Plus") + '</button>';
-    return '<div class="card card-tier' + (b.desbloqueado ? "" : " ben-lock") + '"><div class="body">' +
-      '<div class="ben-com">' + icon("store", { size: 14 }) + ' <strong>' + esc(b.comercio_nombre || "") + '</strong>' + (local ? ' <span class="ben-loc">' + icon("map-pin", { size: 10 }) + ' tu ciudad</span>' : "") + '</div>' +
-      '<span class="chip on">' + esc(b.valor || "") + '</span>' +
-      '<h4>' + esc(b.titulo || "") + '</h4><p>' + esc(b.descripcion || "") + '</p>' +
-      '<div class="ben-rubro">' + esc(b.comercio_rubro || "") + (b.comercio_ciudad ? " · " + esc(b.comercio_ciudad) : "") + '</div>' + cta + '</div></div>';
+  // Hoja con el detalle del beneficio: usarlo (mostrar el QR en caja) o subir de nivel.
+  function abrirBeneficio(b, TL) {
+    if (!b) return;
+    const { root, close } = OLI.modal(`
+      <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
+      <h3 class="ben-hoja-t">${esc(b.valor || "")} · ${esc(b.titulo || "")}</h3>
+      <p class="ben-hoja-p">${esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))}</p>
+      <p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>
+      <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")}</button>
+      <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`);
+    root.querySelector("#benCerrar").onclick = close;
+    root.querySelector("#benCta").onclick = () => { close(); if (b.desbloqueado) activar("carnet"); else if (b.nivel_min === "socio") validarSocioModal(); else mostrarUpsell(b.nivel_min || "premium", T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")); };
   }
 
   // ─── Subastas (puja en vivo por polling; Plus y Socio) ───────────────────────
@@ -1208,6 +1355,7 @@
   async function pagarSubasta(id, cedula) {
     try {
       const r = await api("/subastas/" + id + "/pagar", { method: "POST", body: { cedula } });
+      hap();
       if (r.ya_pagado) return vSubastaDetalle(id);
       if (r.falta_cedula) {
         const c = await OLI.pedirCedula(T("m_cedula_pago"));
@@ -1246,6 +1394,7 @@
   async function pujar(id, monto) {
     try {
       const r = await api("/subastas/" + id + "/pujar", { method: "POST", body: { monto } });
+      hap();
       toast(r.extendida ? T("m_sub_extendido") : T("m_sub_vas_ganando"));
       try { window.OLI.track && window.OLI.track("Puja", null, { value: monto }); } catch (e) {}
     } catch (e) { toast(e.message); }
@@ -1291,6 +1440,8 @@
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && _qrTimer) refrescarQr(); }); // al volver, token nuevo ya
 
+  const qrListo = () => new Promise((res) => { let n = 0; (function chk() { if (window.qrcode || n++ > 40) return res(); setTimeout(chk, 50); })(); });
+  const NIVEL_COLOR = { olimpista: "#c9c7c1", kids: "#ff8a80", premium: "#d9b65a", socio: "#ffffff" };
   async function vCarnet() {
     view().innerHTML = skeleton(0);
     try {
@@ -1301,9 +1452,11 @@
       ]);
       const carnet = carnetR.carnet;
       const membresia = memR.membresia, tier = memR.tier;
+      try { localStorage.setItem("oli_carnet_offline", JSON.stringify({ carnet, ref: (SESSION.socio && SESSION.socio.ref_codigo) || "", guardado: Date.now() })); } catch (e) {}
       const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0 && t.comprable !== false);
       const esGratis = !membresia || (tier && tier.nivel === 0);
       const s = SESSION.socio;
+      await qrListo(); // la librería del QR carga diferida: sin esperarla el carnet salía con "Tu QR" vacío
       const qr = makeQR(location.origin + "/c/" + encodeURIComponent(carnet.numero));
       const social = await socialPais();
       const ubic = [s.ciudad, s.pais].filter(Boolean).join(", ");
@@ -1319,20 +1472,29 @@
         <div class="section" style="border:none;padding-top:8px">
           <h2>${T("m_carnet_h")}</h2>
           <p class="lead">${T("m_carnet_p")}</p>
-          <div class="cn-wrap">
-            ${carnetHTML({ tierSlug: carnet.tierSlug, tierNombre: carnet.tier, nombre: carnet.nombre, numero: carnet.numero, foto: carnet.foto, qr, iso: carnet.iso })}
+          <div class="cn2-grid">
+            <div class="cn2" id="qrBen">
+              <div class="cn2-top"><img src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[carnet.tierSlug] || "#d9b65a"}">${esc(String(carnet.tier || "Olimpista").toUpperCase())}</span></div>
+              <div class="cn2-fr" aria-hidden="true"></div>
+              <div class="cn2-body">
+                <div class="cn2-id"><span class="cn2-nom">${esc(carnet.nombre)}</span><span class="cn2-lin">${T("m_cn_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}${ubic ? " · " + esc(ubic) : ""}</span></div>
+                <div class="cn2-qr"><img id="qrBenImg" alt="${T("m_qr_alt")}" width="188" height="188" /><div class="qr-vel" id="qrBenVel" hidden></div></div>
+                <div class="cn2-pie"><div class="cn2-barra"><span id="qrBenBarra"></span></div><span class="cn2-seg"><span id="qrBenSeg"></span> · <span id="qrBenCod">······</span></span></div>
+              </div>
+            </div>
+            <div class="cn2-lado">
+              <div class="grupo">
+                <div class="grupo-fila"><span class="cn2-ico" style="color:var(--ok)">${OLI.ic(esSocioValidado() ? "verificado" : "check-circulo", 24, true)}</span>
+                  <span class="grupo-tx"><b>${esSocioValidado() ? T("m_cn_socio") : T("m_cn_miembro")}</b><small>${esSocioValidado() ? T("m_cn_socio_sub") : T("m_cn_miembro_sub")}</small></span></div>
+                <div class="grupo-fila"><span class="cn2-ico" style="color:var(--text-secondary)">${OLI.ic("carnet", 24)}</span><span class="grupo-tx"><b>${T("m_cn_numero")}</b></span><span class="grupo-val">${esc(carnet.numero)}</span></div>
+              </div>
+              <p class="cn2-nota">${T("m_cn_nota")}</p>
+              <div class="carnet-acts">
+                <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
+                <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
+              </div>
+            </div>
           </div>
-          <div class="carnet-acts">
-            <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
-            <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
-          </div>
-          <div class="card qr-ben" id="qrBen"><div class="body">
-            <h3 style="margin:0 0 4px">${icon("qr-code", { size: 16 })} ${T("m_qr_h")}</h3>
-            <p class="muted" style="margin:0 0 12px;font-size:13px">${T("m_qr_p")}</p>
-            <div class="qr-caja"><img id="qrBenImg" alt="${T("m_qr_alt")}" width="212" height="212" /><div class="qr-vel" id="qrBenVel"></div></div>
-            <div class="qr-meta"><span class="qr-cod" id="qrBenCod">······</span><span class="muted" id="qrBenSeg"></span></div>
-            <div class="qr-barra"><span id="qrBenBarra"></span></div>
-          </div></div>
           <div class="card" style="max-width:520px;margin:18px auto 0;text-align:center"><div class="body">
             <h3 style="margin:0 0 6px">${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
             <p class="muted" style="margin:0 0 12px">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
@@ -1401,6 +1563,20 @@
         } catch (e) { /* cancelado */ }
       };
     } catch (e) {
+      // Sin conexión: se muestra el último carnet que se vio (datos y número), con aviso. El QR rotativo necesita red:
+      // en caja se dicta el código de socio, que el comercio también acepta.
+      let g = null; try { g = JSON.parse(localStorage.getItem("oli_carnet_offline") || "null"); } catch (x) {}
+      if (g && g.carnet && (!navigator.onLine || /fetch|network|load failed/i.test(String(e && e.message)))) {
+        const c = g.carnet;
+        view().innerHTML = `<div class="section" style="border:none;padding-top:8px"><h2>${T("m_carnet_h")}</h2><p class="lead">${T("m_carnet_p")}</p>
+          <div class="cn2-grid"><div class="cn2"><div class="cn2-top"><img src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[c.tierSlug] || "#d9b65a"}">${esc(String(c.tier || "Olimpista").toUpperCase())}</span></div>
+            <div class="cn2-fr" aria-hidden="true"></div>
+            <div class="cn2-body"><div class="cn2-id"><span class="cn2-nom">${esc(c.nombre)}</span><span class="cn2-lin">${esc(c.numero)}</span></div>
+              <span class="cn2-offline">${OLI.ic("reloj", 16)} ${T("m_cn_offline")}</span>
+              ${g.ref ? `<div class="cn2-codigo"><small>${T("m_cn_codigo")}</small><b>${esc(String(g.ref).toUpperCase())}</b></div>` : ""}
+              <p class="cn2-lin" style="text-align:center">${T("m_cn_offline_p")}</p></div></div></div></div>`;
+        return;
+      }
       view().innerHTML = `<div class="section" style="border:none"><h2>${T("m_carnet_no")}</h2><p class="lead">${T("m_error_generico")}</p></div>`;
     }
   }

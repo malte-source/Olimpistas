@@ -23,21 +23,15 @@
 
   let panel = null, lista = null, campo = null, sugBox = null, estado = "ia", abierto = false, timer = null, visto = new Set(), enviando = false;
 
-  const svg = (d, s) => `<svg width="${s || 20}" height="${s || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-  const ICO = {
-    chat: svg('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>', 24),
-    arriba: svg('<path d="M12 19V5M5 12l7-7 7 7"/>', 20),
-    x: svg('<path d="M6 6l12 12M18 6 6 18"/>', 20),
-    check: svg('<path d="M20 6 9 17l-5-5"/>', 18),
-    persona: svg('<circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c0-3.6 3-5.6 6.5-5.6s6.5 2 6.5 5.6"/>', 18),
-    pago: svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>', 18),
-  };
+  // Íconos del sprite propio (/assets/icons.svg · 10-iconos.md)
+  const sp = (id, s, f) => `<svg class="ic" width="${s}" height="${s}" aria-hidden="true"><use href="/assets/icons.svg#i-${id}${f ? "-f" : ""}"/></svg>`;
+  const ICO = { chat: sp("chat", 27, true), arriba: sp("enviar", 20), x: sp("cerrar", 24), check: sp("check-circulo", 20), persona: sp("persona", 20), pago: sp("pagar", 20) };
 
   function montar() {
     if (document.getElementById("atcFab")) return;
     const fab = document.createElement("button");
     fab.id = "atcFab"; fab.type = "button"; fab.className = "atc-fab"; fab.setAttribute("aria-label", S.abrir);
-    fab.innerHTML = ICO.chat + `<span class="atc-fab-t">${esc(S.abrir)}</span>`;
+    fab.innerHTML = ICO.chat + '<span class="atc-fab-dot" aria-hidden="true"></span>';
     fab.addEventListener("click", abrir);
     document.body.appendChild(fab);
 
@@ -45,10 +39,11 @@
     panel.id = "atcPanel"; panel.className = "atc-panel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", S.titulo); panel.hidden = true;
     panel.innerHTML = `
       <header class="atc-head">
-        <img src="/assets/escudo.png" alt="" width="34" height="34" />
+        <span class="atc-sh"><img src="/assets/escudo-olimpia-blanco.png" alt="" height="26" /></span>
         <div class="atc-head-t"><b>${esc(S.titulo)}</b><span class="atc-estado"><i id="atcDot" class="atc-dot"></i><span id="atcEstado">${esc(S.ia)}</span></span></div>
         <button type="button" class="atc-x" id="atcX" aria-label="${esc(S.cerrar)}">${ICO.x}</button>
       </header>
+      <div class="atc-fr" aria-hidden="true"></div>
       <div class="atc-lista" id="atcLista" role="log" aria-live="polite"></div>
       <div class="atc-sug" id="atcSug"></div>
       <form class="atc-form" id="atcForm" autocomplete="off">

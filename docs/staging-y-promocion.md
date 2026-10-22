@@ -140,3 +140,16 @@ Arreglo (`data/pg-store.js`): la cola vive en JS. Cada consulta toma un cupo (ta
 - **Inicio con widgets** (grilla `auto-fill` de 160 px, radio 26): Billetera de Ahorro (2 columnas), Puntos con anillo hasta el próximo escalón, Mi peña y Mi carnet (negro con franjas). Cada widget aparece solo si su dato cargó; los bloques de siempre (urgente, perfil, sorteos, encuesta, club) se mantienen debajo.
 - **Barra de pestañas del móvil**: etiqueta de 11 px bajo el ícono de 24 px, píldora de 56 × 30 detrás del ícono, fondo con blur de 20 px. **Hojas**: en el móvil los diálogos suben desde abajo (radio 28, manija de 38 × 5, 320 ms).
 - **No se hizo (a propósito):** el encabezado negro colapsable con título grande y la pestaña Partidos. El encabezado actual aloja Ayuda, idioma, tema y Salir, y moverlos a la hoja de Perfil cambia hábitos de ~10 000 hinchas: se decide aparte. Partidos depende de Tuti (abono y liberar lugar).
+
+## Interfaz nativa completa (Sprint 7 · handoff v2)
+
+Se implementó `design_handoff_v2_nativa/09-plan-nativo.md` entero, con estas **desviaciones a propósito**:
+- **Íconos:** set SVG propio en `public/assets/icons.svg` (generado por `scripts/gen-icons-svg.js`, 56 íconos, 14 con variante rellena `-f`). La CSP no deja cargar Material Symbols; el handoff v2 lo corrige. Uso: `<svg class="ic"><use href="/assets/icons.svg#i-inicio"/></svg>` o `OLI.ic("inicio", 24, true)`.
+- **CSS de admin/comercio/peña/reset:** quedó en el `<style>` de cada página con prefijo (`.adm-`, `.com-`, `.pen-`, `.rst-`), no dentro de `styles.css`, para no pisarse entre páginas; todas usan los roles de `styles.css`, los componentes globales (`.btn`, `.grupo`, `.interruptor`, `.ctl-seg`) y `tema.js`.
+- **Tema:** `public/js/tema.js` (se carga en el `<head>` de todas las páginas) maneja claro/oscuro/**automático por defecto**; la elección explícita se guarda en `localStorage("oli_theme")` y, con sesión, en `socios.tema`. `common.js` solo hace de puente con la cuenta.
+- **Partidos:** la pestaña existe pero está **detrás de `TUTI_TICKETERA`**: sin los endpoints nuevos de Tuti explica qué viene y no inventa partidos ni asientos. `TUTI_TICKETERA_URL` (https) activa el botón "Comprar entrada en Tuti".
+- **Descubrir y Perfil** dejaron de ser pestañas: se abren desde Inicio / Ajustes con "‹ Inicio" arriba; las rutas `/miembro/descubrir/*` y `/miembro/perfil` se mantienen.
+- **Offline:** se guarda el último carnet y, sin conexión, se muestra con la píldora "Sin conexión" y el código de socio. **El QR rotativo no se genera sin red** (la firma es del servidor con el secreto de cada hincha; llevar ese secreto al dispositivo para un TOTP local es una decisión de seguridad aparte).
+- **No se hizo:** capturas de la ficha de instalación (`screenshots` del manifest).
+
+Guardas en `test/sistema-visual.test.js`: sin colores viejos, sin emojis, sin `alert/confirm/prompt`, solo fuentes Saira, íconos existentes, escala de tamaños, manifest.

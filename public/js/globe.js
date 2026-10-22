@@ -10,7 +10,7 @@
      create(el,{onFlagClick,onPick,autoRotate,zoom,center,flagsUrl})
        → { setData(ciudades), setCountries(paises), pov, stopRotation, raw } */
 window.OLI_GLOBE = (function () {
-  const ORO = "#c9a227", ORO_BORDE = "#1a1500";
+  const ORO = "#b08d2e", ORO_BORDE = "#1a1500";
   // Cúmulos de ciudad/país: tinta, no oro — "el oro significa dinero, y acá no hay dinero" (F1.7).
   const CUMULO = "#0a0a0a", CUMULO_BORDE = "rgba(255,255,255,.35)";
   const ESTILO = {
@@ -34,7 +34,7 @@ window.OLI_GLOBE = (function () {
       },
     },
     layers: [
-      { id: "fondo", type: "background", paint: { "background-color": "#0b0b0f" } },
+      { id: "fondo", type: "background", paint: { "background-color": "#0a0a0a" } },
       { id: "sat", type: "raster", source: "sat" },
       { id: "lugares", type: "raster", source: "lugares", paint: { "raster-opacity": 0.85 } },
       // Calles: aparecen al acercar (zoom ≥ 10) para no ensuciar la vista de globo.
@@ -151,9 +151,9 @@ window.OLI_GLOBE = (function () {
     const x = cv.getContext("2d");
     x.save(); x.beginPath(); x.arc(c, c, r, 0, Math.PI * 2); x.clip();
     _r(x, 0, top, c, hh / 3, "#f5f5f5"); _r(x, 0, top + hh / 3, c, hh / 3, "#141414"); _r(x, 0, top + 2 * hh / 3, c, hh / 3, "#f5f5f5");
-    (FLAG[iso] || ((xx, a, b, w, h) => _r(xx, a, b, w, h, "#c9a227")))(x, c, top, c, hh);
+    (FLAG[iso] || ((xx, a, b, w, h) => _r(xx, a, b, w, h, "#b08d2e")))(x, c, top, c, hh);
     x.restore();
-    x.strokeStyle = "#c9a227"; x.lineWidth = 3; x.beginPath(); x.moveTo(c, top); x.lineTo(c, top + hh); x.stroke();
+    x.strokeStyle = "#b08d2e"; x.lineWidth = 3; x.beginPath(); x.moveTo(c, top); x.lineTo(c, top + hh); x.stroke();
     x.lineWidth = 5; x.beginPath(); x.arc(c, c, r - 1.5, 0, Math.PI * 2); x.stroke();
     return x.getImageData(0, 0, S, S);
   }
@@ -344,7 +344,7 @@ window.OLI_GLOBE = (function () {
     }
 
     map.once("load", async () => {
-      try { map.setSky({ "sky-color": "#0b0b0f", "horizon-color": "#1a1a22", "fog-color": "#0b0b0f", "fog-ground-blend": 0.4 }); } catch (e) {}
+      try { map.setSky({ "sky-color": "#0a0a0a", "horizon-color": "#1a1a22", "fog-color": "#0a0a0a", "fog-ground-blend": 0.4 }); } catch (e) {}
       await cargarIconoBandera();
       addLayers();
       ready = true;
