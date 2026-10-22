@@ -2,7 +2,7 @@
    Sin librerías: interpolación esférica (slerp). Sirve en el navegador (window.OLI_GEO) y en Node (para las pruebas). */
 (function (raiz) {
   const R = Math.PI / 180;
-  const CLUB_OLIMPIA = [-57.6088, -25.2923]; // [lng, lat] — Club Olimpia (sede y Estadio Osvaldo Domínguez Dibb), Asunción
+  const CLUB_OLIMPIA = [-57.6085796, -25.2916778]; // [lng, lat] — Estadio Osvaldo Domínguez Dibb, Club Olimpia (punto de Google Maps que indicó el club)
 
   // Puntos [lng, lat] a lo largo del camino más corto entre dos puntos. Si el camino cruza el antimeridiano se corta en tramos.
   function arco(desde, hasta, pasos = 48) {
