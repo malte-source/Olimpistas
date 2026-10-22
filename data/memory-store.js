@@ -925,7 +925,7 @@ function createMemoryStore({ filePath = null } = {}) {
       }
       return Object.values(g).map((r) => ({
         pais_iso: r.pais_iso, ciudad: r.ciudad, count: r.count,
-        lat: r.n ? r.latSum / r.n : null, lng: r.n ? r.lngSum / r.n : null,
+        lat: r.n && r.count >= 3 ? r.latSum / r.n : null, lng: r.n && r.count >= 3 ? r.lngSum / r.n : null, // menos de 3 hinchas: se cuentan pero sin coordenadas (privacidad)
       }));
     },
     async historiaAltas() {

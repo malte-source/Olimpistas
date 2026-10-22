@@ -516,6 +516,16 @@ img{width:160px;max-width:70%;margin-bottom:20px}a{color:#f0d873;font-weight:700
 <p style="color:#c6c6d0">Volvé al <a href="/">inicio</a> y hacete Olimpista.</p></div></body></html>`);
 });
 
+// Errores que se escapan de los middlewares (JSON malformado, cuerpo muy grande…): siempre JSON, nunca HTML ni stack.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err && err.type === "entity.parse.failed") return res.status(400).json({ error: "El cuerpo del pedido no es un JSON válido" });
+  if (err && err.type === "entity.too.large") return res.status(413).json({ error: "El pedido es demasiado grande" });
+  const status = Number(err && (err.status || err.statusCode)) || 500;
+  if (status >= 500) log.error({ err: err && err.message, ruta: req.path }, "error no manejado");
+  res.status(status >= 400 && status < 600 ? status : 500).json({ error: status >= 500 ? "Error interno" : (err && err.message) || "Error" });
+});
+
 // Migraciones al arrancar: solo si se pide (MIGRAR_AL_ARRANCAR=1, pensado para staging). En
 // producción se migra ANTES del deploy con `node setup/migrar.js`, para que un fallo de
 // migración no tire el servicio mientras atiende tráfico.
@@ -527,9 +537,16 @@ async function arrancar() {
       catch (e) { log.fatal({ err: e.message }, "migraciones: falló, no se arranca"); process.exit(1); }
     }
   }
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     log.info({ port: PORT, club: BRAND.club }, `Olimpistas arriba en http://localhost:${PORT}`);
   });
+  // Una promesa sin manejar mataría el proceso (Node 22) y con él las pujas y pagos en vuelo: se registra y se avisa.
+  process.on("unhandledRejection", (e) => {
+    log.error({ err: e && e.message, stack: e && e.stack }, "promesa sin manejar");
+    try { require("./lib/alert").alertar("proceso:unhandledRejection", "Promesa sin manejar en el servidor", String(e && e.message)); } catch (x) { /* sin alerta */ }
+  });
+  // Deploy o escalado hacia abajo: dejar terminar lo que está en vuelo (hasta 8 s) antes de cortar.
+  process.on("SIGTERM", () => { log.info({}, "SIGTERM: cerrando"); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 8000).unref(); });
 }
 if (require.main === module) arrancar();
 
