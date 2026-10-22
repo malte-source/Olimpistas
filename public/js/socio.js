@@ -67,6 +67,7 @@
     if (SESSION.socio.tema) OLI.setThemePref(SESSION.socio.tema, false);
     renderHeader();
     initEncabezadoMovil();
+    initTirarParaActualizar();
     document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => activar(t.dataset.tab)));
     document.getElementById("mBack").addEventListener("click", (e) => { e.preventDefault(); activar("inicio"); });
     pintarSideTema();
@@ -579,6 +580,31 @@
     root.querySelector("#ajSalir").onclick = () => { close(); logout(); };
   }
 
+  const hap = () => { try { navigator.vibrate && navigator.vibrate(10); } catch (e) {} };
+
+  // ─── Tirar para actualizar (Inicio y Subastas): hasta 70 px de arrastre con resistencia .5, spinner de franjas; recarga los datos de la vista, no la página ───
+  function initTirarParaActualizar() {
+    const ind = document.createElement("div"); ind.className = "ptr"; ind.setAttribute("aria-hidden", "true"); ind.innerHTML = "<span></span>";
+    document.body.appendChild(ind);
+    let y0 = null, dist = 0, cargando = false;
+    const habilitado = () => curTab === "inicio" || (curTab === "descubrir" && descSeg === "subastas" && !curSubId);
+    document.addEventListener("touchstart", (e) => { y0 = (window.scrollY <= 0 && habilitado() && !cargando && e.touches.length === 1) ? e.touches[0].clientY : null; dist = 0; }, { passive: true });
+    document.addEventListener("touchmove", (e) => {
+      if (y0 == null) return;
+      dist = Math.max(0, Math.min(70, (e.touches[0].clientY - y0) * 0.5));
+      if (dist > 0) { ind.style.opacity = String(Math.min(1, dist / 40)); ind.style.transform = "translate(-50%," + dist + "px)"; }
+    }, { passive: true });
+    document.addEventListener("touchend", async () => {
+      if (y0 == null) return; y0 = null;
+      if (dist >= 60 && !cargando) {
+        cargando = true; ind.classList.add("on"); hap();
+        try { SESSION = (await yo()) || SESSION; renderHeader(); await activar(curTab, { fromRoute: true }); } catch (e) {}
+        await new Promise((r) => setTimeout(r, 400)); ind.classList.remove("on"); cargando = false;
+      }
+      ind.style.opacity = "0"; ind.style.transform = "translate(-50%,0)";
+    }, { passive: true });
+  }
+
   // ─── Partidos: próximo partido, abono (según Tuti) y "No voy · liberar mi lugar". Detrás de TUTI_TICKETERA: mientras Tuti
   // no exponga los endpoints, la pestaña explica qué viene y no inventa partidos ni asientos. ───
   async function vPartidos() {
@@ -953,7 +979,7 @@
       view().querySelectorAll("[data-mision]").forEach((x) => { x.disabled = true; });
       try {
         const r = await api("/puntos/mision/" + b.dataset.mision, { method: "POST", body: { opcion: Number(b.dataset.op) } });
-        if (navigator.vibrate) navigator.vibrate(10);
+        hap();
         toast(r.correcta ? T("m_pts_mision_ok") + " +" + nf(r.puntos) : T("m_pts_mision_no"));
       } catch (e) { toast(e.message); }
       vPuntos();
@@ -965,7 +991,7 @@
       root.querySelector("#ptsNo").onclick = close;
       root.querySelector("#ptsOk").onclick = async () => {
         root.querySelector("#ptsOk").disabled = true;
-        try { await api("/puntos/premios/" + p.id + "/canjear", { method: "POST" }); close(); toast(T("m_pts_canjeado")); }
+        try { await api("/puntos/premios/" + p.id + "/canjear", { method: "POST" }); hap(); close(); toast(T("m_pts_canjeado")); }
         catch (e) { close(); toast(e.message); }
         vPuntos();
       };
@@ -1329,6 +1355,7 @@
   async function pagarSubasta(id, cedula) {
     try {
       const r = await api("/subastas/" + id + "/pagar", { method: "POST", body: { cedula } });
+      hap();
       if (r.ya_pagado) return vSubastaDetalle(id);
       if (r.falta_cedula) {
         const c = await OLI.pedirCedula(T("m_cedula_pago"));
@@ -1367,6 +1394,7 @@
   async function pujar(id, monto) {
     try {
       const r = await api("/subastas/" + id + "/pujar", { method: "POST", body: { monto } });
+      hap();
       toast(r.extendida ? T("m_sub_extendido") : T("m_sub_vas_ganando"));
       try { window.OLI.track && window.OLI.track("Puja", null, { value: monto }); } catch (e) {}
     } catch (e) { toast(e.message); }
@@ -1424,6 +1452,7 @@
       ]);
       const carnet = carnetR.carnet;
       const membresia = memR.membresia, tier = memR.tier;
+      try { localStorage.setItem("oli_carnet_offline", JSON.stringify({ carnet, ref: (SESSION.socio && SESSION.socio.ref_codigo) || "", guardado: Date.now() })); } catch (e) {}
       const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0 && t.comprable !== false);
       const esGratis = !membresia || (tier && tier.nivel === 0);
       const s = SESSION.socio;
@@ -1534,6 +1563,20 @@
         } catch (e) { /* cancelado */ }
       };
     } catch (e) {
+      // Sin conexión: se muestra el último carnet que se vio (datos y número), con aviso. El QR rotativo necesita red:
+      // en caja se dicta el código de socio, que el comercio también acepta.
+      let g = null; try { g = JSON.parse(localStorage.getItem("oli_carnet_offline") || "null"); } catch (x) {}
+      if (g && g.carnet && (!navigator.onLine || /fetch|network|load failed/i.test(String(e && e.message)))) {
+        const c = g.carnet;
+        view().innerHTML = `<div class="section" style="border:none;padding-top:8px"><h2>${T("m_carnet_h")}</h2><p class="lead">${T("m_carnet_p")}</p>
+          <div class="cn2-grid"><div class="cn2"><div class="cn2-top"><img src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[c.tierSlug] || "#d9b65a"}">${esc(String(c.tier || "Olimpista").toUpperCase())}</span></div>
+            <div class="cn2-fr" aria-hidden="true"></div>
+            <div class="cn2-body"><div class="cn2-id"><span class="cn2-nom">${esc(c.nombre)}</span><span class="cn2-lin">${esc(c.numero)}</span></div>
+              <span class="cn2-offline">${OLI.ic("reloj", 16)} ${T("m_cn_offline")}</span>
+              ${g.ref ? `<div class="cn2-codigo"><small>${T("m_cn_codigo")}</small><b>${esc(String(g.ref).toUpperCase())}</b></div>` : ""}
+              <p class="cn2-lin" style="text-align:center">${T("m_cn_offline_p")}</p></div></div></div></div>`;
+        return;
+      }
       view().innerHTML = `<div class="section" style="border:none"><h2>${T("m_carnet_no")}</h2><p class="lead">${T("m_error_generico")}</p></div>`;
     }
   }

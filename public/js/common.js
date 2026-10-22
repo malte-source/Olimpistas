@@ -143,7 +143,7 @@ window.OLI = (function () {
 
   // Art determinista para tarjetas/thumbs según una semilla (id/slug).
   const PALETAS = [
-    ["#c9a227", "#7a5f10"], ["#3a3a52", "#14141b"], ["#2a2f45", "#0d1020"],
+    ["#b08d2e", "#7a5f10"], ["#3a3a52", "#1c1c1e"], ["#2a2f45", "#0d1020"],
     ["#e94560", "#7a1f2e"], ["#1d3a24", "#0a1710"], ["#2b4a6f", "#0e1c2c"],
   ];
   function artGradient(seed) {
@@ -241,7 +241,7 @@ window.OLI = (function () {
       // Filete por nivel — el único diferenciador de color, igual que en el carnet en pantalla
       // (.cn::after / --tier-stripe). El resto del carnet es idéntico en los 4 niveles.
       const tierCol = ({ olimpista: "#c9c7c1", kids: "#55534e", premium: "#e8dcb8", socio: "#b08d2e" })[o.tierSlug || "olimpista"] || "#c9c7c1";
-      const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#14141b"); g.addColorStop(1, "#0b0b0f");
+      const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#1c1c1e"); g.addColorStop(1, "#0a0a0a");
       x.fillStyle = g; x.fillRect(0, 0, W, H);
       x.fillStyle = "#18181f"; x.fillRect(0, 0, W, 132); x.fillStyle = "rgba(255,255,255,.12)"; x.fillRect(0, 132, W, 2);
       const logo = await _loadImg("/assets/logo-horizontal.svg?v=88");
@@ -290,7 +290,7 @@ window.OLI = (function () {
       const W = 1080, H = 1920, cx = W / 2;
       const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
       const x = cv.getContext("2d");
-      x.fillStyle = "#0b0b0f"; x.fillRect(0, 0, W, H);
+      x.fillStyle = "#0a0a0a"; x.fillRect(0, 0, W, H);
       // Fondo: la hinchada del Decano (cover) + velo oscuro para legibilidad.
       const bg = await _loadImg("/assets/hero-mobile.jpg?v=88") || await _loadImg("/assets/hero-desktop.jpg?v=88");
       if (bg && bg.width) {
@@ -303,7 +303,7 @@ window.OLI = (function () {
         x.fillStyle = g; x.fillRect(0, 0, W, H);
       }
       x.fillStyle = "rgba(21,19,28,.86)"; x.fillRect(0, 0, W, 300);
-      x.fillStyle = "#c9a227"; x.fillRect(0, 300, W, 4);
+      x.fillStyle = "#b08d2e"; x.fillRect(0, 300, W, 4);
       // Logo OFICIAL (escudo + OLIMPISTAS.com).
       const logo = await _loadImg("/assets/logo-horizontal.svg?v=88");
       if (logo) { const lw = 520, lh = lw * ((logo.height / logo.width) || 0.215); x.drawImage(logo, (W - lw) / 2, 95, lw, lh); }
@@ -313,18 +313,18 @@ window.OLI = (function () {
       const foto = o.foto ? await _loadImg(o.foto) : null;
       x.textAlign = "center";
       if (foto) x.drawImage(foto, cx - r, cy - r, r * 2, r * 2);
-      else { x.fillStyle = "#23232c"; x.fillRect(cx - r, cy - r, r * 2, r * 2); x.fillStyle = "#f0d873"; x.font = "bold 190px Arial"; x.textBaseline = "middle"; x.fillText((o.nombre || "O").trim().charAt(0).toUpperCase(), cx, cy); x.textBaseline = "alphabetic"; }
+      else { x.fillStyle = "#23232c"; x.fillRect(cx - r, cy - r, r * 2, r * 2); x.fillStyle = "#d9b65a"; x.font = "bold 190px Arial"; x.textBaseline = "middle"; x.fillText((o.nombre || "O").trim().charAt(0).toUpperCase(), cx, cy); x.textBaseline = "alphabetic"; }
       x.restore();
-      x.lineWidth = 10; x.strokeStyle = "#c9a227"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
+      x.lineWidth = 10; x.strokeStyle = "#b08d2e"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
       // Banderita en la selfie.
       const iso = (o.iso || "").toLowerCase().trim();
       if (/^[a-z]{2}$/.test(iso)) {
         const fl = await _loadImg("https://flagcdn.com/" + iso + ".svg", true);
-        if (fl) { const fr = 60, fx = cx + r - 58, fy = cy + r - 58; x.save(); x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.closePath(); x.clip(); x.drawImage(fl, fx - fr, fy - fr, fr * 2, fr * 2); x.restore(); x.lineWidth = 8; x.strokeStyle = "#0b0b0f"; x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.stroke(); x.lineWidth = 3; x.strokeStyle = "#fff"; x.beginPath(); x.arc(fx, fy, fr - 2, 0, 6.2832); x.stroke(); }
+        if (fl) { const fr = 60, fx = cx + r - 58, fy = cy + r - 58; x.save(); x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.closePath(); x.clip(); x.drawImage(fl, fx - fr, fy - fr, fr * 2, fr * 2); x.restore(); x.lineWidth = 8; x.strokeStyle = "#0a0a0a"; x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.stroke(); x.lineWidth = 3; x.strokeStyle = "#fff"; x.beginPath(); x.arc(fx, fy, fr - 2, 0, 6.2832); x.stroke(); }
       }
       // Anuncio. (re-centramos: restore() reseteó textAlign a "start")
       x.textAlign = "center"; x.textBaseline = "alphabetic";
-      x.fillStyle = "#f0d873"; x.font = "700 32px Arial"; try { x.letterSpacing = "8px"; } catch (e) {}
+      x.fillStyle = "#d9b65a"; x.font = "700 32px Arial"; try { x.letterSpacing = "8px"; } catch (e) {}
       x.fillText("ME SUMÉ AL DECANO", cx, 990); try { x.letterSpacing = "0px"; } catch (e) {}
       x.fillStyle = "#fff"; x.font = "900 96px Arial"; x.fillText("SOY OLIMPISTA", cx, 1170);
       x.font = "54px Arial"; x.fillText("🤍 🖤 🤍", cx, 1260);
@@ -333,7 +333,7 @@ window.OLI = (function () {
       if (lugar) { x.fillStyle = "#c6c6d0"; x.font = "600 40px Arial"; x.fillText("📍 " + lugar, cx, 1465); }
       // CTA pie.
       x.fillStyle = "rgba(255,255,255,.6)"; x.font = "600 33px Arial"; x.fillText("Sumate al mundo del Decano, estés donde estés", cx, 1670);
-      x.fillStyle = "#f0d873"; x.font = "800 62px Arial"; x.fillText("www.olimpistas.com", cx, 1755);
+      x.fillStyle = "#d9b65a"; x.font = "800 62px Arial"; x.fillText("www.olimpistas.com", cx, 1755);
       x.fillStyle = "rgba(255,255,255,.55)"; x.font = "600 34px Arial"; x.fillText("@olimpistascom · #SoyOlimpista", cx, 1815);
       return await new Promise((res) => cv.toBlob((b) => res(b), "image/png", 0.92));
     } catch (e) { return null; }
@@ -361,7 +361,7 @@ window.OLI = (function () {
   function confetti(opts) {
     opts = opts || {};
     if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const colors = opts.colors || ["#c9a227", "#e7c64b", "#ffffff", "#1a1a1a"];
+    const colors = opts.colors || ["#b08d2e", "#d9b65a", "#ffffff", "#1a1a1a"];
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cv = document.createElement("canvas"); cv.className = "oli-confetti";
     document.body.appendChild(cv);
