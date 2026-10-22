@@ -742,6 +742,9 @@
       inputHtml = `<select id="pfInput">${opts}</select>`;
     } else if (c.type === "date") {
       inputHtml = `<input id="pfInput" type="date" max="${new Date().toISOString().slice(0, 10)}" value="${attr(c.value)}" />`;
+    } else if (c.key === "ciudad") {
+      // Ciudad con autocompletado (GeoNames): elegir de la lista da la ciudad oficial; escribir otra cosa también se guarda.
+      inputHtml = `<input id="pfInput" type="text" list="pfCiudades" autocomplete="off" value="${attr(c.value)}" placeholder="${attr(c.placeholder || "")}" /><datalist id="pfCiudades"></datalist>`;
     } else {
       inputHtml = `<input id="pfInput" type="text" value="${attr(c.value)}" placeholder="${attr(c.placeholder || "")}" />`;
     }
@@ -749,9 +752,26 @@
       <div class="pf-edit">${inputHtml}<button type="button" class="btn btn-sm" id="pfOk">${icon("check", { size: 14 })}</button></div>`;
     const input = document.getElementById("pfInput");
     input.focus();
+    const ciudadIds = {};
+    if (c.key === "ciudad") {
+      const dl = document.getElementById("pfCiudades"); let t = 0;
+      input.addEventListener("input", () => {
+        clearTimeout(t);
+        t = setTimeout(async () => {
+          const q = input.value.trim(); if (q.length < 2) return;
+          try {
+            const r = await api("/ciudades?q=" + encodeURIComponent(q) + "&pais=" + encodeURIComponent((SESSION.socio && SESSION.socio.pais_iso) || ""));
+            dl.innerHTML = (r.items || []).map((x) => `<option value="${attr(x.nombre)}"></option>`).join("");
+            (r.items || []).forEach((x) => { ciudadIds[String(x.nombre).toLowerCase()] = x.id; });
+          } catch (e) { /* sin sugerencias: se puede escribir igual */ }
+        }, 200);
+      });
+    }
     const commit = () => {
       const apiKey = c.key === "pais_iso" ? "pais" : c.key;
-      guardarCampoPerfil({ [apiKey]: input.value }, T("m_perfil_ok"));
+      const body = { [apiKey]: input.value };
+      if (c.key === "ciudad" && ciudadIds[input.value.trim().toLowerCase()]) body.ciudad_id = ciudadIds[input.value.trim().toLowerCase()];
+      guardarCampoPerfil(body, T("m_perfil_ok"));
     };
     document.getElementById("pfOk").onclick = commit;
     if (c.type === "select") input.addEventListener("change", commit);

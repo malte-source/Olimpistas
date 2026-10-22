@@ -133,6 +133,7 @@ window.OLI_GLOBE = (function () {
     function detenerGiro() { girando = false; clearTimeout(rotT); }
     ["mousedown", "touchstart", "wheel", "dragstart", "rotatestart", "pitchstart"].forEach((ev) => map.on(ev, detenerGiro));
 
+    let pendPenas = [];
     let popup = null, ready = false, pendCiudades = null, pendPaises = null, _casasT = null, _vos = null;
     const UMBRAL_CASAS = 12; // las casas (punto exacto) aparecen recién a nivel calle
 
@@ -172,6 +173,26 @@ window.OLI_GLOBE = (function () {
     function popupEn(coords, html) {
       if (popup) popup.remove();
       popup = new ML.Popup({ offset: 14, closeButton: false, maxWidth: "210px" }).setLngLat(coords).setHTML(html).addTo(map);
+    }
+    const popPena = (p) => `<strong>${esc(p.nombre)}</strong><span>${esc(p.ciudad || "")} · ${Number(p.altas || 0).toLocaleString("es-PY")} hinchas</span><a href="/?pena=${encodeURIComponent(p.slug)}">Sumarme</a>`;
+    function pintarPenas() {
+      const fc = { type: "FeatureCollection", features: pendPenas.map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: [Number(p.lng), Number(p.lat)] }, properties: { slug: p.slug, nombre: p.nombre, ciudad: p.ciudad || "", altas: Number(p.altas || 0) } })) };
+      if (map.getSource("penas")) { map.getSource("penas").setData(fc); return; }
+      map.addSource("penas", { type: "geojson", data: fc });
+      const pintar = () => {
+        if (map.getLayer("penas-escudo")) return;
+        map.addLayer({ id: "penas-escudo", type: "symbol", source: "penas", minzoom: 4.5,
+          layout: { "icon-image": "escudo-pena", "icon-allow-overlap": true, "icon-size": ["interpolate", ["linear"], ["zoom"], 4.5, 0.22, 10, 0.34, 14, 0.42] },
+          paint: { "icon-opacity": ["interpolate", ["linear"], ["zoom"], 4.5, 0, 5.5, 1] } });
+        map.on("click", "penas-escudo", (e) => { const f = e.features[0]; popupEn(f.geometry.coordinates.slice(), popPena(f.properties)); });
+        map.on("mouseenter", "penas-escudo", () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", "penas-escudo", () => { map.getCanvas().style.cursor = ""; });
+      };
+      if (map.hasImage("escudo-pena")) return pintar();
+      const img = new Image();
+      img.onload = () => { try { const c = document.createElement("canvas"); c.width = 96; c.height = Math.round(96 * (img.height / img.width)); const x = c.getContext("2d"); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 6; x.drawImage(img, 6, 6, 84, c.height - 12); map.addImage("escudo-pena", x.getImageData(0, 0, c.width, c.height), { pixelRatio: 2 }); } catch (e) {} pintar(); };
+      img.onerror = () => {};
+      img.src = "/assets/escudo-olimpia-blanco.png";
     }
     const popCiudad = (p) => `<strong>${esc(lugarDe(p))}</strong><span>${Number(p.count || 1).toLocaleString("es-PY")} Olimpista${(p.count || 1) === 1 ? "" : "s"}</span>`;
 
@@ -339,6 +360,7 @@ window.OLI_GLOBE = (function () {
       if (pendCiudades && map.getSource("ciudades")) map.getSource("ciudades").setData(buildFC(pendCiudades));
       if (pendPaises && map.getSource("paises")) { asegurarMedallones(pendPaises); map.getSource("paises").setData(buildFC(pendPaises)); if (map.getSource("caminos")) map.getSource("caminos").setData(caminosDe(pendPaises)); }
       girar();
+      if (pendPenas.length) pintarPenas();
     });
 
     if (opts.onPick) {
@@ -382,6 +404,21 @@ window.OLI_GLOBE = (function () {
         if (nombre === "mundo") { map.flyTo({ center: [-58, -20], zoom: 1.6, duration: 1400 }); if (!_reduce) { girando = true; map.once("moveend", () => girar()); } }
         else if (nombre === "pais" && p && p.bbox) { detenerGiro(); map.fitBounds(p.bbox, { padding: 40, duration: 1400, maxZoom: 7 }); }
         else if (nombre === "ciudad" && p && p.lat != null) { detenerGiro(); map.flyTo({ center: [p.lng, p.lat], zoom: p.zoom || 10, duration: 1800 }); }
+        return this;
+      },
+      // Peñas verificadas con ubicación: escudo blanco desde zoom medio; al tocar, nombre, ciudad y "Sumarme".
+      setPenas(lista) {
+        pendPenas = (lista || []).filter((p) => p.lat != null && p.lng != null);
+        if (ready) pintarPenas();
+        return this;
+      },
+      abrirPena(p) {
+        if (!p || p.lat == null) return this;
+        detenerGiro();
+        map.flyTo({ center: [p.lng, p.lat], zoom: 10.5, duration: 1800, essential: true });
+        let puesto = false;
+        const poner = () => { if (puesto) return; puesto = true; popupEn([p.lng, p.lat], popPena(p)); };
+        map.once("moveend", poner); setTimeout(poner, 2000);
         return this;
       },
       etiqueta(txt) { try { map.getCanvas().setAttribute("aria-label", txt); } catch (e) {} return this; },

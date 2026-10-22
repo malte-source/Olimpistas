@@ -218,6 +218,7 @@
       iniciarVistasMapa(gl);
       etiquetarMapa(stats.porPais || []);
       iniciarTiempo(gl);
+      iniciarPenas(gl);
       focarNuevo();                                            // si recién se inscribió, vuela a su ciudad
     };
 
@@ -242,6 +243,28 @@
       });
       // Si el hincha mueve el mapa a mano, ninguna vista rápida sigue "activa".
       gl.raw.on("dragstart", () => marcar(""));
+    }
+    // Peñas en el mapa + "Encontrá tu peña": la más cercana según la ubicación del navegador.
+    async function iniciarPenas(gl) {
+      let lista = []; try { lista = (await api("/penas")).items || []; } catch (e) { return; }
+      const ubicadas = lista.filter((p) => p.lat != null && p.lng != null);
+      if (!ubicadas.length) return;
+      gl.setPenas(ubicadas);
+      const caja = document.getElementById("globoPena"), btn = document.getElementById("penaCerca"); if (!caja || !btn) return;
+      caja.hidden = false;
+      btn.addEventListener("click", () => {
+        if (!navigator.geolocation) return OLI.toast(T("mapa_sin_geo"));
+        OLI.toast(T("mapa_pena_buscando"));
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          try {
+            const r = await api("/penas?cerca=" + pos.coords.latitude.toFixed(4) + "," + pos.coords.longitude.toFixed(4));
+            const p = (r.items || [])[0];
+            if (!p) return OLI.toast(T("mapa_pena_ninguna"));
+            gl.abrirPena(p);
+            OLI.toast(p.nombre + " · " + T("mapa_pena_km").replace("{km}", Math.round(p.distancia_km).toLocaleString(LANG === "en" ? "en-US" : "es-PY")));
+          } catch (e) { OLI.toast(T("mapa_pena_ninguna")); }
+        }, () => OLI.toast(T("mapa_sin_geo")), { timeout: 8000, maximumAge: 600000 });
+      });
     }
     // "Mirá cómo crece": altas acumuladas mes a mes (solo hinchas reales). Reproduce o se arrastra a mano.
     async function iniciarTiempo(gl) {

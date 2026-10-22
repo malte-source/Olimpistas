@@ -79,7 +79,8 @@ const sinLimitarEnTest = () => process.env.NODE_ENV === "test" && process.env.TE
 const limitePenaAcceso = rateLimit({ windowMs: 15 * 60_000, max: 12, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiados intentos. Esperá unos minutos." } });
 app.use("/api/pena/login", limitePenaAcceso);
 app.use("/api/pena/clave", limitePenaAcceso);
-app.use("/api/comercio/login", limitePenaAcceso); // mismo tope que el login del panel: acepta también las credenciales de un owner
+app.use("/api/comercio/login", limitePenaAcceso);
+app.use("/api/ciudades", rateLimit({ windowMs: 60_000, max: 90, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiadas búsquedas. Esperá un momento." } })); // mismo tope que el login del panel: acepta también las credenciales de un owner
 app.use("/api/penas/solicitud", rateLimit({ windowMs: 60 * 60_000, max: 10, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiadas solicitudes desde esta red. Probá más tarde." } }));
 // TODO /api/admin/*: corta el brute-force de la llave break-glass (x-admin-key) contra
 // cualquier endpoint (no solo /login). Generoso para uso humano real (pocos admins, no
