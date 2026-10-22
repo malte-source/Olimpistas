@@ -462,7 +462,7 @@ function createMemoryStore({ filePath = null } = {}) {
       const s = (db.comercio_sesiones || []).find((x) => x.token === token);
       if (!s || new Date(s.expira).getTime() < Date.now()) return null;
       const c = (db.comercios || []).find((x) => x.id === s.comercio_id);
-      if (!c || c.estado !== "activo") return null;
+      if (!c || (c.estado !== "activo" && !String(s.token).startsWith("adm_"))) return null; // "ver como" (owner): se puede mirar un comercio inactivo
       return { token: s.token, expira: s.expira, comercio_id: c.id, nombre: c.nombre, estado: c.estado };
     },
     async beneficiosDeComercio(comercioId) { return (db.beneficios || []).filter((b) => b.comercio_id === comercioId && b.activo && (b.estado || "aprobado") === "aprobado").sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },

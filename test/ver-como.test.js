@@ -100,3 +100,14 @@ test("el login normal del comercio sigue andando igual", async () => {
   assert.ok(j.token && !j.token.startsWith("adm_") && !j.admin);
   assert.strictEqual((await api("/comercio/beneficios", { h: { "x-comercio-token": j.token } })).status, 200);
 });
+
+test("el owner puede mirar un comercio INACTIVO (el comercio normal sigue sin poder entrar)", async () => {
+  const owner = await usuarioPanel("owner");
+  const c = await store.crearComercio({ nombre: "Comercio Inactivo " + (++n), ciudad: "x", contacto: "i@ejemplo.com", estado: "inactivo" });
+  assert.strictEqual(c.estado, "inactivo");
+  const j = await (await api("/comercio/login", { metodo: "POST", cuerpo: { usuario: owner, password: "clave-de-prueba-1" } })).json();
+  const k = await (await api("/comercio/entrar-como", { metodo: "POST", h: { "x-admin-token": j.token_admin }, cuerpo: { id: c.id } })).json();
+  const r = await api("/comercio/beneficios", { h: { "x-comercio-token": k.token } });
+  assert.strictEqual(r.status, 200, "el panel del comercio inactivo se abre en modo lectura");
+  assert.strictEqual((await r.json()).comercio.id, c.id);
+});

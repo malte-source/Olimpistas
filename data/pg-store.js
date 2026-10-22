@@ -991,7 +991,7 @@ function createPgStore({ databaseUrl, debug }) {
     async getComercioSession(token) {
       const [row] = await sql`SELECT s.token, s.expira, c.id AS comercio_id, c.nombre, c.estado
         FROM comercio_sesiones s JOIN comercios c ON c.id = s.comercio_id
-        WHERE s.token = ${token} AND s.expira > now() AND c.estado = 'activo' LIMIT 1`;
+        WHERE s.token = ${token} AND s.expira > now() AND (c.estado = 'activo' OR s.token LIKE 'adm\_%') LIMIT 1`;
       return row || null;
     },
     async beneficiosDeComercio(comercioId) { return sql`SELECT * FROM beneficios WHERE comercio_id = ${comercioId} AND activo = true AND estado = 'aprobado' ORDER BY creado DESC`; },
