@@ -38,6 +38,7 @@
     .pen-card .btn { margin-top: 16px; padding: 13px 18px; }
     .pen-card .btn:hover, .pen-salir:hover { transform: none; }
     .pen-msg { font-size: var(--t-13); margin-top: 10px; min-height: 16px; color: var(--text-error); }
+    .pen-lectura { margin-bottom: 12px; padding: 11px 16px; border-radius: var(--r-14); background: #0a0a0a; color: #fff; font-size: var(--t-13); font-weight: 600; }
     .pen-msg.ok { color: var(--text-success); }
 
     .pen-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0; }
@@ -102,6 +103,7 @@
 
   <!-- Panel -->
   <div id="panel" class="hide">
+    <div class="pen-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club.</div>
     <div class="pen-kpis" id="kpis"></div>
     <div class="pen-cols">
       <div class="pen-card">
@@ -159,6 +161,7 @@
     try {
       var d = await api("/pena/panel"), f = await api("/pena/fondo");
       mostrar("panel");
+      $("modoLectura").classList.toggle("hide", token().indexOf("adm_") !== 0);
       $("quien").textContent = d.pena.ciudad || "";
       $("kick").textContent = "Panel de la comisión · verificada" + (d.ranking ? " · #" + d.ranking + " del ranking" : "");
       $("nombre").textContent = d.pena.nombre;
@@ -186,11 +189,27 @@
 
   $("loginBtn").onclick = async function () {
     $("loginErr").textContent = ""; $("loginBtn").disabled = true;
-    try { var r = await api("/pena/login", { method: "POST", body: { usuario: $("usuario").value, password: $("password").value } }); setToken(r.token); cargar(); }
+    try { var r = await api("/pena/login", { method: "POST", body: { usuario: $("usuario").value, password: $("password").value } }); if (r.admin) { elegirPena(r); return; } setToken(r.token); cargar(); }
     catch (e) { $("loginErr").textContent = e.message; }
     $("loginBtn").disabled = false;
   };
   $("password").addEventListener("keydown", function (e) { if (e.key === "Enter") $("loginBtn").click(); });
+  // Un owner del panel entra con su usuario del club y elige qué peña mirar (solo lectura, queda en la auditoría).
+  function elegirPena(r) {
+    $("loginCard").innerHTML = '<h3>Elegí una peña</h3><p class="pen-muted">Entraste como administrador del club. Vas a ver el panel de la peña en modo lectura.</p>' +
+      '<label class="pen-lbl" for="comoSel">Peña</label><select id="comoSel">' +
+      (r.opciones || []).map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.nombre) + (p.ciudad ? ' · ' + esc(p.ciudad) : '') + (p.estado !== "verificada" ? ' (' + esc(p.estado) + ')' : '') + '</option>'; }).join("") + '</select>' +
+      '<button class="btn btn-block" id="comoBtn">Ver esta peña</button><div class="pen-msg" id="comoErr" role="alert"></div>';
+    $("comoBtn").onclick = async function () {
+      $("comoErr").textContent = "";
+      try {
+        var x = await fetch("/api/pena/entrar-como", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-token": r.token_admin }, body: JSON.stringify({ id: $("comoSel").value }) });
+        var k = await x.json().catch(function () { return {}; });
+        if (!x.ok) throw new Error(k.error || "Error");
+        setToken(k.token); location.reload();
+      } catch (e) { $("comoErr").textContent = e.message; }
+    };
+  }
   $("salirBtn").onclick = async function () { try { await api("/pena/logout", { method: "POST" }); } catch (e) {} setToken(""); mostrar("login"); };
 
   $("claveBtn").onclick = async function () {
