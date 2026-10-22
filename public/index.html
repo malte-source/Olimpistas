@@ -29,11 +29,11 @@
   <link rel="preload" as="font" type="font/woff2" href="/assets/fonts/saira-700.woff2" crossorigin />
   <script src="/js/tema.js"></script>
   <link rel="stylesheet" href="/assets/fonts/fonts.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=89" />
+  <link rel="stylesheet" href="/css/styles.css?v=90" />
 </head>
 <body>
   <header class="nav" data-nav-solid="1">
-    <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=89" alt="Olimpistas" /></a>
+    <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=90" alt="Olimpistas" /></a>
     <nav class="nav-links">
       <a href="#planes" data-i18n="planes_eyebrow">Niveles</a>
       <a href="#destacadoWrap" id="navSubastas" data-i18n="tab_subastas">Subastas</a>
@@ -85,10 +85,17 @@
         <span class="contador-lbl"><span data-i18n="contador_in">Olimpistas en</span> <strong id="contadorPaises">—</strong> <span data-i18n="contador_paises">países</span></span>
       </div>
       <div class="globo-stage">
+        <div class="globo-vista ctl-seg" id="globoVista" role="radiogroup" aria-label="Dónde mirar en el mapa">
+          <button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-vista="ciudad" data-i18n="mapa_ciudad">Mi ciudad</button>
+          <button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-vista="pais" data-i18n="mapa_pais">Paraguay</button>
+          <button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-vista="mundo" data-i18n="mapa_mundo">El mundo</button>
+        </div>
         <div id="globo" class="globo"></div>
         <aside class="top-paises" id="topPaises"></aside>
         <div class="globo-popup" id="globoPopup" hidden></div>
       </div>
+      <p class="mapa-leyenda" data-i18n="mapa_leyenda">Medallón = país · círculo = ciudad · bandera = tu zona</p>
+      <details class="mapa-lista-wrap" id="mapaListaWrap"><summary id="mapaListaSum"></summary><ol class="mapa-lista" id="mapaLista"></ol></details>
       <p class="globo-note" id="globoNote"><span data-i18n="globo_note_1">Girá el globo y tocá una bandera. ¿No estás en el mapa?</span> <a id="globoCta" data-i18n="globo_note_cta">Sumate y aparecé.</a></p>
     </div>
   </section>
@@ -133,7 +140,7 @@
   <footer class="footer">
     <div class="wrap footer-inner">
       <div class="footer-brand">
-        <div class="brand"><img class="brand-h" src="/assets/logo-horizontal.svg?v=89" alt="Olimpistas" /></div>
+        <div class="brand"><img class="brand-h" src="/assets/logo-horizontal.svg?v=90" alt="Olimpistas" /></div>
         <p class="muted" data-i18n="footer_tagline">Una iniciativa de Club Olimpia para su comunidad mundial de hinchas.</p>
       </div>
       <div class="footer-cols">
@@ -196,11 +203,11 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/js/i18n.js?v=89"></script>
-  <script src="/js/common.js?v=89"></script>
+  <script src="/js/i18n.js?v=90"></script>
+  <script src="/js/common.js?v=90"></script>
   <script src="/assets/vendor/qrcode.js"></script>
-  <script src="/js/onboarding.js?v=89"></script>
+  <script src="/js/onboarding.js?v=90"></script>
   <!-- MapLibre + globe.js se cargan en diferido (lazy) al llegar a la sección del mundo -->
-  <script src="/js/landing.js?v=89"></script>
+  <script src="/js/landing.js?v=90"></script>
 </body>
 </html>

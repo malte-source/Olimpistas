@@ -36,7 +36,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       fontSrc: ["'self'", "data:"],
       imgSrc: ["'self'", "data:", "blob:", "https://flagcdn.com", "https://server.arcgisonline.com", ...(PIXEL_ON ? ["https://www.facebook.com"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com"] : [])],
-      connectSrc: ["'self'", "https://plausible.io", "https://server.arcgisonline.com", "https://demotiles.maplibre.org", ...(PIXEL_ON ? ["https://www.facebook.com", "https://connect.facebook.net"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com", "https://*.analytics.google.com", "https://www.googletagmanager.com"] : [])],
+      connectSrc: ["'self'", "https://plausible.io", "https://server.arcgisonline.com", ...(PIXEL_ON ? ["https://www.facebook.com", "https://connect.facebook.net"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com", "https://*.analytics.google.com", "https://www.googletagmanager.com"] : [])],
       workerSrc: ["'self'", "blob:"],
       childSrc: ["'self'", "blob:"],
       frameAncestors: ["'self'"],

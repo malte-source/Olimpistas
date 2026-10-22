@@ -299,12 +299,12 @@ function buildRouter() {
     const raw = await store.flagsEnBBox({ minLng, minLat, maxLng, maxLat, limit: req.query.limit });
     // Privacidad: NUNCA exponer el domicilio exacto en público. Difuminamos la coordenada
     // ~150m con un offset determinístico por socio (estable, no salta) y mostramos solo el
-    // nombre de pila. El punto exacto solo lo ve el propio socio en su perfil.
+    // ni nombre ni ciudad: solo una bandera. El punto exacto solo lo ve el propio socio en su perfil.
     const flags = raw.map((f) => {
       const h = crypto.createHash("sha256").update(String(f.id)).digest();
       const dLat = ((h[0] / 255) - 0.5) * 0.003;  // ±0.0015° ≈ ±165m
       const dLng = ((h[1] / 255) - 0.5) * 0.003;
-      return { nombre: String(f.nombre || "").split(" ")[0], ciudad: f.ciudad, lat: Number(f.lat) + dLat, lng: Number(f.lng) + dLng };
+      return { lat: Number(f.lat) + dLat, lng: Number(f.lng) + dLng };
     });
     res.setHeader("Cache-Control", "public, max-age=20");
     res.json({ flags });
