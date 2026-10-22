@@ -40,3 +40,11 @@ jobs:
       # (xlsx es devDependency — solo lo usan scripts de setup, no el runtime.)
       - name: Security audit (producción)
         run: npm audit --omit=dev --audit-level=high
+
+  # La imagen de producción tiene que construir: una dependencia nativa rota (bcrypt) se ve acá y no en el deploy.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build de la imagen
+        run: docker build -t olimpistas:ci .
