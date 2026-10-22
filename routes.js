@@ -2482,22 +2482,45 @@ function buildRouter() {
   // ── Panel de la comisión (usuario de peña, sesión de 12 h, header x-pena-token) ──
   async function requirePena(req, res, next) {
     try {
-      const s = await store.getPenaSesion(req.headers["x-pena-token"] || "");
+      const tok = req.headers["x-pena-token"] || "";
+      const s = await store.getPenaSesion(tok);
       if (!s) return res.status(401).json({ error: "Sesión de peña inválida" });
-      if (s.estado !== "verificada") return res.status(403).json({ error: "Tu peña está en pausa. Escribinos al club." });
+      req.soloLectura = esSesionVerComo(tok);
+      if (s.estado !== "verificada" && !req.soloLectura) return res.status(403).json({ error: "Tu peña está en pausa. Escribinos al club." });
       req.pena = { id: s.pena_id, nombre: s.nombre, slug: s.slug };
       next();
     } catch (e) { res.status(401).json({ error: "no autorizado" }); }
   }
-  async function abrirSesionPena(penaId) {
-    const token = crypto.randomBytes(32).toString("base64url");
+  // "Ver como" (solo owner): el login de la peña y del comercio acepta las credenciales de un owner del panel y le deja
+  // elegir a quién mirar. La sesión resultante es de SOLO LECTURA (token con prefijo VER_COMO) y cada ingreso queda en la auditoría.
+  const VER_COMO = "adm_";
+  const esSesionVerComo = (tok) => String(tok || "").startsWith(VER_COMO);
+  const noLectura = (req, res, next) => (req.soloLectura ? res.status(403).json({ error: "Modo lectura: entraste como administrador del club, no podés hacer cambios desde acá." }) : next());
+  async function loginOwner(usuario, password) {
+    try {
+      const out = await adminAuth.loginAdmin({ usuario: String(usuario || "").toLowerCase().trim(), password: String(password || "") });
+      if (out.rol === "owner") return out;
+      await adminAuth.logoutAdmin(out.token);
+    } catch (e) { /* credenciales que no son de un admin: se sigue con el login normal */ }
+    return null;
+  }
+  const exigirOwner = (req, res, next) => (req.adminRole === "owner" ? next() : res.status(403).json({ error: "Solo el owner del panel puede entrar como otro usuario." }));
+  async function abrirSesionPena(penaId, prefijo = "") {
+    const token = prefijo + crypto.randomBytes(32).toString("base64url");
     await store.crearPenaSesion(penaId, token, new Date(Date.now() + 12 * 3600 * 1000).toISOString());
     return token;
   }
   r.post("/pena/login", wrap(async (req, res) => {
     const u = store.getPenaUsuarioPorUsuario ? await store.getPenaUsuarioPorUsuario(String(req.body?.usuario || "")) : null;
     const ok = u && (await bcrypt.compare(String(req.body?.password || ""), u.password_hash));
-    if (!ok) throw httpError(401, "Usuario o contraseña incorrectos");
+    if (!ok) {
+      const owner = await loginOwner(req.body?.usuario, req.body?.password);
+      if (owner) {
+        const peñas = (await store.listPenas()).map((p) => ({ id: p.id, nombre: p.nombre, ciudad: p.ciudad || "", estado: p.estado }));
+        return res.json({ admin: true, token_admin: owner.token, opciones: peñas });
+      }
+      throw httpError(401, "Usuario o contraseña incorrectos");
+    }
     const p = await store.getPena(u.pena_id);
     if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
     res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
@@ -2512,6 +2535,12 @@ function buildRouter() {
     const p = await store.getPena(u.pena_id);
     if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
     res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
+  }));
+  r.post("/pena/entrar-como", requireAdmin, exigirOwner, wrap(async (req, res) => {
+    const [p] = await store.listPenas({ id: String(req.body?.id || "") });
+    if (!p) throw httpError(404, "Peña no encontrada");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "ver_como:pena", targetId: p.id, detalle: p.nombre, por: req.adminUser });
+    res.json({ token: await abrirSesionPena(p.id, VER_COMO), pena: { nombre: p.nombre, slug: p.slug }, solo_lectura: true });
   }));
   r.post("/pena/logout", requirePena, wrap(async (req, res) => { await store.borrarPenaSesion(req.headers["x-pena-token"]); res.json({ ok: true }); }));
 
@@ -2535,7 +2564,7 @@ function buildRouter() {
     res.json({ saldo: f.saldo, pendiente: f.pendiente, disponible: f.disponible, pct: Number(pct) || 10,
       movimientos: mov.map((m) => ({ id: m.id, motivo: m.motivo, monto: m.monto, detalle: m.detalle, estado: m.estado, creado: m.creado })) });
   }));
-  r.post("/pena/fondo/canje", requirePena, wrap(async (req, res) => {
+  r.post("/pena/fondo/canje", requirePena, noLectura, wrap(async (req, res) => {
     const item = limpioTxt(req.body?.item, 120), monto = Math.round(Number(req.body?.monto) || 0);
     if (item.length < 3) throw httpError(400, "Contanos qué querés canjear (ej: bus para ir al estadio)");
     if (!(monto >= 1000)) throw httpError(400, "El monto mínimo es ₲ 1.000");
@@ -2745,13 +2774,27 @@ function buildRouter() {
   r.post("/comercio/login", wrap(async (req, res) => {
     const usuario = String(req.body?.usuario || "").toLowerCase().trim();
     const c = store.getComercioByUsuario ? await store.getComercioByUsuario(usuario) : null;
-    if (!c || c.estado !== "activo" || !c.password_hash) throw httpError(401, "Usuario o contraseña incorrectos");
-    const ok = await bcrypt.compare(String(req.body?.password || ""), c.password_hash);
-    if (!ok) throw httpError(401, "Usuario o contraseña incorrectos");
+    const ok = c && c.estado === "activo" && c.password_hash && (await bcrypt.compare(String(req.body?.password || ""), c.password_hash));
+    if (!ok) {
+      const owner = await loginOwner(usuario, req.body?.password);
+      if (owner) {
+        const comercios = (await store.listComercios()).map((x) => ({ id: x.id, nombre: x.nombre, ciudad: x.ciudad || "", estado: x.estado }));
+        return res.json({ admin: true, token_admin: owner.token, opciones: comercios });
+      }
+      throw httpError(401, "Usuario o contraseña incorrectos");
+    }
     const token = crypto.randomBytes(32).toString("base64url");
     const expira = new Date(Date.now() + 12 * 3600 * 1000).toISOString();
     await store.createComercioSession(c.id, token, expira);
     res.json({ token, comercio: { id: c.id, nombre: c.nombre } });
+  }));
+  r.post("/comercio/entrar-como", requireAdmin, exigirOwner, wrap(async (req, res) => {
+    const c = (await store.listComercios()).find((x) => x.id === String(req.body?.id || ""));
+    if (!c) throw httpError(404, "Comercio no encontrado");
+    const token = VER_COMO + crypto.randomBytes(32).toString("base64url");
+    await store.createComercioSession(c.id, token, new Date(Date.now() + 4 * 3600 * 1000).toISOString());
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "ver_como:comercio", targetId: c.id, detalle: c.nombre, por: req.adminUser });
+    res.json({ token, comercio: { id: c.id, nombre: c.nombre }, solo_lectura: true });
   }));
   // Middleware: sesión de comercio (header x-comercio-token).
   async function requireComercio(req, res, next) {
@@ -2760,6 +2803,7 @@ function buildRouter() {
       const s = token && store.getComercioSession ? await store.getComercioSession(token) : null;
       if (!s) return res.status(401).json({ error: "Sesión de comercio inválida" });
       req.comercio = { id: s.comercio_id, nombre: s.nombre };
+      req.soloLectura = esSesionVerComo(token);
       next();
     } catch (e) { res.status(401).json({ error: "no autorizado" }); }
   }
@@ -2799,7 +2843,7 @@ function buildRouter() {
     if (!parcial && (!o.titulo || !o.valor)) throw httpError(400, "Poné el título y el beneficio");
     return o;
   }
-  r.post("/comercio/beneficios", requireComercio, wrap(async (req, res) => {
+  r.post("/comercio/beneficios", requireComercio, noLectura, wrap(async (req, res) => {
     const o = limpiarOferta(req.body || {}, false);
     const abiertas = (await store.ofertasDeComercio(req.comercio.id)).filter((x) => (x.estado || "aprobado") === "borrador").length;
     if (abiertas >= 10) throw httpError(409, "Ya tenés 10 ofertas esperando aprobación. Esperá a que el club las revise.");
@@ -2810,7 +2854,7 @@ function buildRouter() {
   }));
   // Editar una oferta PROPIA. Cambiar lo que ve el hincha (título, beneficio, para quién, ahorro, vigencia) de una oferta ya
   // aprobada o rechazada la devuelve a "espera aprobación"; pausarla o ajustar el cupo no.
-  r.patch("/comercio/beneficios/:id", requireComercio, wrap(async (req, res) => {
+  r.patch("/comercio/beneficios/:id", requireComercio, noLectura, wrap(async (req, res) => {
     const actual = (await store.ofertasDeComercio(req.comercio.id)).find((x) => x.id === req.params.id);
     if (!actual) throw httpError(404, "Oferta no encontrada");
     const patch = limpiarOferta(req.body || {}, true);
@@ -2844,7 +2888,7 @@ function buildRouter() {
   // Validar un canje en caja: QR del carnet (rota cada 60 s) o código fijo del socio, + beneficio + monto.
   // Con QR: se verifica la firma y la ventana (±1) y cada QR sirve UNA vez. El registro (stock, límite de días, QR usado y canje)
   // es una sola transacción: dos cajas escaneando a la vez no duplican el canje ni pasan el cupo.
-  r.post("/comercio/validar", requireComercio, wrap(async (req, res) => {
+  r.post("/comercio/validar", requireComercio, noLectura, wrap(async (req, res) => {
     const monto = Math.max(0, Number(req.body?.monto) || 0);
     const tokenQr = String(req.body?.token || "").trim();
     let socio = null, ventana = null, via = "codigo";

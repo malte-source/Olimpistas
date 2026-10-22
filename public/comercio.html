@@ -28,6 +28,7 @@
     .com-fr { height: 6px; background: repeating-linear-gradient(90deg, #fff 0 18px, #0a0a0a 18px 36px); }
     .com-wrap { max-width: 1080px; margin: 0 auto; padding: 18px 16px calc(40px + env(safe-area-inset-bottom)); }
     .com-login { max-width: 420px; margin: 4vh auto 0; }
+    .com-lectura { margin-bottom: 12px; padding: 11px 16px; border-radius: var(--r-14); background: #0a0a0a; color: #fff; font-size: var(--t-13); font-weight: 600; }
 
     .com-card { background: var(--surface-card); border-radius: var(--r-22); padding: 18px; }
     .com-card + .com-card { margin-top: 12px; }
@@ -120,6 +121,7 @@
 
     <!-- PANEL -->
     <div id="panel" class="hide">
+      <div class="com-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club.</div>
       <div class="com-seg-wrap">
         <div class="ctl-seg" role="radiogroup" aria-label="Vista" id="seg">
           <button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-vista="validar">Validar</button>
@@ -210,11 +212,29 @@
       $("loginErr").textContent = "";
       try{
         var j = await api("/comercio/login", { method:"POST", body:{ usuario:$("usuario").value, password:$("password").value } });
+        if(j.admin){ elegirComercio(j); return; }
         try{ localStorage.setItem(TK, j.token); }catch(e){}
         entrarPanel();
       }catch(e){ $("loginErr").textContent = e.message; }
     });
     $("password").addEventListener("keydown", function(e){ if(e.key === "Enter") $("loginBtn").click(); });
+    // Un owner del panel entra con su usuario del club y elige qué comercio mirar (solo lectura, queda en la auditoría).
+    function elegirComercio(j){
+      $("loginCard").innerHTML = '<p class="com-muted">Entraste como administrador del club. Elegí el comercio que querés ver en modo lectura.</p>' +
+        '<label class="com-lbl" for="comoSel">Comercio</label><select id="comoSel">' +
+        (j.opciones||[]).map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.nombre)+(c.ciudad?' · '+esc(c.ciudad):'')+'</option>'; }).join("") + '</select>' +
+        '<button class="btn btn-block" id="comoBtn">Ver este comercio</button><div class="com-msg" id="comoErr" role="alert"></div>';
+      $("comoBtn").addEventListener("click", async function(){
+        $("comoErr").textContent = "";
+        try{
+          var r = await fetch("/api/comercio/entrar-como", { method:"POST", headers:{ "Content-Type":"application/json", "x-admin-token": j.token_admin }, body: JSON.stringify({ id: $("comoSel").value }) });
+          var k = await r.json().catch(function(){ return {}; });
+          if(!r.ok) throw new Error(k.error || ("Error "+r.status));
+          try{ localStorage.setItem(TK, k.token); }catch(e){}
+          location.reload();
+        }catch(e){ $("comoErr").textContent = e.message; }
+      });
+    }
     $("salir").addEventListener("click", function(){ try{ localStorage.removeItem(TK); }catch(e){} location.reload(); });
 
     // ── Vistas (en el móvil se alternan; en escritorio se ven las dos lado a lado) ──
@@ -238,6 +258,7 @@
         $("loginCard").classList.add("hide");
         $("panel").classList.remove("hide");
         $("salir").classList.remove("hide");
+        $("modoLectura").classList.toggle("hide", tok().indexOf("adm_") !== 0);
         cargarMiComercio(); // en escritorio las dos vistas conviven
       }catch(e){ /* token inválido → seguir en login */ }
     }
