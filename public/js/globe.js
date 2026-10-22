@@ -175,6 +175,9 @@ window.OLI_GLOBE = (function () {
       cooperativeGestures: true, // mobile: 1 dedo scrollea la página, 2 dedos mueven el mapa
     });
     map.addControl(new ML.NavigationControl({ showCompass: false }), "top-right");
+    if (ML.FullscreenControl) map.addControl(new ML.FullscreenControl({ container: el.closest(".globo-stage") || el }), "top-right");
+    // El mapa es una imagen para un lector de pantalla: la descripción real está en la lista de países de abajo.
+    try { const cv = map.getCanvas(); cv.setAttribute("role", "img"); cv.setAttribute("aria-label", "Mapa de olimpistas en el mundo"); } catch (e) {}
 
     // Rotación automática (estilo Google Earth): gira al cargar y se DETIENE del
     // todo al primer gesto del usuario. No reanuda → nunca pelea con el toque.
@@ -391,6 +394,14 @@ window.OLI_GLOBE = (function () {
         return this;
       },
       stopRotation() { detenerGiro(); return this; },
+      // Vistas rápidas de la botonera: el mundo (y retoma el giro), un país por su recuadro, o un punto (tu ciudad).
+      vista(nombre, p) {
+        if (nombre === "mundo") { map.flyTo({ center: [-58, -20], zoom: 1.6, duration: 1400 }); if (!_reduce) { girando = true; map.once("moveend", () => girar()); } }
+        else if (nombre === "pais" && p && p.bbox) { detenerGiro(); map.fitBounds(p.bbox, { padding: 40, duration: 1400, maxZoom: 7 }); }
+        else if (nombre === "ciudad" && p && p.lat != null) { detenerGiro(); map.flyTo({ center: [p.lng, p.lat], zoom: p.zoom || 10, duration: 1800 }); }
+        return this;
+      },
+      etiqueta(txt) { try { map.getCanvas().setAttribute("aria-label", txt); } catch (e) {} return this; },
       raw: map,
     };
   }

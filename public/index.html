@@ -85,10 +85,17 @@
         <span class="contador-lbl"><span data-i18n="contador_in">Olimpistas en</span> <strong id="contadorPaises">—</strong> <span data-i18n="contador_paises">países</span></span>
       </div>
       <div class="globo-stage">
+        <div class="globo-vista ctl-seg" id="globoVista" role="radiogroup" aria-label="Dónde mirar en el mapa">
+          <button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-vista="ciudad" data-i18n="mapa_ciudad">Mi ciudad</button>
+          <button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-vista="pais" data-i18n="mapa_pais">Paraguay</button>
+          <button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-vista="mundo" data-i18n="mapa_mundo">El mundo</button>
+        </div>
         <div id="globo" class="globo"></div>
         <aside class="top-paises" id="topPaises"></aside>
         <div class="globo-popup" id="globoPopup" hidden></div>
       </div>
+      <p class="mapa-leyenda" data-i18n="mapa_leyenda">Medallón = país · círculo = ciudad · bandera = tu zona</p>
+      <details class="mapa-lista-wrap" id="mapaListaWrap"><summary id="mapaListaSum"></summary><ol class="mapa-lista" id="mapaLista"></ol></details>
       <p class="globo-note" id="globoNote"><span data-i18n="globo_note_1">Girá el globo y tocá una bandera. ¿No estás en el mapa?</span> <a id="globoCta" data-i18n="globo_note_cta">Sumate y aparecé.</a></p>
     </div>
   </section>

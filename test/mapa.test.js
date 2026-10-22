@@ -120,3 +120,23 @@ test("perfil: mover el mapa solo propone el punto; se guarda con 'Poner mi bande
   for (const k of ["m_casa_boton", "m_casa_privacidad", "m_casa_mostrar", "m_casa_guardar", "m_casa_ver", "m_sin_guardar"]) assert.strictEqual((i18n.match(new RegExp(k + ":", "g")) || []).length, 2, k + " en es y en");
   assert.strictEqual((js.match(/api\("\/perfil", \{ method: "PATCH", body: \{ lat: perfilPunto\.lat/g) || []).length, 1, "un único punto de guardado del mapa");
 });
+
+test("encontrarse en el globo: botonera Mi ciudad · Paraguay · El mundo, leyenda y lista accesible de países", () => {
+  const h = leer("index.html");
+  const botones = [...h.matchAll(/<button type="button" role="radio" class="ctl-seg-b" aria-checked="(true|false)" data-vista="(\w+)"/g)].map((m) => m[2]);
+  assert.deepStrictEqual(botones, ["ciudad", "pais", "mundo"]);
+  assert.match(h, /id="globoVista"[^>]*role="radiogroup"/);
+  assert.match(h, /<ol class="mapa-lista" id="mapaLista">/);
+  assert.match(h, /<details class="mapa-lista-wrap" id="mapaListaWrap">/);
+  const g = leer("js/globe.js");
+  assert.match(g, /vista\(nombre, p\)/);
+  assert.match(g, /setAttribute\("role", "img"\)/, "el canvas es una imagen para lectores de pantalla");
+  assert.match(g, /FullscreenControl/);
+  const l = leer("js/landing.js");
+  assert.match(l, /function iniciarVistasMapa\(gl\)/);
+  assert.match(l, /navigator\.geolocation/);
+  assert.match(l, /mapa_aria/);
+  const i18n = leer("js/i18n.js");
+  for (const k of ["mapa_ciudad", "mapa_pais", "mapa_mundo", "mapa_leyenda", "mapa_aria", "mapa_ver_todos", "mapa_ver_los", "mapa_sin_geo"]) assert.strictEqual((i18n.match(new RegExp(k + ":", "g")) || []).length, 2, k + " en es y en");
+  assert.ok(!/<img[^>]+flagcdn/.test(l), "la lista de países no agrega servidores de banderas de terceros");
+});
