@@ -39,43 +39,23 @@ window.OLI = (function () {
   try { _cur = localStorage.getItem("oli_cur") || ""; } catch (e) {}
   function currency() { return _cur || "PYG"; }
   function setCurrency(c) { _cur = c; try { localStorage.setItem("oli_cur", c); } catch (e) {} }
-  // ── Tema (claro/oscuro). Mismo patrón que idioma/moneda: localStorage + toggle manual.
-  // Default oscuro explícito (no prefers-color-scheme) para no cambiar nada hasta que se toque a mano. ──
-  let _theme = "";
-  try { _theme = localStorage.getItem("oli_theme") || ""; } catch (e) {}
-  function theme() { return _theme || "dark"; }
-  function setTheme(t) {
-    _theme = t;
-    try { localStorage.setItem("oli_theme", t); } catch (e) {}
-    document.documentElement.setAttribute("data-theme", t);
-  }
-  // Preferencia guardada en la cuenta (socios.tema): null = nunca eligió (todo como siempre), 'auto' = sigue al
-  // dispositivo, 'claro' | 'oscuro' = explícita. Se aplica al entrar y acompaña al hincha entre dispositivos.
-  const _mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)") : null;
-  let _pref = null;
-  function aplicarPref() {
-    if (_pref === "claro") setTheme("light");
-    else if (_pref === "oscuro") setTheme("dark");
-    else if (_pref === "auto") setTheme(_mq && _mq.matches ? "light" : "dark");
-    document.dispatchEvent(new CustomEvent("oli-theme"));
-  }
-  if (_mq && _mq.addEventListener) _mq.addEventListener("change", () => { if (_pref === "auto") aplicarPref(); });
-  function themePref() { return _pref; }
+  // ── Tema (claro / oscuro / automático) ──
+  // Lo maneja /js/tema.js (se carga en el <head> y aplica data-theme sin destello). Acá queda el puente con la cuenta:
+  // en la app del hincha la elección se guarda también en socios.tema ('auto' | 'claro' | 'oscuro').
+  const OT = () => window.OLITheme;
+  function theme() { return OT() ? OT().efectivo() : "dark"; }
+  function themePref() { const p = OT() ? OT().pref() : "auto"; return p === "light" ? "claro" : p === "dark" ? "oscuro" : "auto"; }
   function setThemePref(p, guardar) {
-    _pref = p; aplicarPref();
-    if (guardar) api("/perfil", { method: "PATCH", body: { tema: p } }).catch(() => {});
+    if (OT()) OT().set(p === "claro" ? "light" : p === "oscuro" ? "dark" : "auto");
+    if (guardar) api("/perfil", { method: "PATCH", body: { tema: p === "claro" || p === "oscuro" ? p : "auto" } }).catch(() => {});
   }
-  // Luna/sol: representan el DESTINO del toggle (igual que el texto) — si ahora
-  // está claro, muestra luna ("pasar a oscuro"); si está oscuro, muestra sol.
+  function setTheme(t) { setThemePref(t === "light" ? "claro" : t === "dark" ? "oscuro" : "auto", false); }
+  // Luna/sol: representan el DESTINO del toggle (si ahora está claro, muestra luna: "pasar a oscuro").
   const MOON_ICON = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
-  const SUN_ICON = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+  const SUN_ICON = '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2.5 12h2M19.5 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
   function initThemeToggle(btnId) {
-    document.documentElement.setAttribute("data-theme", theme());
     const btn = document.getElementById(btnId);
     if (!btn) return;
-    // Ícono + texto: en mobile el texto se oculta (.nav-sw-label) y queda un botón
-    // cuadrado con el ícono — antes "Oscuro"/"Claro" en texto solo apretaba la
-    // topbar contra el borde en pantallas angostas.
     const paint = () => {
       const light = theme() === "light";
       const label = light ? "Oscuro" : "Claro";
@@ -84,10 +64,12 @@ window.OLI = (function () {
       btn.setAttribute("aria-label", label);
     };
     paint();
-    // El botón de la barra es un atajo: elige claro/oscuro explícito y lo guarda en la cuenta (si hay sesión).
-    btn.addEventListener("click", () => { setThemePref(theme() === "light" ? "oscuro" : "claro", window.__oliSesion === true); paint(); });
+    // El botón es un atajo: elige claro/oscuro explícito y, con sesión, lo guarda en la cuenta.
+    btn.addEventListener("click", () => setThemePref(theme() === "light" ? "oscuro" : "claro", window.__oliSesion === true));
     document.addEventListener("oli-theme", paint);
   }
+  // Ícono del sprite propio (/assets/icons.svg). `rellena` = variante -f.
+  function ic(id, size, rellena) { return '<svg class="ic" width="' + (size || 24) + '" height="' + (size || 24) + '" aria-hidden="true"><use href="/assets/icons.svg#i-' + id + (rellena ? "-f" : "") + '"/></svg>'; }
 
   // ── Íconos — F1.2 "Iconografía": 40 SVG de línea (grilla 24, trazo 1.5, currentColor) que
   // reemplazan los emoji del producto. Self-hosteados: la CSP no permite CDNs de íconos.
@@ -629,5 +611,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon };
+  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
 })();

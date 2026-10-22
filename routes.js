@@ -99,7 +99,9 @@ function buildRouter() {
   // ─── Config pública (branding + tiers + países) ─────────────────────────────
   r.get("/config", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=60"); // corto: precios/tiers se propagan rápido al cambiarlos
-    res.json({ brand: BRAND, tiers: TIERS, paises: listaPaises() });
+    // ticketera: Liberá tu Lugar y el abono dependen de los endpoints nuevos de Tuti. Hasta que existan (TUTI_TICKETERA=1)
+    // la pestaña Partidos explica qué viene; la compra de entradas la vende Tuti (TUTI_TICKETERA_URL si está definida).
+    res.json({ brand: BRAND, tiers: TIERS, paises: listaPaises(), ticketera: { activa: process.env.TUTI_TICKETERA === "1", url: /^https:\/\//.test(process.env.TUTI_TICKETERA_URL || "") ? process.env.TUTI_TICKETERA_URL : "" } });
   });
 
   // Health público (sin auth, sin PII): ping barato a la DB → 200 ok / 503 caída.
