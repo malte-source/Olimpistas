@@ -121,7 +121,7 @@
 
     <!-- PANEL -->
     <div id="panel" class="hide">
-      <div class="com-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club.</div>
+      <div class="com-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club. <a href="/admin" style="color:#fff;text-decoration:underline;margin-left:8px">Volver al panel del club</a></div>
       <div class="com-seg-wrap">
         <div class="ctl-seg" role="radiogroup" aria-label="Vista" id="seg">
           <button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-vista="validar">Validar</button>
@@ -220,10 +220,13 @@
     $("password").addEventListener("keydown", function(e){ if(e.key === "Enter") $("loginBtn").click(); });
     // Un owner del panel entra con su usuario del club y elige qué comercio mirar (solo lectura, queda en la auditoría).
     function elegirComercio(j){
-      $("loginCard").innerHTML = '<p class="com-muted">Entraste como administrador del club. Elegí el comercio que querés ver en modo lectura.</p>' +
-        '<label class="com-lbl" for="comoSel">Comercio</label><select id="comoSel">' +
-        (j.opciones||[]).map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.nombre)+(c.ciudad?' · '+esc(c.ciudad):'')+'</option>'; }).join("") + '</select>' +
-        '<button class="btn btn-block" id="comoBtn">Ver este comercio</button><div class="com-msg" id="comoErr" role="alert"></div>';
+      var ops = j.opciones || [];
+      $("loginCard").innerHTML = '<p class="com-muted">Entraste como administrador del club. ' + (ops.length ? 'Elegí el comercio que querés ver en modo lectura.' : 'Todavía no hay comercios cargados: creá uno desde el admin (Contenido → Comercios) y volvé a entrar.') + '</p>' +
+        (ops.length ? '<label class="com-lbl" for="comoSel">Comercio</label><select id="comoSel">' +
+        ops.map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.nombre)+(c.ciudad?' · '+esc(c.ciudad):'')+(c.estado && c.estado !== "activo" ? ' (' + esc(c.estado) + ')' : '')+'</option>'; }).join("") + '</select>' +
+        '<button class="btn btn-block" id="comoBtn">Ver este comercio</button>' : '') +
+        '<div class="com-msg" id="comoErr" role="alert"></div><p class="com-muted" style="margin:14px 0 0"><a href="/admin">Ir al panel del club</a> · <a href="/comercio">Entrar con otro usuario</a></p>';
+      if(!ops.length) return;
       $("comoBtn").addEventListener("click", async function(){
         $("comoErr").textContent = "";
         try{
@@ -260,7 +263,12 @@
         $("salir").classList.remove("hide");
         $("modoLectura").classList.toggle("hide", tok().indexOf("adm_") !== 0);
         cargarMiComercio(); // en escritorio las dos vistas conviven
-      }catch(e){ /* token inválido → seguir en login */ }
+      }catch(e){
+        // Sesión vencida o inválida → volver al login, avisando por qué (antes se quedaba mudo en la pantalla de elección).
+        try{ localStorage.removeItem(TK); }catch(x){}
+        $("loginCard").classList.remove("hide"); $("panel").classList.add("hide");
+        if(typeof e.message === "string" && e.message) $("loginErr").textContent = /inválid|autoriz/i.test(e.message) ? "La sesión venció. Entrá de nuevo." : e.message;
+      }
     }
 
     // ── Validar ──

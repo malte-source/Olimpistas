@@ -103,7 +103,7 @@
 
   <!-- Panel -->
   <div id="panel" class="hide">
-    <div class="pen-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club.</div>
+    <div class="pen-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club. <a href="/admin" style="color:#fff;text-decoration:underline;margin-left:8px">Volver al panel del club</a></div>
     <div class="pen-kpis" id="kpis"></div>
     <div class="pen-cols">
       <div class="pen-card">
@@ -196,10 +196,13 @@
   $("password").addEventListener("keydown", function (e) { if (e.key === "Enter") $("loginBtn").click(); });
   // Un owner del panel entra con su usuario del club y elige qué peña mirar (solo lectura, queda en la auditoría).
   function elegirPena(r) {
-    $("loginCard").innerHTML = '<h3>Elegí una peña</h3><p class="pen-muted">Entraste como administrador del club. Vas a ver el panel de la peña en modo lectura.</p>' +
-      '<label class="pen-lbl" for="comoSel">Peña</label><select id="comoSel">' +
-      (r.opciones || []).map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.nombre) + (p.ciudad ? ' · ' + esc(p.ciudad) : '') + (p.estado !== "verificada" ? ' (' + esc(p.estado) + ')' : '') + '</option>'; }).join("") + '</select>' +
-      '<button class="btn btn-block" id="comoBtn">Ver esta peña</button><div class="pen-msg" id="comoErr" role="alert"></div>';
+    var ops = r.opciones || [];
+    $("loginCard").innerHTML = '<h3>' + (ops.length ? 'Elegí una peña' : 'No hay peñas todavía') + '</h3><p class="pen-muted">Entraste como administrador del club. ' + (ops.length ? 'Vas a ver el panel de la peña en modo lectura.' : 'Cuando llegue una solicitud, aparece acá aunque todavía no esté verificada.') + '</p>' +
+      (ops.length ? '<label class="pen-lbl" for="comoSel">Peña</label><select id="comoSel">' +
+      ops.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.nombre) + (p.ciudad ? ' · ' + esc(p.ciudad) : '') + (p.estado !== "verificada" ? ' (' + esc(p.estado) + ')' : '') + '</option>'; }).join("") + '</select>' +
+      '<button class="btn btn-block" id="comoBtn">Ver esta peña</button>' : '') +
+      '<div class="pen-msg" id="comoErr" role="alert"></div><p class="pen-muted" style="margin:14px 0 0"><a href="/admin">Ir al panel del club</a> · <a href="/pena">Entrar con otro usuario</a></p>';
+    if (!ops.length) return;
     $("comoBtn").onclick = async function () {
       $("comoErr").textContent = "";
       try {
