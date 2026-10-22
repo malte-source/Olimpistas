@@ -238,6 +238,32 @@ window.OLI_GLOBE = (function () {
     }
     const popCiudad = (p) => `<strong>${esc(lugarDe(p))}</strong><span>${Number(p.count || 1).toLocaleString("es-PY")} Olimpista${(p.count || 1) === 1 ? "" : "s"}</span>`;
 
+    // h3-js (216 KB) solo se baja la primera vez que se acerca el mapa a nivel barrio.
+    let _h3P = null;
+    const cargarH3 = () => _h3P || (_h3P = window.h3 ? Promise.resolve() : new Promise((res, rej) => {
+      const s = document.createElement("script"); s.src = "/assets/vendor/h3-js.umd.js"; s.onload = res; s.onerror = () => { _h3P = null; rej(new Error("h3")); }; document.head.appendChild(s);
+    }));
+    const VACIO = { type: "FeatureCollection", features: [] };
+    const UMBRAL_BARRIOS = 11;
+    function celdasFC(celdas) {
+      return { type: "FeatureCollection", features: (celdas || []).map((x) => ({ type: "Feature", properties: { n: x.n, r: x.r },
+        geometry: { type: "Polygon", coordinates: [window.h3.cellToBoundary(x.c, true)] } })) };
+    }
+    function refrescarBarrios() {
+      const src = map.getSource("barrios");
+      if (!opts.celdasUrl || !src) return;
+      const b = map.getBounds();
+      // El servidor rechaza recuadros de más de 2°: a zoom bajo no se piden barrios (ahí mandan países y ciudades).
+      if (map.getZoom() < UMBRAL_BARRIOS || b.getEast() - b.getWest() > 2 || b.getNorth() - b.getSouth() > 2) { src.setData(VACIO); return; }
+      clearTimeout(_casasT);
+      _casasT = setTimeout(() => {
+        const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((n) => n.toFixed(4)).join(",");
+        Promise.all([fetch(opts.celdasUrl + "?bbox=" + bbox, { credentials: "same-origin" }).then((r) => r.json()), cargarH3()])
+          .then(([j]) => { if (map.getSource("barrios")) map.getSource("barrios").setData(celdasFC(j.celdas)); })
+          .catch(() => {});
+      }, 250);
+    }
+
     function refrescarCasas() {
       if (!opts.flagsUrl || !map.getSource("casas")) return;
       if (map.getZoom() < UMBRAL_CASAS) { map.getSource("casas").setData({ type: "FeatureCollection", features: [] }); return; }
@@ -310,8 +336,23 @@ window.OLI_GLOBE = (function () {
           "text-offset": [0, 0.7], "text-anchor": "top", "text-optional": true, "text-allow-overlap": false },
         paint: { "icon-opacity": opa(7.8, 0, 8.6, 1, 12, 1, 13.5, 0), "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.3, "text-opacity": opa(8.2, 0, 9, 1, 12, 1, 13.5, 0) } });
 
-      // ── Tier 4: CASAS opt-in (punto exacto). Solo a zoom alto ──
-      if (opts.flagsUrl) {
+      // ── Tier 4 (barrios): hexágonos H3 con k-anonimato. Nunca una casa: cada celda cuenta hinchas (≥ 3) ──
+      if (opts.celdasUrl) {
+        map.addSource("barrios", { type: "geojson", data: VACIO });
+        map.addLayer({ id: "barrios-fill", type: "fill", source: "barrios",
+          paint: { "fill-color": "#ffffff", "fill-opacity": ["interpolate", ["linear"], ["get", "n"], 3, 0.3, 30, 0.8],
+            "fill-opacity-transition": { duration: 300 } } });
+        map.addLayer({ id: "barrios-linea", type: "line", source: "barrios",
+          paint: { "line-color": "#0a0a0a", "line-opacity": 0.55, "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.6, 16, 1.4] } });
+        map.on("click", "barrios-fill", (e) => {
+          const n = Number(e.features[0].properties.n) || 0;
+          popupEn([e.lngLat.lng, e.lngLat.lat], `<strong>${n.toLocaleString("es-PY")} Olimpistas</strong><span>en este barrio</span>`);
+        });
+        map.on("mouseenter", "barrios-fill", () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", "barrios-fill", () => { map.getCanvas().style.cursor = ""; });
+        map.on("moveend", refrescarBarrios);
+        refrescarBarrios();
+      } else if (opts.flagsUrl) {
         map.addSource("casas", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
         // Sin "text-field": ni el nombre ni la ciudad viajan en /api/flags (dato personal expuesto
         // sin necesidad): la bandera sola ya cuenta la historia.

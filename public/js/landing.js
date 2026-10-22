@@ -209,7 +209,7 @@
     const construir = async () => {
       await cargarMapa();
       if (!window.OLI_GLOBE) return;
-      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600, flagsUrl: "/api/flags" });
+      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600, flagsUrl: "/api/flags", celdasUrl: "/api/mapa/celdas" });
       if (!gl) return;
       gl.setCountries(stats.porPais || []);                    // nivel mundo: 1 badge por país
       gl.setData(stats.puntos || stats.porPais || []);         // nivel ciudad: badges/banderas

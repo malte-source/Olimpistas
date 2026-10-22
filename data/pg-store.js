@@ -636,6 +636,15 @@ function createPgStore({ databaseUrl, debug }) {
           AND lat BETWEEN ${minLat} AND ${maxLat}
         LIMIT ${Math.min(Number(limit) || 600, 1500)}`;
     },
+    // Solo posiciones (sin id, nombre ni ciudad) de quienes eligieron mostrarse: alimenta las celdas H3 del mapa público.
+    async puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat, limit = 20000 }) {
+      return sql`
+        SELECT lat, lng FROM socios
+        WHERE mostrar_exacto = true AND lat IS NOT NULL AND lng IS NOT NULL
+          AND lng BETWEEN ${minLng} AND ${maxLng}
+          AND lat BETWEEN ${minLat} AND ${maxLat}
+        LIMIT ${Math.min(Number(limit) || 20000, 50000)}`;
+    },
     async updateSocio(id, patch) {
       const [s] = await sql`UPDATE socios SET ${sql(patch)} WHERE id = ${id} RETURNING *`;
       return s || null;
