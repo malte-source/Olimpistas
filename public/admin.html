@@ -141,6 +141,10 @@
     .sub-preview-precio strong{display:block;font-size:15px;color:var(--blanco);font-variant-numeric:tabular-nums}
     .sub-preview-cta{display:block;width:100%;text-align:center;background:linear-gradient(120deg,var(--oro2),var(--oro));color:#1a1500;font-weight:800;font-size:12px;padding:8px;border-radius:8px}
     .mini{font-size:13px;color:var(--gris);margin:10px 0 4px;border-top:1px solid var(--linea);padding-top:10px}
+    .ind-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;margin:12px 0}
+    .ind{border:1px solid var(--linea);border-radius:10px;padding:10px}.ind-v{font-weight:800;font-size:15px}.ind-l{font-size:11px;color:var(--gris);margin-top:2px}
+    .tl{margin:6px 0 0;padding:0;list-style:none;max-height:240px;overflow:auto}.tl li{padding:6px 0 6px 12px;border-left:2px solid var(--linea);font-size:13px}.tl li small{display:block;color:var(--gris)}
+    .parec{border:1px solid var(--linea);border-radius:10px;padding:10px;margin-top:8px;font-size:13px}
     .ok{color:var(--verde);font-size:13px;min-height:16px}
 
     /* ── Componentes UI (toast / confirm / info) ── */
@@ -209,12 +213,15 @@
       <a class="nav-link" data-area="dashboard" href="#/dashboard"><span class="ic">📊</span> Dashboard</a>
       <div class="sb-label">Gestión</div>
       <a class="nav-link" data-area="socios" href="#/socios"><span class="ic">👤</span> Socios</a>
+      <a class="nav-link" data-area="atencion" href="#/atencion"><span class="ic">💬</span> Atención <span class="pill pill-warn" id="atBadge" hidden style="margin-left:4px;font-size:11px"></span></a>
       <a class="nav-link" data-area="pagos" href="#/pagos"><span class="ic">💳</span> Pagos</a>
       <a class="nav-link" data-area="campanas" href="#/campanas"><span class="ic">📣</span> Campañas</a>
       <a class="nav-link" data-area="contenido" href="#/contenido"><span class="ic">🎁</span> Contenido</a>
+      <a class="nav-link" data-area="decisiones" href="#/decisiones"><span class="ic">🗳️</span> Decisiones</a>
       <div class="sb-label">Sistema</div>
       <a class="nav-link" data-area="sistema" href="#/sistema"><span class="ic">🛠️</span> Sistema</a>
       <div class="sb-spacer"></div>
+      <a class="nav-link" href="/ayuda" target="_blank" rel="noopener"><span class="ic">❓</span> Ayuda</a>
       <a class="nav-link sb-salir" id="salir"><span class="ic">↩</span> Salir</a>
     </aside>
 
@@ -225,6 +232,7 @@
         <span id="adminWho" class="muted" style="font-size:12px;white-space:nowrap"></span>
       </div>
       <div class="main-inner">
+        <p class="hint" id="soloLecturaBanner" hidden style="background:var(--card2,#1b1b1b);border-radius:10px;padding:10px 14px;margin:0 0 14px">👁️ Estás en <b>modo lectura</b>: podés ver todo lo de tu rol, pero los cambios los hace el equipo del club.</p>
 
         <!-- ÁREA: DASHBOARD -->
         <section class="area" id="area-dashboard">
@@ -235,6 +243,10 @@
             <div class="stat"><div class="n" id="stSubSinPagar">—</div><div class="l">🔨 Subastas ganadas sin pagar</div></div>
             <div class="stat"><div class="n" id="stSubPausadas">—</div><div class="l">⏸ Subastas pausadas</div></div>
           </div>
+          <h2>🏟️ Tablero del club</h2>
+          <p class="hint">Un vistazo a cómo va el club: hinchas, ingresos, subastas, puntos, peñas y comercios. Son números agregados, sin datos personales.</p>
+          <div class="cards" id="tabCards"><p class="loading">Cargando…</p></div>
+          <div id="tabIngresos"></div>
           <h2>🩺 Salud del sistema</h2>
           <div class="cards" id="saludCards"><p class="loading">Cargando…</p></div>
           <h2>📊 Reportes</h2>
@@ -265,6 +277,24 @@
           <h2>🗂️ Padrón Olimpia <span id="padronStats" class="muted" style="font-size:13px;font-weight:400"></span></h2>
           <div class="search-row"><input id="padronQ" type="search" placeholder="cédula, nombre, email o nº socio…" /><button class="btn btn-sm" id="padronBtn">Buscar</button></div>
           <div id="padronWrap"></div>
+        </section>
+
+        <!-- ÁREA: ATENCIÓN -->
+        <section class="area" id="area-atencion" hidden>
+          <h2>💬 Atención a hinchas</h2>
+          <p class="hint">El asistente con IA atiende a los hinchas por la app. Cuando piden una persona, o el tema no se puede resolver, la conversación llega acá. Mientras está con una persona, la IA no contesta.</p>
+          <div class="cards" id="atCards"><p class="loading">Cargando…</p></div>
+          <div class="search-row" style="gap:8px;flex-wrap:wrap;margin-top:6px" id="atFiltros">
+            <button class="btn btn-sm" data-atf="">Todas</button>
+            <button class="btn btn-sm btn-ghost" data-atf="humano">Con una persona</button>
+            <button class="btn btn-sm btn-ghost" data-atf="ia">Con la IA</button>
+            <button class="btn btn-sm btn-ghost" data-atf="resuelta">Resueltas</button>
+          </div>
+          <div id="atLista"><p class="loading">Cargando…</p></div>
+          <div id="atDetalle"></div>
+          <h2>⚙️ Qué puede hacer el asistente</h2>
+          <p class="hint">Cada interruptor habilita o deshabilita una acción del asistente. Las reglas fijas no se pueden cambiar.</p>
+          <div id="atConfig"><p class="loading">Cargando…</p></div>
         </section>
 
         <!-- ÁREA: PAGOS -->
@@ -308,6 +338,7 @@
 
         <!-- ÁREA: CONTENIDO -->
         <section class="area" id="area-contenido" hidden>
+          <div data-sec="contenido,subastas,estadio">
           <h2>🎁 Sorteos, preventas y contenido</h2>
           <div class="search-row" style="gap:8px">
             <select id="crudSel" style="flex:0 0 auto;width:auto"><option value="sorteos">Sorteos</option><option value="preventas">Preventas</option><option value="subastas">Subastas</option><option value="encuestas">Encuestas</option><option value="contenido">Contenido</option></select>
@@ -315,7 +346,28 @@
           </div>
           <div id="crudForm"></div>
           <div id="crudList"><p class="loading">Cargando…</p></div>
+          </div>
 
+          <div data-sec="penas">
+          <h2>Peñas</h2>
+          <p class="hint">Solicitudes para <b>verificar</b>, ranking y canjes del fondo que esperan tu aprobación.</p>
+          <div id="penasWrap"><p class="loading">Cargando…</p></div>
+          </div>
+
+          <div data-sec="beneficios">
+          <h2>Ofertas de comercios</h2>
+          <p class="hint">Las ofertas que cargan los comercios esperan acá: <b>aprobá y publicá</b> o <b>rechazá</b> con el motivo (lo ve el comercio). El reporte para sponsors cruza canjes, ahorro y ventas por comercio, ciudad y nivel.</p>
+          <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">⬇ Reporte para sponsors (mes en curso)</button></div>
+          <div id="ofertasWrap"><p class="loading">Cargando…</p></div>
+          </div>
+
+          <div data-sec="puntos">
+          <h2>Puntos</h2>
+          <p class="hint">Reglas de acumulación, catálogo de canje, misión semanal y canjes por entregar. Los puntos vencen tras 12 meses sin actividad (decisión del club).</p>
+          <div id="puntosWrap"><p class="loading">Cargando…</p></div>
+          </div>
+
+          <div data-sec="contenido">
           <h2>Cola de Actualización (socios)</h2>
           <p class="hint">Datos capturados en el onboarding. Verificá contra el padrón y <b>Unificá</b> para volcarlos a la base oficial, o <b>Rechazá</b>.</p>
           <div class="search-row" style="margin-bottom:10px">
@@ -329,15 +381,31 @@
             <button class="btn btn-sm" id="actCargar">Cargar</button>
           </div>
           <div id="actWrap"><p class="loading">Cargando…</p></div>
+          </div>
+        </section>
+
+        <!-- ÁREA: DECISIONES -->
+        <section class="area" id="area-decisiones" hidden>
+          <h2>🗳️ Decisiones de la Comisión Directiva</h2>
+          <p class="hint">Cada decisión cambia cómo funciona la app. Mientras no se registre una, rige el <b>valor por defecto</b>. Queda anotado quién decidió y cuándo.</p>
+          <div id="decWrap"><p class="loading">Cargando…</p></div>
         </section>
 
         <!-- ÁREA: SISTEMA -->
         <section class="area" id="area-sistema" hidden>
+          <div data-sec="integraciones">
+            <h2>🔌 Integraciones</h2>
+            <p class="hint">Qué está conectado y qué falta. Acá solo se ve el estado; las claves viven en el servidor.</p>
+            <div class="cards" id="integWrap"><p class="loading">Cargando…</p></div>
+          </div>
           <div id="usuariosBox">
             <h2>👤 Usuarios del panel <button class="btn btn-sm" id="usuNuevo" style="font-size:12px;font-weight:700">➕ Nuevo usuario</button></h2>
             <p class="hint">Cuentas con usuario + contraseña y rol. Cada uno ve y puede solo lo de su rol. El log de auditoría registra quién hace qué.</p>
             <div id="usuForm"></div>
             <div id="usuWrap"><p class="loading">Cargando…</p></div>
+            <h2>🔐 Quién ve y quién edita qué</h2>
+            <p class="hint">Matriz de accesos por rol. <b>Ver</b> = entra a la sección. <b>Editar</b> = puede cambiar datos ahí.</p>
+            <div id="matrizWrap"><p class="loading">Cargando…</p></div>
           </div>
 
           <h2>🖼️ Moderación de selfies</h2>
@@ -365,12 +433,13 @@
     var TIER_ORDEN_FICHA = ["socio", "premium", "kids", "olimpista"]; // de mayor a menor, para los botones de la ficha
 
     // Identidad de la sesión (se llena con /admin/whoami). Default FAIL-CLOSED (sin permisos) hasta saber.
-    var ADMIN_ROL = "", ADMIN_PERMS = [], ADMIN_AREAS = ["dashboard"];
+    var ADMIN_ROL = "", ADMIN_PERMS = [], ADMIN_AREAS = ["dashboard"], ADMIN_SECCIONES = ["tablero"], ADMIN_SOLO_LECTURA = false;
+    function veSeccion() { for (var i = 0; i < arguments.length; i++) { if (ADMIN_ROL === "owner" || ADMIN_SECCIONES.indexOf(arguments[i]) > -1) return true; } return false; }
     function puede(perm) { return ADMIN_ROL === "owner" || ADMIN_PERMS.indexOf("*") > -1 || ADMIN_PERMS.indexOf(perm) > -1; }
     // Limpia identidad + estado de tablas/listas para que NO se filtre data entre sesiones de distinto rol.
     function resetAdminState() {
-      ADMIN_ROL = ""; ADMIN_PERMS = []; ADMIN_AREAS = ["dashboard"];
-      crudItems = []; ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura"]; areaLoaded = {};
+      ADMIN_ROL = ""; ADMIN_PERMS = []; ADMIN_AREAS = ["dashboard"]; ADMIN_SECCIONES = ["tablero"]; ADMIN_SOLO_LECTURA = false;
+      crudItems = []; ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura", "cd", "comercial", "operaciones"]; areaLoaded = {};
       ["usuWrap", "segWrap", "searchWrap", "metreWrap", "abWrap", "actWrap", "padronWrap", "selfiesWrap", "accWrap", "campWrap", "crudList", "pendWrap"].forEach(function (id) {
         var c = $(id); if (c) { c.innerHTML = ""; try { delete c._tbl; delete c._tblInit; } catch (e) {} }
       });
@@ -490,16 +559,24 @@
     }
 
     // ── Navegación por áreas (router por hash + carga perezosa) ──
-    var AREAS = ["dashboard", "socios", "pagos", "campanas", "contenido", "sistema"];
-    var AREA_TITLE = { dashboard: "📊 Dashboard", socios: "👤 Socios", pagos: "💳 Pagos", campanas: "📣 Campañas", contenido: "🎁 Contenido", sistema: "🛠️ Sistema" };
+    var AREAS = ["dashboard", "socios", "atencion", "pagos", "campanas", "contenido", "decisiones", "sistema"];
+    var AREA_TITLE = { dashboard: "📊 Dashboard", socios: "👤 Socios", atencion: "💬 Atención", pagos: "💳 Pagos", campanas: "📣 Campañas", contenido: "🎁 Contenido", decisiones: "🗳️ Decisiones", sistema: "🛠️ Sistema" };
     // Loaders que se disparan la PRIMERA vez que se abre cada área (no todo de golpe al entrar).
     var AREA_LOADERS = {
-      dashboard: [cargarSalud, cargarReportes, cargarRevCount],
+      dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount],
       socios: [],                                 // búsqueda/segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
       campanas: [cargarEmailMetricas, cargarCampanas, cargarGhl],
-      contenido: [cargarCrud, cargarActualizaciones],
-      sistema: [cargarUsuarios, cargarSelfies, cargarAcciones],
+      contenido: [function () {
+        if (veSeccion("contenido", "subastas", "estadio")) cargarCrud();
+        if (veSeccion("contenido")) cargarActualizaciones();
+        if (veSeccion("beneficios")) cargarOfertasAdmin();
+        if (veSeccion("penas")) cargarPenasAdmin();
+        if (veSeccion("puntos")) cargarPuntosAdmin();
+      }],
+      atencion: [cargarAtencion, cargarAtencionConfig],
+      decisiones: [cargarDecisiones],
+      sistema: [cargarIntegraciones, cargarUsuarios, cargarMatrizRoles, cargarSelfies, cargarAcciones],
     };
     var areaLoaded = {};
     function navTo(area) {
@@ -520,6 +597,7 @@
         resetAdminState();                        // limpia identidad/tablas de la sesión anterior
         var who = await api("/admin/whoami");   // identidad + rol + áreas/permisos (y valida la sesión)
         ADMIN_ROL = who.rol || "lectura"; ADMIN_PERMS = who.perms || []; ADMIN_AREAS = (who.areas && who.areas.length) ? who.areas : ["dashboard"];
+        ADMIN_SECCIONES = who.secciones || ["tablero"]; ADMIN_SOLO_LECTURA = !!who.solo_lectura;
         showDash();
         aplicarRol();
         $("adminWho").textContent = (who.usuario || "") + " · " + ADMIN_ROL;
@@ -539,9 +617,19 @@
       var links = document.querySelectorAll(".nav-link[data-area]");
       for (var i = 0; i < links.length; i++) { links[i].style.display = (ADMIN_AREAS.indexOf(links[i].dataset.area) > -1) ? "" : "none"; }
       var us = $("usuariosBox"); if (us) us.style.display = puede("usuarios") ? "" : "none";
+      var bloques = document.querySelectorAll("[data-sec]");
+      for (var b = 0; b < bloques.length; b++) { bloques[b].style.display = veSeccion.apply(null, bloques[b].dataset.sec.split(",")) ? "" : "none"; }
+      var bus = document.querySelector(".tsearch"); if (bus) bus.style.display = veSeccion("hinchas") ? "" : "none";
+      var ban = $("soloLecturaBanner"); if (ban) ban.hidden = !ADMIN_SOLO_LECTURA;
+      var sel = $("crudSel");
+      if (sel) {
+        if (sel._orig == null) sel._orig = sel.innerHTML; else sel.innerHTML = sel._orig;
+        var SEC_CRUD = { sorteos: "subastas", subastas: "subastas", preventas: "estadio", contenido: "contenido", encuestas: "contenido" };
+        for (var o = sel.options.length - 1; o >= 0; o--) { if (!veSeccion(SEC_CRUD[sel.options[o].value] || "contenido")) sel.remove(o); }
+      }
       // Botones de acción a nivel sección (los por-fila se gatean al renderizar).
       var setVis = function (id, ok) { var el = $(id); if (el) el.style.display = ok ? "" : "none"; };
-      setVis("crudNuevo", puede("contenido.write"));
+      setVis("crudNuevo", puedeCrud());
       setVis("campLanzar", puede("campanas.write"));
       setVis("ghlSync", puede("campanas.write"));
       setVis("segExport", puede("export"));   // export de PII de socios
@@ -699,8 +787,187 @@
       } catch (e) { $("abWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
 
+    // ── Tablero del club ──
+    async function cargarTablero() {
+      var box = $("tabCards"); if (!box) return;
+      var gs = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); }, nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
+      try {
+        var d = await api("/admin/tablero");
+        var c = function (n, l, sub) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + (sub ? '<br><span class="muted" style="font-size:12px">' + esc(sub) + '</span>' : '') + '</div></div>'; };
+        box.innerHTML =
+          c(nf(d.hinchas.total), "Hinchas registrados", "hoy +" + nf(d.hinchas.hoy) + " · ayer +" + nf(d.hinchas.ayer)) +
+          c(nf(d.hinchas.pagantes), "Membresías pagas", nf(d.hinchas.socios_validados) + " socios validados") +
+          c(gs(d.ingresos.d30), "Ingresos · 30 días", "7 días " + gs(d.ingresos.d7)) +
+          c(nf(d.subastas.activas), "Subastas en vivo", nf(d.subastas.sin_pagar) + " ganadas sin pagar") +
+          c(nf(d.puntos.pasivo), "Puntos en circulación", nf(d.puntos.canjes_pendientes) + " canjes por entregar") +
+          c(nf(d.penas.verificadas) + " / " + nf(d.penas.total), "Peñas verificadas", nf(d.penas.canjes_pendientes) + " canjes de fondo pendientes") +
+          c(nf(d.beneficios.publicados), "Beneficios publicados", nf(d.beneficios.por_aprobar) + " ofertas por aprobar") +
+          c(nf(d.decisiones.tomadas) + " / " + nf(d.decisiones.total), "Decisiones tomadas", "el resto rige por defecto");
+        var pc = (d.ingresos.por_concepto || []);
+        $("tabIngresos").innerHTML = pc.length ? '<div class="mini">Ingresos por concepto (total)</div><div class="row-actions">' + pc.map(function (x) { return '<span class="pill">' + esc(x.tipo) + ' · ' + gs(x.monto) + ' (' + nf(x.n) + ')</span>'; }).join("") + '</div>' : "";
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
+    // ── Atención: bandeja, conversación y configuración del asistente ──
+    var atFiltro = "", atAbierta = null;
+    function hace(iso) {
+      var s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+      if (s < 60) return "recién"; if (s < 3600) return Math.round(s / 60) + " min"; if (s < 86400) return Math.round(s / 3600) + " h"; return Math.round(s / 86400) + " d";
+    }
+    var AT_ESTADO = { ia: { l: "IA", c: "" }, humano: { l: "Con una persona", c: "pill-warn" }, resuelta: { l: "Resuelta", c: "pill-ok" } };
+    async function cargarAtencion() {
+      var box = $("atLista"); if (!box || !veSeccion("atencion")) return;
+      try {
+        var d = await api("/admin/atencion" + (atFiltro ? "?estado=" + atFiltro : ""));
+        var ind = d.indicadores || {}, c = function (n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + '</div></div>'; };
+        $("atCards").innerHTML = c(Number(ind.hoy || 0).toLocaleString("es-PY"), "Conversaciones hoy") + c(ind.pct_ia == null ? "—" : ind.pct_ia + " %", "Resueltas solo por la IA (7 días)") +
+          c(ind.primera_resp_min == null ? "—" : ind.primera_resp_min + " min", "Primera respuesta de una persona") + c(Number(ind.abiertas_humano || 0).toLocaleString("es-PY"), "Abiertas con una persona");
+        var b = $("atBadge"); if (b) { b.hidden = !ind.abiertas_humano; b.textContent = ind.abiertas_humano || ""; }
+        if (!(d.items || []).length) { box.innerHTML = '<p class="empty">No hay conversaciones' + (atFiltro ? " en este estado" : " todavía") + '.</p>'; return; }
+        box.innerHTML = '<div style="overflow-x:auto"><table><thead><tr><th>Hincha</th><th>Canal</th><th>Motivo / último mensaje</th><th>Estado</th><th>Hace</th><th></th></tr></thead><tbody>' + d.items.map(function (x) {
+          var e = AT_ESTADO[x.estado] || AT_ESTADO.ia, nom = [x.socio_nombre, x.socio_apellido].filter(Boolean).join(" ") || "Sin cuenta";
+          return '<tr data-id="' + esc(x.id) + '"><td data-l="Hincha"><b>' + esc(nom) + '</b>' + (x.socio_ciudad ? '<br><span class="muted" style="font-size:12px">' + esc(x.socio_ciudad) + '</span>' : '') + '</td>' +
+            '<td data-l="Canal"><span class="pill">' + (x.canal === "whatsapp" ? "WhatsApp" : "App") + '</span></td>' +
+            '<td data-l="Motivo">' + esc((x.motivo || x.ultimo || "").slice(0, 90)) + '</td>' +
+            '<td data-l="Estado"><span class="pill ' + e.c + '">' + esc(e.l) + '</span></td><td data-l="Hace"><span class="muted">' + esc(hace(x.actualizado)) + '</span></td>' +
+            '<td><button class="btn btn-sm" data-atabrir="' + esc(x.id) + '">Abrir</button></td></tr>';
+        }).join("") + '</tbody></table></div>';
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function abrirConversacionAdmin(id) {
+      var box = $("atDetalle"); atAbierta = id;
+      try {
+        var d = await api("/admin/atencion/" + encodeURIComponent(id)), c = d.conversacion, w = puede("atencion.write");
+        var e = AT_ESTADO[c.estado] || AT_ESTADO.ia, s = d.socio;
+        var burbujas = d.mensajes.map(function (m) {
+          if (m.de === "sistema") return '<div class="muted" style="text-align:center;font-size:12px;margin:6px 0">' + esc(m.texto) + '</div>';
+          if (m.de === "tarjeta") return '<div class="muted" style="text-align:center;font-size:12px;margin:6px 0">▣ ' + esc(m.texto) + '</div>';
+          var yo = m.de === "hincha", hu = m.de === "humano";
+          var et = yo ? ((s && s.nombre) || "Hincha") : hu ? ((m.meta && m.meta.agente) || "Persona del club") : "Asistente · IA";
+          return '<div style="display:flex;flex-direction:column;align-items:' + (yo ? "flex-start" : "flex-end") + ';margin:8px 0"><span class="muted" style="font-size:11px">' + esc(et) + ' · ' + esc(fmtFecha(m.creado)) + '</span>' +
+            '<div style="max-width:80%;padding:9px 13px;border-radius:14px;border:1px solid var(--linea);' + (hu ? 'background:var(--verde-bg)' : yo ? 'background:var(--card2,#1b1b1b)' : '') + '">' + esc(m.texto) + '</div></div>';
+        }).join("");
+        box.innerHTML = '<div style="border:1px solid var(--linea);border-radius:12px;padding:14px;margin-top:14px">' +
+          '<div class="row-actions" style="justify-content:space-between;align-items:flex-start"><div><b>' + esc(s ? [s.nombre, s.apellido].filter(Boolean).join(" ") : "Sin cuenta") + '</b> <span class="pill ' + e.c + '">' + esc(e.l) + '</span>' +
+          '<div class="muted" style="font-size:12px">' + esc(s ? (TIER[s.tier] || s.tier) + (s.ciudad ? " · " + s.ciudad : "") : "") + ' · ' + (c.canal === "whatsapp" ? "WhatsApp" : "App") + '</div></div>' +
+          (s ? '<button class="btn btn-sm btn-ghost" data-ficha="' + esc(s.id) + '">Ver ficha 360</button>' : '') + '</div>' +
+          (c.resumen ? '<div class="hint" style="margin:10px 0"><b>Resumen de la IA:</b> ' + esc(c.resumen) + '</div>' : '') +
+          '<div style="max-height:340px;overflow-y:auto;margin:8px 0" id="atMsgs">' + burbujas + '</div>' +
+          (c.estado !== "resuelta" && w ? '<textarea id="atTexto" rows="2" maxlength="1000" placeholder="Escribí tu respuesta (le llega al hincha por el mismo canal)" style="width:100%"></textarea>' +
+            '<div class="row-actions" style="margin-top:8px"><button class="btn" data-atresp="' + esc(c.id) + '">Responder</button><button class="btn btn-ghost" data-atres="' + esc(c.id) + '">Resolver y devolver a la IA</button></div>' :
+            (c.estado === "resuelta" ? '<p class="muted">Esta conversación está resuelta.</p>' : '')) + '</div>';
+        var m = $("atMsgs"); if (m) m.scrollTop = m.scrollHeight;
+        box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (err) { box.innerHTML = '<p class="err">' + esc(err.message) + '</p>'; }
+    }
+    async function cargarAtencionConfig() {
+      var box = $("atConfig"); if (!box || !veSeccion("atencion")) return;
+      try {
+        var d = await api("/admin/atencion/config"), w = puede("atencion.write");
+        box.innerHTML = '<p class="hint">Modelo: <b>' + esc(d.modelo) + '</b> · ' + (d.ia_conectada ? '<span class="pill pill-ok">IA conectada</span>' : '<span class="pill pill-warn">Sin clave de IA: responde por palabras clave</span>') + '</p>' +
+          d.items.map(function (i) {
+            return '<label style="display:flex;gap:12px;align-items:flex-start;border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin:8px 0;' + (i.disponible ? '' : 'opacity:.7') + '">' +
+              '<input type="checkbox" style="width:auto;margin-top:4px" data-atcfg="' + esc(i.clave) + '"' + (i.activo ? ' checked' : '') + (w && i.disponible ? '' : ' disabled') + ' />' +
+              '<span><b>' + esc(i.nombre) + '</b><br><span class="muted" style="font-size:13px">' + esc(i.descripcion) + (i.disponible ? '' : ' · <b>Todavía no disponible:</b> ' + esc(i.motivo_no_disponible || "")) + '</span></span></label>';
+          }).join("") +
+          '<div class="mini">Reglas fijas (no se pueden cambiar)</div><ul style="margin:6px 0 0 18px;color:var(--gris);font-size:13px">' + d.reglas_fijas.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join("") + '</ul>';
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    document.addEventListener("click", async function (e) {
+      var f = e.target.closest && e.target.closest("[data-atf]");
+      if (f) { atFiltro = f.dataset.atf; var bs = document.querySelectorAll("#atFiltros button"); for (var i = 0; i < bs.length; i++) bs[i].classList.toggle("btn-ghost", bs[i] !== f); cargarAtencion(); return; }
+      var ab = e.target.closest && e.target.closest("[data-atabrir]"); if (ab) { abrirConversacionAdmin(ab.dataset.atabrir); return; }
+      var fb = e.target.closest && e.target.closest("#atDetalle button[data-ficha]"); if (fb) { abrirFicha(fb.dataset.ficha); return; }
+      var rp = e.target.closest && e.target.closest("[data-atresp]");
+      if (rp) {
+        var t = ($("atTexto") || {}).value || ""; if (!t.trim()) { toast("Escribí la respuesta", "err"); return; }
+        try { var r = await api("/admin/atencion/" + encodeURIComponent(rp.dataset.atresp) + "/responder", { method: "POST", body: { texto: t } });
+          toast(r.entregado === false ? "Guardada, pero no se pudo entregar por WhatsApp" : "Respuesta enviada", r.entregado === false ? "err" : undefined); abrirConversacionAdmin(rp.dataset.atresp); cargarAtencion(); }
+        catch (err) { toast(err.message, "err"); }
+        return;
+      }
+      var rs = e.target.closest && e.target.closest("[data-atres]");
+      if (rs) {
+        try {
+          if (!(await confirmar("La conversación se cierra y el asistente vuelve a atender al hincha en su próximo mensaje.", { titulo: "Resolver conversación", ok: "Resolver" })).ok) return;
+          await api("/admin/atencion/" + encodeURIComponent(rs.dataset.atres) + "/resolver", { method: "POST" });
+          toast("Conversación resuelta"); abrirConversacionAdmin(rs.dataset.atres); cargarAtencion();
+        } catch (err) { toast(err.message, "err"); }
+      }
+    });
+    document.addEventListener("change", async function (e) {
+      var k = e.target.dataset && e.target.dataset.atcfg; if (!k) return;
+      try { await api("/admin/atencion/config", { method: "PUT", body: { clave: k, activo: e.target.checked } }); toast(e.target.checked ? "Acción activada" : "Acción desactivada"); }
+      catch (err) { e.target.checked = !e.target.checked; toast(err.message, "err"); }
+    });
+
+    // ── Decisiones de la CD ──
+    var DEC_OPC = {
+      deuda: { no_bloquear: "No bloquear a nadie", mas_2_cuotas: "Bloquear con más de 2 cuotas", cualquier: "Bloquear con cualquier deuda" },
+      plazo: { "72_48": "72 h + 48 h", "48_24": "48 h + 24 h" },
+      base: { por_nivel: "Por nivel", por_plan: "Por plan del club", ambos: "Ambos" },
+      pct: { "10": "10 %", "15": "15 %" },
+      venc: { "12_meses": "Vencen a los 12 meses", no_vencen: "No vencen" },
+      oro: { no_publicar: "No publicar", habilita_futbol: "Habilitar fútbol" },
+    };
+    async function cargarDecisiones() {
+      var box = $("decWrap"); if (!box) return;
+      try {
+        var d = await api("/admin/decisiones"), w = puede("decisiones.write");
+        box.innerHTML = (d.items || []).map(function (x) {
+          var lbl = DEC_OPC[x.clave] || {};
+          var chips = x.opciones.map(function (o) {
+            var on = o === x.valor;
+            return '<button class="btn btn-sm ' + (on ? "" : "btn-ghost") + '" ' + (w && !on ? 'data-decv="' + esc(x.clave) + '" data-val="' + esc(o) + '"' : 'disabled') + ' aria-pressed="' + on + '">' + esc(lbl[o] || o) + (o === x.defecto ? ' <span class="muted" style="font-size:11px">(por defecto)</span>' : '') + '</button>';
+          }).join("");
+          var estado = x.decidido ? '<span class="pill pill-ok">Decidido</span> <span class="muted" style="font-size:12px">por ' + esc(x.decidido_por || "—") + (x.decidido_en ? ' · ' + esc(fmtFecha(x.decidido_en)) : '') + '</span>' : '<span class="pill pill-warn">Sin decidir</span> <span class="muted" style="font-size:12px">rige el valor por defecto</span>';
+          return '<div class="card-row" style="border:1px solid var(--linea);border-radius:10px;padding:12px;margin:10px 0"><b>' + esc(x.pregunta) + '</b><div style="margin:6px 0">' + estado + '</div><div class="row-actions">' + chips + '</div></div>';
+        }).join("") + (w ? "" : '<p class="hint">Las decisiones las registra el equipo del club; acá las podés consultar.</p>');
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    document.addEventListener("click", async function (e) {
+      var b = e.target.closest && e.target.closest("[data-decv]"); if (!b) return;
+      var lbl = (DEC_OPC[b.dataset.decv] || {})[b.dataset.val] || b.dataset.val;
+      try {
+        if (!(await confirmar("Se aplica enseguida en la app: «" + lbl + "». Queda registrado a tu nombre.", { titulo: "Registrar decisión", ok: "Registrar" })).ok) return;
+        await api("/admin/decisiones/" + encodeURIComponent(b.dataset.decv), { method: "PUT", body: { valor: b.dataset.val } });
+        toast("Decisión registrada"); cargarDecisiones();
+      } catch (err) { toast(err.message, "err"); }
+    });
+
+    // ── Integraciones y matriz de roles ──
+    async function cargarIntegraciones() {
+      var box = $("integWrap"); if (!box || !veSeccion("integraciones")) return;
+      try {
+        var d = await api("/admin/integraciones");
+        var E = { conectado: { l: "Conectado", c: "pill-ok" }, simulado: { l: "Simulado (pruebas)", c: "" }, sin_conectar: { l: "Sin conectar", c: "pill-warn" } };
+        box.innerHTML = (d.items || []).map(function (i) {
+          var e = E[i.estado] || E.sin_conectar;
+          return '<div class="stat" style="text-align:left"><div class="l" style="font-weight:700">' + esc(i.nombre) + '</div><div style="margin:6px 0"><span class="pill ' + e.c + '">' + e.l + '</span></div><div class="muted" style="font-size:12px">' + esc(i.detalle) + '</div></div>';
+        }).join("");
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    async function cargarMatrizRoles() {
+      var box = $("matrizWrap"); if (!box || !puede("usuarios")) return;
+      try {
+        var d = await api("/admin/roles");
+        var SEC = { tablero: "Tablero", decisiones: "Decisiones", hinchas: "Hinchas", atencion: "Atención", campanas: "Campañas", beneficios: "Beneficios", puntos: "Puntos", penas: "Peñas", subastas: "Subastas", estadio: "Estadio", integraciones: "Integraciones", roles: "Roles", contenido: "Contenido", pagos: "Pagos" };
+        var EDITA = { decisiones: "decisiones.write", hinchas: "socios.write", atencion: "atencion.write", campanas: "campanas.write", beneficios: "beneficios.write", puntos: "puntos.write", penas: "penas.write", subastas: "subastas.write", estadio: "contenido.write", contenido: "contenido.write", pagos: "pagos.write", roles: "usuarios" };
+        var head = '<tr><th>Rol</th>' + d.secciones.map(function (s) { return '<th>' + esc(SEC[s] || s) + '</th>'; }).join("") + '</tr>';
+        var rows = d.roles.map(function (r) {
+          var todo = r.perms.indexOf("*") > -1;
+          return '<tr><td data-l="Rol"><b>' + esc(r.rol) + '</b><br><span class="muted" style="font-size:11px">' + esc(ROL_DESC[r.rol] || "") + '</span></td>' + d.secciones.map(function (s) {
+            var ve = r.ve.indexOf(s) > -1, ed = ve && (todo || (EDITA[s] && r.perms.indexOf(EDITA[s]) > -1));
+            return '<td data-l="' + esc(SEC[s] || s) + '" style="text-align:center">' + (ed ? '<span title="Ve y edita" style="color:var(--verde)">✎</span>' : ve ? '<span title="Solo ve" class="muted">👁</span>' : '<span class="muted">·</span>') + '</td>';
+          }).join("") + '</tr>';
+        }).join("");
+        box.innerHTML = '<div style="overflow-x:auto"><table>' + head + rows + '</table></div><p class="hint">✎ ve y edita · 👁 solo ve · · sin acceso. Los roles Comisión Directiva, Marketing, Comercial y Operaciones solo entran a lo marcado.</p>';
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
     // ── Gestión de usuarios del panel (solo owner) ──
-    var ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura"];
+    var ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura", "cd", "comercial", "operaciones"];
+    var ROL_DESC = { owner: "Todo, incluido usuarios y decisiones", finanzas: "Pagos, cuadre y socios", marketing: "Campañas, contenido, beneficios y puntos", soporte: "Atención a socios y moderación", lectura: "Solo mirar (sin exportar datos)", cd: "Comisión Directiva: tablero y decisiones, solo lectura", comercial: "Comercios, beneficios y peñas", operaciones: "Subastas, estadio y atención" };
     async function cargarUsuarios() {
       if (!puede("usuarios")) return;
       $("usuForm").innerHTML = "";
@@ -718,7 +985,7 @@
     }
     function formUsuario(item) {
       item = item || {}; var esNuevo = !item.id;
-      var roles = ROLES_ADMIN.map(function (rr) { return '<option value="' + rr + '"' + (item.rol === rr ? ' selected' : '') + '>' + rr + '</option>'; }).join("");
+      var roles = ROLES_ADMIN.map(function (rr) { return '<option value="' + rr + '"' + (item.rol === rr ? ' selected' : '') + '>' + rr + (ROL_DESC[rr] ? ' — ' + ROL_DESC[rr] : '') + '</option>'; }).join("");
       $("usuForm").innerHTML = '<div class="fgrid">' +
         '<div><label>Usuario</label><input id="uf_usuario" value="' + esc(item.usuario || "") + '"' + (esNuevo ? '' : ' disabled') + ' /></div>' +
         '<div><label>Nombre</label><input id="uf_nombre" value="' + esc(item.nombre || "") + '" /></div>' +
@@ -761,14 +1028,16 @@
         campos: [["titulo", "Título (interno)", "text"], ["pregunta", "Pregunta", "text"], ["tipo", "Tipo", ["opcion", "texto"]], ["opciones", "Opciones (separadas por | )", "text"], ["nivel_min", "Quién responde (nivel)", "tier"], ["estado", "Estado", ["borrador", "activa", "cerrada"]]], encuesta: true },
     };
     var crudActual = "sorteos", crudItems = [];
+    // Cada entidad se edita con su permiso (subastas/sorteos, beneficios/comercios, o contenido en general).
+    function puedeCrud() { return puede(({ sorteos: "subastas.write", subastas: "subastas.write" })[crudActual] || "contenido.write"); }
     async function cargarCrud() {
-      crudActual = $("crudSel").value; $("crudForm").innerHTML = "";
+      crudActual = $("crudSel").value; $("crudForm").innerHTML = ""; var nv = $("crudNuevo"); if (nv) nv.style.display = puedeCrud() ? "" : "none";
       try {
         var r = await api("/admin/" + crudActual);
         crudItems = r.items || [];
         var cfg = CRUDCFG[crudActual];
         if (!crudItems.length) { $("crudList").innerHTML = '<p class="empty">Sin ' + cfg.t.toLowerCase() + ' aún. Creá con ➕ Nuevo.</p>'; return; }
-        var w = puede("contenido.write");
+        var w = puedeCrud();
         var rows = crudItems.map(function (x) {
           var parts = cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-parts="' + esc(x.id) + '">Participantes</button>' : "";
           var sub = "";
@@ -785,6 +1054,13 @@
             } else if (x.estado === "pausada") {
               sub += '<button class="btn btn-sm btn-ok" data-reanudar="' + esc(x.id) + '">▶ Reanudar</button>';
               sub += '<button class="btn btn-sm btn-no" data-cerrar="' + esc(x.id) + '">⏹ Cerrar</button>';
+            }
+            if (x.estado === "cerrada" && x.adjudicado_a && x.pago_estado !== "pagado") {
+              var vence = x.pago_vence ? new Date(x.pago_vence) : null, vencido = vence && vence.getTime() < Date.now();
+              sub += '<span class="muted" style="font-size:12px;align-self:center">' + (x.ronda === 2 ? "2.ª ronda · " : "") +
+                (vence ? (vencido ? "plazo vencido " : "paga antes del ") + vence.toLocaleString("es-PY", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "sin plazo (lote anterior)") + '</span>';
+              sub += '<button class="btn btn-sm btn-ghost" data-extender="' + esc(x.id) + '">⏳ Extender 24 h</button>';
+              if (x.ronda !== 2) sub += '<button class="btn btn-sm btn-no" data-segundo="' + esc(x.id) + '">⏭ Pasar al segundo ahora</button>';
             }
             sub += '<button class="btn btn-sm btn-ghost" data-pujas="' + esc(x.id) + '">👁 Pujas</button>';
             // Disponible en CUALQUIER estado (incluso Borrador): sirve para preparar la
@@ -934,6 +1210,14 @@
     async function cerrarSubasta(id) {
       if (!(await confirmar("¿Cerrar la subasta ahora? Gana la puja más alta y se le avisa al ganador.", { titulo: "Cerrar subasta", ok: "Cerrar", danger: true })).ok) return;
       try { await api("/admin/subastas/" + encodeURIComponent(id) + "/cerrar", { method: "POST" }); toast("Subasta cerrada"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function extenderPlazoSubasta(id) {
+      if (!(await confirmar("¿Darle 24 horas más para pagar? Si el plazo ya había vencido, las 24 h cuentan desde ahora.", { titulo: "Extender plazo de pago", ok: "Extender 24 h" })).ok) return;
+      try { await api("/admin/subastas/" + encodeURIComponent(id) + "/extender", { method: "POST", body: { horas: 24 } }); toast("⏳ Plazo extendido 24 h"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
+    }
+    async function pasarAlSegundo(id) {
+      if (!(await confirmar("¿Pasar el lote al segundo postor ahora? Se cancela el pedido del primero, queda suspendido 90 días de las subastas y el lote se adjudica al segundo, a su última oferta, con su propio plazo. No se puede deshacer.", { titulo: "Pasar al segundo postor", ok: "Pasar al segundo", danger: true })).ok) return;
+      try { var r = await api("/admin/subastas/" + encodeURIComponent(id) + "/segundo", { method: "POST" }); toast(r.accion === "ronda2" ? "⏭ Adjudicado al segundo postor" : "↩ No había otro postor: vuelve a borrador"); cargarCrud(); } catch (e) { toast(e.message, "err"); }
     }
     async function despublicarSubasta(id) {
       if (!(await confirmar("¿Volver a borrador? Deja de estar visible para los socios; podés reconfigurarla y volver a publicarla.", { titulo: "Volver a borrador", ok: "Volver a borrador" })).ok) return;
@@ -1236,6 +1520,7 @@
           '<button class="close" data-cerrar>×</button>' +
           '<h3>' + esc([s.nombre, s.apellido].filter(Boolean).join(" ") || "Socio") + '</h3>' +
           '<p class="muted" style="margin:0">' + esc(s.email || "") + ' · <span class="pill">' + esc(TIER[tierAct] || tierAct) + '</span>' + (s.es_socio_olimpia ? ' · ✓ socio Olimpia' : '') + '</p>' +
+          '<div id="f360"><p class="muted" style="font-size:13px">Cargando ficha 360…</p></div>' +
           (s.foto ? '<div style="text-align:center;margin:12px 0"><img src="' + esc(s.foto) + '" alt="" style="max-width:150px;max-height:150px;border-radius:12px;border:1px solid var(--linea)" /></div>' : '') +
           '<div class="fgrid">' + fld("fNombre", "Nombre", s.nombre) + fld("fApellido", "Apellido", s.apellido) + fld("fEmail", "Email", s.email, true) + fld("fCedula", "Cédula", s.cedula) + fld("fIso", "ISO país", s.pais_iso) + fld("fCiudad", "Ciudad", s.ciudad) + fld("fPais", "País", s.pais) + '</div>' +
           '<p class="ok" id="fOk"></p>' +
@@ -1260,7 +1545,131 @@
           : ((s.foto && puede("moderacion")) ? '<div class="row-actions"><button class="btn btn-sm btn-no" data-quitarfoto="' + esc(s.id) + '">🖼 Quitar foto</button></div>' : '')) +
           '<div class="mini">Historial de membresías</div>' + hist +
           '<div class="mini">Pedidos de pago</div>' + peds;
+        cargar360(id);
       } catch (e) { $("fichaBox").innerHTML = '<button class="close" data-cerrar>×</button><p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // Ofertas de comercios por aprobar.
+    async function cargarOfertasAdmin() {
+      var box = $("ofertasWrap"); if (!box) return;
+      try {
+        var d = await api("/admin/beneficios"), w = puede("beneficios.write");
+        var pend = d.items.filter(function (b) { return b.estado === "borrador"; });
+        var rech = d.items.filter(function (b) { return b.estado === "rechazado"; }).slice(0, 5);
+        var PARA = { todos: "Todos", "premium,socio": "Plus y Socio", socio: "Solo socios" };
+        var fila = function (b, acciones) {
+          return '<div class="card-row" style="border:1px solid var(--linea);border-radius:10px;padding:10px;margin:8px 0"><b>' + esc(b.comercio_nombre || "") + '</b> — ' + esc(b.titulo) +
+            ' <span class="pill">' + esc(b.valor || "") + '</span><div class="muted" style="font-size:13px">Para: ' + esc(PARA[b.niveles] || b.niveles) + (b.stock != null ? ' · cupo ' + b.stock : '') + (b.descripcion ? ' · ' + esc(b.descripcion) : '') +
+            (b.motivo_rechazo ? ' · <span class="err">Rechazada: ' + esc(b.motivo_rechazo) + '</span>' : '') + '</div>' + (w && acciones ? '<div class="row-actions" style="margin-top:8px">' + acciones + '</div>' : '') + '</div>';
+        };
+        box.innerHTML = (pend.length ? pend.map(function (b) {
+          return fila(b, '<button class="btn btn-sm btn-ok" data-ofapr="' + esc(b.id) + '">Aprobar y publicar</button><button class="btn btn-sm btn-no" data-ofrec="' + esc(b.id) + '">Rechazar</button>');
+        }).join("") : '<p class="empty">No hay ofertas esperando aprobación.</p>') +
+          (rech.length ? '<div class="mini">Rechazadas recientes</div>' + rech.map(function (b) { return fila(b, '<button class="btn btn-sm btn-ghost" data-ofapr="' + esc(b.id) + '">Aprobar igual</button>'); }).join("") : "");
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // Puntos: reglas (stepper), pasivo, canjes por entregar, catálogo y misiones.
+    async function cargarPuntosAdmin() {
+      var box = $("puntosWrap"); if (!box) return;
+      try {
+        var rs = await Promise.all([api("/admin/puntos/resumen"), api("/admin/puntos/reglas"), api("/admin/puntos/premios"), api("/admin/puntos/canjes?estado=pendiente"), api("/admin/puntos/misiones")]);
+        var res = rs[0], reglas = rs[1].items, premios = rs[2].items, canjes = rs[3].items, mis = rs[4];
+        var w = puede("puntos.write"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
+        var html = '<div style="background:#0a0a0a;color:#fff;border-radius:12px;padding:14px;margin:8px 0"><div style="font-size:12px;opacity:.7">PASIVO DE PUNTOS (lo que el club debe en premios)</div><b style="font-size:24px">' + nf(res.pasivo) + ' pts</b> <span style="opacity:.7">· ' + nf(res.socios_con_saldo) + ' hinchas con saldo · ' + nf(res.canjes_pendientes) + ' canjes por entregar</span></div>';
+        html += '<div class="mini">Reglas de acumulación</div>' + reglas.map(function (r) {
+          return '<div class="row-actions" style="justify-content:space-between;align-items:center;border-bottom:1px solid var(--linea);padding:6px 0;opacity:' + (r.activa ? 1 : .55) + '"><span><b>' + esc(r.titulo) + '</b> <span class="muted" style="font-size:12px">' + esc(r.fuente) + ' · ' + esc(r.quien) + (r.pendiente ? ' · espera datos de Tuti' : '') + '</span></span><span>' +
+            (w ? '<button class="btn btn-sm btn-ghost" data-regla="' + r.clave + '" data-d="-50">−50</button> ' : '') + '<b style="display:inline-block;min-width:54px;text-align:center">' + nf(r.puntos) + '</b>' + (w ? ' <button class="btn btn-sm btn-ghost" data-regla="' + r.clave + '" data-d="50">+50</button> <button class="btn btn-sm btn-ghost" data-reglaact="' + r.clave + '" data-a="' + (r.activa ? 0 : 1) + '">' + (r.activa ? "Desactivar" : "Activar") + '</button>' : '') + '</span></div>';
+        }).join("");
+        html += '<div class="mini">Canjes por entregar</div>' + (canjes.length ? canjes.map(function (c) {
+          return '<div class="row-actions" style="justify-content:space-between;align-items:center;padding:6px 0"><span><b>' + esc(c.premio) + '</b> — ' + esc([c.nombre, c.apellido].filter(Boolean).join(" ") || c.email) + ' <span class="muted" style="font-size:12px">' + nf(c.costo) + ' pts · ' + esc(fmtFecha(c.creado)) + '</span></span>' +
+            (w ? '<span><button class="btn btn-sm btn-ok" data-canje="' + esc(c.id) + '" data-e="entregado">Entregado</button> <button class="btn btn-sm btn-no" data-canje="' + esc(c.id) + '" data-e="cancelado">Cancelar</button></span>' : '') + '</div>';
+        }).join("") : '<p class="empty">No hay canjes pendientes.</p>');
+        html += '<div class="mini">Catálogo de premios</div>' + (premios.length ? premios.map(function (p) {
+          return '<div class="row-actions" style="justify-content:space-between;align-items:center;padding:6px 0;opacity:' + (p.activo ? 1 : .55) + '"><span><b>' + esc(p.titulo) + '</b> <span class="muted" style="font-size:12px">' + esc(p.escalon) + ' · ' + nf(p.costo) + ' pts · ' + (p.stock == null ? 'sin tope' : 'quedan ' + p.stock) + ' · desde ' + esc(p.nivel_min) + '</span></span>' +
+            (w ? '<button class="btn btn-sm btn-ghost" data-premioact="' + esc(p.id) + '" data-a="' + (p.activo ? 0 : 1) + '">' + (p.activo ? "Ocultar" : "Publicar") + '</button>' : '') + '</div>';
+        }).join("") : '<p class="empty">Todavía no hay premios.</p>');
+        if (w) html += '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700">➕ Nuevo premio</summary><div class="fgrid" style="margin-top:8px">' +
+          '<div class="full"><label>Título</label><input id="prTitulo" maxlength="120" /></div><div class="full"><label>Descripción (opcional)</label><input id="prDesc" maxlength="400" /></div>' +
+          '<div><label>Escalón</label><select id="prEsc"><option value="bronce">Bronce</option><option value="plata">Plata</option><option value="oro">Oro</option></select></div>' +
+          '<div><label>Costo (puntos)</label><input id="prCosto" type="number" min="1" /></div><div><label>Stock (vacío = sin tope)</label><input id="prStock" type="number" min="0" /></div>' +
+          '<div><label>Desde el nivel</label><select id="prNivel"><option value="olimpista">Olimpista</option><option value="kids">Junior</option><option value="premium">Plus</option><option value="socio">Socio</option></select></div></div>' +
+          '<div class="row-actions"><button class="btn btn-sm" id="prCrear">Crear premio</button></div></details>';
+        html += '<div class="mini">Misión semanal <span class="muted">(semana actual: ' + esc(mis.semana_actual) + ')</span></div>' + (mis.items.length ? mis.items.slice(0, 6).map(function (m) {
+          return '<div style="padding:6px 0;border-bottom:1px solid var(--linea)"><b>' + esc(m.semana) + '</b> · ' + esc(m.pregunta) + ' <span class="muted" style="font-size:12px">[' + m.opciones.map(function (o, i) { return (i === m.correcta ? "✓ " : "") + esc(o); }).join(" | ") + ']</span></div>';
+        }).join("") : '<p class="empty">No hay misiones cargadas.</p>');
+        if (w) html += '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700">➕ Nueva misión</summary><div class="fgrid" style="margin-top:8px">' +
+          '<div><label>Semana</label><input id="miSemana" value="' + esc(mis.semana_actual) + '" /></div><div><label>Opción correcta (1, 2, 3…)</label><input id="miOk" type="number" min="1" max="4" value="1" /></div>' +
+          '<div class="full"><label>Pregunta</label><input id="miPreg" maxlength="200" /></div><div class="full"><label>Opciones (una por línea, de 2 a 4)</label><textarea id="miOps" rows="3" style="width:100%"></textarea></div></div>' +
+          '<div class="row-actions"><button class="btn btn-sm" id="miCrear">Crear misión</button></div></details>';
+        box.innerHTML = html;
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // Peñas: solicitudes, ranking y canjes del fondo.
+    async function cargarPenasAdmin() {
+      var box = $("penasWrap"); if (!box) return;
+      try {
+        var d = await api("/admin/penas");
+        var gsA = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); };
+        var w = puede("penas.write"), wp = puede("pagos.write") || puede("penas.write");
+        var pend = d.items.filter(function (p) { return p.estado === "pendiente"; });
+        var ok = d.items.filter(function (p) { return p.estado !== "pendiente"; });
+        var html = "";
+        html += pend.map(function (p) {
+          return '<div class="card-row" style="border:1px solid var(--linea);border-radius:10px;padding:10px;margin:8px 0">' +
+            '<b>' + esc(p.nombre) + '</b> <span class="pill">pendiente</span>' +
+            '<div class="muted" style="font-size:13px">' + esc(p.ciudad) + ' · ' + esc(p.pais_iso) + ' · preside ' + esc(p.presidente) + ' · ' + esc(p.contacto) + '</div>' +
+            (w ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" data-penaver="' + esc(p.id) + '">Verificar peña</button></div>' : '') + '</div>';
+        }).join("");
+        html += d.canjes.map(function (c) {
+          return '<div class="card-row" style="border:1px solid var(--linea);border-radius:10px;padding:10px;margin:8px 0">' +
+            '<b>Canje pedido por ' + esc(c.pena) + '</b>: ' + esc(c.detalle) + ' — ' + gsA(Math.abs(c.monto)) +
+            '<div class="muted" style="font-size:13px">Saldo del fondo: ' + gsA(c.saldo) + ' · ' + esc(fmtFecha(c.creado)) + '</div>' +
+            (wp ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm btn-ok" data-penacj="' + esc(c.id) + '">Aprobar</button><button class="btn btn-sm btn-no" data-penacjno="' + esc(c.id) + '">Rechazar</button></div>' : '') + '</div>';
+        }).join("");
+        html += ok.length ? '<table class="tbl" style="width:100%;font-size:13px;margin-top:10px"><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Peña</th><th>Hinchas</th><th>Socios</th><th>Plus/Junior</th><th>Fondo</th><th></th></tr></thead><tbody>' +
+          ok.map(function (p, i) {
+            return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(p.nombre) + '</b><br><span class="muted">' + esc(p.ciudad) + (p.estado === "pausada" ? ' · en pausa' : '') + '</span></td>' +
+              '<td style="text-align:center">' + p.altas + '</td><td style="text-align:center">' + p.socios + '</td><td style="text-align:center">' + p.plus + '</td><td style="text-align:right">' + gsA(p.saldo) + '</td>' +
+              '<td style="text-align:right">' + (w ? '<button class="btn btn-sm btn-ghost" data-penaacc="' + esc(p.id) + '">Reenviar acceso</button> <button class="btn btn-sm btn-ghost" data-penaest="' + esc(p.id) + '" data-a="' + (p.estado === "pausada" ? "verificada" : "pausada") + '">' + (p.estado === "pausada" ? "Reactivar" : "Pausar") + '</button>' : '') + '</td></tr>';
+          }).join("") + '</tbody></table>' : '';
+        box.innerHTML = html || '<p class="empty">Todavía no hay peñas. Las solicitudes llegan desde la app de los hinchas.</p>';
+      } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // Ficha 360: cinco indicadores, estado en el club (en vivo o "sin confirmar") y línea de tiempo.
+    var ultimoParecido = null;
+    async function cargar360(id) {
+      var box = $("f360"); if (!box) return;
+      try {
+        var d = await api("/admin/socios/" + encodeURIComponent(id) + "/360");
+        var i = d.indicadores || {}, ec = d.estado_club || {};
+        var gsA = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); };
+        var club = ec.confirmado
+          ? (ec.encontrado === false ? "No figura como titular" : (ec.status || "") + (ec.al_dia ? " · al día" : " · NO al día") + (ec.deuda ? " · debe " + gsA(ec.deuda) : ""))
+          : "Sin confirmar" + (ec.es_socio_olimpia ? " · figura en el padrón" : "");
+        function ind(l, v) { return '<div class="ind"><div class="ind-v">' + esc(v) + '</div><div class="ind-l">' + esc(l) + '</div></div>'; }
+        var tl = (d.eventos || []).map(function (e) { return '<li><b>' + esc(e.titulo) + '</b>' + (e.detalle ? '<small>' + esc(e.detalle) + '</small>' : '') + '<small>' + esc(fmtFecha(e.fecha)) + '</small></li>'; }).join("");
+        box.innerHTML =
+          '<div class="ind-grid">' + ind("Gastó en Olimpistas", gsA(i.gasto_total)) + ind("Ahorró este año", gsA(i.ahorro_anio)) + ind("Beneficios usados", i.canjes) + ind("Lotes en que pujó", i.lotes_pujados) + ind("Estado en el club", club) + '</div>' +
+          (d.suspension_subastas ? '<p class="err" style="font-size:13px;margin:4px 0">Suspendido de las subastas hasta ' + esc(fmtFecha(d.suspension_subastas)) + '</p>' : '') +
+          (ec.plan_club ? '<p class="muted" style="font-size:12px;margin:4px 0">Plan del club: ' + esc(ec.plan_club) + (ec.numero_socio ? ' · N.º ' + esc(ec.numero_socio) : '') + '</p>' : '') +
+          '<div class="mini">Línea de tiempo</div><ul class="tl">' + (tl || '<li>Sin actividad</li>') + '</ul>' +
+          '<div class="mini">Hinchas parecidos</div>' +
+          '<div class="row-actions"><button class="btn btn-sm btn-ghost" data-parec="perfil" data-sid="' + esc(id) + '">Por perfil</button><button class="btn btn-sm btn-ghost" data-parec="habito" data-sid="' + esc(id) + '">Por hábito</button></div>' +
+          '<div id="f360par"></div>';
+      } catch (e) { box.innerHTML = '<p class="err" style="font-size:13px">No se pudo cargar la ficha 360: ' + esc(e.message) + '</p>'; }
+    }
+    async function buscarParecidos(id, por) {
+      var out = $("f360par"); if (!out) return;
+      out.innerHTML = '<p class="muted" style="font-size:13px">Buscando…</p>';
+      try {
+        var r = await api("/admin/socios/" + encodeURIComponent(id) + "/parecidos?por=" + encodeURIComponent(por));
+        ultimoParecido = { por: por, filtros: r.filtros };
+        var etiqueta = { tier: "nivel", paisIso: "país", validoSocio: "validó que es socio", canjes: "usa beneficios", pujas: "puja en subastas", gasto: "pagó algo" };
+        var f = Object.keys(r.filtros).map(function (k) { var v = r.filtros[k]; return esc(etiqueta[k] || k) + (v === true ? "" : v === false ? ": no" : ": " + esc(TIER[v] || v)); }).join(" · ");
+        out.innerHTML = '<div class="parec"><b>' + r.total + (r.tope ? "+" : "") + ' hinchas parecidos</b> <span class="muted">(' + (por === "perfil" ? "por perfil" : "por hábito") + ')</span>' +
+          '<div class="muted" style="margin:4px 0">' + f + '</div>' +
+          (r.muestra || []).map(function (m) { return '<div>• ' + esc(m.nombre || m.email) + ' <span class="muted">' + esc(m.pais_iso || "") + '</span></div>'; }).join("") +
+          (puede("campanas.write") && r.total ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" data-guardarseg="1">Guardar como segmento</button></div>' : "") + '</div>';
+      } catch (e) { out.innerHTML = '<p class="err" style="font-size:13px">' + esc(e.message) + '</p>'; }
     }
     async function guardarFicha(id) {
       var body = { nombre: $("fNombre").value, apellido: $("fApellido").value, email: $("fEmail").value, cedula: $("fCedula").value, ciudad: $("fCiudad").value, pais: $("fPais").value, pais_iso: $("fIso").value };
@@ -1352,6 +1761,74 @@
     $("segBtn").addEventListener("click", cargarSegmento);
     $("segExport").addEventListener("click", exportarSocios);
     $("crudSel").addEventListener("change", cargarCrud);
+    $("ofertasWrap").addEventListener("click", async function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      try {
+        if (b.dataset.ofapr) {
+          if (!(await confirmar("Se publica en la app de los hinchas y el comercio puede validarla en caja. Le avisamos por correo.", { titulo: "Aprobar oferta", ok: "Aprobar y publicar" })).ok) return;
+          await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofapr), { method: "PATCH", body: { estado: "aprobado" } }); toast("Oferta publicada");
+        } else if (b.dataset.ofrec) {
+          var r = await confirmar("El comercio va a ver este motivo en su panel.", { titulo: "Rechazar oferta", ok: "Rechazar", danger: true, input: true, placeholder: "Motivo (ej. el 90% no es sostenible)" });
+          if (!r.ok) return;
+          await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofrec), { method: "PATCH", body: { estado: "rechazado", motivo: r.val } }); toast("Oferta rechazada");
+        } else return;
+        cargarOfertasAdmin();
+      } catch (err) { toast(err.message, "err"); }
+    });
+    $("sponsorsCsv").addEventListener("click", async function () {
+      try {
+        var res = await fetch("/api/admin/comercios/estadisticas.csv", { headers: { "x-admin-token": getToken(), "x-admin-key": getKey() } });
+        if (!res.ok) { var j = await res.json().catch(function () { return {}; }); throw new Error(j.error || "No se pudo descargar el reporte"); }
+        var blob = await res.blob(), a = document.createElement("a");
+        a.href = URL.createObjectURL(blob); a.download = "reporte-sponsors.csv"; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+        toast("Reporte descargado");
+      } catch (err) { toast(err.message, "err"); }
+    });
+    $("puntosWrap").addEventListener("click", async function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      try {
+        if (b.dataset.regla) {
+          var fila = b.parentNode.querySelector("b"), actual = Number(String(fila.textContent).replace(/\./g, "")) || 0;
+          await api("/admin/puntos/reglas", { method: "PUT", body: { clave: b.dataset.regla, puntos: Math.max(0, actual + Number(b.dataset.d)) } });
+        } else if (b.dataset.reglaact) {
+          await api("/admin/puntos/reglas", { method: "PUT", body: { clave: b.dataset.reglaact, activa: b.dataset.a === "1" } });
+        } else if (b.dataset.canje) {
+          var ent = b.dataset.e === "entregado";
+          if (!(await confirmar(ent ? "Se le avisa al hincha por correo que su premio está listo." : "Se cancela el canje y se le devuelven los puntos (y el stock).", { titulo: ent ? "Marcar entregado" : "Cancelar canje", ok: ent ? "Entregado" : "Cancelar canje", danger: !ent })).ok) return;
+          await api("/admin/puntos/canjes/" + encodeURIComponent(b.dataset.canje), { method: "PATCH", body: { estado: b.dataset.e } }); toast(ent ? "Canje entregado" : "Canje cancelado");
+        } else if (b.dataset.premioact) {
+          await api("/admin/puntos/premios/" + encodeURIComponent(b.dataset.premioact), { method: "PATCH", body: { activo: b.dataset.a === "1" } });
+        } else if (b.id === "prCrear") {
+          await api("/admin/puntos/premios", { method: "POST", body: { titulo: $("prTitulo").value, descripcion: $("prDesc").value, escalon: $("prEsc").value, costo: Number($("prCosto").value), stock: $("prStock").value === "" ? null : Number($("prStock").value), nivel_min: $("prNivel").value } });
+          toast("Premio creado");
+        } else if (b.id === "miCrear") {
+          await api("/admin/puntos/misiones", { method: "POST", body: { semana: $("miSemana").value.trim(), pregunta: $("miPreg").value, opciones: $("miOps").value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean), correcta: Number($("miOk").value) - 1 } });
+          toast("Misión creada");
+        } else return;
+        cargarPuntosAdmin();
+      } catch (err) { toast(err.message, "err"); }
+    });
+    $("penasWrap").addEventListener("click", async function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      try {
+        if (b.dataset.penaver) {
+          if (!(await confirmar("Se crea el acceso de la comisión y se le manda por correo un link para elegir su contraseña. Desde ese momento la peña aparece en el ranking y recibe el aporte al fondo.", { titulo: "Verificar peña", ok: "Verificar" })).ok) return;
+          var r = await api("/admin/penas/" + encodeURIComponent(b.dataset.penaver) + "/verificar", { method: "POST" });
+          if (r.correo_enviado) toast("Peña verificada. Le mandamos el acceso por correo.");
+          else infoModal("Peña verificada", '<p class="muted">No se pudo mandar el correo. Pasale este link a la comisión (sirve una vez, vence en 7 días):</p><p style="word-break:break-all"><b>' + esc(r.url_clave || "") + '</b></p>');
+        } else if (b.dataset.penaacc) {
+          var r2 = await api("/admin/penas/" + encodeURIComponent(b.dataset.penaacc) + "/acceso", { method: "POST" });
+          if (r2.correo_enviado) toast("Acceso reenviado por correo."); else infoModal("Nuevo acceso", '<p style="word-break:break-all"><b>' + esc(r2.url_clave || "") + '</b></p>');
+        } else if (b.dataset.penaest) {
+          await api("/admin/penas/" + encodeURIComponent(b.dataset.penaest) + "/estado", { method: "POST", body: { estado: b.dataset.a } }); toast(b.dataset.a === "pausada" ? "Peña en pausa" : "Peña reactivada");
+        } else if (b.dataset.penacj || b.dataset.penacjno) {
+          var rech = !!b.dataset.penacjno, id = b.dataset.penacj || b.dataset.penacjno;
+          if (!(await confirmar(rech ? "Se rechaza el pedido y el fondo queda como estaba." : "Se aprueba el canje y se resta del saldo del fondo de la peña.", { titulo: rech ? "Rechazar canje" : "Aprobar canje", ok: rech ? "Rechazar" : "Aprobar", danger: rech })).ok) return;
+          await api("/admin/penas/canje/" + encodeURIComponent(id), { method: "POST", body: { rechazar: rech } }); toast(rech ? "Canje rechazado" : "Canje aprobado");
+        } else return;
+        cargarPenasAdmin();
+      } catch (err) { toast(err.message, "err"); }
+    });
     $("crudNuevo").addEventListener("click", function () { formCrud(null); });
     $("crudList").addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;
@@ -1365,6 +1842,8 @@
       else if (b.dataset.pausar) pausarSubasta(b.dataset.pausar);
       else if (b.dataset.reanudar) reanudarSubasta(b.dataset.reanudar);
       else if (b.dataset.cerrar) cerrarSubasta(b.dataset.cerrar);
+      else if (b.dataset.extender) extenderPlazoSubasta(b.dataset.extender);
+      else if (b.dataset.segundo) pasarAlSegundo(b.dataset.segundo);
       else if (b.dataset.pujas) verPujasSubasta(b.dataset.pujas);
       else if (b.dataset.link) verLinkSubasta(b.dataset.link);
       else if (b.dataset.encact) cambiarEstadoEncuesta(b.dataset.encact, "activa");
@@ -1419,6 +1898,14 @@
         var r = await confirmar("Vuelve a Olimpista gratis. El reembolso real se hace en Metrepay.", { titulo: "Dar de baja", ok: "Dar de baja", danger: true, input: true, placeholder: "Motivo (opcional)" });
         if (!r.ok) return;
         try { await api("/admin/socios/" + encodeURIComponent(bj.dataset.baja) + "/baja", { method: "POST", body: { motivo: r.val } }); abrirFicha(bj.dataset.baja); cargarReportes(); cargarCuadre(); cargarAcciones(); toast("Socio dado de baja"); }
+        catch (err) { toast(err.message, "err"); }
+        return;
+      }
+      var pr = e.target.closest("button[data-parec]"); if (pr) { buscarParecidos(pr.dataset.sid, pr.dataset.parec); return; }
+      var gs2 = e.target.closest("button[data-guardarseg]"); if (gs2 && ultimoParecido) {
+        var rs = await confirmar("Se guarda el grupo con estos filtros para usarlo en campañas.", { titulo: "Guardar segmento", ok: "Guardar", input: true, placeholder: "Nombre del segmento" });
+        if (!rs.ok) return;
+        try { var sg = await api("/admin/segmentos", { method: "POST", body: { nombre: rs.val, filtros: ultimoParecido.filtros } }); toast("Segmento guardado (" + sg.total + " hinchas)"); }
         catch (err) { toast(err.message, "err"); }
         return;
       }

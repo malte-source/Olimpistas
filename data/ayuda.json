@@ -1,0 +1,1226 @@
+{
+ "aud": [
+  {
+   "id": "olimpista",
+   "label": "Olimpista gratis",
+   "grupo": "Hinchas",
+   "desc": "Cuenta gratis: carnet, beneficios para todos, puntos, peñas y sorteos.",
+   "club": false,
+   "tile": "#48484A"
+  },
+  {
+   "id": "junior",
+   "label": "Olimpista Junior",
+   "grupo": "Hinchas",
+   "desc": "Para los más chicos: pack de bienvenida, carnet Junior, sorteos para chicos y regalo de cumpleaños.",
+   "club": false,
+   "tile": "#D0612F"
+  },
+  {
+   "id": "plus",
+   "label": "Olimpista Plus",
+   "grupo": "Hinchas",
+   "desc": "Todo lo gratis, más subastas, sorteos VIP y beneficios Plus.",
+   "club": false,
+   "tile": "#B08D2E"
+  },
+  {
+   "id": "socio",
+   "label": "Olimpista Socio",
+   "grupo": "Hinchas",
+   "desc": "Socio del club validado por el Portal de Socios: todo lo de Plus, abono y beneficios exclusivos.",
+   "club": false,
+   "tile": "#0A0A0A"
+  },
+  {
+   "id": "comercio",
+   "label": "Comercio adherido",
+   "grupo": "Red de Beneficios",
+   "desc": "Validás canjes en caja, cargás ofertas y ves cuánto vendés con Olimpistas.",
+   "club": false,
+   "tile": "#1F8A4C"
+  },
+  {
+   "id": "pena",
+   "label": "Comisión de peña",
+   "grupo": "Peñas",
+   "desc": "Captás hinchas con tu link, seguís tu panel y pedís canjes del fondo.",
+   "club": false,
+   "tile": "#C2410C"
+  },
+  {
+   "id": "cd",
+   "label": "Comisión Directiva",
+   "grupo": "Club",
+   "desc": "Tablero ejecutivo y decisiones. Lo operativo lo ves en solo lectura.",
+   "club": true,
+   "tile": "#3A3A3C"
+  },
+  {
+   "id": "marketing",
+   "label": "Marketing y CRM",
+   "grupo": "Club",
+   "desc": "Hinchas, segmentos, campañas, puntos y atención.",
+   "club": true,
+   "tile": "#D0612F"
+  },
+  {
+   "id": "comercial",
+   "label": "Comercial y sponsors",
+   "grupo": "Club",
+   "desc": "Comercios, ofertas y reportes para sponsors.",
+   "club": true,
+   "tile": "#1F8A4C"
+  },
+  {
+   "id": "operaciones",
+   "label": "Operaciones y estadio",
+   "grupo": "Club",
+   "desc": "Partidos, abonos, subastas e integraciones.",
+   "club": true,
+   "tile": "#1F4A7A"
+  },
+  {
+   "id": "atencion",
+   "label": "Atención al hincha",
+   "grupo": "Club",
+   "desc": "Bandeja de conversaciones derivadas por el asistente.",
+   "club": true,
+   "tile": "#0E7C86"
+  },
+  {
+   "id": "admin",
+   "label": "Administrador",
+   "grupo": "Club",
+   "desc": "Usuarios, permisos, auditoría y todo lo demás.",
+   "club": true,
+   "tile": "#5E5E66"
+  }
+ ],
+ "cats": {
+  "cuenta": "Cuenta",
+  "carnet": "Carnet",
+  "beneficios": "Beneficios",
+  "puntos": "Puntos",
+  "estadio": "Estadio",
+  "subastas": "Subastas",
+  "penas": "Peñas",
+  "pagos": "Pagos",
+  "atencion": "Atención",
+  "panel": "Panel",
+  "datos": "Datos y accesos"
+ },
+ "tuts": [
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "cuenta",
+   "titulo": "Crear tu cuenta gratis",
+   "bajada": "En 30 segundos y sin tarjeta.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Entrá y tocá Unite gratis",
+     "texto": "En olimpistas.com, desde el celular o la computadora.",
+     "donde": "olimpistas.com"
+    },
+    {
+     "titulo": "Nombre, correo y contraseña",
+     "texto": "Es lo único que pedimos para empezar.",
+     "donde": ""
+    },
+    {
+     "titulo": "Confirmá tu correo",
+     "texto": "Te llega un correo con un botón. Si no lo ves, revisá spam o pedí que te lo reenviemos.",
+     "donde": ""
+    },
+    {
+     "titulo": "Completá tu perfil",
+     "texto": "WhatsApp, foto, país y ciudad. Cada dato suma a tu barra de perfil y a tus puntos.",
+     "donde": "Perfil"
+    }
+   ]
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "cuenta",
+   "titulo": "Validar que sos socio del club",
+   "bajada": "Con tu cédula pasás a Olimpista Socio.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí tu perfil",
+     "texto": "Tocá tu avatar arriba a la derecha.",
+     "donde": "Perfil"
+    },
+    {
+     "titulo": "Elegí Soy socio del club",
+     "texto": "Ingresá tu número de cédula.",
+     "donde": "Perfil · Soy socio"
+    },
+    {
+     "titulo": "Lo consultamos al Portal de Socios",
+     "texto": "El estado lo confirma en vivo el Portal de Socios de ITTI. Olimpistas no lo edita.",
+     "donde": ""
+    },
+    {
+     "titulo": "Si sos adherente",
+     "texto": "La consulta en vivo solo devuelve titulares: te validamos por el padrón. Si algo no coincide, el asistente te pasa con una persona.",
+     "donde": "Chat de atención"
+    }
+   ]
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "beneficios",
+   "titulo": "Usar un beneficio en caja",
+   "bajada": "Mostrás el carnet y el ahorro queda en tu billetera.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Elegí el beneficio",
+     "texto": "En Beneficios ves los que podés usar con tu nivel y los que se desbloquean subiendo.",
+     "donde": "Beneficios"
+    },
+    {
+     "titulo": "Abrí tu carnet",
+     "texto": "El QR cambia cada minuto: una captura deja de servir.",
+     "donde": "Carnet"
+    },
+    {
+     "titulo": "Mostralo en caja",
+     "texto": "El comercio lo escanea y ve tu foto para confirmar que sos vos.",
+     "donde": ""
+    },
+    {
+     "titulo": "Mirá cuánto ahorraste",
+     "texto": "El ahorro aparece al instante en tu Billetera de Ahorro.",
+     "donde": "Inicio · Billetera"
+    }
+   ]
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "puntos",
+   "titulo": "Sumar y canjear puntos",
+   "bajada": "Referidos, misiones, estadio y más.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Mirá cómo se ganan",
+     "texto": "Referidos, misión semanal, ir al estadio y liberar tu lugar. Los socios suman además por cuota al día y débito automático.",
+     "donde": "Puntos · Cómo se ganan"
+    },
+    {
+     "titulo": "Hacé la misión de la semana",
+     "texto": "Una pregunta o reto corto. Se suma una sola vez por semana.",
+     "donde": "Puntos"
+    },
+    {
+     "titulo": "Elegí un premio",
+     "texto": "Bronce, Plata u Oro. Si te alcanzan los puntos, tocá Canjear.",
+     "donde": "Puntos · Canjear"
+    },
+    {
+     "titulo": "Esperá el aviso",
+     "texto": "El club confirma la entrega y te avisa por correo.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "socio"
+   ],
+   "cat": "estadio",
+   "titulo": "Liberar tu lugar si no vas",
+   "bajada": "Sumás puntos y otro hincha aprovecha tu asiento.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Entrá a Partidos",
+     "texto": "Ves tu abono del próximo partido, según Tuti.",
+     "donde": "Partidos"
+    },
+    {
+     "titulo": "Tocá No voy · liberar mi lugar",
+     "texto": "Hasta 24 h antes del partido.",
+     "donde": "Partidos · Tu abono"
+    },
+    {
+     "titulo": "Confirmá",
+     "texto": "Tuti pone el asiento a la venta y vos sumás los puntos al instante.",
+     "donde": ""
+    },
+    {
+     "titulo": "Si se revende",
+     "texto": "El Portal de Socios te descuenta el 20% de la entrada en tu próxima cuota.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "plus",
+    "socio"
+   ],
+   "cat": "subastas",
+   "titulo": "Pujar y pagar una subasta",
+   "bajada": "Piezas únicas del Decano, con certificado.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Elegí el lote",
+     "texto": "En Subastas ves la puja actual y cuánto falta.",
+     "donde": "Subastas"
+    },
+    {
+     "titulo": "Pujá",
+     "texto": "La puja mínima sube de a ₲ 50.000. Una puja en los últimos 3 minutos extiende el reloj.",
+     "donde": ""
+    },
+    {
+     "titulo": "Si ganás, pagá a tiempo",
+     "texto": "Tenés un plazo para pagar con Pagopar. Si vence, el lote pasa al segundo postor y tu cuenta queda 90 días sin pujar.",
+     "donde": "Inicio · aviso de subasta"
+    },
+    {
+     "titulo": "Coordiná la entrega",
+     "texto": "Apenas se acredita el pago te escribimos por WhatsApp. La pieza va con su Certificado de Autenticidad.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "penas",
+   "titulo": "Sumarte a una peña",
+   "bajada": "Gratis, seas socio o no.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Entrá a Mi peña",
+     "texto": "Ves las peñas oficiales cerca tuyo y en el mundo.",
+     "donde": "Mi peña"
+    },
+    {
+     "titulo": "Tocá Sumarme",
+     "texto": "Podés cambiar de peña cuando quieras.",
+     "donde": ""
+    },
+    {
+     "titulo": "Compartí el link",
+     "texto": "Cada hincha que suma tu peña la hace subir en el ranking.",
+     "donde": "Mi peña · compartir"
+    }
+   ]
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior"
+   ],
+   "cat": "pagos",
+   "titulo": "Pasar a Olimpista Plus",
+   "bajada": "₲ 180.000 o US$ 28,90 al año.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Niveles",
+     "texto": "Comparás qué incluye cada nivel.",
+     "donde": "Inicio · Niveles"
+    },
+    {
+     "titulo": "Elegí Plus",
+     "texto": "Pagás con Pagopar en guaraníes o dólares.",
+     "donde": ""
+    },
+    {
+     "titulo": "Listo",
+     "texto": "Se activa cuando se acredita el pago y te llega un correo de bienvenida.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "atencion",
+   "titulo": "Hablar con atención",
+   "bajada": "Un asistente que ve tu cuenta, y una persona si la necesitás.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Tocá el botón de chat",
+     "texto": "Está abajo a la derecha en todas las pantallas.",
+     "donde": "Botón de chat"
+    },
+    {
+     "titulo": "Preguntá lo que necesites",
+     "texto": "Puntos, beneficios, subastas, tu lugar. Responde con tus datos reales.",
+     "donde": ""
+    },
+    {
+     "titulo": "Pedí una persona",
+     "texto": "Escribí \"hablar con una persona\" y te pasa con el club con un resumen de tu consulta.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "comercio"
+   ],
+   "cat": "panel",
+   "titulo": "Entrar al panel del comercio",
+   "bajada": "Con el usuario que te da el club.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí olimpistas.com/comercio",
+     "texto": "Desde el celular de caja o una computadora.",
+     "donde": "olimpistas.com/comercio"
+    },
+    {
+     "titulo": "Ingresá usuario y contraseña",
+     "texto": "Los genera el área Comercial del club.",
+     "donde": ""
+    },
+    {
+     "titulo": "Quedás adentro",
+     "texto": "La sesión queda abierta en ese equipo hasta que toques Salir.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "comercio"
+   ],
+   "cat": "beneficios",
+   "titulo": "Validar un canje",
+   "bajada": "En segundos, sin integrar tu sistema de caja.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Elegí el beneficio",
+     "texto": "Si tenés más de uno, marcá el que corresponde.",
+     "donde": "Validar"
+    },
+    {
+     "titulo": "Cargá el monto",
+     "texto": "Con el monto calculamos el ahorro del hincha y tus ventas con Olimpistas.",
+     "donde": ""
+    },
+    {
+     "titulo": "Escaneá el carnet",
+     "texto": "El QR se verifica por firma. Compará la foto con quien tenés enfrente.",
+     "donde": ""
+    },
+    {
+     "titulo": "Mirá el resultado",
+     "texto": "Aprobado o no aplica, con el motivo. Si su nivel no alcanza, invitalo a subir.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "comercio"
+   ],
+   "cat": "beneficios",
+   "titulo": "Cargar una oferta nueva",
+   "bajada": "La aprueba el club y aparece en la app.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Entrá a Mi comercio",
+     "texto": "Al lado de Validar.",
+     "donde": "Mi comercio"
+    },
+    {
+     "titulo": "Título, valor y para quién",
+     "texto": "Todos, Plus y Socio, o solo socios.",
+     "donde": ""
+    },
+    {
+     "titulo": "Enviá al club",
+     "texto": "El área Comercial la revisa.",
+     "donde": ""
+    },
+    {
+     "titulo": "Publicada",
+     "texto": "Cuando se aprueba la ves como Publicada y los hinchas ya la tienen.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "pena"
+   ],
+   "cat": "penas",
+   "titulo": "Hacer oficial tu peña",
+   "bajada": "Verificación del club y acceso al panel.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Pedí la verificación",
+     "texto": "Desde Mi peña, con nombre, ciudad y presidente.",
+     "donde": ""
+    },
+    {
+     "titulo": "El club la revisa",
+     "texto": "Se aprueba desde Admin · Peñas.",
+     "donde": ""
+    },
+    {
+     "titulo": "Recibís link, QR y panel",
+     "texto": "La comisión entra con su propio usuario.",
+     "donde": "olimpistas.com/pena"
+    }
+   ]
+  },
+  {
+   "aud": [
+    "pena"
+   ],
+   "cat": "penas",
+   "titulo": "Captar hinchas con tu link",
+   "bajada": "Cada alta queda en tu peña.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Copiá tu link o QR",
+     "texto": "olimpistas.com/asociate?pena=tu-peña",
+     "donde": "Panel · Link de captación"
+    },
+    {
+     "titulo": "Compartilo",
+     "texto": "Grupos de WhatsApp, redes, eventos de la peña.",
+     "donde": ""
+    },
+    {
+     "titulo": "Seguilo en el panel",
+     "texto": "Altas, socios validados, Plus y ranking, en vivo.",
+     "donde": "Panel"
+    }
+   ]
+  },
+  {
+   "aud": [
+    "pena"
+   ],
+   "cat": "pagos",
+   "titulo": "Usar el fondo de la peña",
+   "bajada": "Entradas, ropa oficial o buses.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Mirá el saldo",
+     "texto": "Suma un porcentaje de lo que pagan por Pagopar los hinchas de tu peña.",
+     "donde": "Panel · Fondo"
+    },
+    {
+     "titulo": "Pedí un canje",
+     "texto": "Elegí qué querés y por cuánto.",
+     "donde": ""
+    },
+    {
+     "titulo": "El club lo aprueba",
+     "texto": "Se descuenta del fondo y lo ves en movimientos.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "cd",
+    "admin"
+   ],
+   "cat": "panel",
+   "titulo": "Leer el tablero",
+   "bajada": "Toda la plataforma en una pantalla.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Arriba, los números grandes",
+     "texto": "Olimpistas, socios validados, conversión, ingresos, ahorro entregado e impagos recuperados.",
+     "donde": "Admin · Tablero"
+    },
+    {
+     "titulo": "Ingresos por línea y mundo",
+     "texto": "Qué línea crece y en qué países están los hinchas.",
+     "donde": ""
+    },
+    {
+     "titulo": "Para mirar hoy",
+     "texto": "Alertas que llevan directo a la sección: plazos de subasta, integraciones caídas, decisiones pendientes.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "cd",
+    "admin"
+   ],
+   "cat": "panel",
+   "titulo": "Tomar una decisión",
+   "bajada": "La plataforma aplica la regla al instante.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Decisiones",
+     "texto": "Ves las pendientes con su contexto.",
+     "donde": "Admin · Decisiones"
+    },
+    {
+     "titulo": "Elegí una opción",
+     "texto": "Por ejemplo, el plazo de pago de subastas.",
+     "donde": ""
+    },
+    {
+     "titulo": "Queda registrada",
+     "texto": "Con fecha y responsable en el registro de acciones.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "marketing",
+    "admin"
+   ],
+   "cat": "datos",
+   "titulo": "Ficha 360 y hinchas parecidos",
+   "bajada": "De un hincha a un segmento.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Buscá al hincha",
+     "texto": "Filtrá por nivel y país.",
+     "donde": "Admin · Hinchas"
+    },
+    {
+     "titulo": "Leé su ficha",
+     "texto": "Gasto, ahorro, puntos, canjes, pujas, peña y línea de tiempo. Estado de socio del Portal de Socios; abono de Tuti.",
+     "donde": ""
+    },
+    {
+     "titulo": "Buscá parecidos",
+     "texto": "Por perfil o por hábito.",
+     "donde": ""
+    },
+    {
+     "titulo": "Guardá el segmento",
+     "texto": "Queda disponible en Campañas o lo mandás a GoHighLevel.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "marketing",
+    "admin"
+   ],
+   "cat": "atencion",
+   "titulo": "Mandar una campaña",
+   "bajada": "Correo o WhatsApp, a un segmento.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Elegí a quién",
+     "texto": "Un segmento guardado o uno armado.",
+     "donde": "Admin · Campañas"
+    },
+    {
+     "titulo": "Elegí el canal",
+     "texto": "Correo con Resend o WhatsApp con GoHighLevel.",
+     "donde": ""
+    },
+    {
+     "titulo": "Elegí el mensaje",
+     "texto": "Mirá la vista previa antes de mandar.",
+     "donde": ""
+    },
+    {
+     "titulo": "Enviá y medí",
+     "texto": "Respeta bajas y avisos de cada hincha. Ves aperturas y conversión.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "marketing",
+    "admin"
+   ],
+   "cat": "puntos",
+   "titulo": "Ajustar las reglas de puntos",
+   "bajada": "Cuánto vale cada acción.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Puntos",
+     "texto": "Ves cada regla y de qué sistema viene.",
+     "donde": "Admin · Puntos"
+    },
+    {
+     "titulo": "Subí o bajá el valor",
+     "texto": "La app lo usa desde el próximo movimiento.",
+     "donde": ""
+    },
+    {
+     "titulo": "Mirá el pasivo",
+     "texto": "Cuántos puntos hay en circulación y cuánto representan.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "comercial",
+    "admin"
+   ],
+   "cat": "beneficios",
+   "titulo": "Aprobar ofertas de comercios",
+   "bajada": "Lo que cargan los comercios y las peñas.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Beneficios",
+     "texto": "Arriba, las ofertas por aprobar.",
+     "donde": "Admin · Beneficios"
+    },
+    {
+     "titulo": "Revisá nivel y condiciones",
+     "texto": "Quién la cargó y para quién es.",
+     "donde": ""
+    },
+    {
+     "titulo": "Aprobá o rechazá",
+     "texto": "Si se aprueba, aparece en la app y en el panel del comercio.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "comercial",
+    "admin"
+   ],
+   "cat": "datos",
+   "titulo": "Reporte para sponsors",
+   "bajada": "Canjes, ahorro y ventas por comercio.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Beneficios",
+     "texto": "Bajá hasta Comercios.",
+     "donde": "Admin · Beneficios"
+    },
+    {
+     "titulo": "Descargá el reporte",
+     "texto": "Por comercio, nivel y ciudad.",
+     "donde": ""
+    },
+    {
+     "titulo": "Usalo en la negociación",
+     "texto": "Datos de conversión reales para camiseta, estática o activaciones.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "operaciones",
+    "admin"
+   ],
+   "cat": "estadio",
+   "titulo": "Preparar un partido",
+   "bajada": "Abonos, liberados y no-show.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Abrí Estadio",
+     "texto": "Abonos, liberados, revendidos y crédito, con datos de Tuti.",
+     "donde": "Admin · Estadio"
+    },
+    {
+     "titulo": "Mirá el no-show",
+     "texto": "Por partido y contra la meta.",
+     "donde": ""
+    },
+    {
+     "titulo": "Avisá a los abonados",
+     "texto": "Recordatorio a todos o aviso a quienes faltaron 3 veces seguidas.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "operaciones",
+    "admin"
+   ],
+   "cat": "subastas",
+   "titulo": "Gestionar plazos de subasta",
+   "bajada": "Extender, pasar al segundo o republicar.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Subastas",
+     "texto": "Cada lote con estado, monto y plazo.",
+     "donde": "Admin · Subastas"
+    },
+    {
+     "titulo": "Extendé si hace falta",
+     "texto": "Queda auditado y el hincha ve el reloj nuevo.",
+     "donde": ""
+    },
+    {
+     "titulo": "Pasá al segundo postor",
+     "texto": "Si el ganador avisa que no paga.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "operaciones",
+    "admin"
+   ],
+   "cat": "datos",
+   "titulo": "Revisar las integraciones",
+   "bajada": "Portal de Socios, Tuti, Pagopar, correo y CRM.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Integraciones",
+     "texto": "Estado y qué datos fluyen por cada una.",
+     "donde": "Admin · Integraciones"
+    },
+    {
+     "titulo": "Si cae el Portal de Socios",
+     "texto": "Se usa el padrón y los socios figuran sin confirmar hasta que vuelva.",
+     "donde": ""
+    },
+    {
+     "titulo": "Avisá a sistemas",
+     "texto": "Con la hora y el error del registro de conexiones.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "atencion",
+    "marketing",
+    "admin"
+   ],
+   "cat": "atencion",
+   "titulo": "Atender una conversación",
+   "bajada": "Lo que el asistente no resolvió.",
+   "min": 2,
+   "pasos": [
+    {
+     "titulo": "Abrí Atención",
+     "texto": "La bandeja trae chat de la app y WhatsApp.",
+     "donde": "Admin · Atención"
+    },
+    {
+     "titulo": "Leé el resumen de la IA",
+     "texto": "Qué pasó y qué pidió el hincha.",
+     "donde": ""
+    },
+    {
+     "titulo": "Respondé",
+     "texto": "Le llega por el mismo canal.",
+     "donde": ""
+    },
+    {
+     "titulo": "Resolvé",
+     "texto": "El asistente vuelve a atenderlo y queda en su ficha 360.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "atencion",
+    "admin"
+   ],
+   "cat": "atencion",
+   "titulo": "Configurar el asistente",
+   "bajada": "Qué puede hacer solo y qué no.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Atención",
+     "texto": "Abajo, Qué puede hacer el asistente.",
+     "donde": "Admin · Atención"
+    },
+    {
+     "titulo": "Prendé o apagá acciones",
+     "texto": "Consultar la cuenta, beneficios, liberar lugar, pagos, derivar.",
+     "donde": ""
+    },
+    {
+     "titulo": "Reglas fijas",
+     "texto": "Cuotas al Portal de Socios, lugares a Tuti, confirma antes de actuar.",
+     "donde": ""
+    }
+   ]
+  },
+  {
+   "aud": [
+    "admin"
+   ],
+   "cat": "datos",
+   "titulo": "Dar acceso a un profesional",
+   "bajada": "Usuarios y permisos del panel.",
+   "min": 1,
+   "pasos": [
+    {
+     "titulo": "Abrí Roles y accesos",
+     "texto": "Ves qué ve cada rol.",
+     "donde": "Admin · Roles"
+    },
+    {
+     "titulo": "Creá el usuario",
+     "texto": "Con su rol: CD, Marketing, Comercial, Operaciones o Atención.",
+     "donde": ""
+    },
+    {
+     "titulo": "Todo queda auditado",
+     "texto": "Cada acción en el registro del admin.",
+     "donde": ""
+    }
+   ]
+  }
+ ],
+ "faqs": [
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "cuenta",
+   "q": "¿Olimpistas es la app de los socios?",
+   "a": "No. Olimpistas es para todos los hinchas, en cualquier país. Las cuotas y los planes de socio se gestionan en el Portal de Socios de ITTI, y las entradas en Tuti. Si sos socio, entrás con la misma cuenta y tu nivel sube a Socio.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "pagos",
+   "q": "¿Cuánto cuesta?",
+   "a": "Olimpista es gratis para siempre. Junior cuesta ₲ 80.000 al año y Plus ₲ 180.000 (o US$ 13,90 y US$ 28,90). Socio no se compra: se otorga al validar tu cédula.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "socio"
+   ],
+   "cat": "pagos",
+   "q": "¿Dónde pago mi cuota de socio?",
+   "a": "En el Portal de Socios de ITTI. Olimpistas no cobra ni modifica cuotas: solo consulta tu estado para darte el nivel Socio.",
+   "d": "Portal de Socios · ITTI"
+  },
+  {
+   "aud": [
+    "socio"
+   ],
+   "cat": "cuenta",
+   "q": "Soy socio y la app me muestra otro nivel o plan",
+   "a": "Lo consultamos al Portal de Socios. Si sos adherente de un plan familiar, la consulta en vivo no te encuentra y te validamos por el padrón. Escribile al asistente y pedí una persona: lo revisa el club.",
+   "d": "Portal de Socios · ITTI"
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "carnet",
+   "q": "¿Por qué el QR del carnet cambia?",
+   "a": "Cambia cada minuto y va firmado. Así nadie puede usar una captura de tu carnet. Si no tenés señal, el comercio también puede validarte con tu código.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "puntos",
+   "q": "¿Los puntos vencen?",
+   "a": "La propuesta es que venzan a los 12 meses sin actividad, con un aviso por correo 30 días antes. La regla final la define la Comisión Directiva.",
+   "d": "Olimpistas · a confirmar"
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior"
+   ],
+   "cat": "subastas",
+   "q": "¿Puedo pujar con la cuenta gratis?",
+   "a": "No. Pujan Olimpista Plus y Socio. Podés seguir las subastas y pasarte a Plus cuando quieras.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "plus",
+    "socio"
+   ],
+   "cat": "subastas",
+   "q": "¿Qué pasa si gano y no pago?",
+   "a": "Tenés un plazo para pagar con Pagopar (la propuesta es 72 horas). Si vence, se cancela, tu cuenta queda 90 días sin pujar y el lote pasa al segundo postor.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "socio"
+   ],
+   "cat": "estadio",
+   "q": "¿Hasta cuándo puedo liberar mi lugar?",
+   "a": "Hasta 24 horas antes del partido. El lugar lo gestiona Tuti; Olimpistas le avisa y te suma los puntos.",
+   "d": "Tuti"
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "estadio",
+   "q": "¿Dónde compro entradas?",
+   "a": "En Tuti, la ticketera del club. Desde Partidos te llevamos directo con tu cuenta.",
+   "d": "Tuti"
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "cuenta",
+   "q": "Vivo fuera de Paraguay, ¿me sirve?",
+   "a": "Sí. Ves precios en dólares, hay peñas en el mundo, entrás a sorteos y subastas, y la entrega de piezas se coordina por WhatsApp.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "junior"
+   ],
+   "cat": "cuenta",
+   "q": "¿Qué incluye Junior?",
+   "a": "Todo lo del Olimpista gratis, más pack de bienvenida, carnet Junior, sorteos para chicos y un regalo sorpresa en el cumpleaños.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "atencion",
+   "q": "¿Cómo dejo de recibir correos?",
+   "a": "Desde tu perfil, en Avisos por correo, elegís qué querés recibir: subastas, sorteos o contenido. También podés darte de baja desde cualquier correo.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "olimpista",
+    "junior",
+    "plus",
+    "socio"
+   ],
+   "cat": "atencion",
+   "q": "¿El asistente es una persona?",
+   "a": "Es un asistente con IA que lee tu cuenta en vivo. Si pedís una persona o tu consulta es un reclamo, te pasa con el equipo del club con un resumen.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "comercio"
+   ],
+   "cat": "beneficios",
+   "q": "El QR no escanea, ¿qué hago?",
+   "a": "Pedile al hincha el código que aparece debajo del QR y cargalo a mano. Si aun así no pasa, el resultado te dice el motivo.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "comercio"
+   ],
+   "cat": "beneficios",
+   "q": "¿Puedo limitar cuántas veces se usa un beneficio?",
+   "a": "Sí. Cada beneficio puede tener un límite de un canje cada cierta cantidad de días por hincha.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "comercio"
+   ],
+   "cat": "datos",
+   "q": "¿Qué datos del hincha veo?",
+   "a": "Nombre, foto y nivel, solo para validar el canje. No ves su correo, teléfono ni cédula.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "comercio"
+   ],
+   "cat": "pagos",
+   "q": "¿Cuánto me cuesta estar en la red?",
+   "a": "Las condiciones las acuerda el área Comercial del club con cada comercio.",
+   "d": "Club · Comercial"
+  },
+  {
+   "aud": [
+    "pena"
+   ],
+   "cat": "pagos",
+   "q": "¿Cuánto suma el fondo de la peña?",
+   "a": "Un porcentaje de lo que pagan por Pagopar los hinchas que llegaron por tu peña (la propuesta es 10%). Sobre las cuotas de socio, cuando el Portal de Socios mande el reporte de cobros.",
+   "d": "Olimpistas · a confirmar"
+  },
+  {
+   "aud": [
+    "pena"
+   ],
+   "cat": "panel",
+   "q": "¿Quién de la comisión puede entrar al panel?",
+   "a": "Cada integrante tiene su propio usuario. El club los da de alta al verificar la peña.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "pena"
+   ],
+   "cat": "beneficios",
+   "q": "¿Podemos sumar comercios de nuestra ciudad?",
+   "a": "Sí. Los invitás y el área Comercial los aprueba. Quedan marcados como sumados por tu peña.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "cd",
+    "marketing",
+    "comercial",
+    "operaciones",
+    "atencion",
+    "admin"
+   ],
+   "cat": "datos",
+   "q": "¿Puedo cambiar el estado de un socio desde el panel?",
+   "a": "No. El estado, el plan y la deuda son del Portal de Socios de ITTI. El panel los muestra; los cambios se hacen allá.",
+   "d": "Portal de Socios · ITTI"
+  },
+  {
+   "aud": [
+    "cd",
+    "operaciones",
+    "admin"
+   ],
+   "cat": "datos",
+   "q": "¿Qué pasa si se cae el Portal de Socios?",
+   "a": "Olimpistas usa el padrón como respaldo y marca a los socios como sin confirmar hasta que la conexión vuelve. No inventa estados.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "cd",
+    "admin"
+   ],
+   "cat": "panel",
+   "q": "¿De dónde salen los números del tablero?",
+   "a": "De la base de Olimpistas (registros, pagos por Pagopar, canjes, puntos, subastas) más lo que se lee del Portal de Socios y de Tuti. No incluye cuotas sociales.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "cd",
+    "marketing",
+    "comercial",
+    "operaciones",
+    "atencion",
+    "admin"
+   ],
+   "cat": "datos",
+   "q": "¿Queda registro de lo que hago?",
+   "a": "Sí. Cada acción del panel queda con quién, qué y cuándo en el registro de acciones del admin.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "marketing",
+    "admin"
+   ],
+   "cat": "atencion",
+   "q": "¿Las campañas respetan a quien no quiere correos?",
+   "a": "Sí. Se excluye a quien se dio de baja de marketing y a quien apagó ese tipo de aviso en su perfil.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "atencion",
+    "admin"
+   ],
+   "cat": "atencion",
+   "q": "¿Qué no puede hacer el asistente?",
+   "a": "No cambia cuotas ni planes, no vende entradas y no libera un lugar sin confirmación del hincha. Lo que no resuelve, lo deriva con resumen.",
+   "d": "Olimpistas"
+  },
+  {
+   "aud": [
+    "cd"
+   ],
+   "cat": "panel",
+   "q": "¿Por qué la CD ve todo en solo lectura?",
+   "a": "Para separar decisión de operación: la CD decide las reglas y cada área las ejecuta. Lo que hace cada área queda registrado.",
+   "d": "Olimpistas"
+  }
+ ]
+}

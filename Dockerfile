@@ -13,7 +13,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Debian slim: binarios precompilados de bcrypt sin necesidad de toolchain.
-FROM node:20-slim
+FROM node:22-slim
 
 WORKDIR /app
 

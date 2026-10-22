@@ -76,7 +76,7 @@ window.OLI_ONB = (function () {
     if (!document.getElementById("obConsent").checked) { err.textContent = T("consent_err"); return; }
     const btn = document.getElementById("obCrear"); btn.disabled = true;
     try {
-      await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, ref: window.OLI.ref() } });
+      await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena() } });
       window.OLI.track("Registro", "CompleteRegistration");
       irPaso(2);
     } catch (e) { err.textContent = e.message; btn.disabled = false; }

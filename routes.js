@@ -24,6 +24,17 @@ const { alertar } = require("./lib/alert");
 const bcrypt = require("bcrypt");
 const geo = require("./lib/geo");
 const tutiApi = require("./lib/tuti");
+const { baseUrl } = require("./lib/url");
+const { urlImagen } = require("./lib/imagen-subasta");
+const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib/puntos");
+const carnetLib = require("./lib/carnet");
+const atencionLib = require("./lib/atencion");
+const { periodo } = require("./lib/periodo");
+// Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
+const igualesSeguro = (a, b) => {
+  const h = (x) => require("crypto").createHash("sha256").update(String(x == null ? "" : x)).digest();
+  return require("crypto").timingSafeEqual(h(a), h(b));
+};
 const { listaPaises, paisNombre, paisCentroide, PAISES } = require("./data/paises");
 const { BRAND, TIERS, PERFIL_CAMPOS, tierBySlug } = require("./config");
 const { edadDesde } = require("./lib/edad");
@@ -333,11 +344,24 @@ function buildRouter() {
       try {
         const vtoken = crypto.randomBytes(24).toString("base64url");
         await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false });
-        const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
-        const link = `${proto}://${req.headers.host}/api/auth/verificar?token=${vtoken}`;
+        const link = `${baseUrl()}/api/auth/verificar?token=${vtoken}`;
         mailer.enviarVerificacion(socio, link).catch(() => {});
       } catch (e) { log.error({ err: e.message }, "verificación de email no disponible"); }
     }
+    // Peña: ?pena=slug (igual que ?ref=). Solo cuenta una peña VERIFICADA; un slug inválido nunca rompe el alta.
+    const penaSlug = String((req.body || {}).pena || "").trim().toLowerCase().slice(0, 60);
+    if (penaSlug && store.getPenaPorSlug) {
+      try {
+        const pe = await store.getPenaPorSlug(penaSlug);
+        if (pe && pe.estado === "verificada") {
+          await store.updateSocio(socio.id, { pena_id: pe.id });
+          socio.pena_id = pe.id; _penasPub = null;
+          avisarPenaSumo(pe, { nombre, apellido }).catch(() => {});
+        }
+      } catch (e) { log.warn({ err: e.message }, "registro: no se pudo asignar la peña"); }
+    }
+    // Puntos al que invitó: una vez por referido (ref = el id del invitado).
+    if (socio.referido_por) darPuntos(socio.referido_por, "referido", socio.id, "Referido: " + (nombre || "un hincha")).catch(() => {});
     // Notificar a quien lo invitó (best-effort, no bloquea el alta).
     if (socio.referido_por && store.getSocioById) {
       store.getSocioById(socio.referido_por).then(async (ref) => {
@@ -372,8 +396,7 @@ function buildRouter() {
   r.post("/auth/recuperar", wrap(async (req, res) => {
     const r0 = await auth.solicitarReset({ email: (req.body || {}).email });
     if (r0.token && mailer.enviarReset) {
-      const proto = req.headers["x-forwarded-proto"] || "https";
-      const link = `${proto}://${req.headers.host}/reset?token=${r0.token}`;
+      const link = `${baseUrl()}/reset?token=${r0.token}`;
       mailer.enviarReset(r0.socio, link).catch(() => {});
     }
     res.json({ ok: true });
@@ -454,6 +477,21 @@ function buildRouter() {
     for (const key of ["avisos_subastas", "avisos_sorteos", "avisos_contenido"]) {
       if (typeof b[key] === "boolean") patch[key] = b[key];
     }
+    // Apariencia: auto (sigue al dispositivo) | claro | oscuro.
+    if (b.tema !== undefined) {
+      if (!["auto", "claro", "oscuro"].includes(b.tema)) throw httpError(400, "Apariencia inválida (auto, claro u oscuro)");
+      patch.tema = b.tema;
+    }
+    // Peña: sumarse a una peña verificada, o dejarla (null / "").
+    if (b.pena_id !== undefined) {
+      if (b.pena_id === null || b.pena_id === "") patch.pena_id = null;
+      else {
+        const pe = store.getPena ? await store.getPena(String(b.pena_id)) : null;
+        if (!pe || pe.estado !== "verificada") throw httpError(400, "Esa peña no está disponible");
+        patch.pena_id = pe.id;
+      }
+      _penasPub = null;
+    }
     // Fecha de nacimiento (define el tier por edad). Formato YYYY-MM-DD.
     if (typeof b.fecha_nacimiento === "string" && b.fecha_nacimiento) {
       const f = b.fecha_nacimiento.slice(0, 10);
@@ -465,16 +503,20 @@ function buildRouter() {
     }
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const socio = auth.sanitize(await store.updateSocio(req.socio.id, patch));
-    res.json({ socio, progreso: perfilProgreso(socio) });
+    const progreso = perfilProgreso(socio);
+    if (progreso.pct >= 100) darPuntos(req.socio.id, "perfil", "completo", "Perfil completo").catch(() => {});
+    res.json({ socio, progreso });
   }));
 
   r.post("/perfil/foto", auth.requireSocio, wrap(async (req, res) => {
     const { foto } = req.body || {};
-    if (typeof foto !== "string" || !/^data:image\/(png|jpe?g|webp);base64,/.test(foto))
+    if (typeof foto !== "string" || !/^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(foto))
       throw httpError(400, "Imagen inválida (se espera un data URL de imagen)");
     if (foto.length > 800_000) throw httpError(413, "La imagen es muy grande (máx ~600KB)");
     const socio = auth.sanitize(await store.updateSocio(req.socio.id, { foto }));
-    res.json({ ok: true, foto: socio.foto, progreso: perfilProgreso(socio) });
+    const progreso = perfilProgreso(socio);
+    if (progreso.pct >= 100) darPuntos(req.socio.id, "perfil", "completo", "Perfil completo").catch(() => {});
+    res.json({ ok: true, foto: socio.foto, progreso });
   }));
 
   // ─── Instancia 3 — Validación de socio (cédula → nivel SOCIO otorgado) ──
@@ -507,6 +549,7 @@ function buildRouter() {
     const vivo = tutiApi.habilitado() ? await tutiApi.consultarSocio(cedula) : null;
     const enClub = vivo && vivo.ok && vivo.encontrado ? vivo.socio : null;
     const noAlDia = !!(enClub && !enClub.alDia);
+    if (enClub && enClub.plan) store.updateSocio(req.socio.id, { plan_club: enClub.plan }).catch(() => {}); // copia de lectura del plan
 
     // Match contra el padrón (foto de agosto: todo el padrón se tomó como AL DÍA).
     let fila = null, validado = false;
@@ -545,7 +588,10 @@ function buildRouter() {
     if (!validado) {
       mailer.enviarEnRevision && mailer.enviarEnRevision(socioFull).catch(() => {});
     }
-    res.json({ validado, tier, estado: validado ? "validado_auto" : "a_revisar", ...(noAlDia ? { motivo: "no_al_dia" } : {}) });
+    // Misma respuesta para "no encontrado" y "no está al día": el motivo queda solo en la
+    // actualización interna (para revisión). Si no, cualquiera podía averiguar el estado de
+    // pago de un socio probando su cédula.
+    res.json({ validado, tier, estado: validado ? "validado_auto" : "a_revisar" });
   }));
 
   // ─── Membresía ──────────────────────────────────────────────────────────────
@@ -647,7 +693,7 @@ function buildRouter() {
   async function cumplirPedidoPagado(pedido) {
     if (pedido.tier_slug) {
       const tier = tierBySlug(pedido.tier_slug);
-      if (!tier) return null;
+      if (!tier) throw new Error("el pedido " + pedido.id + " es de un nivel que ya no existe (" + pedido.tier_slug + ")");
       const membresia = await store.setMembresia(pedido.socio_id, { tierSlug: tier.slug, ciclo: pedido.ciclo || "anio", pagoRef: pedido.id });
       const s = await store.getSocioById(pedido.socio_id).catch(() => null);
       if (s && s.email && mailer.enviarBienvenidaCompra) {
@@ -673,8 +719,15 @@ function buildRouter() {
     if (pedido.subasta_id) {
       // El pago ONLINE confirma el lote; la entrega se coordina por privado (WhatsApp)
       // recién ahora — antes de esto no hace falta que el equipo escriba a nadie.
+      const actual = await store.getSubasta(pedido.subasta_id).catch(() => null);
+      if (!actual || actual.estado !== "cerrada" || (actual.adjudicado_a || actual.ganador_id) !== pedido.socio_id) {
+        log.error({ pedidoId: pedido.id, subastaId: pedido.subasta_id, socioId: pedido.socio_id }, "pago recibido por un lote que ya no está adjudicado a ese socio");
+        alertar("subasta:pago-huerfano:" + pedido.id, "Pago recibido por un lote que ya no es de esa persona — REEMBOLSAR",
+          "Pedido " + pedido.id + " · ₲ " + Number(pedido.monto || 0).toLocaleString("es-PY") + " · el plazo venció y el lote pasó a otro postor o volvió a borrador. Reembolsar por Pagopar.");
+        return { huerfano: true };
+      }
       if (store.marcarSubastaPagada) await store.marcarSubastaPagada(pedido.subasta_id);
-      const s = await store.getSubasta(pedido.subasta_id).catch(() => null);
+      const s = actual;
       const socio = await store.getSocioById(pedido.socio_id).catch(() => null);
       if (socio && socio.email && s && mailer.enviarSubastaPagoConfirmado) {
         const urlCertificado = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id) + "/certificado";
@@ -690,6 +743,56 @@ function buildRouter() {
     return null;
   }
 
+  // ÚNICA puerta para dar un pedido por pagado y entregarlo (webhook, conciliación, admin y
+  // confirmación simulada pasan todos por acá). El cobro y la entrega son dos hechos:
+  //  1) reclamarCumplimiento: UPDATE atómico → lo gana UNA sola llamada (dos webhooks a la vez,
+  //     o el reintento de Pagopar, no entregan dos veces);
+  //  2) se entrega; si falla, se libera el candado y se propaga el error → el webhook responde
+  //     500, Pagopar reintenta y la entrega se completa (antes el pedido quedaba "pagado" sin
+  //     entregar y el reintento lo salteaba para siempre);
+  //  3) marcarCumplido.
+  async function acreditarPago(pedidoId, origen) {
+    const p = await store.reclamarCumplimiento(pedidoId);
+    if (!p) return { estado: "ya_procesado" };
+    try {
+      const out = await cumplirPedidoPagado(p);
+      await store.marcarCumplido(p.id);
+      if (!(out && out.huerfano)) await acreditarFondoPena(p); // el 10 % (decisión pct) al fondo de la peña del hincha
+      return { estado: "entregado", out };
+    } catch (e) {
+      await store.liberarCumplimiento(p.id).catch(() => {});
+      log.error({ pedidoId: p.id, origen, err: e.message }, "pago acreditado pero la entrega falló: se reintenta");
+      alertar("pago:entrega-fallo:" + p.id, "Pago acreditado y NO entregado",
+        "Pedido " + p.id + " (" + p.concepto + ") · origen " + origen + " · " + e.message + ". Se reintenta solo (conciliación); si persiste, revisar a mano.");
+      throw e;
+    }
+  }
+
+  // Red de seguridad por si un webhook se pierde o una entrega queda a medias: pregunta a
+  // Pagopar por los pedidos que siguen pendientes y completa las entregas inconclusas.
+  async function conciliarPagos() {
+    const out = { verificados: 0, acreditados: 0, reintentados: 0, errores: 0 };
+    if (!store.pedidosParaConciliar) return out;
+    const { abiertos, sinEntregar } = await store.pedidosParaConciliar();
+    if (pagopar.habilitado) {
+      for (const p of abiertos) {
+        try {
+          const v = await pagopar.verificarPago({ hash: p.ref_externa });
+          out.verificados++;
+          if (v.pagado) { const r = await acreditarPago(p.id, "conciliacion"); if (r.estado === "entregado") out.acreditados++; }
+        } catch (e) { out.errores++; log.warn({ pedidoId: p.id, err: e.message }, "conciliación: no se pudo verificar"); }
+      }
+    }
+    for (const p of sinEntregar) {
+      try { const r = await acreditarPago(p.id, "reintento"); if (r.estado === "entregado") out.reintentados++; }
+      catch (e) { out.errores++; }
+    }
+    if (out.acreditados || out.reintentados)
+      alertar("pagos:conciliacion:" + new Date().toISOString().slice(0, 13), "Conciliación de pagos: se recuperaron entregas",
+        "Acreditados que el webhook no avisó: " + out.acreditados + " · entregas completadas: " + out.reintentados);
+    return out;
+  }
+
   // Confirmación de pago en modo SIMULADO (solo DEV). En producción está deshabilitado:
   // el cobro real es por los links de pago y la activación se hace desde el panel admin.
   r.post("/pagos/confirmar-simulado", auth.requireSocio, wrap(async (req, res) => {
@@ -698,9 +801,8 @@ function buildRouter() {
     const pedido = await store.getPedidoPago(req.body?.pedidoId);
     if (!pedido || pedido.socio_id !== req.socio.id) throw httpError(404, "Pedido no encontrado");
 
-    await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-    const out = await cumplirPedidoPagado(pedido);
-    res.json({ ok: true, membresia: (out && out.membresia) || null });
+    const r0 = await acreditarPago(pedido.id, "simulado");
+    res.json({ ok: true, membresia: (r0.out && r0.out.membresia) || null });
   }));
 
   // ─── Webhook de PAGOPAR (Paso #3): notificación de pago/reversión ──────────────
@@ -721,14 +823,12 @@ function buildRouter() {
     if (!pedido) {
       log.warn({ hash }, "pagopar webhook sin pedido");
     } else if (row.pagado === true) {
-      // Pago confirmado → marcar pedido pagado + ENTREGAR según el tipo (idempotente).
-      if (pedido.estado !== "pagado") {
-        await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-        await cumplirPedidoPagado(pedido);
-      }
-    } else if (row.pagado === false && pedido.estado === "pagado") {
-      // Reversión de un pago ya confirmado.
-      await store.updatePedidoPago(pedido.id, { estado: "reversado" });
+      // Pago confirmado → marcar pagado + ENTREGAR según el tipo. Atómico e idempotente: si la
+      // entrega falla se propaga el error (500) y Pagopar reintenta; ver acreditarPago.
+      await acreditarPago(pedido.id, "webhook");
+    } else if (row.pagado === false && pedido.estado === "pagado" && (await store.marcarReversado(pedido.id))) {
+      // Reversión de un pago ya confirmado (la transición pagado → reversado es atómica).
+      if (store.revertirIngresoPena) await store.revertirIngresoPena(pedido.id).catch((e) => log.error({ pedidoId: pedido.id, err: e.message }, "peña: no se pudo revertir el aporte"));
       if (pedido.reserva_id && store.cancelarReservaYreponer) {
         // Entradas: cancelamos la reserva y reponemos el stock.
         await store.cancelarReservaYreponer(pedido.reserva_id);
@@ -766,9 +866,24 @@ function buildRouter() {
   // ─── Cron diario (Cloud Scheduler): cumpleaños + renovaciones. Gateado por CRON_SECRET. ──
   // Configurar en Cloud Scheduler: POST https://www.olimpistas.com/api/cron/diario con header
   // x-cron-token = CRON_SECRET, frecuencia diaria. Reemplaza correr los scripts a mano.
+  // Tarea horaria (Cloud Scheduler): vence plazos de pago de subastas + conciliación de pagos.
+  r.post("/cron/horario", wrap(async (req, res) => {
+    const tok = process.env.CRON_SECRET;
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
+    const out = {};
+    try { await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron horario: cierre"); }
+    try { out.subastas = await procesarPlazosSubastas(); } catch (e) { out.subastas = { error: true }; log.error({ err: e.message }, "cron horario: plazos"); }
+    try { out.pagos = await conciliarPagos(); } catch (e) { out.pagos = { error: true }; log.error({ err: e.message }, "cron horario: pagos"); }
+    res.json(out);
+  }));
+  r.post("/cron/conciliar-pagos", wrap(async (req, res) => {
+    const tok = process.env.CRON_SECRET;
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
+    res.json(await conciliarPagos());
+  }));
   r.post("/cron/diario", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
-    if (!tok || (req.headers["x-cron-token"] || "") !== tok) return res.status(401).json({ error: "no autorizado" });
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
     const out = { cumples: 0, renovaciones: 0, subastas: 0, sesionesPurgadas: 0 };
     const hoy = new Date().toISOString().slice(0, 10);
     // IDEMPOTENCIA: Cloud Scheduler es at-least-once. `reservarNotificacion` es atómico
@@ -776,6 +891,9 @@ function buildRouter() {
     // reintenta, cada socio recibe el correo UNA sola vez. Sin esto = spam + gasto de cuota.
     const puede = store.reservarNotificacion ? (clave) => store.reservarNotificacion(clave) : async () => true;
     try { out.subastas = await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron subastas"); }
+    try { out.pagos = await conciliarPagos(); } catch (e) { log.error({ err: e.message }, "cron conciliación de pagos"); }
+    try { out.plazosSubastas = await procesarPlazosSubastas(); } catch (e) { log.error({ err: e.message }, "cron plazos de subastas"); }
+    try { out.puntos = await procesarPuntosDiario(); } catch (e) { log.error({ err: e.message }, "cron puntos"); }
     try {
       const cumples = store.cumplenHoy ? await store.cumplenHoy() : [];
       for (const s of cumples) {
@@ -853,13 +971,20 @@ function buildRouter() {
     const i = p.indexOf(":"); return i > 0 ? { nombre: p.slice(0, i), key: p.slice(i + 1) } : { nombre: "admin", key: p };
   });
   if (process.env.ADMIN_KEY) ADMIN_KEYS.push({ nombre: "admin", key: process.env.ADMIN_KEY });
+  // Roles restringidos (CD, marketing, comercial, operaciones): solo entran a las secciones que les corresponden.
+  const pasaSeccion = (req, res, next) => {
+    const ruta = (req.originalUrl || req.url || "").split("?")[0].replace(/^\/api(?=\/)/, "");
+    const a = adminAuth.accesoRuta(req.adminRole, ruta);
+    if (a.ok) return next();
+    return res.status(403).json({ error: req.adminRole === "cd" ? "La Comisión Directiva no tiene acceso a esta sección" : "Tu rol no tiene acceso a esta sección" });
+  };
   const requireAdmin = async (req, res, next) => {
     res.setHeader("Cache-Control", "no-store"); // NUNCA cachear datos admin (ni en CDN ni navegador)
     try {
       const token = req.headers["x-admin-token"] || "";
       if (token && store.getAdminSession) {
         const s = await store.getAdminSession(token);
-        if (s) { req.adminUser = s.usuario; req.adminRole = s.rol; req.adminId = s.admin_id; return next(); }
+        if (s) { req.adminUser = s.usuario; req.adminRole = s.rol; req.adminId = s.admin_id; return pasaSeccion(req, res, next); }
       }
       const key = req.headers["x-admin-key"] || ""; // break-glass → owner
       if (key) {
@@ -876,8 +1001,9 @@ function buildRouter() {
     } catch (e) { return res.status(500).json({ error: "Error de autenticación" }); }
   };
   // Permiso por rol (la seguridad real). Las lecturas no lo usan; las escrituras sí.
-  const requirePerm = (perm) => (req, res, next) => {
-    if (adminAuth.can(req.adminRole, perm)) return next();
+  const requirePerm = (...perms) => (req, res, next) => {
+    if (perms.some((p) => adminAuth.can(req.adminRole, p))) return next();
+    if (req.adminRole === "cd") return res.status(403).json({ error: "La Comisión Directiva ve esta sección en solo lectura" });
     return res.status(403).json({ error: "No tenés permiso para esta acción" });
   };
   // Cache corto para reportes pesados (evita re-correr agregados en cada carga del panel).
@@ -903,7 +1029,13 @@ function buildRouter() {
   }));
   r.get("/admin/whoami", requireAdmin, wrap(async (req, res) => {
     const rol = req.adminRole || "owner";
-    res.json({ usuario: req.adminUser, rol, areas: adminAuth.AREAS_POR_ROL[rol] || adminAuth.AREAS_POR_ROL.owner, perms: adminAuth.PERMS_POR_ROL[rol] || [] });
+    res.json({
+      usuario: req.adminUser, rol,
+      areas: adminAuth.AREAS_POR_ROL[rol] || adminAuth.AREAS_POR_ROL.owner,
+      secciones: adminAuth.seccionesVisibles(rol),
+      solo_lectura: adminAuth.SOLO_LECTURA.includes(rol),
+      perms: adminAuth.PERMS_POR_ROL[rol] || [],
+    });
   }));
   // Gestión de usuarios (solo owner).
   r.get("/admin/usuarios", requireAdmin, requirePerm("usuarios"), wrap(async (_req, res) => {
@@ -947,7 +1079,7 @@ function buildRouter() {
     const [totalReal, pendientes, subastas] = await Promise.all([
       store.contarTotal ? store.contarTotal() : 0,
       store.listPedidos ? store.listPedidos({ estado: "pendiente", limit: 200 }) : [],
-      store.listSubastas ? store.listSubastas() : [],
+      store.listSubastasPublicas ? store.listSubastasPublicas() : [],
     ]);
     // Precio a mostrar según la moneda del pedido (Gs y USD son independientes).
     const enrich = pendientes.map((p) => {
@@ -1001,7 +1133,7 @@ function buildRouter() {
       store.listPedidos ? store.listPedidos({ socioId: socio.id, limit: 50 }) : [],
       store.listActualizaciones ? store.listActualizaciones({ socioId: socio.id, limit: 50 }) : [],
     ]);
-    const safe = { ...socio }; delete safe.password_hash; delete safe.password; delete safe.verif_token;
+    const safe = { ...socio }; delete safe.password_hash; delete safe.password; delete safe.verif_token; delete safe.reset_token; delete safe.reset_token_exp; delete safe.carnet_secreto;
     res.json({ socio: safe, membresia, historial, pedidos, actualizaciones });
   }));
   // Editar datos del socio (corregir email/cédula mal cargados = arregla matches de pago).
@@ -1033,7 +1165,7 @@ function buildRouter() {
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const actualizado = await store.updateSocio(socio.id, patch);
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "editar_socio", targetId: socio.id, detalle: Object.keys(patch).join(", "), por: req.adminUser });
-    const safe = { ...actualizado }; delete safe.password_hash; delete safe.password; delete safe.verif_token;
+    const safe = { ...actualizado }; delete safe.password_hash; delete safe.password; delete safe.verif_token; delete safe.reset_token; delete safe.reset_token_exp; delete safe.carnet_secreto;
     res.json({ ok: true, socio: safe });
   }));
   // Reenviar el email de verificación a un socio.
@@ -1042,8 +1174,7 @@ function buildRouter() {
     if (!socio) throw httpError(404, "Socio no encontrado");
     const vtoken = crypto.randomBytes(24).toString("base64url");
     await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false });
-    const proto = req.headers["x-forwarded-proto"] || "https";
-    const link = `${proto}://${req.headers.host}/api/auth/verificar?token=${vtoken}`;
+    const link = `${baseUrl()}/api/auth/verificar?token=${vtoken}`;
     const r0 = await mailer.enviarVerificacion(socio, link);
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "reenviar_verif", targetId: socio.id, detalle: socio.email || "" });
     res.json({ ok: !!(r0 && r0.ok), modo: r0 && r0.modo });
@@ -1066,6 +1197,67 @@ function buildRouter() {
       statsCacheEdadSeg: _statsTs ? Math.round((Date.now() - _statsTs) / 1000) : null,
       emailVerif: process.env.EMAIL_VERIF === "off" ? "off" : "on",
       rev: process.env.K_REVISION || null,
+    });
+  }));
+  // Tablero del club: lo que mira la Comisión Directiva de un vistazo (todo agregado, sin datos personales).
+  r.get("/admin/tablero", requireAdmin, wrap(async (_req, res) => {
+    res.json(await memoAdmin("tablero", 30000, async () => {
+      // Sin atajos: si la base falla, el tablero falla (un tablero que muestra ceros cuando la base está caída engaña a la CD).
+      const [total, est, pagos, subastas, puntos, penas, beneficios, decs, canjesPena] = await Promise.all([
+        store.contarTotal ? store.contarTotal() : 0,
+        store.estadisticasAdmin ? store.estadisticasAdmin() : { embudo: {}, membresias: [], tiempo: {} },
+        store.pagosRecibidos ? store.pagosRecibidos() : { totales: {}, porConcepto: [] },
+        store.listSubastasPublicas ? store.listSubastasPublicas() : [],
+        store.resumenPuntos ? store.resumenPuntos() : {},
+        store.listPenas ? store.listPenas() : [],
+        store.listBeneficios ? store.listBeneficios() : [],
+        store.listDecisiones ? store.listDecisiones() : [],
+        store.canjesPendientesPena ? store.canjesPendientesPena() : [],
+      ]);
+      const pagantes = (est.membresias || []).reduce((a, m) => a + (Number(m.pagados) || 0), 0);
+      return {
+        hinchas: { total: Number(total) || 0, hoy: (est.tiempo || {}).hoy || 0, ayer: (est.tiempo || {}).ayer || 0, pagantes, socios_validados: (est.embudo || {}).valido_socio || 0 },
+        ingresos: { hoy: (pagos.totales || {}).hoy || 0, d7: (pagos.totales || {}).d7 || 0, d30: (pagos.totales || {}).d30 || 0, total: (pagos.totales || {}).total || 0, por_concepto: pagos.porConcepto || [] },
+        subastas: {
+          activas: (subastas || []).filter((s) => s.estado === "activa").length,
+          sin_pagar: (subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && s.pago_estado !== "pagado").length,
+          pausadas: (subastas || []).filter((s) => s.estado === "pausada").length,
+        },
+        puntos: { pasivo: puntos.pasivo || 0, socios_con_saldo: puntos.socios_con_saldo || 0, canjes_pendientes: puntos.canjes_pendientes || 0 },
+        penas: { total: (penas || []).length, verificadas: (penas || []).filter((p) => p.estado === "verificada").length, canjes_pendientes: (canjesPena || []).length },
+        beneficios: { publicados: (beneficios || []).filter((b) => b.estado === "aprobado").length, por_aprobar: (beneficios || []).filter((b) => b.estado === "borrador").length },
+        decisiones: { total: Object.keys(DECISIONES).length, tomadas: (decs || []).filter((d) => DECISIONES[d.clave]).length },
+        generado: new Date().toISOString(),
+      };
+    }));
+  }));
+  // Integraciones: qué está conectado y qué no (solo estado; nunca valores ni claves).
+  r.get("/admin/integraciones", requireAdmin, wrap(async (_req, res) => {
+    const hay = (...vars) => vars.every((v) => !!process.env[v]);
+    const simulado = process.env.ENTORNO === "staging";
+    const estado = (ok, simul) => (ok ? "conectado" : simul && simulado ? "simulado" : "sin_conectar");
+    res.json({
+      entorno: process.env.ENTORNO || "produccion",
+      items: [
+        { id: "tuti", nombre: "Tuti (padrón de socios)", detalle: "Valida la cédula contra el padrón del club.", estado: estado(hay("TUTI_API_KEY", "TUTI_MERCHANT_KEY"), true) },
+        { id: "pagopar", nombre: "Pagopar (cobros)", detalle: "Tarjetas, transferencias y billeteras.", estado: estado(hay("PAGOPAR_PUBLIC_TOKEN", "PAGOPAR_PRIVATE_TOKEN"), true) },
+        { id: "email", nombre: "Correo (Resend)", detalle: "Verificación, avisos y recibos.", estado: estado(hay("RESEND_API_KEY"), true) },
+        { id: "ghl", nombre: "GoHighLevel", detalle: "Sincronía de contactos y campañas.", estado: estado(hay("GHL_WEBHOOK_URL")) },
+        { id: "ia", nombre: "Atención con IA", detalle: "Asistente de atención a hinchas.", estado: estado(hay("ANTHROPIC_API_KEY")) },
+        { id: "alertas", nombre: "Alertas operativas", detalle: "Avisos cuando algo falla.", estado: estado(hay("ALERT_WEBHOOK_URL") || hay("ALERT_EMAIL")) },
+        { id: "cron", nombre: "Tareas programadas", detalle: "Plazos de subastas, conciliación y puntos.", estado: estado(hay("CRON_SECRET")) },
+      ],
+    });
+  }));
+  // Roles: matriz de quién ve y quién edita cada sección (para que el club audite los accesos).
+  r.get("/admin/roles", requireAdmin, requirePerm("usuarios"), wrap(async (_req, res) => {
+    const secciones = adminAuth.SECCIONES;
+    res.json({
+      secciones,
+      roles: adminAuth.ROLES.map((rol) => ({
+        rol, restringido: adminAuth.RESTRINGIDOS.includes(rol), solo_lectura: adminAuth.SOLO_LECTURA.includes(rol),
+        ve: adminAuth.seccionesVisibles(rol), perms: adminAuth.PERMS_POR_ROL[rol] || [],
+      })),
     });
   }));
   // Cuadre de pagos (conciliación pedidos / membresías pagas / Metrepay).
@@ -1109,6 +1301,136 @@ function buildRouter() {
     res.setHeader("Content-Disposition", 'attachment; filename="socios.csv"');
     res.send(head.join(",") + "\n" + rows.join("\n"));
   }));
+  // ─── Ficha 360 del hincha + "buscar parecidos" + segmentos guardados ───────────
+  // Estado en el club: el Portal de Socios (ITTI) manda; si no responde se usa lo que Olimpistas
+  // ya sabía (padrón) y se marca "sin confirmar". Nunca se inventa un estado.
+  async function estadoClubDe(socio) {
+    const base = { es_socio_olimpia: !!socio.es_socio_olimpia, plan_club: socio.plan_club || "" };
+    const ced = soloDigitos(socio.cedula);
+    if (!ced) return { ...base, fuente: "ninguna", confirmado: false, motivo: "sin_cedula" };
+    if (!tutiApi.habilitado()) return { ...base, fuente: "padron", confirmado: false, motivo: "deshabilitado" };
+    const v = await tutiApi.consultarSocio(ced);
+    if (v.ok && v.encontrado) {
+      const s = v.socio;
+      if (s.plan && s.plan !== socio.plan_club) store.updateSocio(socio.id, { plan_club: s.plan }).catch(() => {}); // copia de lectura
+      return { ...base, plan_club: s.plan || base.plan_club, fuente: "portal", confirmado: true, encontrado: true,
+        status: s.status, al_dia: s.alDia, deuda: s.deuda, numero_socio: s.numeroSocio, debito_automatico: s.debitoAutomatico };
+    }
+    if (v.ok) return { ...base, fuente: "portal", confirmado: true, encontrado: false, nota: "No figura como titular (la API no trae adherentes de un plan familiar)." };
+    return { ...base, fuente: "padron", confirmado: false, motivo: v.motivo };
+  }
+  const FILTROS_SEGMENTO = ["paisIso", "tier", "validoSocio", "sinFoto", "canjes", "pujas", "gasto", "ciudad", "q"];
+  function limpiarFiltros(f) {
+    const out = {}, src = f && typeof f === "object" ? f : {};
+    if (typeof src.paisIso === "string" && /^[A-Za-z]{2}$/.test(src.paisIso)) out.paisIso = src.paisIso.toUpperCase();
+    if (typeof src.tier === "string" && tierBySlug(src.tier)) out.tier = src.tier;
+    for (const k of ["validoSocio", "sinFoto"]) if (src[k] === true) out[k] = true;
+    for (const k of ["canjes", "pujas", "gasto"]) if (typeof src[k] === "boolean") out[k] = src[k];
+    for (const k of ["ciudad", "q"]) if (typeof src[k] === "string" && src[k].trim()) out[k] = src[k].trim().slice(0, 80);
+    return out;
+  }
+  r.get("/admin/socios/:id/360", requireAdmin, wrap(async (req, res) => {
+    const socio = await store.getSocioById(req.params.id);
+    if (!socio) throw httpError(404, "Socio no encontrado");
+    const [membresia, historial, pedidos, ahorro, canjes, pujasRaw, actualizaciones, club] = await Promise.all([
+      store.getMembresia(socio.id),
+      store.listMembresias ? store.listMembresias(socio.id) : [],
+      store.listPedidos ? store.listPedidos({ socioId: socio.id, limit: 100 }) : [],
+      store.resumenAhorroSocio ? store.resumenAhorroSocio(socio.id) : { mes: 0, anio: 0, total: 0, canjes_mes: 0 },
+      store.canjesDeSocio ? store.canjesDeSocio(socio.id, 30) : [],
+      store.pujasDeSocio ? store.pujasDeSocio(socio.id, 30) : [],
+      store.listActualizaciones ? store.listActualizaciones({ socioId: socio.id, limit: 30 }) : [],
+      estadoClubDe(socio),
+    ]);
+    const tier = (membresia && membresia.tier_slug) || "olimpista";
+    const resultado = (p) => p.estado === "activa" ? "en_vivo" : (p.adjudicado_a || p.ganador_id) === socio.id ? (p.pago_estado === "pagado" ? "pagado" : "gano_sin_pagar") : "no_gano";
+    const puntosSaldo = store.saldoPuntos ? await store.saldoPuntos(socio.id) : 0;
+    const puntosMov = store.movimientosPuntos ? await store.movimientosPuntos(socio.id, 10) : [];
+    const pena = socio.pena_id && store.getPena ? await store.getPena(socio.pena_id).catch(() => null) : null;
+    const pujas = pujasRaw.map((p) => ({ subasta_id: p.subasta_id, titulo: p.titulo, mejor_oferta: p.mejor_oferta, pujas: p.pujas, ultima: p.ultima, resultado: resultado(p) }));
+    const pagados = pedidos.filter((p) => p.estado === "pagado");
+    const bloqueo = socio.subastas_bloqueo_hasta && new Date(socio.subastas_bloqueo_hasta).getTime() > Date.now() ? socio.subastas_bloqueo_hasta : null;
+
+    // Línea de tiempo (lo más nuevo primero): alta, membresías, pagos, canjes, pujas, validaciones.
+    const eventos = [{ tipo: "alta", titulo: "Se registró", detalle: "", fecha: socio.creado }];
+    for (const m of historial) eventos.push({ tipo: "membresia", titulo: "Nivel " + ((tierBySlug(m.tier_slug) || {}).nombre || m.tier_slug), detalle: m.estado, fecha: m.inicio });
+    for (const p of pagados) eventos.push({ tipo: "pago", titulo: "Pagó " + (p.concepto || "un pedido"), detalle: "₲ " + Number(p.monto || 0).toLocaleString("es-PY"), fecha: p.pagado_en || p.creado });
+    for (const c of canjes) eventos.push({ tipo: "canje", titulo: "Usó un beneficio" + (c.beneficio ? ": " + c.beneficio : ""), detalle: [c.comercio, c.ahorro ? "ahorró ₲ " + Number(c.ahorro).toLocaleString("es-PY") : ""].filter(Boolean).join(" · "), fecha: c.creado });
+    for (const p of pujas) eventos.push({ tipo: "puja", titulo: "Pujó en " + (p.titulo || "un lote"), detalle: "mejor oferta ₲ " + Number(p.mejor_oferta).toLocaleString("es-PY") + " · " + p.resultado.replace(/_/g, " "), fecha: p.ultima });
+    for (const a of actualizaciones.filter((x) => x.tipo !== "alta")) eventos.push({ tipo: "validacion", titulo: a.tipo === "socio_claim" ? "Pidió validar que es socio" : "Actualización: " + a.tipo, detalle: a.estado || "", fecha: a.creado || a.creada });
+    const atenciones = store.listConversacionesDeSocio ? await store.listConversacionesDeSocio(socio.id, 10) : [];
+    for (const c of atenciones) {
+      eventos.push({ tipo: "atencion", titulo: "Escribió a Atención" + (c.canal === "whatsapp" ? " (WhatsApp)" : ""), detalle: c.motivo || (c.derivada_en ? "Pasó a una persona" : "Lo atendió el asistente"), fecha: c.creado });
+      if (c.resuelta_en) eventos.push({ tipo: "atencion", titulo: "Atención resuelta", detalle: c.motivo || "", fecha: c.resuelta_en });
+    }
+    if (bloqueo) eventos.push({ tipo: "suspension", titulo: "Suspendido de las subastas", detalle: "hasta " + fechaCorta(bloqueo), fecha: bloqueo });
+    eventos.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+
+    res.json({
+      socio: { id: socio.id, nombre: socio.nombre, apellido: socio.apellido, email: socio.email, cedula: socio.cedula, pais: socio.pais, pais_iso: socio.pais_iso,
+        ciudad: socio.ciudad, creado: socio.creado, ultima_actividad: socio.ultima_actividad || null, es_socio_olimpia: !!socio.es_socio_olimpia,
+        plan_club: club.plan_club || "", tier, tiene_foto: !!socio.foto },
+      indicadores: {
+        gasto_total: socio.gasto_total || 0, pagos: pagados.length, ahorro_mes: ahorro.mes, ahorro_anio: ahorro.anio, ahorro_total: ahorro.total,
+        canjes: canjes.length, lotes_pujados: pujas.length, lotes_ganados: pujas.filter((p) => p.resultado === "pagado" || p.resultado === "gano_sin_pagar").length,
+      },
+      estado_club: club,
+      suspension_subastas: bloqueo,
+      canjes, pujas,
+      // El abono llega con los endpoints nuevos de Tuti.
+      abono: null,
+      puntos: { saldo: puntosSaldo, escalon: escalonDe(puntosSaldo).nombre, movimientos: puntosMov },
+      pena: pena ? { id: pena.id, nombre: pena.nombre, slug: pena.slug, ciudad: pena.ciudad } : null,
+      eventos: eventos.slice(0, 60),
+    });
+  }));
+  // "Buscar parecidos": por PERFIL (mismo país y nivel) o por HÁBITO (mismo nivel y mismo uso de la
+  // plataforma: canjes, pujas, gasto). Devuelve cuántos hay y los filtros, listos para guardar.
+  r.get("/admin/socios/:id/parecidos", requireAdmin, wrap(async (req, res) => {
+    const socio = await store.getSocioById(req.params.id);
+    if (!socio) throw httpError(404, "Socio no encontrado");
+    const por = req.query.por === "habito" ? "habito" : "perfil";
+    const m = await store.getMembresia(socio.id);
+    const tier = (m && m.tier_slug) || "olimpista";
+    let filtros;
+    if (por === "perfil") {
+      filtros = { tier };
+      if (socio.pais_iso) filtros.paisIso = String(socio.pais_iso).toUpperCase();
+      if (socio.es_socio_olimpia) filtros.validoSocio = true;
+    } else {
+      const [canjes, pujas] = await Promise.all([store.canjesDeSocio(socio.id, 1), store.pujasDeSocio(socio.id, 1)]);
+      filtros = { tier, canjes: canjes.length > 0, pujas: pujas.length > 0, gasto: (socio.gasto_total || 0) > 0 };
+    }
+    const TOPE = 5000;
+    const items = await store.filtrarSocios({ ...filtros, excluirId: socio.id, limit: TOPE });
+    res.json({ por, filtros, total: items.length, tope: items.length >= TOPE,
+      muestra: items.slice(0, 10).map((s) => ({ id: s.id, nombre: [s.nombre, s.apellido].filter(Boolean).join(" "), email: s.email, pais_iso: s.pais_iso, tier_slug: s.tier_slug })) });
+  }));
+  r.get("/admin/segmentos", requireAdmin, wrap(async (_req, res) => {
+    res.json({ items: store.listSegmentos ? await store.listSegmentos() : [] });
+  }));
+  r.post("/admin/segmentos", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    const nombre = String((req.body && req.body.nombre) || "").trim();
+    if (nombre.length < 2 || nombre.length > 80) throw httpError(400, "Poné un nombre de 2 a 80 caracteres");
+    const filtros = limpiarFiltros(req.body && req.body.filtros);
+    if (!Object.keys(filtros).length) throw httpError(400, "El segmento no tiene filtros");
+    const seg = await store.crearSegmento({ nombre, filtros, por: req.adminUser });
+    const total = (await store.filtrarSocios({ ...filtros, limit: 5000 })).length;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "segmento:guardar", targetId: seg.id, detalle: nombre + " (" + total + ")", por: req.adminUser });
+    res.status(201).json({ ok: true, segmento: seg, total });
+  }));
+  r.get("/admin/segmentos/:id/socios", requireAdmin, wrap(async (req, res) => {
+    const seg = (await store.listSegmentos()).find((s) => s.id === req.params.id);
+    if (!seg) throw httpError(404, "Segmento no encontrado");
+    const items = await store.filtrarSocios({ ...limpiarFiltros(seg.filtros), limit: 500 });
+    res.json({ segmento: { id: seg.id, nombre: seg.nombre, filtros: seg.filtros }, total: items.length, items });
+  }));
+  r.delete("/admin/segmentos/:id", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    await store.deleteSegmento(req.params.id);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "segmento:borrar", targetId: req.params.id, por: req.adminUser });
+    res.json({ ok: true });
+  }));
+
   // Dar de baja → revertir a Olimpista gratis (el reembolso real se hace en Metrepay).
   r.post("/admin/socios/:id/baja", requireAdmin, requirePerm("socios.write"), wrap(async (req, res) => {
     const socio = await store.getSocioById(req.params.id);
@@ -1135,14 +1457,16 @@ function buildRouter() {
     }
     return out;
   };
+  const PERM_ENTIDAD = { sorteos: "subastas.write", subastas: "subastas.write", comercios: "beneficios.write", beneficios: "beneficios.write" };
   const crudEntidad = (nombre, o) => {
+    const permEscritura = PERM_ENTIDAD[nombre] || "contenido.write";
     r.get(`/admin/${nombre}`, requireAdmin, wrap(async (_req, res) => res.json({ items: await o.list() })));
-    r.post(`/admin/${nombre}`, requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    r.post(`/admin/${nombre}`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
       const item = await o.crear(limpiarCampos(req.body, o.campos));
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: nombre + ":crear", targetId: item && item.id, por: req.adminUser });
       res.status(201).json({ ok: true, item });
     }));
-    r.patch(`/admin/${nombre}/:id`, requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    r.patch(`/admin/${nombre}/:id`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
       const d = limpiarCampos(req.body, o.campos);
       if (!Object.keys(d).length) throw httpError(400, "Nada para actualizar");
       const item = await o.update(req.params.id, d);
@@ -1150,7 +1474,7 @@ function buildRouter() {
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: nombre + ":editar", targetId: req.params.id, por: req.adminUser });
       res.json({ ok: true, item });
     }));
-    r.delete(`/admin/${nombre}/:id`, requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+    r.delete(`/admin/${nombre}/:id`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
       const ok = await o.del(req.params.id);
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: nombre + ":borrar", targetId: req.params.id, por: req.adminUser });
       res.json({ ok });
@@ -1161,6 +1485,29 @@ function buildRouter() {
   crudEntidad("contenido", { list: () => store.listContenido(), crear: (d) => store.crearContenido(d), update: (id, d) => store.updateContenido(id, d), del: (id) => store.deleteContenido(id), campos: { titulo: "text", tipo: "text", tier_min: "text", duracion: "text", descripcion: "text", thumb: "text", publicado: "date" } });
   // Red de Beneficios (admin). comercio_id enlaza el beneficio; niveles = "todos" o CSV "premium,socio".
   crudEntidad("comercios", { list: () => store.listComercios(), crear: (d) => store.crearComercio(d), update: (id, d) => store.updateComercio(id, d), del: (id) => store.deleteComercio(id), campos: { nombre: "text", rubro: "text", ciudad: "text", direccion: "text", contacto: "text", logo: "text", estado: "text" } });
+  // ── Admin: aprobar o rechazar ofertas de comercios, y el reporte para sponsors ──
+  // Se registra ANTES del CRUD genérico: con `estado` en el cuerpo resuelve la oferta; sin él, cede el paso al CRUD.
+  r.patch("/admin/beneficios/:id", requireAdmin, requirePerm("beneficios.write"), (req, res, next) => (!req.body || req.body.estado === undefined) ? next("route") : next(), wrap(async (req, res) => {
+    const estado = String(req.body.estado);
+    if (!["aprobado", "rechazado"].includes(estado)) throw httpError(400, "Estado inválido (aprobado | rechazado)");
+    const motivo = String(req.body.motivo || "").replace(/[<>]/g, "").trim().slice(0, 200);
+    if (estado === "rechazado" && motivo.length < 3) throw httpError(400, "Contale al comercio por qué se rechaza (mínimo 3 caracteres)");
+    const b = await store.resolverOferta(req.params.id, { estado, motivo });
+    if (!b) throw httpError(404, "Oferta no encontrada");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "beneficios:" + estado, targetId: b.id, detalle: b.titulo + (motivo ? " · " + motivo : ""), por: req.adminUser });
+    if (estado === "aprobado" && mailer.enviarOfertaAprobada && store.getComercio) {
+      const co = await store.getComercio(b.comercio_id).catch(() => null);
+      if (co && emailOk(co.contacto)) mailer.enviarOfertaAprobada({ email: co.contacto }, { comercio: co.nombre, titulo: b.titulo }).catch(() => {});
+    }
+    res.json({ ok: true, oferta: ofertaOut(b) });
+  }));
+  r.get("/admin/comercios/estadisticas.csv", requireAdmin, requirePerm("export"), wrap(async (req, res) => {
+    const p = periodo({ desde: req.query.desde, hasta: req.query.hasta });
+    const filas = await store.estadisticasPorComercio({ desde: p.desde, hasta: p.hasta });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "export:sponsors", detalle: p.etiqueta, por: req.adminUser });
+    enviarCsv(res, "sponsors-" + p.etiqueta.replace(/ a /, "_") + ".csv", ["comercio", "ciudad", "nivel", "canjes", "ahorro", "ventas"], filas.map((f) => [f.comercio, f.ciudad, f.nivel, f.canjes, Number(f.ahorro), Number(f.ventas)]));
+  }));
+
   crudEntidad("beneficios", { list: () => store.listBeneficios(), crear: (d) => store.crearBeneficio(d), update: (id, d) => store.updateBeneficio(id, d), del: (id) => store.deleteBeneficio(id), campos: { comercio_id: "text", titulo: "text", descripcion: "text", tipo: "text", valor: "text", niveles: "text", pct: "int", ahorro_estimado: "int", vigencia_desde: "date", vigencia_hasta: "date", limite_dias: "int" } });
   // Subastas (admin). Se crean como BORRADOR; se publican con /publicar (setea termina = now + duracion_horas).
   crudEntidad("subastas", {
@@ -1189,7 +1536,7 @@ function buildRouter() {
   r.get("/admin/sorteos/:id/participantes", requireAdmin, wrap(async (req, res) => {
     res.json({ items: store.listParticipantesSorteo ? await store.listParticipantesSorteo(req.params.id) : [] });
   }));
-  r.post("/admin/sorteos/:id/ganador", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/sorteos/:id/ganador", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const parts = store.listParticipantesSorteo ? await store.listParticipantesSorteo(req.params.id) : [];
     if (!parts.length) throw httpError(400, "Este sorteo no tiene participantes");
     const g = parts[Math.floor(Math.random() * parts.length)];
@@ -1269,12 +1616,12 @@ function buildRouter() {
   r.post("/admin/pedidos/:id/activar", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
     const pedido = await store.getPedidoPago(req.params.id);
     if (!pedido) throw httpError(404, "Pedido no encontrado");
-    await store.updatePedidoPago(pedido.id, { estado: "pagado" });
-    const tier = tierBySlug(pedido.tier_slug);
-    const membresia = tier
-      ? await store.setMembresia(pedido.socio_id, { tierSlug: tier.slug, ciclo: pedido.ciclo, pagoRef: pedido.id })
-      : null;
-    res.json({ ok: true, membresia });
+    // Misma puerta que el webhook: entrega según el tipo de pedido (membresía, entrada o lote;
+    // antes solo activaba membresías) y no entrega dos veces si el webhook ya lo hizo.
+    const r0 = await acreditarPago(pedido.id, "admin");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "pedido:activar", targetId: pedido.id, detalle: r0.estado, por: req.adminUser });
+    const membresia = (r0.out && r0.out.membresia) || (pedido.tier_slug ? await store.getMembresia(pedido.socio_id) : null);
+    res.json({ ok: true, membresia, ya_procesado: r0.estado === "ya_procesado" });
   }));
   // Rechazar/cancelar un pedido.
   r.post("/admin/pedidos/:id/rechazar", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
@@ -1402,12 +1749,61 @@ function buildRouter() {
     const rr = await store.responderEncuesta({ encuestaId: e.id, socioId: req.socio.id, opcion, texto });
     if (!rr.ok) throw httpError(409, "La encuesta está cerrada");
     _encResCache.delete(e.id); // el voto debe reflejarse al toque
+    darPuntos(req.socio.id, "mision", "encuesta:" + e.id, "Respondió una encuesta").catch(() => {}); // "misión semanal o encuesta"
     res.json({ ok: true, resultados: await store.resultadosEncuesta(e.id) });
   }));
 
   // ─── Subastas ─────────────────────────────────────────────────────────────
   // Puja Plus y Socio (nivel_min = "premium"). Gateo en el server. El líder actual
   // = subasta.ganador_id. Anti-sniping y guard de monto viven en store.pujar (atómico).
+  // ── Decisiones de la Comisión Directiva (tabla decisiones_club; sin fila = valor por defecto) ──
+  // La plataforma las lee en cada uso (caché de 30 s) — ver docs del handoff, 08-decisiones.
+  const DECISIONES = {
+    deuda: { def: "no_bloquear", opciones: ["no_bloquear", "mas_2_cuotas", "cualquier"], texto: "¿Con qué deuda se bloquea una puja?" },
+    plazo: { def: "72_48", opciones: ["72_48", "48_24"], texto: "Plazo de pago de subastas (horas ronda 1 + ronda 2)" },
+    base: { def: "por_nivel", opciones: ["por_nivel", "por_plan", "ambos"], texto: "¿Beneficios por nivel o por plan del club?" },
+    pct: { def: "10", opciones: ["10", "15"], texto: "Fondo de las peñas (%)" },
+    venc: { def: "12_meses", opciones: ["12_meses", "no_vencen"], texto: "Vencimiento de puntos" },
+    oro: { def: "no_publicar", opciones: ["no_publicar", "habilita_futbol"], texto: "Experiencias Oro" },
+  };
+  let _decCache = null;
+  async function decisiones() {
+    if (_decCache && Date.now() - _decCache.t < 30000) return _decCache.v;
+    const filas = store.listDecisiones ? await store.listDecisiones() : [];
+    const v = {};
+    for (const [k, d] of Object.entries(DECISIONES)) v[k] = d.def;
+    for (const f of filas) if (DECISIONES[f.clave] && DECISIONES[f.clave].opciones.includes(f.valor)) v[f.clave] = f.valor;
+    _decCache = { t: Date.now(), v };
+    return v;
+  }
+  const decision = async (clave) => (await decisiones())[clave];
+  // Horas de plazo de pago: ronda 1 (ganador) y ronda 2 (segundo postor).
+  async function plazosHoras() { return (await decision("plazo")) === "48_24" ? { r1: 48, r2: 24 } : { r1: 72, r2: 48 }; }
+  const BLOQUEO_SUBASTAS_DIAS = 90;
+  const fechaCorta = (d) => new Date(d).toLocaleDateString("es-PY", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Asuncion" });
+
+  // Regla de deuda para pujar (decisión `deuda`). Por defecto NO se bloquea a ningún socio.
+  // Si el club decide bloquear, se consulta el estado EN VIVO a Tuti; si Tuti no responde se deja
+  // pujar (nunca se castiga a un hincha por una caída del proveedor). Jamás se usa `DEBT` solo:
+  // es "tiene un pago pendiente", no mora (ver lib/tuti.js).
+  async function chequearDeudaPuja(socio) {
+    const regla = await decision("deuda");
+    if (regla === "no_bloquear") return;
+    const cedula = soloDigitos(socio && socio.cedula);
+    if (!cedula || !tutiApi.habilitado()) return;
+    const r = await tutiApi.consultarSocio(cedula);
+    if (!r.ok || !r.encontrado) return;
+    const deuda = Number(r.socio.deuda) || 0;
+    let bloquea = false;
+    if (regla === "cualquier") bloquea = !!r.socio.deudor && deuda > 0;
+    else if (regla === "mas_2_cuotas") {
+      const cuota = Number(process.env.CUOTA_SOCIO_GS) || 0; // valor de una cuota del club
+      if (cuota > 0) bloquea = deuda > 2 * cuota;
+      else log.warn("decisión deuda=mas_2_cuotas pero falta CUOTA_SOCIO_GS: no se bloquea a nadie");
+    }
+    if (bloquea) throw httpError(403, "Tenés una deuda pendiente con el club. Regularizala para poder pujar.");
+  }
+
   function subastaAbierta(s) { return s.estado === "activa" && new Date(s.termina).getTime() > Date.now(); }
   // Notifica a los ganadores de subastas recién cerradas (email + alerta al EQUIPO para
   // coordinar WhatsApp). Idempotente (flag `notificado`). La query que arma la lista es
@@ -1418,10 +1814,11 @@ function buildRouter() {
       for (const s of pend) {
         try {
           const ganador = await store.getSocioById(s.ganador_id);
-          const urlSubasta = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id);
+          const urlSubasta = urlLote(s);
           if (ganador && mailer.enviarSubastaGanador) {
-            const limitePago = new Date(Date.now() + 7 * 86400000); // plazo de pago: 7 días
-            await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago }).catch(() => {});
+            const limitePago = s.pago_vence || null; // fijado al cerrar, según la decisión del club (72 h por defecto)
+            const horas = limitePago ? Math.max(1, Math.round((new Date(limitePago).getTime() - Date.now()) / 3600000)) : undefined;
+            await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago, horas }).catch(() => {});
           }
           // Avisar AL EQUIPO (no solo al ganador): así saben que hay un ganador, aunque
           // recién escriban por WhatsApp cuando el pago esté confirmado (ver
@@ -1445,7 +1842,7 @@ function buildRouter() {
   async function cerrarYnotificarSubastas() {
     try {
       if (store.abrirProgramadas) await store.abrirProgramadas();
-      if (store.cerrarSubastasVencidas) await store.cerrarSubastasVencidas();
+      await cerrarVencidas();
       return await notificarGanadoresPendientes();
     } catch (e) { log.error({ err: e.message }, "subastas cierre"); return 0; }
   }
@@ -1459,17 +1856,75 @@ function buildRouter() {
     _barridoSubT = Date.now();
     try {
       if (store.abrirProgramadas) await store.abrirProgramadas();
-      if (store.cerrarSubastasVencidas) await store.cerrarSubastasVencidas();
+      await cerrarVencidas();
       await notificarGanadoresPendientes();
     }
     catch (e) { log.error({ err: e.message }, "subastas barrido"); }
   }
+  // Cierra las vencidas con el plazo de pago vigente (decisión `plazo`).
+  async function cerrarVencidas() {
+    if (!store.cerrarSubastasVencidas) return;
+    await store.cerrarSubastasVencidas({ plazoHoras: (await plazosHoras()).r1 });
+  }
+  const urlLote = (s) => baseUrl() + "/subasta/" + encodeURIComponent(s.slug || s.id);
+
+  // Resuelve el vencimiento de UN lote (por plazo, o forzado desde el admin). Atómico en la base:
+  // si dos instancias lo intentan a la vez, una sola lo resuelve y la otra recibe null.
+  async function resolverVencimientoSubasta(id, { forzar = false, por = "sistema" } = {}) {
+    const pl = await plazosHoras();
+    const r = await store.vencerPlazoSubasta(id, { plazoRonda2Horas: pl.r2, bloqueoDias: BLOQUEO_SUBASTAS_DIAS, forzar });
+    if (!r) return null;
+    _subCache.delete(id); _listaSub = null;
+    const s = r.subasta;
+    const [anterior, segundo] = await Promise.all([
+      store.getSocioById(r.anterior).catch(() => null),
+      r.segundo ? store.getSocioById(r.segundo).catch(() => null) : null,
+    ]);
+    if (anterior && mailer.enviarSubastaCancelada)
+      mailer.enviarSubastaCancelada(anterior, { titulo: s.titulo, bloqueadoHasta: r.bloqueadoHasta }).catch(() => {});
+    if (segundo && mailer.enviarSubastaSegundaOportunidad)
+      mailer.enviarSubastaSegundaOportunidad(segundo, { titulo: s.titulo, monto: r.monto, urlSubasta: urlLote(s), limitePago: s.pago_vence, horas: pl.r2 }).catch(() => {});
+    const quien = (x) => (x ? (x.nombre || x.email) : "?");
+    alertar("subasta:vencida:" + id + ":" + (r.accion === "ronda2" ? 1 : 2),
+      r.accion === "ronda2" ? "Subasta: venció el plazo, pasa al segundo postor" : "Subasta: venció el plazo, el lote vuelve a borrador",
+      `"${s.titulo}" · no pagó: ${quien(anterior)}${r.bloqueadoHasta ? " (suspendido hasta " + fechaCorta(r.bloqueadoHasta) + ")" : ""}` +
+      (r.accion === "ronda2" ? ` · ahora: ${quien(segundo)} a ₲ ${Number(r.monto).toLocaleString("es-PY")}` : " · no había otro postor elegible"));
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:vencimiento", targetId: id, detalle: r.accion + (forzar ? " (forzado)" : ""), por });
+    log.info({ subastaId: id, accion: r.accion, forzado: forzar }, "subasta: plazo de pago resuelto");
+    return r;
+  }
+
+  // Tarea horaria (y respaldo del cron diario): vence los plazos y avisa 24 h antes. Idempotente:
+  // el vencimiento es atómico y el recordatorio se reserva una vez por lote y ronda.
+  async function procesarPlazosSubastas() {
+    const out = { vencidos: 0, ronda2: 0, borrador: 0, recordatorios: 0 };
+    if (!store.subastasPlazoVencido) return out;
+    for (const s of await store.subastasPlazoVencido()) {
+      try {
+        const r = await resolverVencimientoSubasta(s.id);
+        if (r) { out.vencidos++; out[r.accion === "ronda2" ? "ronda2" : "borrador"]++; }
+      } catch (e) { log.error({ subastaId: s.id, err: e.message }, "subasta: no se pudo vencer el plazo"); }
+    }
+    const reservar = store.reservarNotificacion ? (k) => store.reservarNotificacion(k) : async () => true;
+    for (const s of await store.subastasPagoPorVencer({ horas: 24 })) {
+      try {
+        if (!(await reservar("subasta:porvencer:" + s.id + ":" + (s.ronda || 1)))) continue;
+        const socio = await store.getSocioById(s.adjudicado_a);
+        if (socio && mailer.enviarSubastaPagoPorVencer) {
+          await mailer.enviarSubastaPagoPorVencer(socio, { titulo: s.titulo, monto: s.puja_actual, urlSubasta: urlLote(s), vence: s.pago_vence }).catch(() => {});
+          out.recordatorios++;
+        }
+      } catch (e) { log.error({ subastaId: s.id, err: e.message }, "subasta: recordatorio de pago"); }
+    }
+    return out;
+  }
+
   // Cache corto (3s) del listado base (subastas visibles + pujadores). Absorbe el polling:
   // ~1 lectura cada 3s por instancia en vez de (lista + N counts) por cada mirador.
   let _listaSub = null;
   async function listaSubastasBase() {
     if (_listaSub && Date.now() - _listaSub.t < 3000) return _listaSub.v;
-    const raw = (await store.listSubastas()).filter((s) => s.estado === "activa" || s.estado === "cerrada");
+    const raw = (await store.listSubastasPublicas()).filter((s) => s.estado === "activa" || s.estado === "cerrada");
     const v = [];
     for (const s of raw) v.push({ s, pujadores: await store.contarPujadores(s.id) });
     _listaSub = { t: Date.now(), v };
@@ -1481,13 +1936,16 @@ function buildRouter() {
     const items = (await listaSubastasBase()).map(({ s, pujadores }) => {
       const abierta = subastaAbierta(s);
       return {
-        id: s.id, slug: s.slug, titulo: s.titulo, descripcion: s.descripcion, imagen: s.imagen, emoji: s.emoji,
+        id: s.id, slug: s.slug, titulo: s.titulo, descripcion: s.descripcion, imagen_url: urlImagen(s), emoji: s.emoji,
         nivel_min: s.nivel_min, precio_inicial: s.precio_inicial, incremento: s.incremento,
         puja_actual: s.puja_actual, termina: s.termina, estado: abierta ? "activa" : "cerrada",
         pago_estado: s.pago_estado || null,
         desbloqueado: access.puedeAcceder(membresia, s.nivel_min),
         pujadores,
         gano: !abierta && !!(req.socio && s.ganador_id === req.socio.id),
+        // Solo el adjudicado ve su plazo de pago (y mientras no haya pagado).
+        pago_vence: (!abierta && req.socio && s.ganador_id === req.socio.id && s.pago_estado !== "pagado") ? (s.pago_vence || null) : null,
+        ronda: (!abierta && req.socio && s.ganador_id === req.socio.id) ? (s.ronda || 1) : undefined,
         // Nombre del ganador SOLO si ya cerró (mientras está activa, ganador_id es apenas
         // el líder actual — mostrarlo sería el mismo leak de privacidad que ya arreglamos
         // en el feed de pujas). Enmascarado igual que ahí.
@@ -1545,7 +2003,7 @@ function buildRouter() {
       subasta: {
         id: s.id, slug: s.slug, titulo: s.titulo,
         descripcion: liviano ? undefined : s.descripcion,
-        imagen: liviano ? undefined : s.imagen,
+        imagen_url: liviano ? undefined : urlImagen(s),
         emoji: s.emoji,
         nivel_min: s.nivel_min, precio_inicial: s.precio_inicial, incremento: s.incremento,
         puja_actual: s.puja_actual, termina: s.termina, estado: abierta ? "activa" : "cerrada",
@@ -1556,6 +2014,8 @@ function buildRouter() {
       voyGanando: !!(req.socio && s.ganador_id === req.socio.id),
       miPuja: req.socio ? await store.miPujaMax(s.id, req.socio.id) : 0,
       gano: !abierta && !!(req.socio && s.ganador_id === req.socio.id),
+      pago_vence: (!abierta && req.socio && s.ganador_id === req.socio.id && s.pago_estado !== "pagado") ? (s.pago_vence || null) : null,
+      ronda: (!abierta && req.socio && s.ganador_id === req.socio.id) ? (s.ronda || 1) : undefined,
       feed,
     });
   }));
@@ -1565,6 +2025,9 @@ function buildRouter() {
     const membresia = await store.getMembresia(req.socio.id);
     if (!access.puedeAcceder(membresia, s.nivel_min))
       throw httpError(403, "Las subastas son para Olimpistas Plus y Socio");
+    if (req.socio.subastas_bloqueo_hasta && new Date(req.socio.subastas_bloqueo_hasta).getTime() > Date.now())
+      throw httpError(403, "Estás suspendido de las subastas hasta el " + fechaCorta(req.socio.subastas_bloqueo_hasta) + " por no haber pagado un lote a tiempo.");
+    await chequearDeudaPuja(req.socio);
     const monto = Math.round(Number(req.body && req.body.monto) || 0);
     if (!monto) throw httpError(400, "Monto inválido");
     const out = await store.pujar({ subastaId: s.id, socioId: req.socio.id, monto });
@@ -1589,63 +2052,69 @@ function buildRouter() {
   // El ganador paga ONLINE (Pagopar) para confirmar el lote — la entrega recién se
   // coordina por privado (WhatsApp) después de acreditado el pago (ver cumplirPedidoPagado).
   // Mismo manejo de cédula que /membresia/unirse: Pagopar la exige, se pide una sola vez.
-  r.post("/subastas/:id/pagar", auth.requireSocio, wrap(async (req, res) => {
-    const s = await store.getSubasta(req.params.id);
-    if (!s) throw httpError(404, "Subasta no encontrada");
-    if (s.estado !== "cerrada" || s.ganador_id !== req.socio.id) throw httpError(403, "No ganaste esta subasta");
-    if (s.pago_estado === "pagado") return res.json({ ya_pagado: true });
-
-    const sFull = await store.getSocioById(req.socio.id).catch(() => null);
+  // Arma (o reutiliza) el pedido del lote ganado y pide el link de pago. { falta_cedula } si todavía no hay documento.
+  async function iniciarPagoSubasta(socio, s, cedulaIngresada) {
+    const sFull = await store.getSocioById(socio.id).catch(() => null);
     let documento = soloDigitos((sFull && sFull.cedula) || "");
-    const cedulaBody = soloDigitos(req.body?.cedula || "");
+    const cedulaBody = soloDigitos(cedulaIngresada || "");
     if (!documento && cedulaBody) {
       if (cedulaBody.length < 5 || cedulaBody.length > 12) throw httpError(400, "Número de cédula inválido");
       if (store.getSocioByCedula) {
         const otra = await store.getSocioByCedula(cedulaBody);
-        if (otra && otra.id !== req.socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
+        if (otra && otra.id !== socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
       }
-      try { await store.updateSocio(req.socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
+      try { await store.updateSocio(socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
       catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta"); }
     }
-    if (!documento) return res.json({ falta_cedula: true });
+    if (!documento) return { falta_cedula: true };
 
     // Reusar el pedido pendiente si el ganador ya había iniciado el pago antes (evita
     // duplicar pedidos en PAGOPAR si reintenta o vuelve a entrar a la página).
     const existente = store.getPedidoPorSubasta ? await store.getPedidoPorSubasta(s.id) : null;
-    const pedido = (existente && existente.estado === "pendiente")
+    const pedido = (existente && existente.estado === "pendiente" && existente.socio_id === socio.id)
       ? existente
-      : await store.createPedidoPago({ socioId: req.socio.id, concepto: `Subasta: ${s.titulo}`, monto: s.puja_actual, moneda: BRAND.monedaCod, subastaId: s.id });
+      : await store.createPedidoPago({ socioId: socio.id, concepto: `Subasta: ${s.titulo}`, monto: s.puja_actual, moneda: BRAND.monedaCod, subastaId: s.id });
 
     const pago = await pagopar.crearPedido({
       pedidoId: pedido.id, monto: s.puja_actual, concepto: pedido.concepto,
       comprador: {
-        email: req.socio.email,
-        nombre: [req.socio.nombre, sFull && sFull.apellido].filter(Boolean).join(" ") || req.socio.nombre,
+        email: socio.email,
+        nombre: [socio.nombre, sFull && sFull.apellido].filter(Boolean).join(" ") || socio.nombre,
         documento, telefono: (sFull && (sFull.whatsapp || sFull.telefono)) || "",
       },
     });
     await store.updatePedidoPago(pedido.id, { ref_externa: pago.hash });
-    res.json({ pago });
+    return { pago };
+  }
+  r.post("/subastas/:id/pagar", auth.requireSocio, wrap(async (req, res) => {
+    const s = await store.getSubasta(req.params.id);
+    if (!s) throw httpError(404, "Subasta no encontrada");
+    if (s.estado !== "cerrada" || (s.adjudicado_a || s.ganador_id) !== req.socio.id) throw httpError(403, "Este lote no está adjudicado a vos");
+    if (s.pago_estado === "pagado") return res.json({ ya_pagado: true });
+    // Sin pago_vence = lote anterior a esta función: sin plazo (se resuelve a mano desde el admin).
+    if (s.pago_vence && new Date(s.pago_vence).getTime() < Date.now()) throw httpError(409, "El plazo de pago de este lote venció.");
+
+    res.json(await iniciarPagoSubasta(req.socio, s, req.body && req.body.cedula));
   }));
 
   // ── Admin de subastas: poner en vivo / cerrar / ver pujas (además del CRUD) ──
-  r.post("/admin/subastas/:id/publicar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/publicar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (!s.titulo || !(s.precio_inicial > 0)) throw httpError(400, "Faltan datos: título y precio inicial");
     const horas = Number(s.duracion_horas) || Number(req.body && req.body.horas) || 48;
     const inicia = new Date().toISOString();
     const termina = new Date(Date.now() + horas * 3600 * 1000).toISOString();
-    const item = await store.updateSubasta(s.id, { estado: "activa", inicia, termina, ganador_id: null, puja_actual: s.precio_inicial, notificado: false });
+    const item = await store.updateSubasta(s.id, { estado: "activa", inicia, termina, ganador_id: null, adjudicado_a: null, ronda: 1, pago_vence: null, pago_estado: null, puja_actual: s.precio_inicial, notificado: false });
     _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:publicar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
   }));
-  r.post("/admin/subastas/:id/despublicar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/despublicar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado === "cerrada") throw httpError(409, "La subasta ya cerró; no se puede volver a borrador");
-    const item = await store.updateSubasta(s.id, { estado: "borrador", ganador_id: null, termina: null, notificado: false });
+    const item = await store.updateSubasta(s.id, { estado: "borrador", ganador_id: null, adjudicado_a: null, ronda: 1, pago_vence: null, termina: null, notificado: false });
     _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:despublicar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
@@ -1653,7 +2122,7 @@ function buildRouter() {
   // Pausar/reanudar: frena la puja y la esconde del home + hub SIN cerrarla (no se
   // elige ganador ni se avisa a nadie) — válvula de seguridad durante una subasta en
   // vivo. Al reanudar, el reloj se corre exactamente lo que estuvo en pausa.
-  r.post("/admin/subastas/:id/pausar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/pausar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado !== "activa") throw httpError(409, "Solo se puede pausar una subasta en vivo");
@@ -1662,7 +2131,7 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:pausar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
   }));
-  r.post("/admin/subastas/:id/reanudar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/reanudar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado !== "pausada") throw httpError(409, "La subasta no está pausada");
@@ -1673,25 +2142,64 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:reanudar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
   }));
-  r.post("/admin/subastas/:id/programar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/programar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (!s.titulo || !(s.precio_inicial > 0)) throw httpError(400, "Faltan datos: título y precio inicial");
     const t = new Date((req.body && req.body.inicia) || "");
     if (isNaN(t.getTime()) || t.getTime() <= Date.now()) throw httpError(400, "La fecha de inicio debe ser válida y futura");
-    const item = await store.updateSubasta(s.id, { estado: "programada", inicia: t.toISOString(), termina: null, ganador_id: null, notificado: false });
+    const item = await store.updateSubasta(s.id, { estado: "programada", inicia: t.toISOString(), termina: null, ganador_id: null, adjudicado_a: null, ronda: 1, pago_vence: null, pago_estado: null, notificado: false });
     _subCache.delete(s.id); _listaSub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:programar", targetId: s.id, detalle: t.toISOString(), por: req.adminUser });
     res.json({ ok: true, item });
   }));
-  r.post("/admin/subastas/:id/cerrar", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/subastas/:id/cerrar", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
-    const item = await store.updateSubasta(s.id, { estado: "cerrada", termina: new Date().toISOString() });
+    const item = (await store.cerrarSubasta(s.id, { plazoHoras: (await plazosHoras()).r1 })) || s;
     _subCache.delete(s.id); _listaSub = null;
     await cerrarYnotificarSubastas(); // avisa al ganador al toque
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:cerrar", targetId: s.id, por: req.adminUser });
     res.json({ ok: true, item });
+  }));
+  // Extender el plazo de pago (horas, 1 a 168). Si ya había vencido o el lote no tenía plazo, cuenta desde ahora.
+  r.post("/admin/subastas/:id/extender", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
+    const horas = Math.round(Number(req.body && req.body.horas) || 24);
+    if (!(horas >= 1 && horas <= 168)) throw httpError(400, "Las horas deben estar entre 1 y 168");
+    const s = await store.getSubasta(req.params.id);
+    if (!s) throw httpError(404, "Subasta no encontrada");
+    const item = await store.extenderPlazoSubasta(s.id, horas);
+    if (!item) throw httpError(409, "Solo se extiende el plazo de un lote cerrado, adjudicado y sin pagar");
+    _subCache.delete(s.id); _listaSub = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "subastas:extender", targetId: s.id, detalle: "+" + horas + " h", por: req.adminUser });
+    res.json({ ok: true, item: { id: item.id, pago_vence: item.pago_vence, ronda: item.ronda } });
+  }));
+  // Pasar al segundo postor ahora (sin esperar el vencimiento). Suspende al primero igual que un vencimiento.
+  r.post("/admin/subastas/:id/segundo", requireAdmin, requirePerm("subastas.write"), wrap(async (req, res) => {
+    const s = await store.getSubasta(req.params.id);
+    if (!s) throw httpError(404, "Subasta no encontrada");
+    const r0 = await resolverVencimientoSubasta(s.id, { forzar: true, por: req.adminUser });
+    if (!r0) throw httpError(409, "Solo se pasa al segundo un lote cerrado, adjudicado, sin pagar y en la primera ronda");
+    res.json({ ok: true, accion: r0.accion, segundo: r0.segundo || null, monto: r0.monto || null });
+  }));
+  // Decisiones de la Comisión Directiva. Leer: cualquier admin. Registrar: solo quien tenga decisiones.write (owner).
+  r.get("/admin/decisiones", requireAdmin, wrap(async (_req, res) => {
+    const vig = await decisiones();
+    const filas = store.listDecisiones ? await store.listDecisiones() : [];
+    res.json({ items: Object.entries(DECISIONES).map(([clave, d]) => {
+      const f = filas.find((x) => x.clave === clave);
+      return { clave, pregunta: d.texto, opciones: d.opciones, defecto: d.def, valor: vig[clave], decidido: !!f, decidido_por: f ? f.decidido_por : null, decidido_en: f ? f.decidido_en : null };
+    }) });
+  }));
+  r.put("/admin/decisiones/:clave", requireAdmin, requirePerm("decisiones.write"), wrap(async (req, res) => {
+    const d = DECISIONES[req.params.clave];
+    if (!d) throw httpError(404, "Decisión desconocida");
+    const valor = String(req.body && req.body.valor);
+    if (!d.opciones.includes(valor)) throw httpError(400, "Valor inválido. Opciones: " + d.opciones.join(", "));
+    const out = await store.setDecision(req.params.clave, valor, req.adminUser || "admin");
+    _decCache = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "decisiones:registrar", targetId: req.params.clave, detalle: valor, por: req.adminUser });
+    res.json({ ok: true, clave: req.params.clave, valor: out.valor });
   }));
   r.get("/admin/subastas/:id/pujas", requireAdmin, wrap(async (req, res) => {
     const s = await store.getSubasta(req.params.id);
@@ -1699,10 +2207,435 @@ function buildRouter() {
     let ganador = null;
     if (s.ganador_id) { const g = await store.getSocioById(s.ganador_id); if (g) ganador = { nombre: g.nombre, email: g.email, whatsapp: g.whatsapp || g.telefono || "" }; }
     res.json({
-      subasta: { titulo: s.titulo, estado: s.estado, puja_actual: s.puja_actual, termina: s.termina },
+      subasta: { titulo: s.titulo, estado: s.estado, puja_actual: s.puja_actual, termina: s.termina, pago_vence: s.pago_vence || null, ronda: s.ronda || 1, pago_estado: s.pago_estado || null },
       pujadores: await store.contarPujadores(s.id), ganador, pujas: await store.pujasDeSubasta(s.id, 50),
     });
   }));
+
+  // ─── Motor de puntos: reglas, escalones, misión semanal y catálogo de canje ──────
+  let _reglasCache = null;
+  async function reglasPuntos() {
+    if (_reglasCache && Date.now() - _reglasCache.t < 30000) return _reglasCache.v;
+    const filas = store.listReglas ? await store.listReglas() : [];
+    const v = {};
+    for (const f of filas) v[f.clave] = { puntos: f.puntos, activa: f.activa };
+    _reglasCache = { t: Date.now(), v };
+    return v;
+  }
+  // Suma los puntos de una regla UNA vez por hecho (socio + regla + ref): un evento repetido no suma dos veces.
+  // Una falla acá nunca rompe la acción que la disparó (alta, perfil, encuesta…).
+  async function darPuntos(socioId, clave, refId, detalle) {
+    try {
+      if (!store.sumarPuntos) return null;
+      const regla = (await reglasPuntos())[clave];
+      if (!regla || !regla.activa || !(regla.puntos > 0)) return null;
+      return await store.sumarPuntos({ socioId, motivo: clave, refId, puntos: regla.puntos, detalle });
+    } catch (e) { log.error({ socioId, clave, err: e.message }, "puntos: no se pudo sumar"); return null; }
+  }
+  const oroHabilitado = async () => (await decision("oro")) === "habilita_futbol";
+  // Todo socio con sesión es al menos Olimpista: una cuenta sin fila de membresía (importada, por ejemplo) no es "público".
+  const membresiaDe = async (socioId) => (await store.getMembresia(socioId)) || { tier_slug: "olimpista" };
+
+  async function misionParaSocio(socioId) {
+    const m = store.getMisionDeSemana ? await store.getMisionDeSemana(semanaIso()) : null;
+    if (!m) return null;
+    const resp = await store.respuestaMision(m.id, socioId);
+    const regla = (await reglasPuntos()).mision || {};
+    // Nunca se manda cuál es la correcta: solo si ya respondió y si acertó.
+    return { id: m.id, semana: m.semana, pregunta: m.pregunta, opciones: m.opciones, puntos: regla.activa ? regla.puntos : 0, respondida: resp ? { opcion: resp.opcion, correcta: resp.correcta } : null };
+  }
+
+  r.get("/puntos", auth.requireSocio, wrap(async (req, res) => {
+    const id = req.socio.id;
+    const [saldo, movimientos, reglas, membresia, mision, venc] = await Promise.all([
+      store.saldoPuntos(id), store.movimientosPuntos(id, 20), reglasPuntos(), store.getMembresia(id), misionParaSocio(id), decision("venc"),
+    ]);
+    const esSocio = !!req.socio.es_socio_olimpia || (membresia && membresia.tier_slug === "socio");
+    res.json({
+      saldo, escalon: escalonDe(saldo), movimientos, mision, vencen: venc === "12_meses",
+      reglas: Object.entries(REGLAS_META).map(([clave, m]) => ({
+        clave, titulo: m.t, fuente: m.fuente, quien: m.quien, pendiente: !!m.pendiente,
+        puntos: (reglas[clave] || {}).puntos || 0, activa: !!(reglas[clave] || {}).activa,
+        aplica: m.quien === "todos" || (m.quien === "socios" && esSocio),
+      })),
+    });
+  }));
+  r.get("/puntos/premios", auth.requireSocio, wrap(async (req, res) => {
+    const [saldo, membresia, premios, oro] = await Promise.all([store.saldoPuntos(req.socio.id), membresiaDe(req.socio.id), store.listPremios(), oroHabilitado()]);
+    res.json({
+      saldo,
+      items: premios.filter((p) => access.puedeAcceder(membresia, p.nivel_min)).map((p) => {
+        const proximamente = p.escalon === "oro" && !oro, agotado = p.stock !== null && p.stock <= 0;
+        return { id: p.id, titulo: p.titulo, descripcion: p.descripcion, escalon: p.escalon, costo: p.costo, agotado, proximamente,
+          puede_canjear: !proximamente && !agotado && saldo >= p.costo, faltan: Math.max(0, p.costo - saldo) };
+      }),
+    });
+  }));
+  r.post("/puntos/premios/:id/canjear", auth.requireSocio, wrap(async (req, res) => {
+    const p = await store.getPremio(req.params.id);
+    if (!p || !p.activo) throw httpError(404, "Premio no encontrado");
+    const membresia = await membresiaDe(req.socio.id);
+    if (!access.puedeAcceder(membresia, p.nivel_min)) throw httpError(403, "Este premio es para otro nivel");
+    if (p.escalon === "oro" && !(await oroHabilitado())) throw httpError(409, "Las experiencias Oro llegan pronto");
+    const out = await store.canjearPremio({ socioId: req.socio.id, premioId: p.id });
+    if (!out.ok) {
+      if (out.motivo === "saldo") throw httpError(409, "Te faltan " + Number(out.costo - out.saldo).toLocaleString("es-PY") + " puntos");
+      if (out.motivo === "stock") throw httpError(409, "Este premio se agotó");
+      throw httpError(404, "Premio no encontrado");
+    }
+    alertar("puntos:canje:" + out.canje.id, "Canje de premio por entregar", `${p.titulo} · ${req.socio.nombre || req.socio.email} · ${p.costo} puntos`);
+    res.status(201).json({ ok: true, saldo: out.saldo, canje: { id: out.canje.id, estado: out.canje.estado } });
+  }));
+  // Misión de la semana: UNA respuesta por hincha (con tres opciones, dejar reintentar equivale a regalar los puntos).
+  r.post("/puntos/mision/:id", auth.requireSocio, wrap(async (req, res) => {
+    const m = await store.getMision(req.params.id);
+    if (!m || !m.activa) throw httpError(404, "Misión no encontrada");
+    if (m.semana !== semanaIso()) throw httpError(409, "Esa misión ya no está disponible");
+    const opcion = Number(req.body && req.body.opcion);
+    if (!Number.isInteger(opcion) || opcion < 0 || opcion >= m.opciones.length) throw httpError(400, "Opción inválida");
+    const correcta = opcion === m.correcta;
+    const reg = await store.responderMision({ misionId: m.id, socioId: req.socio.id, opcion, correcta });
+    if (!reg) throw httpError(409, "Ya respondiste la misión de esta semana");
+    let puntos = 0;
+    if (correcta) { const mov = await darPuntos(req.socio.id, "mision", m.semana, "Misión de la semana"); puntos = mov ? mov.puntos : 0; }
+    res.json({ ok: true, correcta, puntos, saldo: await store.saldoPuntos(req.socio.id) });
+  }));
+
+  // ── Admin de puntos ──
+  r.get("/admin/puntos/reglas", requireAdmin, wrap(async (_req, res) => {
+    const reglas = await reglasPuntos();
+    res.json({ items: Object.entries(REGLAS_META).map(([clave, m]) => ({ clave, titulo: m.t, fuente: m.fuente, quien: m.quien, pendiente: !!m.pendiente, puntos: (reglas[clave] || {}).puntos || 0, activa: !!(reglas[clave] || {}).activa })) });
+  }));
+  r.put("/admin/puntos/reglas", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
+    const b = req.body || {};
+    if (!REGLAS_META[b.clave]) throw httpError(404, "Regla desconocida");
+    const patch = {};
+    if (b.puntos !== undefined) { const n = Math.round(Number(b.puntos)); if (!(n >= 0 && n <= 100000)) throw httpError(400, "Los puntos van de 0 a 100.000"); patch.puntos = n; }
+    if (typeof b.activa === "boolean") patch.activa = b.activa;
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const out = await store.setRegla(b.clave, patch);
+    if (!out) throw httpError(404, "Regla desconocida");
+    _reglasCache = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:regla", targetId: b.clave, detalle: JSON.stringify(patch), por: req.adminUser });
+    res.json({ ok: true, regla: out });
+  }));
+  r.get("/admin/puntos/resumen", requireAdmin, wrap(async (_req, res) => { res.json(await store.resumenPuntos()); }));
+  r.get("/admin/puntos/premios", requireAdmin, wrap(async (_req, res) => { res.json({ items: await store.listPremios({ soloActivos: false }) }); }));
+  const limpiarPremio = (b, parcial) => {
+    const p = {};
+    const txt = (k, max) => { if (b[k] !== undefined) p[k] = String(b[k]).replace(/[<>]/g, "").trim().slice(0, max); };
+    txt("titulo", 120); txt("descripcion", 400);
+    if (b.escalon !== undefined) { if (!["bronce", "plata", "oro"].includes(b.escalon)) throw httpError(400, "Escalón inválido (bronce, plata u oro)"); p.escalon = b.escalon; }
+    if (b.nivel_min !== undefined) { if (!tierBySlug(b.nivel_min)) throw httpError(400, "Nivel mínimo inválido"); p.nivel_min = b.nivel_min; }
+    if (b.costo !== undefined) { const n = Math.round(Number(b.costo)); if (!(n >= 1 && n <= 1000000)) throw httpError(400, "El costo va de 1 a 1.000.000 de puntos"); p.costo = n; }
+    if (b.stock !== undefined) { if (b.stock === null || b.stock === "") p.stock = null; else { const n = Math.round(Number(b.stock)); if (!(n >= 0 && n <= 100000)) throw httpError(400, "Stock inválido"); p.stock = n; } }
+    if (typeof b.activo === "boolean") p.activo = b.activo;
+    if (!parcial && (!p.titulo || p.titulo.length < 3)) throw httpError(400, "Poné un título");
+    if (!parcial && p.costo === undefined) throw httpError(400, "Poné el costo en puntos");
+    return p;
+  };
+  r.post("/admin/puntos/premios", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
+    const p = await store.crearPremio(limpiarPremio(req.body || {}, false));
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:premio-crear", targetId: p.id, detalle: p.titulo, por: req.adminUser });
+    res.status(201).json({ ok: true, premio: p });
+  }));
+  r.patch("/admin/puntos/premios/:id", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
+    const patch = limpiarPremio(req.body || {}, true);
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const p = await store.updatePremio(req.params.id, patch);
+    if (!p) throw httpError(404, "Premio no encontrado");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:premio-editar", targetId: p.id, detalle: JSON.stringify(patch), por: req.adminUser });
+    res.json({ ok: true, premio: p });
+  }));
+  r.get("/admin/puntos/canjes", requireAdmin, wrap(async (req, res) => {
+    res.json({ items: await store.listCanjesPremio({ estado: req.query.estado || undefined }) });
+  }));
+  // Entregar (avisa al hincha) o cancelar (devuelve los puntos y el stock) un canje pendiente.
+  r.patch("/admin/puntos/canjes/:id", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
+    const estado = String(req.body && req.body.estado);
+    if (!["entregado", "cancelado"].includes(estado)) throw httpError(400, "Estado inválido (entregado | cancelado)");
+    const out = await store.resolverCanjePremio(req.params.id, { estado });
+    if (!out.ok) throw httpError(out.motivo === "no_existe" ? 404 : 409, out.motivo === "no_existe" ? "Canje no encontrado" : "Ese canje ya se resolvió (" + out.estado + ")");
+    if (estado === "entregado" && mailer.enviarPremioListo) {
+      const socio = await store.getSocioById(out.canje.socio_id).catch(() => null);
+      if (socio && socio.email) mailer.enviarPremioListo(socio, { premio: out.premio && out.premio.titulo }).catch(() => {});
+    }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:canje-" + estado, targetId: req.params.id, detalle: out.premio && out.premio.titulo, por: req.adminUser });
+    res.json({ ok: true, estado: out.canje.estado });
+  }));
+  r.get("/admin/puntos/misiones", requireAdmin, wrap(async (_req, res) => { res.json({ items: await store.listMisiones(30), semana_actual: semanaIso() }); }));
+  r.post("/admin/puntos/misiones", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
+    const b = req.body || {};
+    const semana = String(b.semana || ""), pregunta = String(b.pregunta || "").replace(/[<>]/g, "").trim();
+    const opciones = Array.isArray(b.opciones) ? b.opciones.map((o) => String(o).replace(/[<>]/g, "").trim().slice(0, 60)).filter(Boolean) : [];
+    const correcta = Number(b.correcta);
+    if (!/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(semana)) throw httpError(400, "La semana va como 2026-W43");
+    if (pregunta.length < 5 || pregunta.length > 200) throw httpError(400, "La pregunta va de 5 a 200 caracteres");
+    if (opciones.length < 2 || opciones.length > 4) throw httpError(400, "Poné entre 2 y 4 opciones");
+    if (!Number.isInteger(correcta) || correcta < 0 || correcta >= opciones.length) throw httpError(400, "Indicá cuál opción es la correcta");
+    let m;
+    try { m = await store.crearMision({ semana, pregunta, opciones, correcta }); }
+    catch (e) { if (e.code === "23505") throw httpError(409, "Ya hay una misión para esa semana"); throw e; }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:mision-crear", targetId: m.id, detalle: semana, por: req.adminUser });
+    res.status(201).json({ ok: true, mision: m });
+  }));
+  r.patch("/admin/puntos/misiones/:id", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
+    if (typeof (req.body && req.body.activa) !== "boolean") throw httpError(400, "Indicá activa: true o false");
+    const m = await store.updateMision(req.params.id, { activa: req.body.activa });
+    if (!m) throw httpError(404, "Misión no encontrada");
+    res.json({ ok: true, mision: m });
+  }));
+
+  // ── Tareas del cron diario: cuota y débito (Portal de Socios) y vencimiento por inactividad ──
+  // La cuota al día suma con status ACTIVE o LIFETIME (nunca DEBT: es un pago pendiente). La API de socios tiene
+  // límite de velocidad, así que se revisan lotes durante los primeros 5 días del mes; cada socio queda marcado
+  // (un movimiento de 0 puntos) para no volver a consultarlo ese mes.
+  async function procesarCuotasMes() {
+    const out = { revisados: 0, cuota: 0, debito: 0, pausado: null };
+    if (!tutiApi.habilitado() || !store.sociosParaCuota || diaDelMesPy() > (Number(process.env.PUNTOS_CUOTA_DIAS) || 5)) return out; // PUNTOS_CUOTA_DIAS: hasta qué día del mes se revisan cuotas (5 por defecto)
+    const mes = mesPy(), reglas = await reglasPuntos(), rc = reglas.cuota || {};
+    const t0 = Date.now();
+    for (const c of await store.sociosParaCuota({ mes, limit: 120 })) {
+      if (Date.now() - t0 > 90000) { out.pausado = "tiempo"; break; }
+      const v = await tutiApi.consultarSocio(c.cedula);
+      if (!v.ok) { if (v.motivo === "limite" || v.motivo === "credenciales") { out.pausado = v.motivo; break; } continue; } // error puntual: mañana se reintenta
+      out.revisados++;
+      const s = v.encontrado ? v.socio : null;
+      if (s && ["ACTIVE", "LIFETIME"].includes(s.status) && rc.activa && rc.puntos > 0) {
+        await store.sumarPuntos({ socioId: c.id, motivo: "cuota", refId: mes, puntos: rc.puntos, detalle: "Cuota al día · " + mes });
+        out.cuota++;
+      } else {
+        await store.sumarPuntos({ socioId: c.id, motivo: "cuota", refId: mes, puntos: 0, detalle: s ? "Cuota sin confirmar al día (" + s.status + ")" : "No figura como titular" });
+      }
+      if (s && s.debitoAutomatico && (await darPuntos(c.id, "debito", "debito", "Débito automático activado"))) out.debito++;
+    }
+    return out;
+  }
+  async function procesarVencimientoPuntos() {
+    const out = { vencidos: 0, puntos: 0, avisos: 0 };
+    if ((await decision("venc")) !== "12_meses" || !store.puntosInactivos) return out;
+    const haceMeses = (n) => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() - n); return d.toISOString(); };
+    const dia = (f) => new Date(f).toISOString().slice(0, 10);
+    for (const s of await store.puntosInactivos({ desde: "1970-01-01T00:00:00Z", hasta: haceMeses(12) })) {
+      const m = await store.vencerPuntosSocio(s.id, "inact:" + dia(s.ultima_actividad));
+      if (m) { out.vencidos++; out.puntos += -m.puntos; }
+    }
+    const reservar = store.reservarNotificacion ? (k) => store.reservarNotificacion(k) : async () => true;
+    for (const s of await store.puntosInactivos({ desde: haceMeses(12), hasta: haceMeses(11) })) {
+      if (!(await reservar("puntos:aviso:" + s.id + ":" + dia(s.ultima_actividad)))) continue;
+      const vence = new Date(s.ultima_actividad); vence.setUTCMonth(vence.getUTCMonth() + 12);
+      if (mailer.enviarPuntosPorVencer) { await mailer.enviarPuntosPorVencer(s, { saldo: s.saldo, vence }).catch(() => {}); out.avisos++; }
+    }
+    return out;
+  }
+  async function procesarPuntosDiario() {
+    const out = {};
+    try { out.cuotas = await procesarCuotasMes(); } catch (e) { log.error({ err: e.message }, "puntos: cuotas del mes"); }
+    try { out.vencimiento = await procesarVencimientoPuntos(); } catch (e) { log.error({ err: e.message }, "puntos: vencimiento"); }
+    return out;
+  }
+
+  // ─── Peñas oficiales: link de captación, panel de la comisión y fondo ───────────
+  const emailOk = (e) => typeof e === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+  const limpioTxt = (s, max) => (typeof s === "string" ? s.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "");
+  const linkPena = (p) => baseUrl() + "/?pena=" + encodeURIComponent(p.slug);
+  // Privacidad: la comisión ve el nombre y la inicial del apellido de quien se sumó, nunca email, cédula ni teléfono.
+  const nombreCorto = (s) => [s.nombre, s.apellido ? s.apellido[0].toUpperCase() + "." : ""].filter(Boolean).join(" ") || "Hincha";
+
+  // Ranking público de peñas verificadas por altas (caché de 30 s: la home lo pide seguido).
+  let _penasPub = null;
+  async function penasVerificadas() {
+    if (_penasPub && Date.now() - _penasPub.t < 30000) return _penasPub.v;
+    const filas = store.listPenas ? await store.listPenas({ estado: "verificada" }) : [];
+    const v = filas.map((p, i) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, socios: p.socios, plus: p.plus, ranking: i + 1 }));
+    _penasPub = { t: Date.now(), v };
+    return v;
+  }
+  r.get("/penas", wrap(async (req, res) => {
+    const mia = req.socio && req.socio.pena_id;
+    res.json({ items: (await penasVerificadas()).map((p) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, ranking: p.ranking, es_tuya: p.id === mia })), mia: mia || null });
+  }));
+  r.get("/penas/:slug", wrap(async (req, res) => {
+    const p = (await penasVerificadas()).find((x) => x.slug === String(req.params.slug).toLowerCase());
+    if (!p) throw httpError(404, "Peña no encontrada");
+    res.json({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, ranking: p.ranking, link: linkPena(p), es_tuya: !!(req.socio && req.socio.pena_id === p.id) });
+  }));
+  // Pedir que el club verifique una peña nueva. Queda PENDIENTE: no aparece en el ranking ni recibe aportes hasta que el club la verifique.
+  r.post("/penas/solicitud", wrap(async (req, res) => {
+    const b = req.body || {};
+    const nombre = limpioTxt(b.nombre, 80), ciudad = limpioTxt(b.ciudad, 60), presidente = limpioTxt(b.presidente, 80), contacto = limpioTxt(b.contacto, 120).toLowerCase();
+    const iso = String(b.pais_iso || "PY").toUpperCase();
+    if (nombre.length < 3) throw httpError(400, "Poné el nombre de la peña");
+    if (ciudad.length < 2) throw httpError(400, "Poné la ciudad");
+    if (presidente.length < 3) throw httpError(400, "Poné el nombre de quien preside");
+    if (!emailOk(contacto)) throw httpError(400, "Poné un email de contacto válido: ahí te mandamos el acceso al panel");
+    if (!PAISES[iso]) throw httpError(400, "País inválido");
+    const pendientes = await store.listPenas({ estado: "pendiente" });
+    if (pendientes.some((p) => String(p.contacto).toLowerCase() === contacto)) throw httpError(409, "Ya recibimos una solicitud con ese email. Te vamos a escribir.");
+    const p = await store.crearPena({ nombre, ciudad, pais_iso: iso, presidente, contacto });
+    alertar("pena:solicitud:" + p.id, "Peña nueva para verificar", `${nombre} · ${ciudad} · preside ${presidente} · ${contacto}`);
+    res.status(201).json({ ok: true, id: p.id });
+  }));
+
+  // ── Panel de la comisión (usuario de peña, sesión de 12 h, header x-pena-token) ──
+  async function requirePena(req, res, next) {
+    try {
+      const s = await store.getPenaSesion(req.headers["x-pena-token"] || "");
+      if (!s) return res.status(401).json({ error: "Sesión de peña inválida" });
+      if (s.estado !== "verificada") return res.status(403).json({ error: "Tu peña está en pausa. Escribinos al club." });
+      req.pena = { id: s.pena_id, nombre: s.nombre, slug: s.slug };
+      next();
+    } catch (e) { res.status(401).json({ error: "no autorizado" }); }
+  }
+  async function abrirSesionPena(penaId) {
+    const token = crypto.randomBytes(32).toString("base64url");
+    await store.crearPenaSesion(penaId, token, new Date(Date.now() + 12 * 3600 * 1000).toISOString());
+    return token;
+  }
+  r.post("/pena/login", wrap(async (req, res) => {
+    const u = store.getPenaUsuarioPorUsuario ? await store.getPenaUsuarioPorUsuario(String(req.body?.usuario || "")) : null;
+    const ok = u && (await bcrypt.compare(String(req.body?.password || ""), u.password_hash));
+    if (!ok) throw httpError(401, "Usuario o contraseña incorrectos");
+    const p = await store.getPena(u.pena_id);
+    if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
+    res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
+  }));
+  // Elegir la contraseña con el link de un solo uso del correo de verificación.
+  r.post("/pena/clave", wrap(async (req, res) => {
+    const password = String(req.body?.password || "");
+    if (password.length < 8) throw httpError(400, "La contraseña debe tener al menos 8 caracteres");
+    const u = await store.getPenaUsuarioPorSetupToken(String(req.body?.token || ""));
+    if (!u) throw httpError(400, "El link venció o ya se usó. Pedile al club que te mande otro.");
+    await store.updatePenaUsuario(u.id, { password_hash: await bcrypt.hash(password, 10), setup_token: null, setup_exp: null });
+    const p = await store.getPena(u.pena_id);
+    if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
+    res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
+  }));
+  r.post("/pena/logout", requirePena, wrap(async (req, res) => { await store.borrarPenaSesion(req.headers["x-pena-token"]); res.json({ ok: true }); }));
+
+  async function fondoDe(penaId) {
+    const [p] = await store.listPenas({ id: penaId });
+    return { saldo: p.saldo, pendiente: p.canje_pendiente, disponible: Math.max(0, p.saldo - p.canje_pendiente), pena: p };
+  }
+  r.get("/pena/panel", requirePena, wrap(async (req, res) => {
+    const [f, altas, ranking, pct] = await Promise.all([fondoDe(req.pena.id), store.ultimasAltasPena(req.pena.id, 8), penasVerificadas(), decision("pct")]);
+    const mia = ranking.find((x) => x.id === req.pena.id);
+    res.json({
+      pena: { nombre: f.pena.nombre, slug: f.pena.slug, ciudad: f.pena.ciudad, pais_iso: f.pena.pais_iso, estado: f.pena.estado },
+      ranking: mia ? mia.ranking : null, total_penas: ranking.length,
+      kpis: { altas: f.pena.altas, socios: f.pena.socios, plus: f.pena.plus, saldo: f.saldo },
+      link: linkPena(f.pena), pct: Number(pct) || 10,
+      ultimas_altas: altas.map((s) => ({ nombre: nombreCorto(s), ciudad: s.ciudad || "", nivel: (tierBySlug(s.tier_slug) || {}).nombre || "Olimpista", creado: s.creado })),
+    });
+  }));
+  r.get("/pena/fondo", requirePena, wrap(async (req, res) => {
+    const [f, mov, pct] = await Promise.all([fondoDe(req.pena.id), store.movimientosPena(req.pena.id, 40), decision("pct")]);
+    res.json({ saldo: f.saldo, pendiente: f.pendiente, disponible: f.disponible, pct: Number(pct) || 10,
+      movimientos: mov.map((m) => ({ id: m.id, motivo: m.motivo, monto: m.monto, detalle: m.detalle, estado: m.estado, creado: m.creado })) });
+  }));
+  r.post("/pena/fondo/canje", requirePena, wrap(async (req, res) => {
+    const item = limpioTxt(req.body?.item, 120), monto = Math.round(Number(req.body?.monto) || 0);
+    if (item.length < 3) throw httpError(400, "Contanos qué querés canjear (ej: bus para ir al estadio)");
+    if (!(monto >= 1000)) throw httpError(400, "El monto mínimo es ₲ 1.000");
+    const out = await store.pedirCanjePena({ penaId: req.pena.id, monto, detalle: item });
+    if (!out || !out.ok) throw httpError(409, "El fondo disponible es ₲ " + Number((out && out.disponible) || 0).toLocaleString("es-PY"));
+    alertar("pena:canje:" + out.movimiento.id, "Peña pide canjear su fondo", `${req.pena.nombre} · ${item} · ₲ ${monto.toLocaleString("es-PY")}`);
+    res.status(201).json({ ok: true, movimiento: { id: out.movimiento.id, monto: out.movimiento.monto, detalle: out.movimiento.detalle, estado: out.movimiento.estado } });
+  }));
+
+  // ── Admin (club): verificar, pausar, aprobar canjes ──
+  r.get("/admin/penas", requireAdmin, wrap(async (_req, res) => {
+    const [items, canjes, pct] = await Promise.all([store.listPenas(), store.canjesPendientesPena(), decision("pct")]);
+    res.json({ items, canjes, pct: Number(pct) || 10 });
+  }));
+  async function enviarAccesoPena(pena, { renovar = false } = {}) {
+    let u = await store.getPenaUsuarioDePena(pena.id);
+    const setupToken = crypto.randomBytes(24).toString("base64url");
+    const setupExp = new Date(Date.now() + 7 * 86400000).toISOString();
+    if (!u) {
+      let usuario = pena.slug, n = 1;
+      while (await store.getPenaUsuarioPorUsuario(usuario)) usuario = pena.slug + "-" + (++n);
+      // Contraseña al azar que nadie conoce: la comisión elige la suya con el link de un solo uso.
+      u = await store.crearPenaUsuario({ penaId: pena.id, usuario, passwordHash: await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 10), setupToken, setupExp });
+    } else {
+      u = await store.updatePenaUsuario(u.id, { setup_token: setupToken, setup_exp: setupExp });
+      if (renovar && store.borrarSesionesDePena) await store.borrarSesionesDePena(pena.id);
+    }
+    const urlClave = baseUrl() + "/pena?token=" + encodeURIComponent(setupToken);
+    let correo = false;
+    if (emailOk(pena.contacto) && mailer.enviarPenaVerificada) {
+      await mailer.enviarPenaVerificada({ email: pena.contacto }, { pena, usuario: u.usuario, urlClave, urlLink: linkPena(pena) }).then(() => { correo = true; }).catch(() => {});
+    }
+    return { usuario: u.usuario, urlClave, correo };
+  }
+  r.post("/admin/penas/:id/verificar", requireAdmin, requirePerm("penas.write"), wrap(async (req, res) => {
+    const pena = await store.getPena(req.params.id);
+    if (!pena) throw httpError(404, "Peña no encontrada");
+    const p = await store.updatePena(pena.id, { estado: "verificada" });
+    _penasPub = null;
+    const acceso = await enviarAccesoPena(p);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:verificar", targetId: p.id, detalle: p.nombre, por: req.adminUser });
+    // Si no hay correo válido, el admin recibe el link para pasárselo a la comisión por otro medio.
+    res.json({ ok: true, pena: { id: p.id, slug: p.slug, estado: p.estado }, usuario: acceso.usuario, correo_enviado: acceso.correo, ...(acceso.correo ? {} : { url_clave: acceso.urlClave }) });
+  }));
+  r.post("/admin/penas/:id/acceso", requireAdmin, requirePerm("penas.write"), wrap(async (req, res) => {
+    const pena = await store.getPena(req.params.id);
+    if (!pena || pena.estado !== "verificada") throw httpError(409, "Solo se reenvía el acceso de una peña verificada");
+    const acceso = await enviarAccesoPena(pena, { renovar: true });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:acceso", targetId: pena.id, detalle: pena.nombre, por: req.adminUser });
+    res.json({ ok: true, usuario: acceso.usuario, correo_enviado: acceso.correo, ...(acceso.correo ? {} : { url_clave: acceso.urlClave }) });
+  }));
+  r.post("/admin/penas/:id/estado", requireAdmin, requirePerm("penas.write"), wrap(async (req, res) => {
+    const estado = String(req.body?.estado || "");
+    if (!["verificada", "pausada"].includes(estado)) throw httpError(400, "Estado inválido (verificada | pausada)");
+    const pena = await store.getPena(req.params.id);
+    if (!pena || pena.estado === "pendiente") throw httpError(409, "Una peña pendiente se verifica, no se pausa");
+    const p = await store.updatePena(pena.id, { estado });
+    if (estado === "pausada" && store.borrarSesionesDePena) await store.borrarSesionesDePena(pena.id);
+    _penasPub = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:" + estado, targetId: pena.id, detalle: pena.nombre, por: req.adminUser });
+    res.json({ ok: true, pena: { id: p.id, estado: p.estado } });
+  }));
+  // Aprobar (resta del saldo) o rechazar un canje pedido por una peña.
+  r.post("/admin/penas/canje/:id", requireAdmin, requirePerm("pagos.write", "penas.write"), wrap(async (req, res) => {
+    const aprobar = !(req.body && req.body.rechazar === true);
+    const out = await store.resolverCanjePena(req.params.id, { aprobar });
+    if (!out.ok) {
+      if (out.motivo === "no_existe") throw httpError(404, "Canje no encontrado");
+      if (out.motivo === "ya_resuelto") throw httpError(409, "Ese canje ya se resolvió (" + out.estado + ")");
+      throw httpError(409, "El fondo de la peña ya no alcanza para este canje");
+    }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: aprobar ? "penas:canje-aprobado" : "penas:canje-rechazado", targetId: req.params.id, detalle: out.movimiento.detalle, por: req.adminUser });
+    res.json({ ok: true, estado: out.movimiento.estado });
+  }));
+
+  // Aporte al fondo: el % que decide el club (10 por defecto) de lo que paga cada hincha de la peña.
+  // Un pedido acredita UNA vez (pedido_id único en el libro). Una falla acá nunca frena la entrega del pago.
+  async function acreditarFondoPena(pedido) {
+    try {
+      if (!store.acreditarPena || !pedido.socio_id) return;
+      const socio = await store.getSocioById(pedido.socio_id);
+      if (!socio || !socio.pena_id) return;
+      const pena = await store.getPena(socio.pena_id);
+      if (!pena || pena.estado !== "verificada") return;
+      const pct = Number(await decision("pct")) || 10;
+      const monto = Math.floor(Number(pedido.monto || 0) * pct / 100);
+      if (monto <= 0) return;
+      const m = await store.acreditarPena({ penaId: pena.id, pedidoId: pedido.id, monto, detalle: `${pedido.concepto || "Pago"} · ${nombreCorto(socio)} (${pct}%)` });
+      if (m) log.info({ penaId: pena.id, pedidoId: pedido.id, monto }, "peña: aporte al fondo");
+    } catch (e) {
+      log.error({ pedidoId: pedido.id, err: e.message }, "peña: no se pudo acreditar el fondo");
+      alertar("pena:fondo-fallo:" + pedido.id, "Falló el aporte al fondo de una peña", `Pedido ${pedido.id}: ${e.message}. El pago se entregó igual; hay que acreditar el fondo a mano.`);
+    }
+  }
+  // Aviso a la comisión de que se sumó un hincha: como máximo uno por día y peña.
+  async function avisarPenaSumo(pena, socio) {
+    if (!emailOk(pena.contacto) || !mailer.enviarPenaSumoSocio) return;
+    const reservar = store.reservarNotificacion ? (k) => store.reservarNotificacion(k) : async () => true;
+    if (!(await reservar("pena:sumo:" + pena.id + ":" + new Date().toISOString().slice(0, 10)))) return;
+    const [p] = await store.listPenas({ id: pena.id });
+    await mailer.enviarPenaSumoSocio({ email: pena.contacto }, { pena, invitado: nombreCorto(socio), total: p ? p.altas : undefined }).catch(() => {});
+  }
 
   // ─── Preventas de entradas ──────────────────────────────────────────────────
   r.get("/preventas", auth.attachSocio, wrap(async (req, res) => {
@@ -1774,6 +2707,11 @@ function buildRouter() {
   }));
 
   // ─── Red de Beneficios (socio): beneficios aplicables a SU nivel ──
+  // Billetera de Ahorro: lo que ahorró este mes y en el año (mes calendario en hora de Paraguay).
+  r.get("/beneficios/ahorro", auth.requireSocio, wrap(async (req, res) => {
+    const a = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id) : { mes: 0, anio: 0, total: 0, canjes_mes: 0 };
+    res.json({ mes: a.mes, anio: a.anio, total: a.total, canjes_mes: a.canjes_mes });
+  }));
   r.get("/beneficios", auth.requireSocio, wrap(async (req, res) => {
     const [m, sFull] = await Promise.all([store.getMembresia(req.socio.id), store.getSocioById(req.socio.id).catch(() => null)]);
     const tier = (m && m.tier_slug) || "olimpista";
@@ -1782,14 +2720,15 @@ function buildRouter() {
     // Orden: desbloqueados primero (lo tuyo) y, dentro de eso, local-first (comercio de tu ciudad).
     const esLocal = (x) => (ciudad && String(x.comercio_ciudad || "").toLowerCase() === ciudad) ? 1 : 0;
     items = items.slice().sort((a, b) => ((b.desbloqueado ? 1 : 0) - (a.desbloqueado ? 1 : 0)) || (esLocal(b) - esLocal(a)));
-    const ahorro = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id).catch(() => ({ mes: 0, total: 0 })) : { mes: 0, total: 0 };
+    const ahorro = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id).catch(() => ({ mes: 0, anio: 0, total: 0 })) : { mes: 0, anio: 0, total: 0 };
     const codigo = (sFull && sFull.ref_codigo) || "";
+    items = items.map((b) => ({ ...b, agotado: b.stock != null && Number(b.stock) <= 0 }));
     res.json({ tier, ciudad: (sFull && sFull.ciudad) || "", codigo, items, ahorro });
   }));
 
   // ─── Panel de validación del COMERCIO (Red de Beneficios) ─────────────────────
   // Alta de acceso (admin): setea usuario+contraseña del comercio para su panel.
-  r.post("/admin/comercios/:id/acceso", requireAdmin, requirePerm("contenido.write"), wrap(async (req, res) => {
+  r.post("/admin/comercios/:id/acceso", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
     const usuario = String(req.body?.usuario || "").toLowerCase().trim();
     const password = String(req.body?.password || "");
     if (usuario.length < 3) throw httpError(400, "Usuario inválido (mín. 3)");
@@ -1822,31 +2761,122 @@ function buildRouter() {
       next();
     } catch (e) { res.status(401).json({ error: "no autorizado" }); }
   }
-  // Beneficios del comercio (para elegir cuál validar).
+  // Beneficios del comercio: `items` = lo publicado (para elegir cuál validar en caja), `ofertas` = todo lo suyo con su estado.
   r.get("/comercio/beneficios", requireComercio, wrap(async (req, res) => {
-    res.json({ comercio: req.comercio, items: store.beneficiosDeComercio ? await store.beneficiosDeComercio(req.comercio.id) : [] });
+    const ofertas = store.ofertasDeComercio ? await store.ofertasDeComercio(req.comercio.id) : [];
+    res.json({ comercio: req.comercio, items: store.beneficiosDeComercio ? await store.beneficiosDeComercio(req.comercio.id) : [],
+      ofertas: ofertas.map(ofertaOut) });
   }));
-  // Validar un canje: código de socio + beneficio + monto → registra canje y calcula ahorro.
+  const ofertaOut = (b) => ({ id: b.id, titulo: b.titulo, descripcion: b.descripcion, valor: b.valor, niveles: b.niveles, pct: b.pct, ahorro_estimado: b.ahorro_estimado,
+    stock: b.stock == null ? null : b.stock, activo: b.activo, estado: b.estado || "aprobado", origen: b.origen || "club", motivo_rechazo: b.motivo_rechazo || null, vigencia_hasta: b.vigencia_hasta || null });
+
+  // ── Ofertas que carga el propio comercio: nacen en BORRADOR y el club las aprueba antes de publicarse ──
+  const NIVELES_OFERTA = { todos: "todos", plus: "premium,socio", socio: "socio" };
+  function limpiarOferta(b, parcial) {
+    const o = {};
+    const txt = (k, min, max, msg) => { if (b[k] !== undefined) { const v = String(b[k]).replace(/[<>]/g, "").replace(/\s+/g, " ").trim(); if (v.length < min || v.length > max) throw httpError(400, msg); o[k] = v; } };
+    txt("titulo", 3, 100, "El título va de 3 a 100 caracteres");
+    txt("valor", 1, 30, "Poné el beneficio en pocas palabras (ej. 10%, 2x1)");
+    if (b.descripcion !== undefined) o.descripcion = String(b.descripcion).replace(/[<>]/g, "").trim().slice(0, 300);
+    if (b.para !== undefined) { if (!NIVELES_OFERTA[b.para]) throw httpError(400, "Elegí para quién es: todos, plus o socio"); o.niveles = NIVELES_OFERTA[b.para]; }
+    if (o.valor !== undefined || b.valor !== undefined) { const m = /^(\d{1,3})\s*%$/.exec(o.valor || ""); if (m && Number(m[1]) >= 1 && Number(m[1]) <= 100) o.pct = Number(m[1]); else if (o.valor !== undefined) o.pct = null; }
+    if (b.ahorro_estimado !== undefined) {
+      if (b.ahorro_estimado === null || b.ahorro_estimado === "") o.ahorro_estimado = null;
+      else { const n = Math.round(Number(b.ahorro_estimado)); if (!(n >= 0 && n <= 10000000)) throw httpError(400, "El ahorro estimado va de 0 a ₲ 10.000.000"); o.ahorro_estimado = n; }
+    }
+    if (b.stock !== undefined) {
+      if (b.stock === null || b.stock === "") o.stock = null;
+      else { const n = Math.round(Number(b.stock)); if (!(n >= 0 && n <= 100000)) throw httpError(400, "El cupo va de 0 a 100.000"); o.stock = n; }
+    }
+    if (b.vigencia_hasta !== undefined) {
+      if (b.vigencia_hasta === null || b.vigencia_hasta === "") o.vigencia_hasta = null;
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(String(b.vigencia_hasta)) && !isNaN(new Date(b.vigencia_hasta).getTime())) o.vigencia_hasta = String(b.vigencia_hasta);
+      else throw httpError(400, "Fecha de vigencia inválida (AAAA-MM-DD)");
+    }
+    if (typeof b.activo === "boolean") o.activo = b.activo;
+    if (!parcial && (!o.titulo || !o.valor)) throw httpError(400, "Poné el título y el beneficio");
+    return o;
+  }
+  r.post("/comercio/beneficios", requireComercio, wrap(async (req, res) => {
+    const o = limpiarOferta(req.body || {}, false);
+    const abiertas = (await store.ofertasDeComercio(req.comercio.id)).filter((x) => (x.estado || "aprobado") === "borrador").length;
+    if (abiertas >= 10) throw httpError(409, "Ya tenés 10 ofertas esperando aprobación. Esperá a que el club las revise.");
+    const b = await store.crearBeneficioComercio({ comercioId: req.comercio.id, titulo: o.titulo, descripcion: o.descripcion, valor: o.valor, niveles: o.niveles || "todos",
+      pct: o.pct == null ? null : o.pct, ahorro_estimado: o.ahorro_estimado == null ? null : o.ahorro_estimado, stock: o.stock == null ? null : o.stock, vigencia_hasta: o.vigencia_hasta || null });
+    alertar("oferta:nueva:" + b.id, "Oferta nueva de un comercio para aprobar", `${req.comercio.nombre}: "${b.titulo}" (${b.valor})`);
+    res.status(201).json({ ok: true, oferta: ofertaOut(b) });
+  }));
+  // Editar una oferta PROPIA. Cambiar lo que ve el hincha (título, beneficio, para quién, ahorro, vigencia) de una oferta ya
+  // aprobada o rechazada la devuelve a "espera aprobación"; pausarla o ajustar el cupo no.
+  r.patch("/comercio/beneficios/:id", requireComercio, wrap(async (req, res) => {
+    const actual = (await store.ofertasDeComercio(req.comercio.id)).find((x) => x.id === req.params.id);
+    if (!actual) throw httpError(404, "Oferta no encontrada");
+    const patch = limpiarOferta(req.body || {}, true);
+    delete patch.para;
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const CAMBIOS_VISIBLES = ["titulo", "valor", "descripcion", "niveles", "pct", "ahorro_estimado", "vigencia_hasta"];
+    const cambioVisible = CAMBIOS_VISIBLES.some((k) => patch[k] !== undefined && String(patch[k] == null ? "" : patch[k]) !== String(actual[k] == null ? "" : actual[k]));
+    if (cambioVisible && (actual.estado || "aprobado") !== "borrador") { patch.estado = "borrador"; patch.motivo_rechazo = null; }
+    const b = await store.updateBeneficioComercio(actual.id, req.comercio.id, patch);
+    if (cambioVisible && patch.estado === "borrador") alertar("oferta:editada:" + b.id + ":" + Date.now(), "Un comercio editó una oferta: vuelve a aprobación", `${req.comercio.nombre}: "${b.titulo}"`);
+    res.json({ ok: true, oferta: ofertaOut(b), vuelve_a_aprobacion: !!(cambioVisible && patch.estado === "borrador") });
+  }));
+
+  // ── Estadísticas del comercio: canjes, ahorro entregado, ventas, ticket promedio y mix por nivel ──
+  const csvCelda = (v) => { let s = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; }; // sin inyección de fórmulas en Excel
+  const enviarCsv = (res, nombre, cabecera, filas) => {
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${nombre}"`);
+    res.send("﻿" + [cabecera.map(csvCelda).join(","), ...filas.map((f) => f.map(csvCelda).join(","))].join("\n"));
+  };
+  r.get("/comercio/estadisticas", requireComercio, wrap(async (req, res) => {
+    const p = periodo({ desde: req.query.desde, hasta: req.query.hasta });
+    if (req.query.format === "csv") {
+      const filas = await store.canjesDeComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta });
+      return enviarCsv(res, "canjes-" + p.etiqueta.replace(/ a /, "_") + ".csv", ["fecha", "beneficio", "nivel", "monto", "ahorro"],
+        filas.map((f) => [new Date(f.creado).toISOString(), f.beneficio, f.nivel, f.monto, f.ahorro]));
+    }
+    res.json({ periodo: p.etiqueta, ...(await store.estadisticasComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta })) });
+  }));
+
+  // Validar un canje en caja: QR del carnet (rota cada 60 s) o código fijo del socio, + beneficio + monto.
+  // Con QR: se verifica la firma y la ventana (±1) y cada QR sirve UNA vez. El registro (stock, límite de días, QR usado y canje)
+  // es una sola transacción: dos cajas escaneando a la vez no duplican el canje ni pasan el cupo.
   r.post("/comercio/validar", requireComercio, wrap(async (req, res) => {
-    const codigo = String(req.body?.codigo || "").trim().toLowerCase();
     const monto = Math.max(0, Number(req.body?.monto) || 0);
-    const socio = codigo && store.getSocioByRefCodigo ? await store.getSocioByRefCodigo(codigo) : null;
+    const tokenQr = String(req.body?.token || "").trim();
+    let socio = null, ventana = null, via = "codigo";
+    if (tokenQr) {
+      const v = await carnetLib.verificarToken(tokenQr, (id) => store.getCarnetSecreto(id));
+      if (!v.ok) return res.json({ ok: false, motivo: v.motivo === "vencido" ? "qr_vencido" : "qr_invalido" });
+      socio = await store.getSocioById(v.socioId); ventana = v.ventana; via = "qr";
+    } else {
+      const codigo = String(req.body?.codigo || "").trim().toLowerCase();
+      socio = codigo && store.getSocioByRefCodigo ? await store.getSocioByRefCodigo(codigo) : null;
+    }
     if (!socio) return res.json({ ok: false, motivo: "socio_no_encontrado" });
     const ben = store.getBeneficio ? await store.getBeneficio(req.body?.beneficioId) : null;
-    if (!ben || ben.comercio_id !== req.comercio.id || ben.activo === false) return res.json({ ok: false, motivo: "beneficio_invalido" });
+    if (!ben || ben.comercio_id !== req.comercio.id || ben.activo === false || (ben.estado || "aprobado") !== "aprobado") return res.json({ ok: false, motivo: "beneficio_invalido" });
     const m = await store.getMembresia(socio.id);
     const tier = (m && m.tier_slug) || "olimpista";
     const nivs = ben.niveles === "todos" ? "todos" : String(ben.niveles).split(",").map((x) => x.trim());
     const socioOut = { nombre: [socio.nombre, socio.apellido].filter(Boolean).join(" ") || socio.email, tier };
     if (!(nivs === "todos" || nivs.indexOf(tier) > -1)) return res.json({ ok: false, motivo: "nivel_no_aplica", socio: socioOut, requiere: (nivs === "todos" ? "olimpista" : nivs[0]) });
-    if (ben.limite_dias && store.ultimoCanje) {
-      const u = await store.ultimoCanje(socio.id, ben.id);
-      if (u && (Date.now() - new Date(u.creado).getTime()) / 86400000 < Number(ben.limite_dias)) return res.json({ ok: false, motivo: "limite", socio: socioOut });
-    }
     const ahorro = ben.pct ? Math.round(monto * Number(ben.pct) / 100) : (Number(ben.ahorro_estimado) || 0);
-    await store.registrarCanje({ beneficioId: ben.id, socioId: socio.id, comercioId: req.comercio.id, validadoPor: req.comercio.nombre, monto: monto || null, ahorro: ahorro || null });
-    res.json({ ok: true, socio: socioOut, beneficio: ben.titulo, ahorro: ahorro });
+    const out = await store.canjearBeneficio({ beneficioId: ben.id, socioId: socio.id, comercioId: req.comercio.id, validadoPor: req.comercio.nombre, monto: monto || null, ahorro: ahorro || null, tierSlug: tier, ventana });
+    if (!out.ok) return res.json({ ok: false, motivo: out.motivo, socio: socioOut });
+    res.json({ ok: true, socio: socioOut, beneficio: ben.titulo, ahorro, via, stock: out.stock });
   }));
+
+  // QR rotativo del carnet: el hincha lo pide cada minuto y lo muestra en caja.
+  r.get("/carnet/token", auth.requireSocio, wrap(async (req, res) => {
+    const secreto = await store.asegurarCarnetSecreto(req.socio.id);
+    if (!secreto) throw httpError(404, "Cuenta no encontrada");
+    const t = carnetLib.generarToken(req.socio.id, secreto);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ token: t.token, codigo: t.codigo, vence_en: t.vence_en, ventana_s: carnetLib.VENTANA_S });
+  }));
+
 
   // ─── Carnet digital ─────────────────────────────────────────────────────────
   r.get("/carnet", auth.requireSocio, wrap(async (req, res) => {
@@ -1865,6 +2895,218 @@ function buildRouter() {
         desde: membresia.inicio,
         numero: "OLI-" + req.socio.id.replace(/\D/g, "").slice(0, 8).padStart(8, "0"),
       },
+    });
+  }));
+
+  // ─── Atención: asistente con IA + bandeja del club ───────────────────────────
+  // El hincha escribe en la app (o por WhatsApp, que entra a la misma función con canal='whatsapp'); el asistente
+  // contesta con la API de Anthropic en el servidor. Si la IA falla, responde por palabras clave. Si pide una
+  // persona, la conversación pasa a la bandeja y la IA calla hasta que se resuelva.
+  const diaPy = (d) => new Date((d ? new Date(d).getTime() : Date.now()) - 3 * 3600000).toISOString().slice(0, 10);
+  const _atRafaga = new Map();   // hincha → marcas de tiempo (ráfaga por minuto)
+  function atRafagaOk(id) {
+    const n = Date.now(), max = Number(process.env.ATENCION_RAFAGA) || 8;
+    const v = (_atRafaga.get(id) || []).filter((x) => n - x < 60000);
+    if (v.length >= max) { _atRafaga.set(id, v); return false; }
+    v.push(n); _atRafaga.set(id, v);
+    if (_atRafaga.size > 5000) for (const [k, a] of _atRafaga) if (!a.length || n - a[a.length - 1] > 60000) _atRafaga.delete(k);
+    return true;
+  }
+  const llamarIA = () => (process.env.ANTHROPIC_API_KEY
+    ? (p) => atencionLib.llamarAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY, modelo: atencionLib.MODELO(), system: p.system, messages: p.messages, tools: p.tools, maxTokens: p.max_tokens })
+    : null);
+  const msgPublico = (m) => { let meta = null; try { meta = m.meta ? JSON.parse(m.meta) : null; } catch (e) { meta = null; } return { id: m.id, de: m.de, texto: m.texto, meta, creado: m.creado }; };
+
+  // Lo que el asistente sabe del hincha que escribe (nunca de otro).
+  async function cuentaParaAtencion(socio) {
+    const full = (await store.getSocioById(socio.id)) || socio;
+    const [m, ahorro, saldo, pujas, club] = await Promise.all([
+      store.getMembresia(socio.id),
+      store.resumenAhorroSocio ? store.resumenAhorroSocio(socio.id).catch(() => ({ mes: 0, anio: 0 })) : { mes: 0, anio: 0 },
+      store.saldoPuntos ? store.saldoPuntos(socio.id) : 0,
+      store.pujasDeSocio ? store.pujasDeSocio(socio.id, 5) : [],
+      estadoClubDe(full),
+    ]);
+    const pena = full.pena_id && store.getPena ? await store.getPena(full.pena_id).catch(() => null) : null;
+    const tier = (m && m.tier_slug) || "olimpista", t = tierBySlug(tier) || {}, plus = tierBySlug("premium") || {};
+    const bloqueo = full.subastas_bloqueo_hasta && new Date(full.subastas_bloqueo_hasta).getTime() > Date.now() ? full.subastas_bloqueo_hasta : null;
+    const resultado = (p) => p.estado === "activa" ? "en_vivo" : (p.adjudicado_a || p.ganador_id) === socio.id ? (p.pago_estado === "pagado" ? "pagado" : "ganaste_sin_pagar") : "no_ganaste";
+    return {
+      nombre: full.nombre || "", nivel: t.nombre || tier, plan_club: club.plan_club || "", ciudad: full.ciudad || "", pais: full.pais || "",
+      puntos: saldo, escalon: escalonDe(saldo).nombre, ahorro_mes: ahorro.mes || 0, ahorro_anio: ahorro.anio || 0,
+      pena: pena ? pena.nombre : null,
+      abono: "todavía no disponible en la app", credito: "todavía no disponible en la app",
+      subastas: { lotes: pujas.map((p) => ({ titulo: p.titulo, mejor_oferta: p.mejor_oferta, resultado: resultado(p) })), bloqueado_hasta: bloqueo, puede_pujar: !bloqueo },
+      estado_socio: club.confirmado ? (club.encontrado === false ? "no figura como titular" : club.al_dia === false ? "con un pago pendiente" : "al día") : "sin confirmar",
+      plus: { precio_anio_gs: plus.precioAnio || 0, beneficios: plus.beneficios || [] },
+    };
+  }
+  function ejecutoresAtencion({ socio, conv }) {
+    return {
+      consultar_cuenta: async () => ({ resultado: await cuentaParaAtencion(socio) }),
+      listar_beneficios: async () => {
+        const m = await store.getMembresia(socio.id);
+        const items = store.beneficiosParaNivel ? await store.beneficiosParaNivel((m && m.tier_slug) || "olimpista") : [];
+        return { resultado: items.slice(0, 15).map((b) => ({ titulo: b.titulo, comercio: b.comercio_nombre || "", valor: b.valor || "", puede_usarlo: !!b.desbloqueado })) };
+      },
+      abrir_pago_subasta: async () => {
+        const pujas = store.pujasDeSocio ? await store.pujasDeSocio(socio.id, 30) : [];
+        const ganado = pujas.find((p) => p.estado === "cerrada" && (p.adjudicado_a || p.ganador_id) === socio.id && p.pago_estado !== "pagado");
+        if (!ganado) return { resultado: { ok: false, motivo: "no_tenes_lotes_para_pagar" } };
+        const s = await store.getSubasta(ganado.subasta_id);
+        if (!s) return { resultado: { ok: false, motivo: "lote_no_encontrado" } };
+        if (s.pago_vence && new Date(s.pago_vence).getTime() < Date.now()) return { resultado: { ok: false, motivo: "plazo_vencido", detalle: "El plazo de pago venció: lo resuelve una persona del club." } };
+        const r0 = await iniciarPagoSubasta(socio, s, null);
+        if (r0.falta_cedula) return { resultado: { ok: false, motivo: "falta_cedula" }, tarjeta: { tipo: "pago_subasta", titulo: "Completá tu cédula para pagar el lote", url: baseUrl() + "/socio" } };
+        return { resultado: { ok: true, lote: s.titulo, monto: s.puja_actual }, tarjeta: { tipo: "pago_subasta", titulo: "Pagar «" + s.titulo + "»", url: r0.pago.urlPago } };
+      },
+      derivar_a_humano: async ({ motivo }) => {
+        const mot = String(motivo || "").replace(/[<>]/g, "").trim().slice(0, 200) || "Sin motivo";
+        const [m, full] = await Promise.all([store.getMembresia(socio.id), store.getSocioById(socio.id)]);
+        const nivel = (tierBySlug((m && m.tier_slug) || "olimpista") || {}).nombre || "Olimpista";
+        const c = await store.cambiarEstadoAtencion(conv.id, { desde: ["ia"], a: "humano", patch: { motivo: mot, resumen: mot + " · " + nivel + " · " + ((full && full.ciudad) || "sin ciudad"), derivada_en: new Date().toISOString() } });
+        if (c) alertar("atencion:" + conv.id, "Un hincha pide hablar con una persona", [socio.nombre, conv.canal, mot].filter(Boolean).join(" · "));
+        return { resultado: { ok: true, derivado: true }, tarjeta: { tipo: "derivado", titulo: "Te paso con una persona del club" } };
+      },
+    };
+  }
+  // Mismo motor para la app y para WhatsApp (GHL): quien llama pone el canal.
+  async function procesarMensajeAtencion({ socio, texto, canal = "app" }) {
+    const conv = await store.abrirConversacionAtencion({ socioId: socio.id, canal });
+    const nuevos = [await store.addMensajeAtencion({ conversacionId: conv.id, de: "hincha", texto })];
+    if (conv.estado === "humano") return { conversacion: conv, nuevos, via: "humano" };
+    const [historial, config] = await Promise.all([store.listMensajesAtencion(conv.id, { limit: 30 }), store.getAtencionConfig()]);
+    const out = await atencionLib.responder({
+      historial, config, ejecutores: ejecutoresAtencion({ socio, conv }), llamar: llamarIA(),
+      log: (...a) => log.warn({ detalle: a.map(String).join(" ") }, "atención"),
+    });
+    nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "ia", texto: out.texto, meta: { via: out.via } }));
+    for (const tj of out.tarjetas) nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "tarjeta", texto: tj.titulo, meta: tj }));
+    return { conversacion: await store.getConversacionAtencion(conv.id), nuevos, via: out.via };
+  }
+
+  r.get("/atencion/chat", auth.requireSocio, wrap(async (req, res) => {
+    const [ultima] = store.listConversacionesDeSocio ? await store.listConversacionesDeSocio(req.socio.id, 1) : [];
+    const reciente = ultima && (ultima.estado !== "resuelta" || Date.now() - new Date(ultima.resuelta_en || ultima.actualizado).getTime() < 10 * 60000);
+    const m = await store.getMembresia(req.socio.id);
+    const sugerencias = atencionLib.sugerenciasPara({ tier: (m && m.tier_slug) || "olimpista", esSocio: !!req.socio.es_socio_olimpia });
+    const mensajes = reciente ? (await store.listMensajesAtencion(ultima.id, { limit: 60 })).map(msgPublico) : [];
+    res.json({ conversacion: reciente ? { id: ultima.id, estado: ultima.estado, canal: ultima.canal } : null, mensajes, sugerencias, ia: !!process.env.ANTHROPIC_API_KEY });
+  }));
+  r.post("/atencion/chat", auth.requireSocio, wrap(async (req, res) => {
+    const texto = String((req.body && req.body.texto) || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim();
+    if (!texto) throw httpError(400, "Escribí tu consulta");
+    if (texto.length > atencionLib.MAX_TEXTO) throw httpError(400, "El mensaje es muy largo (máximo " + atencionLib.MAX_TEXTO + " caracteres)");
+    if (!atRafagaOk(req.socio.id)) throw httpError(429, "Vas muy rápido. Esperá un momento y volvé a escribir.");
+    const tope = Number(process.env.ATENCION_TOPE_DIARIO) || 40;
+    if ((await store.incrementarUsoAtencion(req.socio.id, diaPy())) > tope) throw httpError(429, "Llegaste al máximo de mensajes de hoy. Escribinos mañana.");
+    const out = await procesarMensajeAtencion({ socio: req.socio, texto, canal: "app" });
+    res.json({ estado: out.conversacion.estado, conversacion_id: out.conversacion.id, mensajes: out.nuevos.map(msgPublico) });
+  }));
+
+  // Admin · Atención
+  const AT_VACIO = { hoy: 0, semana: 0, solo_ia: 0, primera_resp_min: null, abiertas_humano: 0 };
+  r.get("/admin/atencion", requireAdmin, wrap(async (req, res) => {
+    const estado = ["ia", "humano", "resuelta"].includes(req.query.estado) ? req.query.estado : undefined;
+    const ahora = Date.now();
+    const [items, ind] = await Promise.all([
+      store.listBandejaAtencion({ estado, limit: 100 }),
+      store.indicadoresAtencion({ desdeDia: new Date(diaPy() + "T03:00:00.000Z").toISOString(), desde7: new Date(ahora - 7 * 86400000).toISOString() }).catch(() => AT_VACIO),
+    ]);
+    res.json({
+      items,
+      indicadores: { hoy: ind.hoy, pct_ia: ind.semana ? Math.round((ind.solo_ia / ind.semana) * 100) : null, primera_resp_min: ind.primera_resp_min, abiertas_humano: ind.abiertas_humano },
+    });
+  }));
+  const configAtencion = async () => {
+    const cfg = await store.getAtencionConfig();
+    return {
+      items: atencionLib.CLAVES.map((k) => ({ clave: k, nombre: atencionLib.HERRAMIENTAS[k].nombre, descripcion: atencionLib.HERRAMIENTAS[k].descripcion, activo: !!cfg[k], disponible: atencionLib.HERRAMIENTAS[k].disponible, motivo_no_disponible: atencionLib.HERRAMIENTAS[k].motivo_no_disponible || null })),
+      reglas_fijas: atencionLib.REGLAS_FIJAS, modelo: atencionLib.MODELO(), ia_conectada: !!process.env.ANTHROPIC_API_KEY,
+    };
+  };
+  r.get("/admin/atencion/config", requireAdmin, wrap(async (_req, res) => { res.json(await configAtencion()); }));
+  r.put("/admin/atencion/config", requireAdmin, requirePerm("atencion.write"), wrap(async (req, res) => {
+    const clave = String((req.body && req.body.clave) || ""), activo = !!(req.body && req.body.activo);
+    if (!atencionLib.CLAVES.includes(clave)) throw httpError(404, "Acción desconocida");
+    if (activo && !atencionLib.HERRAMIENTAS[clave].disponible) throw httpError(409, "Todavía no está disponible: " + (atencionLib.HERRAMIENTAS[clave].motivo_no_disponible || ""));
+    await store.setAtencionConfig(clave, activo);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "atencion:config", targetId: clave, detalle: activo ? "activada" : "desactivada", por: req.adminUser });
+    res.json(await configAtencion());
+  }));
+  r.get("/admin/atencion/:id", requireAdmin, wrap(async (req, res) => {
+    const c = await store.getConversacionAtencion(req.params.id);
+    if (!c) throw httpError(404, "Conversación no encontrada");
+    const [mensajes, socio, m] = await Promise.all([store.listMensajesAtencion(c.id, { limit: 200 }), c.socio_id ? store.getSocioById(c.socio_id) : null, c.socio_id ? store.getMembresia(c.socio_id) : null]);
+    res.json({
+      conversacion: c, mensajes: mensajes.map(msgPublico),
+      socio: socio ? { id: socio.id, nombre: socio.nombre, apellido: socio.apellido, ciudad: socio.ciudad || "", tier: (m && m.tier_slug) || "olimpista" } : null,
+    });
+  }));
+  r.post("/admin/atencion/:id/responder", requireAdmin, requirePerm("atencion.write"), wrap(async (req, res) => {
+    const texto = String((req.body && req.body.texto) || "").replace(/[<>]/g, "").trim();
+    if (!texto) throw httpError(400, "Escribí la respuesta");
+    if (texto.length > 1000) throw httpError(400, "La respuesta es muy larga (máximo 1000 caracteres)");
+    let c = await store.getConversacionAtencion(req.params.id);
+    if (!c) throw httpError(404, "Conversación no encontrada");
+    if (c.estado === "resuelta") throw httpError(409, "La conversación ya está resuelta");
+    const ahora = new Date().toISOString();
+    if (c.estado === "ia") { // una persona toma la conversación: la IA calla
+      c = (await store.cambiarEstadoAtencion(c.id, { desde: ["ia"], a: "humano", patch: { motivo: c.motivo || "Una persona del club tomó la conversación", derivada_en: ahora } })) || (await store.getConversacionAtencion(c.id));
+    }
+    await store.updateConversacionAtencion(c.id, { asignado_a: req.adminUser, ...(c.humano_responde_en ? {} : { humano_responde_en: ahora }) });
+    const msg = await store.addMensajeAtencion({ conversacionId: c.id, de: "humano", texto, meta: { agente: req.adminUser } });
+    let entregado = true;
+    if (c.canal === "whatsapp") { // la respuesta sale por el mismo canal: GHL
+      entregado = false;
+      const url = (process.env.GHL_WHATSAPP_URL || "").trim();
+      if (/^https:\/\//i.test(url) && c.socio_id) {
+        const s = await store.getSocioById(c.socio_id);
+        entregado = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ conversacion_id: c.id, telefono: (s && (s.whatsapp || s.telefono)) || "", texto }) }).then((x) => x.ok).catch(() => false);
+      }
+    }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "atencion:responder", targetId: c.id, por: req.adminUser });
+    res.status(201).json({ ok: true, mensaje: msgPublico(msg), entregado });
+  }));
+  r.post("/admin/atencion/:id/resolver", requireAdmin, requirePerm("atencion.write"), wrap(async (req, res) => {
+    const c = await store.cambiarEstadoAtencion(req.params.id, { desde: ["ia", "humano"], a: "resuelta", patch: { resuelta_en: new Date().toISOString() } });
+    if (!c) throw httpError(409, "La conversación no existe o ya estaba resuelta");
+    await store.addMensajeAtencion({ conversacionId: c.id, de: "sistema", texto: "La conversación se cerró. El asistente vuelve a atenderte." });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "atencion:resolver", targetId: c.id, por: req.adminUser });
+    res.json({ ok: true, conversacion: c });
+  }));
+
+  // ─── Centro de ayuda: tutoriales y preguntas frecuentes por perfil (contenido estático en data/ayuda.json) ───
+  // Los perfiles del club (CD, Marketing, Comercial, Operaciones, Atención, Admin) solo se ven con sesión del panel.
+  const AYUDA = require("./data/ayuda.json");
+  async function esSesionAdmin(req) {
+    try {
+      const token = req.headers["x-admin-token"] || "";
+      if (token && store.getAdminSession && (await store.getAdminSession(token))) return true;
+      const key = req.headers["x-admin-key"] || "";
+      if (key) { const kb = Buffer.from(key); return ADMIN_KEYS.some((a) => { const ab = Buffer.from(a.key); return ab.length === kb.length && crypto.timingSafeEqual(ab, kb); }); }
+    } catch (e) { /* sin sesión */ }
+    return false;
+  }
+  r.get("/ayuda", wrap(async (req, res) => {
+    const club = await esSesionAdmin(req);
+    const visibles = AYUDA.aud.filter((a) => club || !a.club);
+    const pedida = String(req.query.aud || "");
+    if (pedida && !AYUDA.aud.some((a) => a.id === pedida)) throw httpError(404, "Perfil de ayuda desconocido");
+    if (pedida && !visibles.some((a) => a.id === pedida)) throw httpError(403, "Esta ayuda es del equipo del club: entrá al panel para verla");
+    const aud = pedida || visibles[0].id;
+    const delPerfil = (x) => x.aud.includes(aud);
+    const cat = String(req.query.cat || "todas");
+    const q = String(req.query.q || "").trim().toLowerCase().slice(0, 80);
+    const coincide = (x) => !q || JSON.stringify(x).toLowerCase().includes(q);
+    const cuenta = (id) => AYUDA.tuts.filter((x) => x.aud.includes(id)).length + AYUDA.faqs.filter((x) => x.aud.includes(id)).length;
+    const base = [...AYUDA.tuts, ...AYUDA.faqs].filter(delPerfil);
+    res.setHeader("Cache-Control", "no-store"); // depende de si hay sesión del panel
+    res.json({
+      aud: visibles.map((a) => ({ id: a.id, label: a.label, grupo: a.grupo, desc: a.desc, tile: a.tile, n: cuenta(a.id) })),
+      categorias: Object.entries(AYUDA.cats).filter(([id]) => base.some((x) => x.cat === id)).map(([id, label]) => ({ id, label })),
+      tuts: AYUDA.tuts.filter((x) => delPerfil(x) && (cat === "todas" || x.cat === cat) && coincide(x)),
+      faqs: AYUDA.faqs.filter((x) => delPerfil(x) && (cat === "todas" || x.cat === cat) && coincide(x)),
     });
   }));
 

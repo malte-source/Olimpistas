@@ -12,8 +12,8 @@
   // deben reflejar la vista actual. Esquema: /miembro, /miembro/carnet,
   // /miembro/beneficios, /miembro/perfil, /miembro/descubrir(/<segmento>)(/subastas/<id>).
   let curTab = "inicio", curSubId = null;
-  const TABS_RUTA = ["inicio", "carnet", "beneficios", "perfil", "descubrir"];
-  const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media"];
+  const TABS_RUTA = ["inicio", "carnet", "beneficios", "puntos", "perfil", "descubrir"];
+  const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media", "penas"];
   function parseRuta(pathname) {
     const parts = pathname.replace(/^\/miembro\/?/, "").split("/").filter(Boolean);
     if (!parts.length || !TABS_RUTA.includes(parts[0])) return { tab: "inicio" };
@@ -39,6 +39,13 @@
   let _contentHost = null;
   const cv = () => _contentHost || view();
   const fecha = (d) => new Date(d).toLocaleDateString(LOC, { year: "numeric", month: "long", day: "numeric" });
+  // "Pagá antes del 24 de octubre, 15:30" — y si falta menos de 24 h se marca como último día.
+  const fechaHoraCorta = (d) => new Date(d).toLocaleString(LOC, { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  const plazoPagoHtml = (vence, ronda) => {
+    if (!vence) return "";
+    const urgente = new Date(vence).getTime() - Date.now() < 24 * 3600000;
+    return `<span class="sub-plazo${urgente ? " urg" : ""}">${urgente ? T("m_sub_plazo_ult") + " " : ""}${T("m_sub_vence")} <b>${fechaHoraCorta(vence)}</b></span>${ronda === 2 ? `<span class="sub-plazo-r2">${T("m_sub_ronda2_txt")}</span>` : ""}`;
+  };
   const _previewQR = (() => { try { return makeQR("https://www.olimpistas.com"); } catch (e) { return ""; } })();
 
   // Skeleton de carga (en vez de "Cargando…").
@@ -55,6 +62,8 @@
     if (!SESSION) { location.href = "/"; return; }
     CONFIG = await api("/config").catch(() => ({ paises: [] }));
     perfilPunto = { lat: SESSION.socio.lat ?? null, lng: SESSION.socio.lng ?? null };
+    window.__oliSesion = true; // desde acá, cambiar la apariencia también se guarda en la cuenta
+    if (SESSION.socio.tema) OLI.setThemePref(SESSION.socio.tema, false);
     renderHeader();
     document.getElementById("logoutBtn").onclick = logout;
     OLI.initThemeToggle("themeSw");
@@ -127,6 +136,7 @@
     opts = opts || {};
     window.scrollTo(0, 0); // si venías scrolleado, el título de la pestaña nueva no debe quedar tapado por el header fijo
     if (typeof stopSub === "function") stopSub();   // corta polling de subastas al cambiar de tab
+    detenerQrBeneficios();                          // y el QR rotativo del carnet
     _contentHost = null;                            // fuera de Descubrir el contenido ocupa todo #view
     curTab = tab; curSubId = null;
     // fromRoute (init/popstate): normaliza con replace si hiciera falta, sin nueva entrada.
@@ -138,7 +148,7 @@
       t.setAttribute("aria-selected", on ? "true" : "false");
     });
     moveTabInd();
-    ({ inicio: vInicio, carnet: vCarnet, beneficios: vBeneficios, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio)();
+    ({ inicio: vInicio, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio)();
   }
 
   // Pulido PRO: pill deslizante bajo el tab activo (solo mobile) + borde glass al hacer scroll.
@@ -152,7 +162,7 @@
       const act = bar && bar.querySelector(".tab.active");
       if (!bar || !ind || !act) return;
       const br = bar.getBoundingClientRect(), ar = act.getBoundingClientRect();
-      ind.style.transform = "translateX(" + Math.round(ar.left - br.left + ar.width / 2 - 26) + "px)";
+      ind.style.transform = "translateX(" + Math.round(ar.left - br.left + ar.width / 2 - 28) + "px)";
     });
   }
 
@@ -165,11 +175,14 @@
     const s = SESSION.socio;
     const nombre = esc((String(s.nombre || s.email || "").trim().split(" ")[0]) || "Olimpista");
     view().innerHTML = skeleton(2);
-    const [subsR, sorteosR, preventasR, encsR] = await Promise.all([
+    const [subsR, sorteosR, preventasR, encsR, ahorroR, puntosR, penasR] = await Promise.all([
       api("/subastas").catch(() => ({ items: [] })),
       api("/sorteos").catch(() => ({ items: [] })),
       api("/preventas").catch(() => ({ items: [] })),
       api("/encuestas").catch(() => ({ items: [] })),
+      api("/beneficios/ahorro").catch(() => null),
+      api("/puntos").catch(() => null),
+      api("/penas").catch(() => null),
     ]);
     const subaViva = (subsR.items || []).find((x) => x.estado === "activa");
     const sorteosActivos = (sorteosR.items || []).filter((sor) => sor.estado === "activa");
@@ -212,7 +225,8 @@
       <p class="lead">${T("m_ini_p")}</p>
       ${destacado}
       <p class="eyebrow-ini">${T("m_ini_mis_cosas")}</p>
-      <div class="ini-feed"><div id="progreso"></div>${cosas.join("")}</div>
+      <div class="wg-grid">${widgetsInicio(ahorroR, puntosR, penasR)}</div>
+      <div class="ini-feed" style="margin-top:14px"><div id="progreso"></div>${cosas.join("")}</div>
       <p class="eyebrow-ini">${T("m_ini_club")}</p>
       ${enc ? encuestaCard(enc) : ""}
       <div class="ini-feed">${club.join("")}</div>
@@ -229,6 +243,43 @@
     if (esc2) esc2.onclick = () => esc2.dataset.tier === "socio" ? validarSocioModal() : mostrarUpsell(esc2.dataset.tier, T("m_ini_escalon_p"));
     const card = view().querySelector(".enc-card");
     if (card && enc) bindEncuesta(card, enc);
+  }
+  // ─── Widgets de Inicio: billetera de ahorro, puntos, peña y carnet. Cada uno aparece solo si su dato cargó. ───
+  function widgetsInicio(ahorro, puntos, penas) {
+    const w = [];
+    if (ahorro) {
+      w.push(`<button type="button" class="wg wg-2" data-goto="beneficios" aria-label="${T("m_wg_ahorro")}">
+        <span class="wg-eb">${T("m_wg_ahorro")}</span>
+        <span class="wg-num">${gs(ahorro.mes || 0)}</span>
+        <span class="wg-sub">${T("m_wg_ahorro_mes")} · ${T("m_wg_ahorro_anio")} <b>${gs(ahorro.anio || 0)}</b></span>
+        <span class="wg-nota">${ahorro.canjes_mes ? (ahorro.canjes_mes + " " + T(ahorro.canjes_mes === 1 ? "m_wg_canje" : "m_wg_canjes")) : T("m_wg_ahorro_vacio")}</span>
+      </button>`);
+    }
+    if (puntos) {
+      const pct = Math.max(0, Math.min(100, Number(puntos.escalon && puntos.escalon.pct) || 0));
+      w.push(`<button type="button" class="wg" data-goto="puntos" aria-label="${T("tab_puntos")}">
+        <span class="wg-eb">${T("tab_puntos")}</span>
+        <span class="wg-ring" style="--p:${pct}"><b>${Number(puntos.saldo || 0).toLocaleString(LOC)}</b></span>
+        <span class="wg-sub">${esc((puntos.escalon && puntos.escalon.nombre) || "")}</span>
+      </button>`);
+    }
+    const items = penas && Array.isArray(penas.items) ? penas.items : null;
+    if (items) {
+      const mia = items.find((p) => p.es_tuya);
+      w.push(`<button type="button" class="wg" data-goto="descubrir" data-seg="penas" aria-label="${T("m_wg_pena")}">
+        <span class="wg-eb">${T("m_wg_pena")}</span>
+        <span class="wg-ic" style="background:#C2410C">${icon("users", { size: 18 })}</span>
+        <span class="wg-t">${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</span>
+        <span class="wg-sub">${mia ? "#" + mia.ranking + " · " + mia.altas + " " + T(mia.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</span>
+      </button>`);
+    }
+    w.push(`<button type="button" class="wg wg-negro" data-goto="carnet" aria-label="${T("tab_carnet")}">
+      <span class="wg-eb" style="color:#D9B65A">${T("tab_carnet")}</span>
+      <span class="wg-ic" style="background:rgba(255,255,255,.14)">${icon("qr-code", { size: 18 })}</span>
+      <span class="wg-t" style="color:#fff">${T("m_wg_carnet")}</span>
+      <span class="wg-fr" aria-hidden="true"></span>
+    </button>`);
+    return w.join("");
   }
   // Misma tarjeta de producto que el banner de la landing (mismas clases .destacado*).
   function destacadoSubasta(subaViva) {
@@ -334,7 +385,7 @@
   let descSeg = "subastas", _deepSub = null;
   function vDescubrir() {
     stopSub();
-    const segs = [["subastas", T("tab_subastas")], ["sorteos", T("tab_sorteos")], ["preventas", T("tab_preventas")], ["media", T("tab_media")]];
+    const segs = [["subastas", T("tab_subastas")], ["sorteos", T("tab_sorteos")], ["preventas", T("tab_preventas")], ["media", T("tab_media")], ["penas", T("tab_penas")]];
     view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
       <h2>${T("m_desc_h")}</h2><p class="lead">${T("m_desc_p")}</p>
       <div class="seg-nav" id="descSegNav">${segs.map(([id, l]) => `<button class="seg-b${id === descSeg ? " on" : ""}" data-seg="${id}">${l}</button>`).join("")}</div>
@@ -349,7 +400,7 @@
     const nav = document.getElementById("descSegNav");
     if (nav) nav.querySelectorAll("[data-seg]").forEach((b) => b.classList.toggle("on", b.dataset.seg === descSeg));
     if (descSeg === "subastas" && _deepSub) { const id = _deepSub; _deepSub = null; curSubId = id; syncUrl(true); return vSubastaDetalle(id); }
-    ({ subastas: vSubastas, sorteos: vSorteos, preventas: vPreventas, media: vContenido }[descSeg] || vSubastas)();
+    ({ subastas: vSubastas, sorteos: vSorteos, preventas: vPreventas, media: vContenido, penas: vPenas }[descSeg] || vSubastas)();
   }
 
   // ── Upgrade de socio (validación de cédula) — disponible en todo el portal ──
@@ -368,7 +419,7 @@
       const pendiente = (items || []).find((x) => x.gano && x.pago_estado !== "pagado");
       if (pendiente) {
         host.innerHTML = `<div class="socio-banner socio-banner-pago">
-          <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("m_sub_banner_pago")} <b>${esc(pendiente.titulo)}</b></span>
+          <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("m_sub_banner_pago")} <b>${esc(pendiente.titulo)}</b>${pendiente.pago_vence ? `<br>${plazoPagoHtml(pendiente.pago_vence, pendiente.ronda)}` : ""}</span>
           <button class="btn btn-valor btn-sm" id="pagoBannerBtn">${T("m_sub_pagar")}</button></div>`;
         host.querySelector("#pagoBannerBtn").onclick = () => { descSeg = "subastas"; activar("descubrir"); };
         return;
@@ -524,6 +575,14 @@
         </div>
 
         <div class="perfil-avisos">
+          <h3 style="margin:0 0 4px">${T("m_tema_h")}</h3>
+          <p class="lead" style="margin-bottom:12px">${T("m_tema_p")}</p>
+          <div class="ctl-seg" role="radiogroup" aria-label="${T("m_tema_h")}" id="temaSeg">
+            ${[["auto", T("m_tema_auto")], ["claro", T("m_tema_claro")], ["oscuro", T("m_tema_oscuro")]].map(([v, l]) => `<button type="button" role="radio" class="ctl-seg-b" data-tema="${v}" aria-checked="${(OLI.themePref() || (OLI.theme() === "light" ? "claro" : "oscuro")) === v}">${l}</button>`).join("")}
+          </div>
+        </div>
+
+        <div class="perfil-avisos">
           <h3 style="margin:0 0 4px">${T("m_avisos_h")}</h3>
           <p class="lead" style="margin-bottom:12px">${T("m_avisos_p")}</p>
           ${avisos.map((a) => `<label class="casa-toggle" for="${a.key}">
@@ -537,6 +596,10 @@
     document.getElementById("f_foto").onclick = () => fotoModal(subirFoto);
     document.getElementById("btnGeo").onclick = usarUbicacion;
     campos.forEach((c) => { document.getElementById("f_" + c.key).onclick = () => entrarEdicionPerfil(c); });
+    document.querySelectorAll("#temaSeg [data-tema]").forEach((b) => b.onclick = () => {
+      OLI.setThemePref(b.dataset.tema, true);
+      document.querySelectorAll("#temaSeg [data-tema]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+    });
     avisos.forEach((a) => { document.getElementById(a.key).onchange = (e) => guardarAviso(a.key, e.target.checked); });
     const cancelBtn = document.getElementById("btnCancelarMembresia");
     if (cancelBtn) cancelBtn.onclick = () => confirmarCancelarMembresia(cancelBtn);
@@ -746,6 +809,116 @@
   }
 
   // ─── Sorteos ───────────────────────────────────────────────────────────────────
+  // ─── Puntos: saldo y escalón, misión de la semana, cómo se ganan, catálogo de canje y movimientos ──
+  async function vPuntos() {
+    view().innerHTML = skeleton(3);
+    let d, pr;
+    try { [d, pr] = await Promise.all([api("/puntos"), api("/puntos/premios")]); } catch (e) { view().innerHTML = vacio(T("m_error_generico")); return; }
+    const nf = (n) => Number(n || 0).toLocaleString(LOC);
+    const esc2 = d.escalon || {};
+    const falta = esc2.siguiente ? `${T("m_pts_faltan")} ${nf(esc2.faltan)} ${T("m_pts_para")} ${esc2.siguiente.nombre}` : T("m_pts_top");
+    const m = d.mision;
+    const misionHtml = !m ? "" : m.respondida
+      ? `<div class="pts-mision pts-hecha">${icon("check", { size: 16 })} ${m.respondida.correcta ? T("m_pts_mision_ok") : T("m_pts_mision_no")}</div>`
+      : `<div class="pts-mision"><span class="pts-kick">${T("m_pts_mision")} · +${nf(m.puntos)}</span><p>${esc(m.pregunta)}</p>
+          <div class="pts-ops">${m.opciones.map((o, i) => `<button class="pts-op" data-mision="${esc(m.id)}" data-op="${i}">${esc(o)}</button>`).join("")}</div></div>`;
+    const reglasHtml = d.reglas.map((r) => `<div class="pts-fila${r.aplica && r.activa ? "" : " off"}">
+        <span><b>${esc(r.titulo)}</b><small>${esc(r.fuente)} · ${T("m_pts_q_" + r.quien)}${r.pendiente ? " · " + T("m_pts_pronto") : ""}</small></span>
+        <span class="pts-n">${r.activa ? "+" + nf(r.puntos) : "—"}</span></div>`).join("");
+    const premiosHtml = pr.items.length ? pr.items.map((p) => {
+      const txt = p.proximamente ? T("m_pts_pronto") : p.agotado ? T("m_pts_agotado") : p.puede_canjear ? T("m_pts_canjear") : T("m_pts_faltan") + " " + nf(p.faltan);
+      return `<div class="pts-fila"><span><small class="pts-esc">${esc(String(p.escalon).toUpperCase())} · ${nf(p.costo)} PTS</small><b>${esc(p.titulo)}</b>${p.descripcion ? `<small>${esc(p.descripcion)}</small>` : ""}</span>
+        <button class="btn btn-sm${p.puede_canjear ? "" : " btn-ghost"}" data-premio="${esc(p.id)}" ${p.puede_canjear ? "" : "disabled"}>${txt}</button></div>`;
+    }).join("") : `<p class="muted" style="padding:12px 0">${T("m_pts_sin_premios")}</p>`;
+    const movHtml = d.movimientos.length ? d.movimientos.map((x) => `<div class="pts-fila"><span><b>${esc(x.detalle || x.motivo)}</b><small>${fecha(x.creado)}</small></span>
+        <span class="pts-n${x.puntos < 0 ? " neg" : ""}">${x.puntos > 0 ? "+" : "−"}${nf(Math.abs(x.puntos))}</span></div>`).join("") : `<p class="muted" style="padding:12px 0">${T("m_pts_sin_mov")}</p>`;
+    view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <div class="pts-head"><div class="pts-anillo" style="--p:${Math.round((esc2.pct || 0) * 3.6)}deg"><b>${nf(d.saldo)}</b></div>
+        <div><h2 style="margin:0">${T("m_pts_h")}</h2><p class="muted" style="margin:2px 0">${T("m_pts_escalon")} ${esc(esc2.nombre || "")} · ${falta}</p></div></div>
+      ${misionHtml}
+      <h3 class="pts-h3">${T("m_pts_como")}</h3><div class="pts-lista">${reglasHtml}</div>
+      <h3 class="pts-h3">${T("m_pts_canje")}</h3><div class="pts-lista">${premiosHtml}</div>
+      <h3 class="pts-h3">${T("m_pts_mov")}</h3><div class="pts-lista">${movHtml}</div>
+      ${d.vencen ? `<p class="muted" style="font-size:12.5px;margin-top:14px">${T("m_pts_vencen")}</p>` : ""}
+    </div>`;
+    view().querySelectorAll("[data-mision]").forEach((b) => b.addEventListener("click", async () => {
+      view().querySelectorAll("[data-mision]").forEach((x) => { x.disabled = true; });
+      try {
+        const r = await api("/puntos/mision/" + b.dataset.mision, { method: "POST", body: { opcion: Number(b.dataset.op) } });
+        toast(r.correcta ? T("m_pts_mision_ok") + " +" + nf(r.puntos) : T("m_pts_mision_no"));
+      } catch (e) { toast(e.message); }
+      vPuntos();
+    }));
+    view().querySelectorAll("[data-premio]:not([disabled])").forEach((b) => b.addEventListener("click", () => {
+      const p = pr.items.find((x) => x.id === b.dataset.premio); if (!p) return;
+      const { root, close } = OLI.modal(`<h3>${esc(p.titulo)}</h3><p class="muted">${T("m_pts_confirma")} <b>${nf(p.costo)}</b> ${T("m_pts_puntos")}. ${T("m_pts_wsp")}</p>
+        <button class="btn btn-block" id="ptsOk">${T("m_pts_canjear")}</button><button class="btn btn-ghost btn-block" id="ptsNo" style="margin-top:8px">${T("up_cerrar")}</button>`);
+      root.querySelector("#ptsNo").onclick = close;
+      root.querySelector("#ptsOk").onclick = async () => {
+        root.querySelector("#ptsOk").disabled = true;
+        try { await api("/puntos/premios/" + p.id + "/canjear", { method: "POST" }); close(); toast(T("m_pts_canjeado")); }
+        catch (e) { close(); toast(e.message); }
+        vPuntos();
+      };
+    }));
+  }
+
+  // ─── Peñas: ranking, sumarse, compartir el link y pedir una peña nueva ───────────
+  async function vPenas() {
+    cv().innerHTML = skeleton(3);
+    let d;
+    try { d = await api("/penas"); } catch (e) { cv().innerHTML = vacio(T("m_error_generico")); return; }
+    const items = Array.isArray(d.items) ? d.items : [];
+    const mia = items.find((p) => p.es_tuya);
+    const link = (p) => location.origin + "/?pena=" + encodeURIComponent(p.slug);
+    cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <p class="lead">${T("m_pena_p")}</p>
+      ${mia ? `<div class="pena-mia"><b>${esc(mia.nombre)}</b><span class="muted"> · ${T("m_pena_tuya")}</span>
+        <p class="muted" style="font-size:13px;margin:6px 0 10px">${T("m_pena_link_p")}</p>
+        <div class="pena-acc"><button class="btn btn-sm" id="penaCompartir">${T("m_pena_compartir")}</button><button class="btn btn-ghost btn-sm" id="penaDejar">${T("m_pena_dejar")}</button></div></div>` : ""}
+      <div class="pena-lista">${items.length ? items.map((p) => `<div class="pena-fila">
+          <span class="pena-rk">${p.ranking}</span>
+          <div class="pena-nm"><b>${esc(p.nombre)}</b><span class="muted">${esc(p.ciudad || "")} · ${p.altas} ${T(p.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas")}</span></div>
+          ${p.es_tuya ? `<span class="chip on">${T("m_pena_tuya_chip")}</span>` : `<button class="btn btn-sm btn-ghost" data-pena="${esc(p.id)}">${T("m_pena_sumarme")}</button>`}
+        </div>`).join("") : vacio(T("m_pena_vacio"))}</div>
+      <details class="pena-sol"><summary>${T("m_pena_solicitar")}</summary>
+        <p class="muted" style="font-size:13px;margin:8px 0">${T("m_pena_sol_p")}</p>
+        <form id="penaSolForm" class="pena-form">
+          <input name="nombre" placeholder="${T("m_pena_f_nombre")}" maxlength="80" required />
+          <input name="ciudad" placeholder="${T("m_pena_f_ciudad")}" maxlength="60" required />
+          <input name="presidente" placeholder="${T("m_pena_f_presi")}" maxlength="80" required />
+          <input name="contacto" type="email" placeholder="${T("m_pena_f_email")}" maxlength="120" required />
+          <button class="btn btn-block" type="submit">${T("m_pena_enviar")}</button>
+        </form></details>
+    </div>`;
+    cv().querySelectorAll("[data-pena]").forEach((b) => b.addEventListener("click", async () => {
+      try {
+        const r = await api("/perfil", { method: "PATCH", body: { pena_id: b.dataset.pena } });
+        if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = r.socio.pena_id;
+        toast(T("m_pena_sumada"));
+        vPenas();
+      } catch (e) { toast(e.message); }
+    }));
+    const dejar = cv().querySelector("#penaDejar");
+    if (dejar) dejar.addEventListener("click", async () => {
+      try { const r = await api("/perfil", { method: "PATCH", body: { pena_id: null } }); if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = null; toast(T("m_pena_dejada")); vPenas(); }
+      catch (e) { toast(e.message); }
+    });
+    const comp = cv().querySelector("#penaCompartir");
+    if (comp && mia) comp.addEventListener("click", async () => {
+      const url = link(mia), txt = T("m_pena_compartir_txt") + " " + mia.nombre;
+      try { if (navigator.share) { await navigator.share({ text: txt, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+      try { await navigator.clipboard.writeText(url); toast(T("m_pena_link_copiado")); } catch (e) { toast(url); }
+    });
+    const form = cv().querySelector("#penaSolForm");
+    if (form) form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(form).entries());
+      try { await api("/penas/solicitud", { method: "POST", body: f }); form.reset(); toast(T("m_pena_sol_ok")); form.closest("details").open = false; }
+      catch (err) { toast(err.message); }
+    });
+  }
+
   async function vSorteos() {
     cv().innerHTML = skeleton(3);
     const { items } = await api("/sorteos");
@@ -839,9 +1012,13 @@
     const ah = r.ahorro || { mes: 0, total: 0 }, ciudad = r.ciudad || "";
     const paga = r.tier === "premium" ? '<div class="ba-paga">Tu Plus rinde — mirá cuánto te ahorra</div>'
       : r.tier === "socio" ? '<div class="ba-paga">El mejor ahorro, por ser Socio del Decano</div>' : "";
-    const ahorroCard = '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_ahorro_mes") + '</div>' +
-      '<div class="ba-monto">' + gs(ah.mes) + '</div>' +
-      '<div class="ba-nota">' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
+    // Billetera de Ahorro: lo del mes grande, lo del año a la derecha y una nota de uso.
+    const anioNum = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
+    const notaMes = ah.canjes_mes ? ah.canjes_mes + " " + (ah.canjes_mes === 1 ? T("m_ben_canje_uno") : T("m_ben_canje_n")) : T("m_ben_canje_ninguno");
+    const ahorroCard = '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
+      '<div class="ba-fila"><div><div class="ba-sub">' + T("m_ben_ahorro_mes") + '</div><div class="ba-monto">' + gs(ah.mes) + '</div></div>' +
+      '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
+      '<div class="ba-nota">' + notaMes + ' · ' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
     const cod = r.codigo ? '<div class="ben-codigo">' + T("m_ben_codigo") + ': <b>' + esc(String(r.codigo).toUpperCase()) + '</b></div>' : "";
     const cards = items.length ? items.map(function (b) { return cardBeneficio(b, ciudad); }).join("") : vacio(T("m_ben_vacio"));
     view().innerHTML = '<div class="section" style="border:none;padding-top:8px">' + ahorroCard + cod +
@@ -863,8 +1040,11 @@
   }
 
   // ─── Subastas (puja en vivo por polling; Plus y Socio) ───────────────────────
-  let _subPoll = null, _subTick = null, _subData = null;
-  function stopSub() { if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
+  let _subPoll = null, _subTick = null, _subData = null, _subGen = 0;
+  // _subGen invalida a un pollTick que ya salió a la red: sin esto, si el usuario salía del lote
+  // mientras la respuesta estaba en vuelo, ese tick se reprogramaba solo y quedaba un poller
+  // "zombie" golpeando la API para siempre (uno más por cada lote que se abría y cerraba).
+  function stopSub() { _subGen++; if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
   const gsK = (n) => "₲" + Math.round((Number(n) || 0) / 1000) + "k";
   function cdTexto(termina) {
     const ms = new Date(termina).getTime() - Date.now();
@@ -891,7 +1071,7 @@
   }
   // Miniatura/hero de una subasta: la foto real subida en el admin si hay, si no el
   // ícono generado (antes SIEMPRE se ignoraba `s.imagen` acá, la imagen subida nunca se veía).
-  function subastaMedia(s) { return s.imagen ? `<img src="${esc(s.imagen)}" alt="" />` : artSvg(s.id, s.titulo, s.emoji || icon("gavel", { size: 34 })); }
+  function subastaMedia(s) { return (s.imagen_url || s.imagen) ? `<img src="${esc(s.imagen_url || s.imagen)}" alt="" decoding="async" />` : artSvg(s.id, s.titulo, s.emoji || icon("gavel", { size: 34 })); }
   function cardSubasta(s) {
     const cd = cdTexto(s.termina), cerrada = s.estado !== "activa" || cd.fin;
     const cta = !s.desbloqueado
@@ -926,9 +1106,15 @@
     // momento (ej: justo después de un mailing o un repost) terminen pujando en el
     // mismo segundo para siempre — picos periódicos sincronizados en vez de carga pareja
     // (se vieron en los logs de la caída del 2026-08-09: ráfagas de 300+ req en 1 minuto).
+    const gen = _subGen;
     const pollTick = async () => {
-      try { const d = await api("/subastas/" + id + "?liviano=1"); actualizarDetalle(d); } catch (e) {}
-      _subPoll = setTimeout(pollTick, 3500 + Math.random() * 1000);
+      if (gen !== _subGen) return;
+      // Pestaña en segundo plano: no se consulta (nadie lo ve) y se vuelve a mirar más tarde.
+      if (!document.hidden) {
+        try { const d = await api("/subastas/" + id + "?liviano=1"); if (gen !== _subGen) return; actualizarDetalle(d); } catch (e) {}
+      }
+      if (gen !== _subGen) return;
+      _subPoll = setTimeout(pollTick, document.hidden ? 8000 : 3500 + Math.random() * 1000);
     };
     _subPoll = setTimeout(pollTick, 3500 + Math.random() * 1000);
   }
@@ -953,6 +1139,7 @@
     const s = r.subasta;
     if (!r.desbloqueado) return `<button class="btn btn-block" data-upsell-cta="${esc(s.nivel_min || "premium")}" data-upsell-ctx="${esc(T("m_up_ctx_subasta"))}">${icon("chevron-right", { size: 14 })} ${T("m_sub_subi")}</button>`;
     if (cerrada && r.gano && s.pago_estado !== "pagado") return `<div class="sub-cerrada">${icon("trophy", { size: 14 })} ${T("m_sub_ganaste_txt")}</div>
+      ${r.pago_vence ? `<div class="sub-plazo-box">${plazoPagoHtml(r.pago_vence, r.ronda)}</div>` : ""}
       <button class="btn btn-valor btn-block" id="subPagarBtn" data-sub-pagar="${s.id}">${T("m_sub_pagar")} — ${gs(s.puja_actual)}</button>`;
     if (cerrada && r.gano) return `<div class="sub-cerrada">${icon("check", { size: 14 })} ${T("m_sub_pagado_txt")}</div>
       <a class="btn btn-ghost btn-block" href="/subasta/${esc(s.slug || s.id)}/certificado" target="_blank" rel="noopener">${icon("trophy", { size: 14 })} ${T("m_sub_certificado")}</a>`;
@@ -1065,6 +1252,43 @@
 
   // ─── Carnet digital (mismo componente que la landing, color por nivel) ───────
   // Vista UNIFICADA: carnet + nivel + beneficios + social + compartir + upsell.
+  // ─── QR rotativo para usar los beneficios en caja: se renueva cada 60 s con un token firmado por el servidor ───
+  let _qrTimer = null, _qrVence = 0, _qrCargando = false;
+  function detenerQrBeneficios() { if (_qrTimer) clearInterval(_qrTimer); _qrTimer = null; _qrCargando = false; }
+  async function refrescarQr() {
+    if (_qrCargando) return;
+    _qrCargando = true;
+    try {
+      const d = await api("/carnet/token");
+      const img = document.getElementById("qrBenImg"); if (!img) return detenerQrBeneficios();
+      const src = makeQR(d.token);
+      // La librería del QR se carga diferida: si todavía no está, se reintenta enseguida en vez de dejar el cuadro en blanco.
+      if (!src) { _qrVence = Date.now() + 700; return; }
+      img.src = src;
+      document.getElementById("qrBenCod").textContent = d.codigo;
+      _qrVence = Date.now() + d.vence_en * 1000;
+      const v = document.getElementById("qrBenVel"); if (v) v.hidden = true;
+    } catch (e) {
+      const v = document.getElementById("qrBenVel"); if (v) { v.hidden = false; v.textContent = T("m_qr_error"); }
+      _qrVence = Date.now() + 5000; // reintenta pronto
+    } finally { _qrCargando = false; }
+  }
+  function iniciarQrBeneficios() {
+    detenerQrBeneficios();
+    if (!document.getElementById("qrBen")) return;
+    refrescarQr();
+    _qrTimer = setInterval(() => {
+      if (!document.getElementById("qrBenImg")) return detenerQrBeneficios();
+      if (document.hidden) return;                       // pestaña en segundo plano: no se pide nada
+      const resta = Math.max(0, Math.ceil((_qrVence - Date.now()) / 1000));
+      const seg = document.getElementById("qrBenSeg"), barra = document.getElementById("qrBenBarra");
+      if (seg) seg.textContent = T("m_qr_cambia") + " " + resta + " s";
+      if (barra) barra.style.width = Math.min(100, (resta / 60) * 100) + "%";
+      if (resta <= 0) refrescarQr();
+    }, 1000);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && _qrTimer) refrescarQr(); }); // al volver, token nuevo ya
+
   async function vCarnet() {
     view().innerHTML = skeleton(0);
     try {
@@ -1100,6 +1324,13 @@
             <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
             <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
           </div>
+          <div class="card qr-ben" id="qrBen"><div class="body">
+            <h3 style="margin:0 0 4px">${icon("qr-code", { size: 16 })} ${T("m_qr_h")}</h3>
+            <p class="muted" style="margin:0 0 12px;font-size:13px">${T("m_qr_p")}</p>
+            <div class="qr-caja"><img id="qrBenImg" alt="${T("m_qr_alt")}" width="212" height="212" /><div class="qr-vel" id="qrBenVel"></div></div>
+            <div class="qr-meta"><span class="qr-cod" id="qrBenCod">······</span><span class="muted" id="qrBenSeg"></span></div>
+            <div class="qr-barra"><span id="qrBenBarra"></span></div>
+          </div></div>
           <div class="card" style="max-width:520px;margin:18px auto 0;text-align:center"><div class="body">
             <h3 style="margin:0 0 6px">${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
             <p class="muted" style="margin:0 0 12px">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
@@ -1116,6 +1347,7 @@
           ${upsell}
         </div>`;
       view().querySelectorAll("[data-upsell]").forEach((b) => b.addEventListener("click", () => upgrade(b.dataset.upsell)));
+      iniciarQrBeneficios();
       view().querySelector("#upCardBtn")?.addEventListener("click", validarSocioModal);
       view().querySelector(".ed-ubic")?.addEventListener("click", () => { activar("perfil"); setTimeout(() => focusCampo("pais"), 60); });
       view().querySelector("#compartir").onclick = async () => {

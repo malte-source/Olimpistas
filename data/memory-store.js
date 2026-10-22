@@ -149,7 +149,7 @@ function createMemoryStore({ filePath = null } = {}) {
     async createSocio({ email, passwordHash, nombre, apellido, telefono, cedula, fechaNacimiento, referidoPor, idioma }) {
       const id = uid("soc");
       const socio = {
-        id, email: email.toLowerCase(), password_hash: passwordHash,
+        id, email: email.toLowerCase(), password_hash: passwordHash, ultima_actividad: new Date().toISOString(), gasto_total: 0, plan_club: "",
         nombre: nombre || "", apellido: apellido || "", telefono: telefono || "",
         // Campos de enriquecimiento (barra de progreso, se completan después):
         whatsapp: "", foto: "", pais: "", pais_iso: "", ciudad: "",
@@ -264,11 +264,16 @@ function createMemoryStore({ filePath = null } = {}) {
         if (f.paisIso && String(s.pais_iso || "").toUpperCase() !== String(f.paisIso).toUpperCase()) return false;
         if (f.validoSocio && !s.es_socio_olimpia) return false;
         if (f.sinFoto && s.foto) return false;
+        if (f.canjes !== undefined && f.canjes !== null && (db.canjes || []).some((c) => c.socio_id === s.id) !== f.canjes) return false;
+        if (f.pujas !== undefined && f.pujas !== null && (db.pujas || []).some((p) => p.socio_id === s.id) !== f.pujas) return false;
+        if (f.gasto !== undefined && f.gasto !== null && ((s.gasto_total || 0) > 0) !== f.gasto) return false;
+        if (f.ciudad && String(s.ciudad || "").toLowerCase() !== String(f.ciudad).toLowerCase()) return false;
+        if (f.excluirId && s.id === f.excluirId) return false;
         if (f.tier && tierDe(s.id) !== f.tier) return false;
         if (term && !((s.email || "").toLowerCase().includes(term) || ((s.nombre || "") + " " + (s.apellido || "")).toLowerCase().includes(term) || (s.cedula || "").includes(term))) return false;
         return true;
       }).sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
-      return rows.slice(0, Math.min(Number(f.limit) || 500, 5000)).map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, cedula: s.cedula, pais: s.pais, pais_iso: s.pais_iso, es_socio_olimpia: s.es_socio_olimpia, tiene_foto: !!s.foto, tier_slug: tierDe(s.id), creado: s.creado }));
+      return rows.slice(0, Math.min(Number(f.limit) || 500, 5000)).map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, cedula: s.cedula, pais: s.pais, pais_iso: s.pais_iso, ciudad: s.ciudad, es_socio_olimpia: s.es_socio_olimpia, gasto_total: s.gasto_total || 0, ultima_actividad: s.ultima_actividad || null, tiene_foto: !!s.foto, tier_slug: tierDe(s.id), creado: s.creado }));
     },
     async cuadrePagos() {
       const peds = db.pedidos || [];
@@ -310,7 +315,7 @@ function createMemoryStore({ filePath = null } = {}) {
 
     async listBeneficios() { const cm = {}; (db.comercios || []).forEach((c) => (cm[c.id] = c)); return (db.beneficios || []).slice().sort((a, b) => String(b.creado).localeCompare(String(a.creado))).map((b) => ({ ...b, comercio_nombre: (cm[b.comercio_id] || {}).nombre })); },
     async getBeneficio(id) { return (db.beneficios || []).find((b) => b.id === id) || null; },
-    async crearBeneficio(d = {}) { const num = (v) => (v != null && v !== "" ? Number(v) : null); const b = { id: uid("ben"), comercio_id: d.comercio_id, titulo: d.titulo || "", descripcion: d.descripcion || "", tipo: d.tipo || "descuento", valor: d.valor || "", niveles: d.niveles || "todos", pct: num(d.pct), ahorro_estimado: num(d.ahorro_estimado), vigencia_desde: d.vigencia_desde || null, vigencia_hasta: d.vigencia_hasta || null, limite_dias: num(d.limite_dias), activo: d.activo !== false, creado: nowIso() }; (db.beneficios = db.beneficios || []).push(b); persist(); return b; },
+    async crearBeneficio(d = {}) { const num = (v) => (v != null && v !== "" ? Number(v) : null); const b = { id: uid("ben"), comercio_id: d.comercio_id, titulo: d.titulo || "", descripcion: d.descripcion || "", tipo: d.tipo || "descuento", valor: d.valor || "", niveles: d.niveles || "todos", pct: num(d.pct), ahorro_estimado: num(d.ahorro_estimado), vigencia_desde: d.vigencia_desde || null, vigencia_hasta: d.vigencia_hasta || null, limite_dias: num(d.limite_dias), activo: d.activo !== false, estado: "aprobado", origen: "club", stock: null, motivo_rechazo: null, creado: nowIso() }; (db.beneficios = db.beneficios || []).push(b); persist(); return b; },
     async updateBeneficio(id, patch) { const b = (db.beneficios || []).find((x) => x.id === id); if (!b) return null; Object.assign(b, patch); persist(); return b; },
     async deleteBeneficio(id) { db.beneficios = (db.beneficios || []).filter((b) => b.id !== id); persist(); return true; },
 
@@ -320,7 +325,7 @@ function createMemoryStore({ filePath = null } = {}) {
       const cm = {}; (db.comercios || []).forEach((c) => (cm[c.id] = c));
       return (db.beneficios || []).filter((b) => {
         const c = cm[b.comercio_id];
-        if (!b.activo || !c || c.estado !== "activo") return false;
+        if (!b.activo || (b.estado || "aprobado") !== "aprobado" || !c || c.estado !== "activo") return false;
         if (b.vigencia_desde && String(b.vigencia_desde).slice(0, 10) > hoy) return false;
         if (b.vigencia_hasta && String(b.vigencia_hasta).slice(0, 10) < hoy) return false;
         return true;
@@ -337,12 +342,118 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     async registrarCanje({ beneficioId, socioId, comercioId, validadoPor, monto, ahorro } = {}) { const c = { id: uid("cnj"), beneficio_id: beneficioId, socio_id: socioId || null, comercio_id: comercioId || null, validado_por: validadoPor || "", monto: monto != null ? Math.round(monto) : null, ahorro: ahorro != null ? Math.round(ahorro) : null, creado: nowIso() }; (db.canjes = db.canjes || []).push(c); persist(); return c; },
     async ultimoCanje(socioId, beneficioId) { return (db.canjes || []).filter((c) => c.socio_id === socioId && c.beneficio_id === beneficioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null; },
-    async resumenAhorroSocio(socioId) {
-      const mesIni = new Date().toISOString().slice(0, 7); // YYYY-MM
-      let mes = 0, total = 0;
-      (db.canjes || []).forEach((c) => { if (c.socio_id !== socioId) return; const a = Number(c.ahorro) || 0; total += a; if (String(c.creado).slice(0, 7) === mesIni) mes += a; });
-      return { mes, total };
+    // ── Carnet con QR rotativo y comercio autogestionado (mismo contrato que pg-store) ──
+    async asegurarCarnetSecreto(socioId) {
+      const s = (db.socios || []).find((x) => x.id === socioId); if (!s) return null;
+      if (!s.carnet_secreto) { s.carnet_secreto = require("crypto").randomBytes(32).toString("hex"); persist(); }
+      return s.carnet_secreto;
     },
+    async getCarnetSecreto(socioId) { const s = (db.socios || []).find((x) => x.id === socioId); return s ? s.carnet_secreto || null : null; },
+    async canjearBeneficio({ beneficioId, socioId, comercioId, validadoPor, monto, ahorro, tierSlug, ventana }) {
+      const b = (db.beneficios || []).find((x) => x.id === beneficioId);
+      const estado = b ? b.estado || "aprobado" : null;
+      if (!b || b.activo === false || estado !== "aprobado" || b.comercio_id !== comercioId) return { ok: false, motivo: "beneficio_invalido" };
+      const stock = b.stock == null ? null : b.stock;
+      if (stock !== null && stock <= 0) return { ok: false, motivo: "agotado" };
+      if (b.limite_dias) {
+        const u = (db.canjes || []).filter((c) => c.socio_id === socioId && c.beneficio_id === beneficioId).sort((x, y) => String(y.creado).localeCompare(String(x.creado)))[0];
+        if (u && (Date.now() - new Date(u.creado).getTime()) / 86400000 < Number(b.limite_dias)) return { ok: false, motivo: "limite" };
+      }
+      if (ventana != null) {
+        db.carnet_usos = db.carnet_usos || [];
+        if (db.carnet_usos.some((x) => x.socio_id === socioId && x.ventana === ventana)) return { ok: false, motivo: "qr_usado" };
+        db.carnet_usos.push({ socio_id: socioId, ventana, comercio_id: comercioId, creado: nowIso() });
+      }
+      if (stock !== null) b.stock = stock - 1;
+      const c = { id: uid("cnj"), beneficio_id: beneficioId, socio_id: socioId, comercio_id: comercioId, validado_por: validadoPor || "", monto: monto != null ? Math.round(monto) : null, ahorro: ahorro != null ? Math.round(ahorro) : null, tier_slug: tierSlug || null, creado: nowIso() };
+      (db.canjes = db.canjes || []).push(c); persist();
+      return { ok: true, canje: c, stock: stock === null ? null : stock - 1 };
+    },
+    async crearBeneficioComercio({ comercioId, titulo, descripcion, valor, niveles, pct, ahorro_estimado, stock, vigencia_hasta }) {
+      const b = { id: uid("ben"), comercio_id: comercioId, titulo, descripcion: descripcion || "", tipo: "descuento", valor: valor || "", niveles: niveles || "todos",
+        pct: pct == null ? null : pct, ahorro_estimado: ahorro_estimado == null ? null : ahorro_estimado, vigencia_desde: null, vigencia_hasta: vigencia_hasta || null,
+        limite_dias: null, activo: true, estado: "borrador", origen: "comercio", stock: stock == null ? null : stock, motivo_rechazo: null, creado: nowIso() };
+      (db.beneficios = db.beneficios || []).push(b); persist(); return b;
+    },
+    async updateBeneficioComercio(id, comercioId, patch) {
+      const b = (db.beneficios || []).find((x) => x.id === id && x.comercio_id === comercioId); if (!b) return null;
+      Object.assign(b, patch); persist(); return b;
+    },
+    async ofertasDeComercio(comercioId) {
+      return (db.beneficios || []).filter((b) => b.comercio_id === comercioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).map((b) => ({ estado: "aprobado", origen: "club", stock: null, motivo_rechazo: null, ...b }));
+    },
+    async resolverOferta(id, { estado, motivo }) {
+      const b = (db.beneficios || []).find((x) => x.id === id); if (!b) return null;
+      b.estado = estado; b.motivo_rechazo = estado === "rechazado" ? (motivo || "") : null;
+      if (estado === "aprobado") b.activo = true;
+      persist(); return b;
+    },
+    async estadisticasComercio({ comercioId, desde, hasta }) {
+      const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
+      const filas = (db.canjes || []).filter((c) => c.comercio_id === comercioId && new Date(c.creado).getTime() >= d && new Date(c.creado).getTime() < h);
+      const conMonto = filas.filter((c) => c.monto != null);
+      const ventas = filas.reduce((a, c) => a + (c.monto || 0), 0);
+      const mix = new Map(); filas.forEach((c) => mix.set(c.tier_slug || "sin_dato", (mix.get(c.tier_slug || "sin_dato") || 0) + 1));
+      return { canjes: filas.length, ahorro: filas.reduce((a, c) => a + (c.ahorro || 0), 0), ventas, ticket_promedio: conMonto.length ? Math.round(ventas / conMonto.length) : 0,
+        mix: [...mix.entries()].map(([nivel, canjes]) => ({ nivel, canjes })).sort((a, b) => b.canjes - a.canjes) };
+    },
+    async canjesDeComercio({ comercioId, desde, hasta, limit = 5000 }) {
+      const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
+      return (db.canjes || []).filter((c) => c.comercio_id === comercioId && new Date(c.creado).getTime() >= d && new Date(c.creado).getTime() < h)
+        .sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
+        .map((c) => { const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}; return { creado: c.creado, beneficio: b.titulo || null, nivel: c.tier_slug || "", monto: c.monto, ahorro: c.ahorro }; });
+    },
+    async estadisticasPorComercio({ desde, hasta }) {
+      const d = new Date(desde).getTime(), h = new Date(hasta).getTime(), por = new Map();
+      for (const c of (db.canjes || [])) {
+        const t = new Date(c.creado).getTime(); if (t < d || t >= h) continue;
+        const co = (db.comercios || []).find((x) => x.id === c.comercio_id); if (!co) continue;
+        const k = co.nombre + "|" + (co.ciudad || "") + "|" + (c.tier_slug || "sin_dato");
+        const e = por.get(k) || { comercio: co.nombre, ciudad: co.ciudad || "", nivel: c.tier_slug || "sin_dato", canjes: 0, ahorro: 0, ventas: 0 };
+        e.canjes++; e.ahorro += c.ahorro || 0; e.ventas += c.monto || 0; por.set(k, e);
+      }
+      return [...por.values()].sort((a, b) => a.comercio.localeCompare(b.comercio) || a.nivel.localeCompare(b.nivel));
+    },
+    // ── Billetera de ahorro, Ficha 360 y segmentos (mismo contrato que pg-store) ──
+    async resumenAhorroSocio(socioId) {
+      // Mes y año calendario en hora de Paraguay (UTC-3 fijo desde 2024).
+      const L = new Date(Date.now() - 3 * 3600000), ym = L.toISOString().slice(0, 7), y = L.toISOString().slice(0, 4);
+      let mes = 0, anio = 0, total = 0, canjesMes = 0;
+      (db.canjes || []).forEach((c) => {
+        if (c.socio_id !== socioId) return;
+        const a = Number(c.ahorro) || 0, cl = new Date(new Date(c.creado).getTime() - 3 * 3600000).toISOString();
+        total += a;
+        if (cl.slice(0, 4) === y) anio += a;
+        if (cl.slice(0, 7) === ym) { mes += a; canjesMes++; }
+      });
+      return { mes, anio, total, canjes_mes: canjesMes };
+    },
+    async tocarActividad(socioId) { const s = (db.socios || []).find((x) => x.id === socioId); if (s) { s.ultima_actividad = nowIso(); persist(); } return true; },
+    async canjesDeSocio(socioId, limit = 20) {
+      return (db.canjes || []).filter((c) => c.socio_id === socioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit).map((c) => {
+        const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}, co = (db.comercios || []).find((x) => x.id === c.comercio_id) || {};
+        return { id: c.id, creado: c.creado, monto: c.monto, ahorro: c.ahorro, beneficio: b.titulo || null, comercio: co.nombre || null };
+      });
+    },
+    async pujasDeSocio(socioId, limit = 20) {
+      const por = new Map();
+      for (const p of (db.pujas || [])) {
+        if (p.socio_id !== socioId) continue;
+        const e = por.get(p.subasta_id) || { mejor_oferta: 0, pujas: 0, ultima: "" };
+        e.mejor_oferta = Math.max(e.mejor_oferta, p.monto); e.pujas++; if (String(p.creado) > String(e.ultima)) e.ultima = p.creado;
+        por.set(p.subasta_id, e);
+      }
+      return [...por.entries()].map(([id, e]) => {
+        const s = (db.subastas || []).find((x) => x.id === id) || {};
+        return { subasta_id: id, titulo: s.titulo, estado: s.estado, puja_actual: s.puja_actual, ganador_id: s.ganador_id || null, adjudicado_a: s.adjudicado_a || null, pago_estado: s.pago_estado || null, ...e };
+      }).sort((a, b) => String(b.ultima).localeCompare(String(a.ultima))).slice(0, limit);
+    },
+    async crearSegmento({ nombre, filtros, por }) {
+      const s = { id: uid("seg"), nombre, filtros: filtros || {}, creado_por: por || "admin", creado: nowIso() };
+      (db.segmentos = db.segmentos || []).push(s); persist(); return s;
+    },
+    async listSegmentos() { return (db.segmentos || []).slice().sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, 200); },
+    async deleteSegmento(id) { db.segmentos = (db.segmentos || []).filter((s) => s.id !== id); persist(); return true; },
     // ── Auth del panel de comercio ──
     async getComercioByUsuario(usuario) { const u = String(usuario || "").toLowerCase(); return (db.comercios || []).find((c) => (c.usuario || "").toLowerCase() === u) || null; },
     async setComercioAcceso(id, usuario, passwordHash) { const c = (db.comercios || []).find((x) => x.id === id); if (!c) return null; c.usuario = String(usuario || "").toLowerCase(); c.password_hash = passwordHash; persist(); return c; },
@@ -354,7 +465,7 @@ function createMemoryStore({ filePath = null } = {}) {
       if (!c || c.estado !== "activo") return null;
       return { token: s.token, expira: s.expira, comercio_id: c.id, nombre: c.nombre, estado: c.estado };
     },
-    async beneficiosDeComercio(comercioId) { return (db.beneficios || []).filter((b) => b.comercio_id === comercioId && b.activo).sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
+    async beneficiosDeComercio(comercioId) { return (db.beneficios || []).filter((b) => b.comercio_id === comercioId && b.activo && (b.estado || "aprobado") === "aprobado").sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
 
     // ── Subastas ──
     async listSubastas() {
@@ -363,6 +474,18 @@ function createMemoryStore({ filePath = null } = {}) {
         const g = (db.socios || []).find((x) => x.id === s.ganador_id);
         return { ...s, ganador_nombre: g ? g.nombre : null };
       });
+    },
+    // Mismo contrato que pg-store.listSubastasPublicas: sin la foto, con tiene_imagen + imagen_v.
+    async listSubastasPublicas() {
+      const crypto = require("crypto");
+      return (await this.listSubastas()).map((s) => {
+        const { imagen, ...resto } = s;
+        return { ...resto, tiene_imagen: !!imagen, imagen_v: crypto.createHash("md5").update(imagen || "").digest("hex").slice(0, 10) };
+      });
+    },
+    async imagenSubasta(idOrSlug) {
+      const s = (db.subastas || []).find((x) => x.id === idOrSlug || x.slug === idOrSlug);
+      return s ? { id: s.id, imagen: s.imagen || null } : null;
     },
     // Acepta el id interno O el slug (link público) — así cualquier ruta que reciba
     // "lo que sea que vino en la URL" sigue funcionando sin tener que saber cuál es.
@@ -379,6 +502,7 @@ function createMemoryStore({ filePath = null } = {}) {
         puja_actual: Math.round(d.precio_inicial || 0), ganador_id: null,
         duracion_horas: d.duracion_horas != null ? Math.round(d.duracion_horas) : 48,
         inicia: d.inicia || nowIso(), termina: d.termina || null, estado: d.estado || "borrador", notificado: false, creado: nowIso(),
+        pago_estado: null, pausada_en: null, pago_vence: null, adjudicado_a: null, ronda: 1, // mismas columnas que la tabla (contrato con pg-store)
         slug: slugify(d.titulo, id) };
       (db.subastas = db.subastas || []).push(s); persist(); return s;
     },
@@ -409,10 +533,78 @@ function createMemoryStore({ filePath = null } = {}) {
       return ms.length ? Math.max.apply(null, ms) : 0;
     },
     async contarPujadores(subastaId) { return new Set((db.pujas || []).filter((p) => p.subasta_id === subastaId).map((p) => p.socio_id)).size; },
-    async cerrarSubastasVencidas() {
+    // ── Plazo de pago, ronda 2 y decisiones del club (mismo contrato que pg-store) ──
+    async cerrarSubastasVencidas({ plazoHoras = 72 } = {}) {
       const now = Date.now(), cerradas = [];
-      (db.subastas || []).forEach((s) => { if (s.estado === "activa" && new Date(s.termina).getTime() <= now) { s.estado = "cerrada"; cerradas.push(s); } });
+      (db.subastas || []).forEach((s) => {
+        if (s.estado === "activa" && new Date(s.termina).getTime() <= now) {
+          s.estado = "cerrada"; s.adjudicado_a = s.ganador_id || null; s.ronda = 1;
+          s.pago_vence = s.ganador_id ? new Date(now + plazoHoras * 3600000).toISOString() : null;
+          cerradas.push(s);
+        }
+      });
       if (cerradas.length) persist(); return cerradas;
+    },
+    async cerrarSubasta(id, { plazoHoras = 72 } = {}) {
+      const s = (db.subastas || []).find((x) => x.id === id);
+      if (!s || s.estado === "cerrada") return null;
+      s.estado = "cerrada"; s.termina = nowIso(); s.adjudicado_a = s.ganador_id || null; s.ronda = 1;
+      s.pago_vence = s.ganador_id ? new Date(Date.now() + plazoHoras * 3600000).toISOString() : null;
+      persist(); return s;
+    },
+    async subastasPlazoVencido() {
+      const now = Date.now();
+      return (db.subastas || []).filter((s) => s.estado === "cerrada" && s.pago_vence && new Date(s.pago_vence).getTime() < now && s.pago_estado !== "pagado")
+        .sort((a, b) => String(a.pago_vence).localeCompare(String(b.pago_vence))).slice(0, 50);
+    },
+    async subastasPagoPorVencer({ horas = 24 } = {}) {
+      const now = Date.now(), tope = now + horas * 3600000;
+      return (db.subastas || []).filter((s) => s.estado === "cerrada" && s.pago_vence && new Date(s.pago_vence).getTime() > now && new Date(s.pago_vence).getTime() <= tope && s.pago_estado !== "pagado");
+    },
+    async vencerPlazoSubasta(id, { plazoRonda2Horas = 48, bloqueoDias = 90, forzar = false } = {}) {
+      const s = (db.subastas || []).find((x) => x.id === id);
+      if (!s || s.estado !== "cerrada" || s.pago_estado === "pagado" || !s.adjudicado_a) return null;
+      const vencido = !!(s.pago_vence && new Date(s.pago_vence).getTime() < Date.now());
+      if (!forzar && !vencido) return null;
+      if (forzar && (s.ronda || 1) >= 2) return null;
+      const anterior = s.adjudicado_a;
+      (db.pedidos || []).forEach((p) => { if (p.subasta_id === id && p.estado === "pendiente") p.estado = "cancelado"; });
+      let bloqueadoHasta = null;
+      if ((s.ronda || 1) === 1) {
+        const ant = (db.socios || []).find((x) => x.id === anterior);
+        if (ant) { bloqueadoHasta = new Date(Date.now() + bloqueoDias * 86400000).toISOString(); ant.subastas_bloqueo_hasta = bloqueadoHasta; }
+        const mejores = new Map();
+        for (const p of (db.pujas || [])) {
+          if (p.subasta_id !== id || p.socio_id === anterior || String(p.creado) < String(new Date(s.inicia).toISOString())) continue;
+          const so = (db.socios || []).find((x) => x.id === p.socio_id);
+          if (so && so.subastas_bloqueo_hasta && new Date(so.subastas_bloqueo_hasta).getTime() > Date.now()) continue;
+          mejores.set(p.socio_id, Math.max(mejores.get(p.socio_id) || 0, p.monto));
+        }
+        const seg = [...mejores.entries()].sort((a, b) => b[1] - a[1])[0];
+        if (seg) {
+          Object.assign(s, { ganador_id: seg[0], adjudicado_a: seg[0], puja_actual: seg[1], ronda: 2, notificado: true,
+            pago_vence: new Date(Date.now() + plazoRonda2Horas * 3600000).toISOString() });
+          persist();
+          return { accion: "ronda2", anterior, bloqueadoHasta, subasta: s, segundo: seg[0], monto: seg[1] };
+        }
+      }
+      Object.assign(s, { estado: "borrador", ganador_id: null, adjudicado_a: null, ronda: 1, pago_vence: null, pago_estado: null, termina: null, puja_actual: s.precio_inicial, notificado: false });
+      persist();
+      return { accion: "borrador", anterior, bloqueadoHasta, subasta: s };
+    },
+    async extenderPlazoSubasta(id, horas) {
+      const s = (db.subastas || []).find((x) => x.id === id);
+      if (!s || s.estado !== "cerrada" || !s.adjudicado_a || s.pago_estado === "pagado") return null;
+      const base = Math.max(Date.now(), s.pago_vence ? new Date(s.pago_vence).getTime() : 0);
+      s.pago_vence = new Date(base + horas * 3600000).toISOString(); persist(); return s;
+    },
+    async listDecisiones() { return (db.decisiones || []).slice(); },
+    async setDecision(clave, valor, por) {
+      db.decisiones = db.decisiones || [];
+      let d = db.decisiones.find((x) => x.clave === clave);
+      if (!d) { d = { clave }; db.decisiones.push(d); }
+      Object.assign(d, { valor, decidido_por: por, decidido_en: nowIso() });
+      persist(); return d;
     },
     async abrirProgramadas() {
       const now = Date.now(), abiertas = [];
@@ -428,6 +620,196 @@ function createMemoryStore({ filePath = null } = {}) {
     async marcarSubastaNotificada(id) { const s = (db.subastas || []).find((x) => x.id === id); if (s) { s.notificado = true; persist(); } return true; },
     async subastasSinNotificar() { return (db.subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && !s.notificado); },
 
+    // ── Peñas oficiales (mismo contrato que pg-store) ──
+    async crearPena({ nombre, ciudad, pais_iso, presidente, contacto }) {
+      const base = String(nombre || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "pena";
+      db.penas = db.penas || [];
+      let slug = base, i = 1;
+      while (db.penas.some((p) => p.slug === slug)) slug = base + "-" + (++i);
+      const p = { id: uid("pen"), slug, nombre, ciudad: ciudad || "", pais_iso: pais_iso || "PY", presidente: presidente || "", contacto: contacto || "",
+        comision_pct: 10, saldo: 0, estado: "pendiente", creado: nowIso() };
+      db.penas.push(p); persist(); return p;
+    },
+    async getPena(id) { return (db.penas || []).find((p) => p.id === id) || null; },
+    async getPenaPorSlug(slug) { const s = String(slug || "").toLowerCase(); return (db.penas || []).find((p) => p.slug === s) || null; },
+    async updatePena(id, patch) { const p = (db.penas || []).find((x) => x.id === id); if (!p) return null; Object.assign(p, patch); persist(); return p; },
+    async listPenas({ estado, id } = {}) {
+      const tier = (sid) => { const m = (db.membresias || []).filter((x) => x.socio_id === sid && x.estado === "activa").slice(-1)[0]; return m ? m.tier_slug : "olimpista"; };
+      return (db.penas || []).filter((p) => (!estado || p.estado === estado) && (!id || p.id === id)).map((p) => {
+        const mios = (db.socios || []).filter((s) => s.pena_id === p.id);
+        const pend = (db.pena_movimientos || []).filter((m) => m.pena_id === p.id && m.motivo === "canje" && m.estado === "pendiente").reduce((a, m) => a - m.monto, 0);
+        return { ...p, altas: mios.length, socios: mios.filter((s) => s.es_socio_olimpia).length, plus: mios.filter((s) => ["premium", "kids"].includes(tier(s.id))).length, canje_pendiente: pend };
+      }).sort((a, b) => (b.altas - a.altas) || String(a.creado).localeCompare(String(b.creado)));
+    },
+    async ultimasAltasPena(penaId, limit = 8) {
+      const tier = (sid) => { const m = (db.membresias || []).filter((x) => x.socio_id === sid && x.estado === "activa").slice(-1)[0]; return m ? m.tier_slug : "olimpista"; };
+      return (db.socios || []).filter((s) => s.pena_id === penaId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
+        .map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, ciudad: s.ciudad, creado: s.creado, tier_slug: tier(s.id) }));
+    },
+    async crearPenaUsuario({ penaId, usuario, passwordHash, setupToken, setupExp }) {
+      db.pena_usuarios = db.pena_usuarios || [];
+      const u = { id: uid("peu"), pena_id: penaId, usuario: String(usuario).toLowerCase(), password_hash: passwordHash, setup_token: setupToken || null, setup_exp: setupExp || null, creado: nowIso() };
+      db.pena_usuarios.push(u); persist(); return u;
+    },
+    async getPenaUsuarioPorUsuario(usuario) { const s = String(usuario || "").toLowerCase(); return (db.pena_usuarios || []).find((u) => u.usuario === s) || null; },
+    async getPenaUsuarioDePena(penaId) { return (db.pena_usuarios || []).find((u) => u.pena_id === penaId) || null; },
+    async getPenaUsuarioPorSetupToken(token) {
+      if (!token) return null;
+      return (db.pena_usuarios || []).find((u) => u.setup_token === token && u.setup_exp && new Date(u.setup_exp).getTime() > Date.now()) || null;
+    },
+    async updatePenaUsuario(id, patch) { const u = (db.pena_usuarios || []).find((x) => x.id === id); if (!u) return null; Object.assign(u, patch); persist(); return u; },
+    async crearPenaSesion(penaId, token, expira) {
+      db.pena_sesiones = (db.pena_sesiones || []).filter((s) => new Date(s.expira).getTime() > Date.now());
+      db.pena_sesiones.push({ token, pena_id: penaId, expira }); persist(); return true;
+    },
+    async getPenaSesion(token) {
+      const s = (db.pena_sesiones || []).find((x) => x.token === token && new Date(x.expira).getTime() > Date.now());
+      const p = s && (db.penas || []).find((x) => x.id === s.pena_id);
+      return s && p ? { token: s.token, pena_id: s.pena_id, expira: s.expira, nombre: p.nombre, slug: p.slug, estado: p.estado } : null;
+    },
+    async borrarPenaSesion(token) { db.pena_sesiones = (db.pena_sesiones || []).filter((s) => s.token !== token); persist(); return true; },
+    async borrarSesionesDePena(penaId) { db.pena_sesiones = (db.pena_sesiones || []).filter((s) => s.pena_id !== penaId); persist(); return true; },
+    async acreditarPena({ penaId, pedidoId, monto, detalle }) {
+      db.pena_movimientos = db.pena_movimientos || [];
+      if (db.pena_movimientos.some((m) => m.pedido_id === pedidoId)) return null;
+      const p = (db.penas || []).find((x) => x.id === penaId); if (!p) return null;
+      const m = { id: uid("pmv"), pena_id: penaId, pedido_id: pedidoId, monto, motivo: "ingreso", detalle: detalle || "", estado: "aplicado", creado: nowIso() };
+      db.pena_movimientos.push(m); p.saldo += monto; persist(); return m;
+    },
+    async revertirIngresoPena(pedidoId) {
+      const m = (db.pena_movimientos || []).find((x) => x.pedido_id === pedidoId && x.motivo === "ingreso" && x.estado === "aplicado");
+      if (!m) return null;
+      m.estado = "revertido";
+      const p = (db.penas || []).find((x) => x.id === m.pena_id); if (p) p.saldo -= m.monto;
+      persist(); return m;
+    },
+    async pedirCanjePena({ penaId, monto, detalle }) {
+      const p = (db.penas || []).find((x) => x.id === penaId); if (!p) return null;
+      const pendiente = (db.pena_movimientos || []).filter((m) => m.pena_id === penaId && m.motivo === "canje" && m.estado === "pendiente").reduce((a, m) => a - m.monto, 0);
+      if (monto > p.saldo - pendiente) return { ok: false, disponible: Math.max(0, p.saldo - pendiente) };
+      const m = { id: uid("pmv"), pena_id: penaId, pedido_id: null, monto: -monto, motivo: "canje", detalle: detalle || "", estado: "pendiente", creado: nowIso() };
+      (db.pena_movimientos = db.pena_movimientos || []).push(m); persist();
+      return { ok: true, movimiento: m };
+    },
+    async resolverCanjePena(movId, { aprobar }) {
+      const m = (db.pena_movimientos || []).find((x) => x.id === movId && x.motivo === "canje");
+      if (!m) return { ok: false, motivo: "no_existe" };
+      if (m.estado !== "pendiente") return { ok: false, motivo: "ya_resuelto", estado: m.estado };
+      const p = (db.penas || []).find((x) => x.id === m.pena_id);
+      if (aprobar) {
+        if (!p || p.saldo + m.monto < 0) return { ok: false, motivo: "saldo" };
+        p.saldo += m.monto;
+      }
+      m.estado = aprobar ? "aplicado" : "rechazado"; persist();
+      return { ok: true, movimiento: m };
+    },
+    async movimientosPena(penaId, limit = 30) {
+      return (db.pena_movimientos || []).filter((m) => m.pena_id === penaId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit);
+    },
+    async canjesPendientesPena() {
+      return (db.pena_movimientos || []).filter((m) => m.motivo === "canje" && m.estado === "pendiente").sort((a, b) => String(a.creado).localeCompare(String(b.creado)))
+        .map((m) => { const p = (db.penas || []).find((x) => x.id === m.pena_id) || {}; return { ...m, pena: p.nombre, saldo: p.saldo }; });
+    },
+    // ── Motor de puntos (mismo contrato que pg-store) ──
+    async listReglas() {
+      if (!db.puntos_reglas) db.puntos_reglas = [["referido", 300], ["mision", 50], ["estadio", 150], ["liberar", 200], ["cuota", 100], ["debito", 500], ["perfil", 100]].map(([clave, puntos]) => ({ clave, puntos, activa: true }));
+      return db.puntos_reglas.slice().sort((a, b) => a.clave.localeCompare(b.clave));
+    },
+    async setRegla(clave, patch) { await this.listReglas(); const r = db.puntos_reglas.find((x) => x.clave === clave); if (!r) return null; Object.assign(r, patch); persist(); return r; },
+    async sumarPuntos({ socioId, motivo, refId, puntos, detalle }) {
+      db.puntos_mov = db.puntos_mov || [];
+      if (db.puntos_mov.some((m) => m.socio_id === socioId && m.motivo === motivo && m.ref_id === (refId || ""))) return null;
+      const m = { id: uid("pmo"), socio_id: socioId, puntos, motivo, ref_id: refId || "", detalle: detalle || "", vence: null, creado: nowIso() };
+      db.puntos_mov.push(m); persist(); return m;
+    },
+    async saldoPuntos(socioId) { return (db.puntos_mov || []).filter((m) => m.socio_id === socioId).reduce((a, m) => a + m.puntos, 0); },
+    async movimientosPuntos(socioId, limit = 20) {
+      return (db.puntos_mov || []).filter((m) => m.socio_id === socioId && m.puntos !== 0).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
+        .map((m) => ({ id: m.id, puntos: m.puntos, motivo: m.motivo, ref_id: m.ref_id, detalle: m.detalle, creado: m.creado }));
+    },
+    async resumenPuntos() {
+      const por = new Map();
+      for (const m of (db.puntos_mov || [])) por.set(m.socio_id, (por.get(m.socio_id) || 0) + m.puntos);
+      const saldos = [...por.values()].filter((s) => s > 0);
+      return { pasivo: saldos.reduce((a, s) => a + s, 0), socios_con_saldo: saldos.length, canjes_pendientes: (db.canjes_premio || []).filter((c) => c.estado === "pendiente").length };
+    },
+    async listPremios({ soloActivos = true } = {}) {
+      return (db.premios || []).filter((p) => !soloActivos || p.activo).sort((a, b) => (a.costo - b.costo) || String(a.creado).localeCompare(String(b.creado)));
+    },
+    async getPremio(id) { return (db.premios || []).find((p) => p.id === id) || null; },
+    async crearPremio(d) {
+      const p = { id: uid("pre"), titulo: d.titulo, descripcion: d.descripcion || "", imagen: d.imagen || null, escalon: d.escalon || "bronce", costo: Math.round(d.costo),
+        stock: d.stock == null ? null : Math.round(d.stock), nivel_min: d.nivel_min || "olimpista", activo: d.activo !== false, creado: nowIso() };
+      (db.premios = db.premios || []).push(p); persist(); return p;
+    },
+    async updatePremio(id, patch) { const p = (db.premios || []).find((x) => x.id === id); if (!p) return null; Object.assign(p, patch); persist(); return p; },
+    async canjearPremio({ socioId, premioId }) {
+      if (!(db.socios || []).some((s) => s.id === socioId)) return { ok: false, motivo: "no_existe" };
+      const p = (db.premios || []).find((x) => x.id === premioId);
+      if (!p || !p.activo) return { ok: false, motivo: "no_existe" };
+      const saldo = await this.saldoPuntos(socioId);
+      if (saldo < p.costo) return { ok: false, motivo: "saldo", saldo, costo: p.costo };
+      if (p.stock !== null && p.stock <= 0) return { ok: false, motivo: "stock" };
+      if (p.stock !== null) p.stock -= 1;
+      const c = { id: uid("cjp"), socio_id: socioId, premio_id: premioId, costo: p.costo, estado: "pendiente", creado: nowIso(), resuelto: null };
+      (db.canjes_premio = db.canjes_premio || []).push(c);
+      (db.puntos_mov = db.puntos_mov || []).push({ id: uid("pmo"), socio_id: socioId, puntos: -p.costo, motivo: "canje", ref_id: c.id, detalle: "Canje · " + p.titulo, vence: null, creado: nowIso() });
+      persist();
+      return { ok: true, canje: { ...c }, premio: p, saldo: saldo - p.costo };
+    },
+    async listCanjesPremio({ estado, socioId, limit = 100 } = {}) {
+      return (db.canjes_premio || []).filter((c) => (!estado || c.estado === estado) && (!socioId || c.socio_id === socioId))
+        .sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit).map((c) => {
+          const p = (db.premios || []).find((x) => x.id === c.premio_id) || {}, s = (db.socios || []).find((x) => x.id === c.socio_id) || {};
+          return { ...c, premio: p.titulo, escalon: p.escalon, nombre: s.nombre, apellido: s.apellido, email: s.email };
+        });
+    },
+    async resolverCanjePremio(id, { estado }) {
+      const c = (db.canjes_premio || []).find((x) => x.id === id);
+      if (!c) return { ok: false, motivo: "no_existe" };
+      if (c.estado !== "pendiente") return { ok: false, motivo: "ya_resuelto", estado: c.estado };
+      c.estado = estado; c.resuelto = nowIso();
+      const p = (db.premios || []).find((x) => x.id === c.premio_id);
+      if (estado === "cancelado") {
+        const ya = (db.puntos_mov || []).some((m) => m.socio_id === c.socio_id && m.motivo === "reintegro" && m.ref_id === c.id);
+        if (!ya) (db.puntos_mov = db.puntos_mov || []).push({ id: uid("pmo"), socio_id: c.socio_id, puntos: c.costo, motivo: "reintegro", ref_id: c.id, detalle: "Canje cancelado · " + (p ? p.titulo : ""), vence: null, creado: nowIso() });
+        if (p && p.stock !== null) p.stock += 1;
+      }
+      persist();
+      return { ok: true, canje: { ...c }, premio: p };
+    },
+    async crearMision({ semana, pregunta, opciones, correcta }) {
+      db.misiones = db.misiones || [];
+      if (db.misiones.some((m) => m.semana === semana)) { const e = new Error("semana repetida"); e.code = "23505"; throw e; }
+      const m = { id: uid("mis"), semana, pregunta, opciones, correcta, activa: true, creado: nowIso() };
+      db.misiones.push(m); persist(); return m;
+    },
+    async listMisiones(limit = 30) { return (db.misiones || []).slice().sort((a, b) => b.semana.localeCompare(a.semana)).slice(0, limit); },
+    async getMision(id) { return (db.misiones || []).find((m) => m.id === id) || null; },
+    async getMisionDeSemana(semana) { return (db.misiones || []).find((m) => m.semana === semana && m.activa) || null; },
+    async updateMision(id, patch) { const m = (db.misiones || []).find((x) => x.id === id); if (!m) return null; Object.assign(m, patch); persist(); return m; },
+    async responderMision({ misionId, socioId, opcion, correcta }) {
+      db.mision_respuestas = db.mision_respuestas || [];
+      if (db.mision_respuestas.some((r) => r.mision_id === misionId && r.socio_id === socioId)) return null;
+      const r = { mision_id: misionId, socio_id: socioId, opcion, correcta, creado: nowIso() };
+      db.mision_respuestas.push(r); persist(); return r;
+    },
+    async respuestaMision(misionId, socioId) { return (db.mision_respuestas || []).find((r) => r.mision_id === misionId && r.socio_id === socioId) || null; },
+    async puntosInactivos({ desde, hasta, limit = 500 }) {
+      const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
+      return (db.socios || []).filter((s) => s.ultima_actividad && new Date(s.ultima_actividad).getTime() >= d && new Date(s.ultima_actividad).getTime() < h)
+        .map((s) => ({ id: s.id, email: s.email, nombre: s.nombre, idioma: s.idioma, ultima_actividad: s.ultima_actividad, saldo: (db.puntos_mov || []).filter((m) => m.socio_id === s.id).reduce((a, m) => a + m.puntos, 0) }))
+        .filter((s) => s.saldo > 0).sort((a, b) => String(a.ultima_actividad).localeCompare(String(b.ultima_actividad))).slice(0, limit);
+    },
+    async vencerPuntosSocio(socioId, refId) {
+      const saldo = await this.saldoPuntos(socioId);
+      if (saldo <= 0) return null;
+      return this.sumarPuntos({ socioId, motivo: "vencimiento", refId, puntos: -saldo, detalle: "Puntos vencidos por inactividad" });
+    },
+    async sociosParaCuota({ mes, limit = 200 }) {
+      return (db.socios || []).filter((s) => s.es_socio_olimpia && s.cedula && !(db.puntos_mov || []).some((m) => m.socio_id === s.id && m.motivo === "cuota" && m.ref_id === mes))
+        .sort((a, b) => a.id.localeCompare(b.id)).slice(0, limit).map((s) => ({ id: s.id, cedula: s.cedula }));
+    },
     // ── Encuestas (Fan Survey) ──
     async listEncuestas() { return (db.encuestas || []).slice().sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
     async encuestasActivas() { return (db.encuestas || []).filter((e) => e.estado === "activa"); },
@@ -709,6 +1091,49 @@ function createMemoryStore({ filePath = null } = {}) {
       if (!ref) return null;
       return (db.pedidos || []).filter((p) => p.ref_externa === ref).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null;
     },
+    // ── Cobro y entrega, como dos hechos atómicos (mismo contrato que pg-store) ──
+    async reclamarCumplimiento(id) {
+      const p = db.pedidos.find((x) => x.id === id);
+      if (!p || p.cumplido_en) return null;
+      const dosMin = 2 * 60 * 1000;
+      if (p.cumplimiento_desde && Date.now() - new Date(p.cumplimiento_desde).getTime() < dosMin) return null;
+      p.estado = "pagado"; p.pagado_en = p.pagado_en || nowIso(); p.cumplimiento_desde = nowIso();
+      persist();
+      return { ...p };
+    },
+    async marcarCumplido(id) {
+      const p = db.pedidos.find((x) => x.id === id);
+      if (!p || p.cumplido_en) return null;
+      p.cumplido_en = nowIso(); p.cumplimiento_desde = null;
+      const so = (db.socios || []).find((x) => x.id === p.socio_id);
+      if (so) { so.gasto_total = (so.gasto_total || 0) + (p.monto || 0); so.ultima_actividad = nowIso(); }
+      persist();
+      return { ...p };
+    },
+    async liberarCumplimiento(id) {
+      const p = db.pedidos.find((x) => x.id === id);
+      if (p && !p.cumplido_en) { p.cumplimiento_desde = null; persist(); }
+      return true;
+    },
+    async marcarReversado(id) {
+      const p = db.pedidos.find((x) => x.id === id);
+      if (!p || p.estado !== "pagado") return null;
+      p.estado = "reversado";
+      const so = (db.socios || []).find((x) => x.id === p.socio_id);
+      if (so && p.cumplido_en) so.gasto_total = Math.max(0, (so.gasto_total || 0) - (p.monto || 0));
+      persist();
+      return { ...p };
+    },
+    async pedidosParaConciliar({ pendienteMin = 10, maxDias = 7, sinEntregarMin = 5, limit = 50 } = {}) {
+      const ahora = Date.now(), min = 60 * 1000, dia = 24 * 60 * min;
+      const edad = (p) => ahora - new Date(p.creado).getTime();
+      const abiertos = (db.pedidos || []).filter((p) => p.estado === "pendiente" && p.ref_externa && edad(p) > pendienteMin * min && edad(p) < maxDias * dia).slice(0, limit);
+      const sinEntregar = (db.pedidos || []).filter((p) => p.estado === "pagado" && !p.cumplido_en
+        && ahora - new Date(p.pagado_en || p.creado).getTime() > sinEntregarMin * min
+        && (!p.cumplimiento_desde || ahora - new Date(p.cumplimiento_desde).getTime() > 2 * min)).slice(0, limit);
+      return { abiertos, sinEntregar };
+    },
+
     async getPedidoPorSubasta(subastaId) {
       return (db.pedidos || []).filter((p) => p.subasta_id === subastaId).sort((a, b) => String(b.creado).localeCompare(String(a.creado)))[0] || null;
     },
@@ -790,6 +1215,86 @@ function createMemoryStore({ filePath = null } = {}) {
     async deleteAdminSession(token) { db.admin_sesiones = db.admin_sesiones.filter((s) => s.token !== token); persist(); },
     async deleteAdminSessionsByUser(adminId) { db.admin_sesiones = db.admin_sesiones.filter((s) => s.admin_id !== adminId); persist(); },
     async purgarAdminSesionesVencidas() { var n = Date.now(); db.admin_sesiones = db.admin_sesiones.filter((s) => new Date(s.expira).getTime() > n); persist(); },
+
+    // ── Atención: conversaciones, mensajes, herramientas del asistente y tope diario ──
+    // Una sola conversación abierta (no resuelta) por hincha y canal: abrir dos veces devuelve la misma.
+    async abrirConversacionAtencion({ socioId, canal = "app" }) {
+      db.atencion_conv = db.atencion_conv || [];
+      if (socioId) {
+        const abierta = db.atencion_conv.find((c) => c.socio_id === socioId && c.canal === canal && c.estado !== "resuelta");
+        if (abierta) return abierta;
+      }
+      const ahora = nowIso();
+      const c = { id: uid("atc"), socio_id: socioId || null, canal, estado: "ia", motivo: "", resumen: "", asignado_a: null, derivada_en: null, humano_responde_en: null, resuelta_en: null, creado: ahora, actualizado: ahora };
+      db.atencion_conv.push(c); persist(); return c;
+    },
+    async listConversacionesDeSocio(socioId, limit = 10) {
+      return (db.atencion_conv || []).filter((c) => c.socio_id === socioId).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit);
+    },
+    async getConversacionAtencion(id) { return (db.atencion_conv || []).find((c) => c.id === id) || null; },
+    async getConversacionAbiertaAtencion(socioId, canal = "app") { return (db.atencion_conv || []).find((c) => c.socio_id === socioId && c.canal === canal && c.estado !== "resuelta") || null; },
+    async updateConversacionAtencion(id, patch) {
+      const c = (db.atencion_conv || []).find((x) => x.id === id); if (!c) return null;
+      for (const k of ["motivo", "resumen", "asignado_a", "humano_responde_en"]) if (patch[k] !== undefined) c[k] = patch[k];
+      c.actualizado = nowIso(); persist(); return c;
+    },
+    // Cambio de estado atómico: solo si la conversación está hoy en alguno de los estados `desde`. null = otro ya la movió.
+    async cambiarEstadoAtencion(id, { desde, a, patch = {} }) {
+      const c = (db.atencion_conv || []).find((x) => x.id === id);
+      if (!c || !desde.includes(c.estado)) return null;
+      c.estado = a;
+      for (const k of ["motivo", "resumen", "asignado_a", "derivada_en", "humano_responde_en", "resuelta_en"]) if (patch[k] !== undefined) c[k] = patch[k];
+      c.actualizado = nowIso(); persist(); return c;
+    },
+    async addMensajeAtencion({ conversacionId, de, texto, meta }) {
+      const c = (db.atencion_conv || []).find((x) => x.id === conversacionId); if (!c) return null;
+      const m = { id: uid("atm"), conversacion_id: conversacionId, de, texto: String(texto), meta: meta == null ? null : (typeof meta === "string" ? meta : JSON.stringify(meta)), creado: nowIso() };
+      (db.atencion_msg = db.atencion_msg || []).push(m); c.actualizado = m.creado; persist(); return m;
+    },
+    async listMensajesAtencion(conversacionId, { limit = 100 } = {}) {
+      return (db.atencion_msg || []).filter((m) => m.conversacion_id === conversacionId).slice(-Math.min(Number(limit) || 100, 500));
+    },
+    async listBandejaAtencion({ estado, limit = 100 } = {}) {
+      const msgs = db.atencion_msg || [];
+      return (db.atencion_conv || []).filter((c) => !estado || c.estado === estado)
+        .sort((a, b) => String(b.actualizado).localeCompare(String(a.actualizado))).slice(0, Math.min(Number(limit) || 100, 300))
+        .map((c) => {
+          const s = c.socio_id ? db.socios.find((x) => x.id === c.socio_id) : null;
+          const propios = msgs.filter((m) => m.conversacion_id === c.id);
+          const ult = propios.filter((m) => ["hincha", "ia", "humano"].includes(m.de)).slice(-1)[0];
+          return { ...c, socio_nombre: s ? s.nombre || null : null, socio_apellido: s ? s.apellido || null : null, socio_ciudad: s ? s.ciudad || null : null, ultimo: ult ? ult.texto : null, n_mensajes: propios.length };
+        });
+    },
+    async indicadoresAtencion({ desdeDia, desde7 }) {
+      const todas = db.atencion_conv || [];
+      const sem = todas.filter((c) => c.creado >= desde7);
+      const tiempos = sem.filter((c) => c.derivada_en && c.humano_responde_en).map((c) => (new Date(c.humano_responde_en) - new Date(c.derivada_en)) / 60000);
+      return {
+        hoy: todas.filter((c) => c.creado >= desdeDia).length,
+        semana: sem.length,
+        solo_ia: sem.filter((c) => !c.derivada_en).length,
+        primera_resp_min: tiempos.length ? Math.round(tiempos.reduce((a, x) => a + x, 0) / tiempos.length) : null,
+        abiertas_humano: todas.filter((c) => c.estado === "humano").length,
+      };
+    },
+    async getAtencionConfig() {
+      const base = { consultar_cuenta: true, listar_beneficios: true, liberar_lugar: false, abrir_pago_subasta: true, derivar_a_humano: true };
+      for (const f of (db.atencion_cfg || [])) base[f.clave] = !!f.activo;
+      return base;
+    },
+    async setAtencionConfig(clave, activo) {
+      db.atencion_cfg = db.atencion_cfg || [];
+      const f = db.atencion_cfg.find((x) => x.clave === clave);
+      if (f) f.activo = !!activo; else db.atencion_cfg.push({ clave, activo: !!activo });
+      persist(); return { clave, activo: !!activo };
+    },
+    // Suma 1 al contador diario del hincha y devuelve el total (atómico: sirve de tope de gasto).
+    async incrementarUsoAtencion(socioId, dia) {
+      db.atencion_uso = db.atencion_uso || [];
+      let u = db.atencion_uso.find((x) => x.socio_id === socioId && x.dia === dia);
+      if (!u) { u = { socio_id: socioId, dia, mensajes: 0 }; db.atencion_uso.push(u); }
+      u.mensajes++; persist(); return u.mensajes;
+    },
   };
 }
 
