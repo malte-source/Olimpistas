@@ -9,7 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="theme-color" content="#0b0b0f" />
+  <meta name="theme-color" content="#0a0a0a" />
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Olimpistas" />
@@ -20,6 +20,17 @@
   <style> body { background: var(--negro); } .wrap { padding-top: 0; } </style>
 </head>
 <body>
+  <!-- Móvil: encabezado negro a todo el ancho. El título es el de la pestaña y se achica al hacer scroll;
+       Ayuda, idioma, apariencia y salir viven en el menú del avatar. -->
+  <header class="mhead" id="mHead" style="--c:0">
+    <div class="mhead-body">
+      <div class="mhead-tx"><h1 id="mTitle">&nbsp;</h1><p id="mSub"></p></div>
+      <img class="mhead-escudo" src="/assets/escudo.png" alt="" width="58" height="58" />
+      <button type="button" class="mhead-av" id="mAv" aria-label="Menú" aria-haspopup="dialog"></button>
+    </div>
+    <div class="mhead-fr" aria-hidden="true"></div>
+  </header>
+  <div class="mhead-sp" aria-hidden="true"></div>
   <div class="wrap">
     <div class="topbar">
       <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" /></a>

@@ -66,6 +66,7 @@
     if (SESSION.socio.tema) OLI.setThemePref(SESSION.socio.tema, false);
     renderHeader();
     document.getElementById("logoutBtn").onclick = logout;
+    initEncabezadoMovil();
     document.getElementById("logoutBtn").setAttribute("aria-label", T("logout"));
     document.getElementById("ayudaSw").setAttribute("aria-label", T("m_ayuda"));
     OLI.initThemeToggle("themeSw");
@@ -476,11 +477,58 @@
     const slug = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
     const inicial = (s.nombre || s.email || "?").trim().charAt(0).toUpperCase();
     const av = s.foto ? `<img src="${s.foto}" alt="" />` : `<span>${inicial}</span>`;
+    const mAv = document.getElementById("mAv"); if (mAv) mAv.innerHTML = av;
     const me = document.getElementById("me");
     if (me) me.innerHTML = `
       <div class="me-av">${av}</div>
       <div class="me-txt"><span class="me-hi">${T("m_hola")}</span><strong id="hola">${esc(s.nombre || s.email)}</strong></div>
       <span class="tier-chip tier-chip--${slug}">${TIER_LBL[slug] || "Olimpista"}</span>`;
+  }
+
+  // ─── Encabezado móvil: título de la pestaña (lo toma de la vista), colapso con el scroll y menú del avatar ───
+  function syncHead() {
+    const t = document.getElementById("mTitle"), sub = document.getElementById("mSub");
+    if (!t) return;
+    const h = view().querySelector("h2.ini-hi, .section > h2");
+    const lead = h && h.nextElementSibling && h.nextElementSibling.classList.contains("lead") ? h.nextElementSibling : null;
+    const txt = (h && h.textContent.trim()) || T("tab_" + curTab);
+    if (t.textContent !== txt) t.textContent = txt;
+    const st = lead ? lead.textContent.trim() : "";
+    if (sub.textContent !== st) sub.textContent = st;
+  }
+  function initEncabezadoMovil() {
+    const head = document.getElementById("mHead");
+    if (!head) return;
+    let raf = 0;
+    const onScroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; head.style.setProperty("--c", Math.min(1, Math.max(0, window.scrollY / 120)).toFixed(3)); }); };
+    window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+    let pend = 0;
+    new MutationObserver(() => { if (pend) return; pend = requestAnimationFrame(() => { pend = 0; syncHead(); }); }).observe(view(), { childList: true, subtree: true });
+    syncHead();
+    document.getElementById("mAv").addEventListener("click", abrirMenuCuenta);
+  }
+  function abrirMenuCuenta() {
+    const s = SESSION.socio, slug = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
+    const inicial = (s.nombre || s.email || "?").trim().charAt(0).toUpperCase();
+    const av = s.foto ? `<img src="${s.foto}" alt="" />` : `<span>${inicial}</span>`;
+    const pref = OLI.themePref() || (OLI.theme() === "light" ? "claro" : "oscuro");
+    const lang = window.OLI_I18N ? OLI_I18N.lang() : "es";
+    const chev = icon("chevron-right", { size: 16 });
+    const { root, close } = OLI.modal(`
+      <div class="mn-user"><div class="mn-av">${av}</div><div class="mn-id"><strong>${esc([s.nombre, s.apellido].filter(Boolean).join(" ") || s.email)}</strong><span>${TIER_LBL[slug] || "Olimpista"} · ${esc(s.email)}</span></div></div>
+      <div class="mn-grupo">
+        <a class="mn-row" href="/ayuda" target="_blank" rel="noopener"><span>${T("m_ayuda")}</span>${chev}</a>
+        <button type="button" class="mn-row" id="mnLang"><span>${T("m_idioma")}</span><span class="mn-val">${lang === "en" ? "English" : "Español"}</span></button>
+        <div class="mn-row mn-col"><span>${T("m_tema_h")}</span>
+          <div class="ctl-seg" role="radiogroup" aria-label="${T("m_tema_h")}">${[["auto", T("m_tema_auto")], ["claro", T("m_tema_claro")], ["oscuro", T("m_tema_oscuro")]].map(([v, l]) => `<button type="button" role="radio" class="ctl-seg-b" data-tema="${v}" aria-checked="${pref === v}">${l}</button>`).join("")}</div></div>
+      </div>
+      <div class="mn-grupo"><button type="button" class="mn-row mn-bad" id="mnSalir"><span>${T("m_cerrar_sesion")}</span></button></div>`);
+    root.querySelector("#mnLang").onclick = () => { OLI_I18N.setLang(lang === "en" ? "es" : "en"); location.reload(); };
+    root.querySelectorAll("[data-tema]").forEach((b) => b.onclick = () => {
+      OLI.setThemePref(b.dataset.tema, true);
+      root.querySelectorAll("[data-tema]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+    });
+    root.querySelector("#mnSalir").onclick = () => { close(); logout(); };
   }
 
   // ─── Anillo de progreso (persistente, animado) ───────────────────────────────
@@ -1291,6 +1339,7 @@
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && _qrTimer) refrescarQr(); }); // al volver, token nuevo ya
 
+  const qrListo = () => new Promise((res) => { let n = 0; (function chk() { if (window.qrcode || n++ > 40) return res(); setTimeout(chk, 50); })(); });
   async function vCarnet() {
     view().innerHTML = skeleton(0);
     try {
@@ -1304,6 +1353,7 @@
       const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0 && t.comprable !== false);
       const esGratis = !membresia || (tier && tier.nivel === 0);
       const s = SESSION.socio;
+      await qrListo(); // la librería del QR carga diferida: sin esperarla el carnet salía con "Tu QR" vacío
       const qr = makeQR(location.origin + "/c/" + encodeURIComponent(carnet.numero));
       const social = await socialPais();
       const ubic = [s.ciudad, s.pais].filter(Boolean).join(", ");
@@ -1322,10 +1372,6 @@
           <div class="cn-wrap">
             ${carnetHTML({ tierSlug: carnet.tierSlug, tierNombre: carnet.tier, nombre: carnet.nombre, numero: carnet.numero, foto: carnet.foto, qr, iso: carnet.iso })}
           </div>
-          <div class="carnet-acts">
-            <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
-            <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
-          </div>
           <div class="card qr-ben" id="qrBen"><div class="body">
             <h3 style="margin:0 0 4px">${icon("qr-code", { size: 16 })} ${T("m_qr_h")}</h3>
             <p class="muted" style="margin:0 0 12px;font-size:13px">${T("m_qr_p")}</p>
@@ -1333,6 +1379,10 @@
             <div class="qr-meta"><span class="qr-cod" id="qrBenCod">······</span><span class="muted" id="qrBenSeg"></span></div>
             <div class="qr-barra"><span id="qrBenBarra"></span></div>
           </div></div>
+          <div class="carnet-acts">
+            <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
+            <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
+          </div>
           <div class="card" style="max-width:520px;margin:18px auto 0;text-align:center"><div class="body">
             <h3 style="margin:0 0 6px">${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
             <p class="muted" style="margin:0 0 12px">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
