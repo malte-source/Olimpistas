@@ -38,6 +38,16 @@ window.OLI = (function () {
   let _cur = "";
   try { _cur = localStorage.getItem("oli_cur") || ""; } catch (e) {}
   function currency() { return _cur || "PYG"; }
+  // Carga diferida del mapa (MapLibre + globe.js): una sola vez, devuelve la misma promesa a quien la pida.
+  // Ni la landing ni la app del hincha lo bajan hasta que hace falta un mapa.
+  let _mapaP = null;
+  function cargarMapa() {
+    if (_mapaP) return _mapaP;
+    const css = (href) => new Promise((res) => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.onload = res; l.onerror = res; document.head.appendChild(l); });
+    const js = (src) => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    _mapaP = (async () => { await css("/assets/vendor/maplibre-gl.css"); await js("/assets/vendor/maplibre-gl.js"); await js("/js/globe.js?v=90"); })().catch((e) => { _mapaP = null; throw e; });
+    return _mapaP;
+  }
   function setCurrency(c) { _cur = c; try { localStorage.setItem("oli_cur", c); } catch (e) {} }
   // ── Tema (claro / oscuro / automático) ──
   // Lo maneja /js/tema.js (se carga en el <head> y aplica data-theme sin destello). Acá queda el puente con la cuenta:
@@ -611,5 +621,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
+  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, makeQR, carnet, carnetImagen, storyImagen, compartirStory, currency, setCurrency, cargarMapa, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
 })();

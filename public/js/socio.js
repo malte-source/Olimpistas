@@ -711,10 +711,9 @@
           <div class="perfil-casa">
             <h3 style="margin:0 0 4px">${T("m_casa_h")}</h3>
             <p class="lead" style="margin-bottom:12px">${T("m_casa_p")}</p>
-            <div class="grupo sin-ic"><div class="grupo-fila"><span class="grupo-tx"><b>${T("m_exacto_h")}</b><small>${T("m_exacto_p")}</small></span>
-              <button type="button" role="switch" class="interruptor" id="f_exacto" aria-checked="${!!s.mostrar_exacto}"></button></div></div>
             <div class="ubic" style="margin-top:12px">
               <button class="btn btn-ghost" id="btnGeo" type="button">${T("m_geo")}</button>
+              <button class="btn" id="btnCasa" type="button">${T("m_casa_boton")}</button>
               <span id="ubicEstado" class="muted">${tienePunto ? T("m_fijado") : T("m_sin_fijar")}</span>
             </div>
             <div id="perfilMapa" class="ob-mapa"><div class="ob-mapa-pin">${icon("map-pin", { size: 28 })}</div></div>
@@ -729,7 +728,7 @@
     campos.forEach((c) => { document.getElementById("f_" + c.key).onclick = () => entrarEdicionPerfil(c); });
     const cancelBtn = document.getElementById("btnCancelarMembresia");
     if (cancelBtn) cancelBtn.onclick = () => confirmarCancelarMembresia(cancelBtn);
-    document.getElementById("f_exacto").onclick = (e) => guardarCampoPerfil({ mostrar_exacto: e.currentTarget.getAttribute("aria-checked") !== "true" }, T("m_casa_ok"));
+    document.getElementById("btnCasa").onclick = abrirHojaCasa;
     initPerfilMapa();
     if (!s.pais_iso) prefillPaisPorIP();
   }
@@ -810,7 +809,7 @@
   function initPerfilMapa() {
     const arranque = () => {
       const el = document.getElementById("perfilMapa");
-      if (!window.maplibregl || !el) return;
+      if (!window.maplibregl || !el || !el.isConnected) return;
       if (perfilGlobo) { try { perfilGlobo.remove(); } catch (e) {} perfilGlobo = null; }
       const tiene = perfilPunto.lat != null;
       perfilGlobo = new window.maplibregl.Map({
@@ -819,32 +818,49 @@
         zoom: tiene ? 15 : 11, attributionControl: false,
       });
       perfilGlobo.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), "top-right");
-      // El pin vive fijo al centro (CSS). Al soltar el mapa, el centro = tu punto —
-      // se guarda solo (edición inline: sin botón "Guardar" global que lo bundlee).
-      perfilGlobo.on("moveend", () => { const c = perfilGlobo.getCenter(); perfilPunto = { lat: c.lat, lng: c.lng }; marcarFijado(); guardarUbicacionExacta(); });
+      // El pin vive fijo al centro (CSS). Mover el mapa solo propone un punto: NO se guarda hasta
+      // tocar "Poner mi bandera acá" (un solo PATCH, con la confirmación de privacidad).
+      perfilGlobo.on("moveend", () => { const c = perfilGlobo.getCenter(); perfilPunto = { lat: c.lat, lng: c.lng }; marcarSinGuardar(); });
     };
-    if (window.maplibregl) arranque();
-    else { let n = 0; const t = setInterval(() => { if (window.maplibregl) { clearInterval(t); arranque(); } else if (++n > 80) clearInterval(t); }, 100); }
+    OLI.cargarMapa().then(arranque).catch(() => { const e = document.getElementById("ubicEstado"); if (e) e.textContent = T("m_geo_err"); });
   }
   function marcarFijado() { const e = document.getElementById("ubicEstado"); if (e) e.textContent = T("m_fijado"); }
+  function marcarSinGuardar() { const e = document.getElementById("ubicEstado"); if (e) e.textContent = T("m_sin_guardar"); }
+
+  // Hoja "Poner mi bandera acá": confirma la privacidad y guarda el punto de una sola vez.
+  function abrirHojaCasa() {
+    if (perfilPunto.lat == null && perfilGlobo) { const c = perfilGlobo.getCenter(); perfilPunto = { lat: c.lat, lng: c.lng }; }
+    if (perfilPunto.lat == null) return toast(T("m_sin_fijar"));
+    const s = SESSION.socio;
+    const { root, close } = OLI.modal(`<h3>${T("m_casa_boton")}</h3><p class="muted" style="margin:6px 0 14px">${T("m_casa_privacidad")}</p>
+      <div class="grupo sin-ic"><div class="grupo-fila"><span class="grupo-tx"><b>${T("m_casa_mostrar")}</b></span>
+        <button type="button" role="switch" class="interruptor" id="hcMostrar" aria-checked="${!!s.mostrar_exacto}"></button></div></div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+        <button type="button" class="btn btn-block" id="hcGuardar">${T("m_casa_guardar")}</button>
+        <button type="button" class="btn btn-ghost btn-block" id="hcVer">${T("m_casa_ver")}</button>
+      </div>`);
+    const sw = root.querySelector("#hcMostrar");
+    sw.onclick = () => sw.setAttribute("aria-checked", sw.getAttribute("aria-checked") === "true" ? "false" : "true");
+    const guardar = async () => {
+      const r = await api("/perfil", { method: "PATCH", body: { lat: perfilPunto.lat, lng: perfilPunto.lng, mostrar_exacto: sw.getAttribute("aria-checked") === "true" } });
+      SESSION.socio = r.socio; SESSION.progreso = r.progreso;
+    };
+    root.querySelector("#hcGuardar").onclick = async () => { try { await guardar(); marcarFijado(); toast(T("m_casa_ok")); close(); } catch (e) { toast(e.message); } };
+    root.querySelector("#hcVer").onclick = async () => {
+      try { await guardar(); try { sessionStorage.setItem("oli_nuevo", JSON.stringify({ lat: perfilPunto.lat, lng: perfilPunto.lng, iso: s.pais_iso || "" })); } catch (e) {} location.href = "/#mundo"; }
+      catch (e) { toast(e.message); }
+    };
+  }
 
   function usarUbicacion() {
     if (!navigator.geolocation) return toast(T("m_geo_no"));
     const e = document.getElementById("ubicEstado");
     if (e) e.textContent = T("m_buscando");
     navigator.geolocation.getCurrentPosition(
-      (pos) => { const { latitude, longitude } = pos.coords; perfilPunto = { lat: latitude, lng: longitude }; if (perfilGlobo) perfilGlobo.flyTo({ center: [longitude, latitude], zoom: 16 }); marcarFijado(); guardarUbicacionExacta(); },
+      (pos) => { const { latitude, longitude } = pos.coords; perfilPunto = { lat: latitude, lng: longitude }; if (perfilGlobo) perfilGlobo.flyTo({ center: [longitude, latitude], zoom: 16 }); marcarSinGuardar(); },
       () => { if (e) e.textContent = T("m_geo_err"); },
       { enableHighAccuracy: true, timeout: 8000 }
     );
-  }
-
-  async function guardarUbicacionExacta() {
-    if (perfilPunto.lat == null) return;
-    try {
-      const r = await api("/perfil", { method: "PATCH", body: { lat: perfilPunto.lat, lng: perfilPunto.lng } });
-      SESSION.socio = r.socio; SESSION.progreso = r.progreso;
-    } catch (e) { toast(e.message); }
   }
 
   async function subirFoto(dataUrl) {

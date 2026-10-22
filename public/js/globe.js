@@ -1,7 +1,7 @@
 /* globe.js — globo 3D (MapLibre GL, satélite) con NIVELES DE DETALLE que se
    funden con el zoom, para que se entienda de qué país es y se vaya detallando:
 
-     z bajo  (mundo)   → 1 badge dorado POR PAÍS, con nombre y total (1M, 5K…)
+     z bajo  (mundo)   → 1 medallón POR PAÍS, con nombre y total (1M, 5K…)
      z medio (país)    → badges POR CIUDAD (Gran Asunción se agrupa hasta entrar)
      z alto  (ciudad)  → banderas de Olimpia por ciudad (tamaño según cantidad)
      z muy alto (calle)→ banderas individuales "en tu casa" (opt-in)
@@ -10,13 +10,12 @@
      create(el,{onFlagClick,onPick,autoRotate,zoom,center,flagsUrl})
        → { setData(ciudades), setCountries(paises), pov, stopRotation, raw } */
 window.OLI_GLOBE = (function () {
-  const ORO = "#b08d2e", ORO_BORDE = "#1a1500";
   // Cúmulos de ciudad/país: tinta, no oro — "el oro significa dinero, y acá no hay dinero" (F1.7).
   const CUMULO = "#0a0a0a", CUMULO_BORDE = "rgba(255,255,255,.35)";
   const ESTILO = {
     version: 8,
     projection: { type: "globe" },
-    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    glyphs: "/assets/glyphs/{fontstack}/{range}.pbf", // Saira propia (scripts/generar-glyphs.mjs): sin servidores de terceros
     sources: {
       sat: {
         type: "raster", tileSize: 256, maxzoom: 19,
@@ -135,7 +134,6 @@ window.OLI_GLOBE = (function () {
     IT:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#009246');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#CE2B37');},
     PE:(x,a,b,w,h)=>{_r(x,a,b,w/3,h,'#D91023');_r(x,a+w/3,b,w/3,h,'#fff');_r(x,a+2*w/3,b,w/3,h,'#D91023');},
     CA:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');_r(x,a,b,w*0.28,h,'#FF0000');_r(x,a+w*0.72,b,w*0.28,h,'#FF0000');x.fillStyle='#FF0000';x.beginPath();x.arc(a+w/2,b+h/2,h*0.14,0,7);x.fill();},
-    PT:(x,a,b,w,h)=>{_r(x,a,b,w*0.4,h,'#006600');_r(x,a+w*0.4,b,w*0.6,h,'#FF0000');x.fillStyle='#FFD700';x.beginPath();x.arc(a+w*0.4,b+h/2,h*0.12,0,7);x.fill();},
     BR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#009C3B');const cx=a+w/2,cy=b+h/2;x.fillStyle='#FFDF00';x.beginPath();x.moveTo(cx,cy-h*0.36);x.lineTo(a+w*0.92,cy);x.lineTo(cx,cy+h*0.36);x.lineTo(a+w*0.08,cy);x.closePath();x.fill();x.fillStyle='#002776';x.beginPath();x.arc(cx,cy,h*0.16,0,7);x.fill();},
     JP:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#fff');x.fillStyle='#BC002D';x.beginPath();x.arc(a+w/2,b+h/2,h*0.26,0,7);x.fill();},
     TR:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#E30A17');const cx=a+w*0.52,cy=b+h/2,rr=h*0.22;x.fillStyle='#fff';x.beginPath();x.arc(cx,cy,rr,0,7);x.fill();x.fillStyle='#E30A17';x.beginPath();x.arc(cx+rr*0.5,cy,rr*0.82,0,7);x.fill();},
@@ -145,16 +143,20 @@ window.OLI_GLOBE = (function () {
     NZ:(x,a,b,w,h)=>{_r(x,a,b,w,h,'#00247D');x.strokeStyle='#fff';x.lineWidth=h*0.06;x.beginPath();x.moveTo(a,b);x.lineTo(a+w*0.45,b+h*0.45);x.moveTo(a+w*0.45,b);x.lineTo(a,b+h*0.45);x.stroke();x.fillStyle='#CC142B';_star(x,a+w*0.72,b+h*0.55,h*0.12);},
     CL:(x,a,b,w,h)=>{_r(x,a,b,w,h*0.5,'#fff');_r(x,a,b+h*0.5,w,h*0.5,'#D52B1E');_r(x,a,b,w*0.4,h*0.5,'#0039A6');x.fillStyle='#fff';_star(x,a+w*0.2,b+h*0.25,h*0.13);},
   };
+  // Sin bandera propia: el medallón entero es Olimpia (franjas), nunca un color de relleno.
+  const franjasOlimpia = (x, a, b, w, h) => { _r(x, a, b, w, h / 3, "#f5f5f5"); _r(x, a, b + h / 3, w, h / 3, "#141414"); _r(x, a, b + 2 * h / 3, w, h / 3, "#f5f5f5"); };
   function medallonData(iso) {
     const S = 128, c = 64, r = 60, top = 4, hh = 120;
     const cv = document.createElement("canvas"); cv.width = cv.height = S;
     const x = cv.getContext("2d");
     x.save(); x.beginPath(); x.arc(c, c, r, 0, Math.PI * 2); x.clip();
     _r(x, 0, top, c, hh / 3, "#f5f5f5"); _r(x, 0, top + hh / 3, c, hh / 3, "#141414"); _r(x, 0, top + 2 * hh / 3, c, hh / 3, "#f5f5f5");
-    (FLAG[iso] || ((xx, a, b, w, h) => _r(xx, a, b, w, h, "#b08d2e")))(x, c, top, c, hh);
+    (FLAG[iso] || franjasOlimpia)(x, c, top, c, hh);
     x.restore();
-    x.strokeStyle = "#b08d2e"; x.lineWidth = 3; x.beginPath(); x.moveTo(c, top); x.lineTo(c, top + hh); x.stroke();
-    x.lineWidth = 5; x.beginPath(); x.arc(c, c, r - 1.5, 0, Math.PI * 2); x.stroke();
+    // Aro y divisor blancos con un contorno tenue para que no se pierdan sobre el satélite claro (sin oro: acá no hay dinero).
+    const trazos = (ancho) => { x.lineWidth = ancho; x.beginPath(); x.moveTo(c, top); x.lineTo(c, top + hh); x.stroke(); x.beginPath(); x.arc(c, c, r - 1.5, 0, Math.PI * 2); x.stroke(); };
+    x.strokeStyle = "rgba(10,10,10,.35)"; trazos(8);
+    x.strokeStyle = "#ffffff"; trazos(4);
     return x.getImageData(0, 0, S, S);
   }
 
@@ -260,7 +262,7 @@ window.OLI_GLOBE = (function () {
 
       const RADIO_SUM = ["interpolate", ["linear"], ["get", "sum"], 1, 12, 1000, 16, 20000, 24, 200000, 34, 700000, 46];
       const RADIO_CIUDAD = ["interpolate", ["linear"], ["get", "count"], 1, 11, 1000, 15, 20000, 22, 200000, 32];
-      const TXT = (size) => ({ "text-font": ["Open Sans Bold"], "text-size": size, "text-allow-overlap": true });
+      const TXT = (size) => ({ "text-font": ["Saira Bold"], "text-size": size, "text-allow-overlap": true });
       const TXT_PAINT = { "text-color": "#fff" };
       const opa = (...stops) => ["interpolate", ["linear"], ["zoom"], ...stops];
 
@@ -271,11 +273,11 @@ window.OLI_GLOBE = (function () {
           "icon-size": ["interpolate", ["linear"], ["get", "count"], 1, 0.4, 5000, 0.52, 100000, 0.8, 1024501, 1.2] },
         paint: { "icon-opacity": fadePais } });
       map.addLayer({ id: "pais-count", type: "symbol", source: "paises",
-        layout: { "text-field": fmt("count"), "text-font": ["Open Sans Bold"], "text-size": 14,
+        layout: { "text-field": fmt("count"), "text-font": ["Saira Bold"], "text-size": 14,
           "text-anchor": "top", "text-offset": [0, 0.5], "text-allow-overlap": true },
         paint: { "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.6, "text-opacity": fadePais } });
       map.addLayer({ id: "pais-nombre", type: "symbol", source: "paises",
-        layout: { "text-field": ["get", "nombre"], "text-font": ["Open Sans Bold"], "text-size": 12,
+        layout: { "text-field": ["get", "nombre"], "text-font": ["Saira SemiBold"], "text-size": 12,
           "text-anchor": "top", "text-offset": [0, 1.9], "text-allow-overlap": false, "text-optional": true },
         paint: { "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.3, "text-opacity": fadePais } });
 
@@ -301,22 +303,22 @@ window.OLI_GLOBE = (function () {
       map.addLayer({ id: "ciudad-flag", type: "symbol", source: "ciudades", filter: ["!", ["has", "point_count"]],
         layout: { "icon-image": "bandera", "icon-allow-overlap": true, "icon-anchor": "bottom",
           "icon-size": ["interpolate", ["linear"], ["zoom"], 8, ["*", 0.16, cf], 11, ["*", 0.24, cf], 14, ["*", 0.26, cf]],
-          "text-field": ["get", "ciudad"], "text-font": ["Open Sans Bold"], "text-size": 11,
+          "text-field": ["get", "ciudad"], "text-font": ["Saira SemiBold"], "text-size": 11,
           "text-offset": [0, 0.7], "text-anchor": "top", "text-optional": true, "text-allow-overlap": false },
         paint: { "icon-opacity": opa(7.8, 0, 8.6, 1, 12, 1, 13.5, 0), "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.3, "text-opacity": opa(8.2, 0, 9, 1, 12, 1, 13.5, 0) } });
 
       // ── Tier 4: CASAS opt-in (punto exacto). Solo a zoom alto ──
       if (opts.flagsUrl) {
         map.addSource("casas", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-        // Sin "text-field": el nombre de pila NO se imprime junto al pin — es un dato
-        // personal expuesto sin necesidad, la bandera sola ya cuenta la historia.
+        // Sin "text-field": ni el nombre ni la ciudad viajan en /api/flags (dato personal expuesto
+        // sin necesidad): la bandera sola ya cuenta la historia.
         map.addLayer({ id: "casas", type: "symbol", source: "casas",
           layout: { "icon-image": "bandera", "icon-allow-overlap": true, "icon-anchor": "bottom",
             "icon-size": ["interpolate", ["linear"], ["zoom"], 12, 0.2, 15, 0.3, 18, 0.4] },
           paint: { "icon-opacity": opa(11.5, 0, 12.5, 1) } });
         map.on("click", "casas", (e) => {
-          const f = e.features[0], p = f.properties;
-          popupEn(f.geometry.coordinates.slice(), `<strong><img class="pop-fl" src="/assets/flag-olimpia.svg" alt="" /> Olimpista</strong><span>${esc(p.ciudad || "")}</span>`);
+          const f = e.features[0];
+          popupEn(f.geometry.coordinates.slice(), `<strong><img class="pop-fl" src="/assets/flag-olimpia.svg" alt="" /> Olimpista</strong>`);
         });
         map.on("moveend", refrescarCasas);
         refrescarCasas();
@@ -344,7 +346,7 @@ window.OLI_GLOBE = (function () {
     }
 
     map.once("load", async () => {
-      try { map.setSky({ "sky-color": "#0a0a0a", "horizon-color": "#1a1a22", "fog-color": "#0a0a0a", "fog-ground-blend": 0.4 }); } catch (e) {}
+      try { map.setSky({ "sky-color": "#0a0a0a", "horizon-color": "#0a0a0a", "fog-color": "#0a0a0a", "fog-ground-blend": 0.4 }); } catch (e) {}
       await cargarIconoBandera();
       addLayers();
       ready = true;

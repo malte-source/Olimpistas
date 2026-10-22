@@ -86,13 +86,7 @@
   function cargarJs(src) {
     return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
   }
-  let _mapaCargado = false;
-  async function cargarMapa() {
-    if (_mapaCargado) return; _mapaCargado = true;
-    await cargarCss("/assets/vendor/maplibre-gl.css");
-    await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=88");
-  }
+  const cargarMapa = () => OLI.cargarMapa(); // misma carga diferida que usa la app del hincha (common.js)
 
   async function initIdiomaMoneda() {
     OLI.initThemeToggle("themeSw");
@@ -230,6 +224,8 @@
       let info; try { info = JSON.parse(sessionStorage.getItem("oli_nuevo") || "null"); } catch (e) {}
       if (!info) return;
       try { sessionStorage.removeItem("oli_nuevo"); } catch (e) {}
+      // Desde el perfil ("Ver cómo queda") llega el punto exacto elegido: se vuela directo ahí.
+      if (info.lat != null && info.lng != null) { gl.destacar({ lat: Number(info.lat), lng: Number(info.lng), label: "¡Vos!" }); return; }
       let pt = (stats.puntos || []).find((p) => (p.ciudad || "").toLowerCase() === (info.ciudad || "").toLowerCase() && (!info.iso || p.iso === info.iso));
       if (!pt) pt = (stats.porPais || []).find((p) => p.iso === info.iso);
       if (!pt) return;
