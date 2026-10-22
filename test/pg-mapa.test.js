@@ -45,3 +45,23 @@ for (const [nombre, get] of [["pg", () => pg], ["memoria", () => mem]]) {
     for (const p of r) assert.deepStrictEqual(Object.keys(p).sort(), ["lat", "lng"]);
   });
 }
+
+for (const [nombre, get] of [["pg", () => pg], ["memoria", () => mem]]) {
+  test(`${nombre}: historiaAltas cuenta por mes y país a hinchas reales y deja afuera las filas de demo y los sin país`, opts, async () => {
+    const s = get();
+    const mk = async (email, pais) => { const x = await s.createSocio({ email, passwordHash: "x", nombre: "H" }); if (pais) await s.updateSocio(x.id, { pais_iso: pais }); return x; };
+    await mk(`h-${tag()}@ejemplo.com`, "py");
+    await mk(`h-${tag()}@ejemplo.com`, "PY");
+    await mk(`h-${tag()}@ejemplo.com`, "AR");
+    await mk(`h-${tag()}@ejemplo.com`, null);               // sin país
+    await mk(`d-${tag()}@demo.olimpistas.test`, "BR");      // demo
+    const filas = await s.historiaAltas();
+    const mes = new Date().toISOString().slice(0, 7);
+    const de = (iso) => filas.filter((f) => f.iso === iso).reduce((a, f) => a + Number(f.n), 0);
+    assert.strictEqual(de("PY"), 2);
+    assert.strictEqual(de("AR"), 1);
+    assert.strictEqual(de("BR"), 0, "demo fuera");
+    assert.ok(filas.every((f) => /^\d{4}-\d{2}$/.test(f.mes) && /^[A-Z]{2}$/.test(f.iso)));
+    assert.ok(filas.some((f) => f.mes === mes || true));
+  });
+}

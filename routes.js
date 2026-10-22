@@ -31,6 +31,7 @@ const carnetLib = require("./lib/carnet");
 const atencionLib = require("./lib/atencion");
 const campanasLib = require("./lib/campanas");
 const h3lib = require("./lib/h3");
+const mapaLib = require("./lib/mapa");
 const { periodo } = require("./lib/periodo");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
@@ -321,6 +322,12 @@ function buildRouter() {
     const puntos = await store.puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat });
     res.setHeader("Cache-Control", "public, max-age=60");
     res.json({ k: h3lib.K, celdas: h3lib.celdasAnonimas(puntos).slice(0, 2000) });
+  }));
+
+  // "Mirá cómo crece": altas acumuladas por mes y país, solo hinchas reales. Totales por país: nada de una persona.
+  r.get("/mapa/historia", wrap(async (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=600");
+    res.json({ meses: mapaLib.acumularHistoria(await store.historiaAltas()) });
   }));
 
   const soloDigitos = (s) => String(s || "").replace(/\D/g, "");

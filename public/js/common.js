@@ -1,4 +1,5 @@
 /* common.js — helpers compartidos entre landing y área de socio. */
+const _OLI_SCRIPT = document.currentScript;
 window.OLI = (function () {
   async function api(path, opts = {}) {
     const res = await fetch("/api" + path, {
@@ -41,11 +42,12 @@ window.OLI = (function () {
   // Carga diferida del mapa (MapLibre + globe.js): una sola vez, devuelve la misma promesa a quien la pida.
   // Ni la landing ni la app del hincha lo bajan hasta que hace falta un mapa.
   let _mapaP = null;
+  const VER = ((_OLI_SCRIPT && _OLI_SCRIPT.src.split("?v=")[1]) || "x").replace(/[^\w.-]/g, "");
   function cargarMapa() {
     if (_mapaP) return _mapaP;
     const css = (href) => new Promise((res) => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.onload = res; l.onerror = res; document.head.appendChild(l); });
     const js = (src) => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-    _mapaP = (async () => { await css("/assets/vendor/maplibre-gl.css"); await js("/assets/vendor/maplibre-gl.js"); await js("/js/globe.js?v=91"); })().catch((e) => { _mapaP = null; throw e; });
+    _mapaP = (async () => { await css("/assets/vendor/maplibre-gl.css"); await js("/assets/vendor/maplibre-gl.js"); await js("/js/geo-arcos.js?v=" + VER); await js("/js/globe.js?v=" + VER); })().catch((e) => { _mapaP = null; throw e; });
     return _mapaP;
   }
   function setCurrency(c) { _cur = c; try { localStorage.setItem("oli_cur", c); } catch (e) {} }
@@ -219,7 +221,7 @@ window.OLI = (function () {
       : `<div class="cn-qr cn-qr-empty">Tu QR</div>`;
     const iso = (o.iso || "").toLowerCase().trim();
     const flag = /^[a-z]{2}$/.test(iso)
-      ? `<img class="cn-flag" src="https://flagcdn.com/${iso}.svg" alt="" loading="lazy" />` : "";
+      ? `<img class="cn-flag" src="/assets/flags/4x3/${iso}.svg" alt="" loading="lazy" />` : "";
     return `<div class="cn cn--${slug}">
       <div class="cn-head">
         <img class="cn-logo" src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas" />
@@ -272,7 +274,7 @@ window.OLI = (function () {
       x.lineWidth = 5; x.strokeStyle = "rgba(255,255,255,.25)"; x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.stroke();
       const iso = (o.iso || "").toLowerCase().trim();
       if (/^[a-z]{2}$/.test(iso)) {
-        const fl = await _loadImg("https://flagcdn.com/" + iso + ".svg", true);
+        const fl = await _loadImg("/assets/flags/4x3/" + iso + ".svg", true);
         if (fl) { const fr = 34, fx = cx + r - 26, fy = cy + r - 34; x.save(); x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.closePath(); x.clip(); x.drawImage(fl, fx - fr, fy - fr, fr * 2, fr * 2); x.restore(); x.lineWidth = 4; x.strokeStyle = "#fff"; x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.stroke(); }
       }
       x.textAlign = "center"; x.textBaseline = "alphabetic";
@@ -329,7 +331,7 @@ window.OLI = (function () {
       // Banderita en la selfie.
       const iso = (o.iso || "").toLowerCase().trim();
       if (/^[a-z]{2}$/.test(iso)) {
-        const fl = await _loadImg("https://flagcdn.com/" + iso + ".svg", true);
+        const fl = await _loadImg("/assets/flags/4x3/" + iso + ".svg", true);
         if (fl) { const fr = 60, fx = cx + r - 58, fy = cy + r - 58; x.save(); x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.closePath(); x.clip(); x.drawImage(fl, fx - fr, fy - fr, fr * 2, fr * 2); x.restore(); x.lineWidth = 8; x.strokeStyle = "#0a0a0a"; x.beginPath(); x.arc(fx, fy, fr, 0, 6.2832); x.stroke(); x.lineWidth = 3; x.strokeStyle = "#fff"; x.beginPath(); x.arc(fx, fy, fr - 2, 0, 6.2832); x.stroke(); }
       }
       // Anuncio. (re-centramos: restore() reseteó textAlign a "start")

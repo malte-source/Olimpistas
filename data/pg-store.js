@@ -637,6 +637,12 @@ function createPgStore({ databaseUrl, debug }) {
         LIMIT ${Math.min(Number(limit) || 600, 1500)}`;
     },
     // Solo posiciones (sin id, nombre ni ciudad) de quienes eligieron mostrarse: alimenta las celdas H3 del mapa público.
+    // Altas por mes y país de hinchas reales (sin las filas de demo): alimenta "Mirá cómo crece". Solo totales.
+    async historiaAltas() {
+      const dom = "%@" + SEED_DOMAIN;
+      return sql`SELECT to_char(creado AT TIME ZONE 'America/Asuncion', 'YYYY-MM') AS mes, upper(pais_iso) AS iso, COUNT(*)::int AS n
+        FROM socios WHERE email NOT LIKE ${dom} AND pais_iso IS NOT NULL AND pais_iso <> '' GROUP BY 1, 2 ORDER BY 1`;
+    },
     async puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat, limit = 20000 }) {
       return sql`
         SELECT lat, lng FROM socios

@@ -927,6 +927,16 @@ function createMemoryStore({ filePath = null } = {}) {
         lat: r.n ? r.latSum / r.n : null, lng: r.n ? r.lngSum / r.n : null,
       }));
     },
+    async historiaAltas() {
+      const cuenta = new Map();
+      for (const s of db.socios) {
+        if (!s.pais_iso || String(s.email || "").endsWith("@demo.olimpistas.test")) continue;
+        const d = new Date(s.creado); if (isNaN(d)) continue;
+        const mes = new Date(d.getTime() - 3 * 3600 * 1000).toISOString().slice(0, 7); // hora de Paraguay (aprox.)
+        const k = mes + "|" + String(s.pais_iso).toUpperCase(); cuenta.set(k, (cuenta.get(k) || 0) + 1);
+      }
+      return [...cuenta].map(([k, n]) => { const [mes, iso] = k.split("|"); return { mes, iso, n }; }).sort((a, b) => a.mes.localeCompare(b.mes));
+    },
     async puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat, limit = 20000 }) {
       const out = [];
       for (const s of db.socios) {

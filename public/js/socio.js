@@ -1293,7 +1293,7 @@
     if (!feed || !feed.length) return `<p class="muted">${T("m_sub_primero")}</p>`;
     return feed.map((f) => {
       const iso = String(f.pais_iso || "").toLowerCase().trim();
-      const flag = /^[a-z]{2}$/.test(iso) ? `<img class="sub-fflag" src="https://flagcdn.com/${iso}.svg" alt="" loading="lazy" />` : "";
+      const flag = /^[a-z]{2}$/.test(iso) ? `<img class="sub-fflag" src="/assets/flags/4x3/${iso}.svg" alt="" loading="lazy" />` : "";
       return `<div class="sub-fitem${f.yo ? " yo" : ""}">
       <span class="sub-fav-wrap"><span class="sub-fav">${(f.nombre || "?").charAt(0).toUpperCase()}</span>${flag}</span>
       <span class="sub-fnm">${f.yo ? "Vos" : esc(f.nombre)}</span>
