@@ -146,7 +146,7 @@
     document.body.dataset.tab = tab;
     const back = document.getElementById("mBack"); if (back) back.hidden = PESTANAS.includes(tab);
     moveTabInd();
-    const conVista = (fn) => (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? document.startViewTransition(() => fn()) : fn());
+    const conVista = (fn) => (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? document.startViewTransition(() => { fn(); }) /* sin devolver la promesa: la transición no espera a los datos de la vista */ : fn());
     conVista(({ inicio: vInicio, partidos: vPartidos, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio));
   }
 
