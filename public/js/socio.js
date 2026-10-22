@@ -66,6 +66,8 @@
     if (SESSION.socio.tema) OLI.setThemePref(SESSION.socio.tema, false);
     renderHeader();
     document.getElementById("logoutBtn").onclick = logout;
+    document.getElementById("logoutBtn").setAttribute("aria-label", T("logout"));
+    document.getElementById("ayudaSw").setAttribute("aria-label", T("m_ayuda"));
     OLI.initThemeToggle("themeSw");
     // Selector de idioma in-app: muestra el idioma DESTINO y recarga para reaplicar i18n.
     const langSw = document.getElementById("langSw");
