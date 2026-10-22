@@ -220,7 +220,7 @@ window.OLI_GLOBE = (function () {
     function addLayers() {
       if (map.getSource("ciudades")) return;
       map.addSource("paises", { type: "geojson", data: buildFC(pendPaises || []) });
-      // "Todos los caminos llevan al Defensores": un arco de círculo máximo por país hacia el estadio (solo a zoom bajo).
+      // "Todos los caminos llevan al Club Olimpia": un arco de círculo máximo por país hacia el club (solo a zoom bajo).
       map.addSource("caminos", { type: "geojson", data: caminosDe(pendPaises) });
       map.addSource("ciudades", {
         type: "geojson", data: buildFC(pendCiudades || []),
