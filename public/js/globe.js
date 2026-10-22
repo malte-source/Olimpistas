@@ -237,11 +237,11 @@ window.OLI_GLOBE = (function () {
       // ── Tier 1: PAÍS (mundo) → medallón mitad Olimpia / mitad país. Fade out ~4.2→5 ──
       const fadePais = opa(0, 1, 4.2, 1, 5, 0);
       map.addLayer({ id: "caminos-linea", type: "line", source: "caminos", layout: { "line-cap": "round" },
-        paint: { "line-color": "#ffffff", "line-opacity": opa(0, 0.4, 4.2, 0.4, 5.2, 0),
-          "line-width": ["interpolate", ["linear"], ["get", "count"], 1, 1, 5000, 1.6, 100000, 2.6, 1000000, 4] } });
+        paint: { "line-color": "#ffffff", "line-opacity": opa(0, 0.6, 4.2, 0.6, 5.2, 0),
+          "line-width": ["interpolate", ["linear"], ["get", "count"], 1, 1.6, 5000, 2.2, 100000, 3, 1000000, 4.5] } });
       map.addLayer({ id: "pais-badge", type: "symbol", source: "paises",
         layout: { "icon-image": ["concat", "pais-", ["get", "iso"]], "icon-anchor": "bottom", "icon-allow-overlap": true,
-          "icon-size": ["interpolate", ["linear"], ["get", "count"], 1, 0.4, 5000, 0.52, 100000, 0.8, 1024501, 1.2] },
+          "icon-size": ["interpolate", ["linear"], ["get", "count"], 1, 0.55, 5000, 0.65, 100000, 0.9, 1024501, 1.25] },
         paint: { "icon-opacity": fadePais } });
       map.addLayer({ id: "pais-count", type: "symbol", source: "paises",
         layout: { "text-field": fmt("count"), "text-font": ["Saira Bold"], "text-size": 14,
