@@ -1,5 +1,5 @@
 "use strict";
-// Mapa (handoff v3, M2.6 + M3): banderas propias de 250 países, caminos al Defensores y "Mirá cómo crece".
+// Mapa (handoff v3, M2.6 + M3): banderas propias de 250 países, caminos al Club Olimpia y "Mirá cómo crece".
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";
@@ -51,17 +51,17 @@ test("API /mapa/historia: solo hinchas reales (sin demo), con país, y solo tota
 });
 
 test("caminos: el arco empieza y termina donde debe, es el camino corto y se corta al cruzar el antimeridiano", () => {
-  const [par] = geo.arco([2.35, 48.85], geo.DEFENSORES);
+  const [par] = geo.arco([2.35, 48.85], geo.CLUB_OLIMPIA);
   assert.deepStrictEqual(par[0], [2.35, 48.85]);
-  assert.ok(Math.abs(par[par.length - 1][0] - geo.DEFENSORES[0]) < 1e-6 && Math.abs(par[par.length - 1][1] - geo.DEFENSORES[1]) < 1e-6);
+  assert.ok(Math.abs(par[par.length - 1][0] - geo.CLUB_OLIMPIA[0]) < 1e-6 && Math.abs(par[par.length - 1][1] - geo.CLUB_OLIMPIA[1]) < 1e-6);
   // París → Asunción pasa por el Atlántico, no por Asia: la longitud nunca sube de la de París
   assert.ok(par.every(([lng]) => lng <= 2.36 && lng >= -57.7));
   // Tokio → Asunción: por el Pacífico, cruza ±180 → 2 tramos, y dentro de cada tramo no hay saltos de más de 180°
-  const tokio = geo.arco([139.7, 35.7], geo.DEFENSORES);
+  const tokio = geo.arco([139.7, 35.7], geo.CLUB_OLIMPIA);
   assert.strictEqual(tokio.length, 2);
   for (const t of tokio) for (let i = 1; i < t.length; i++) assert.ok(Math.abs(t[i][0] - t[i - 1][0]) < 180);
   // mismo punto: no hay línea
-  assert.strictEqual(geo.arco(geo.DEFENSORES, geo.DEFENSORES)[0].length, 1);
+  assert.strictEqual(geo.arco(geo.CLUB_OLIMPIA, geo.CLUB_OLIMPIA)[0].length, 1);
 });
 
 test("caminosFC: una línea por país con coordenadas, Paraguay no dibuja, y lleva la cantidad", () => {

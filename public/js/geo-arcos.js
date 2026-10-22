@@ -1,8 +1,8 @@
-/* geo-arcos.js — arcos de círculo máximo (el camino más corto sobre la esfera) para "Todos los caminos llevan al Defensores".
+/* geo-arcos.js — arcos de círculo máximo (el camino más corto sobre la esfera) para "Todos los caminos llevan al Club Olimpia"
    Sin librerías: interpolación esférica (slerp). Sirve en el navegador (window.OLI_GEO) y en Node (para las pruebas). */
 (function (raiz) {
   const R = Math.PI / 180;
-  const DEFENSORES = [-57.6136, -25.2925]; // [lng, lat] — Estadio Defensores del Chaco, Asunción
+  const CLUB_OLIMPIA = [-57.6088, -25.2923]; // [lng, lat] — Club Olimpia (sede y Estadio Osvaldo Domínguez Dibb), Asunción
 
   // Puntos [lng, lat] a lo largo del camino más corto entre dos puntos. Si el camino cruza el antimeridiano se corta en tramos.
   function arco(desde, hasta, pasos = 48) {
@@ -26,7 +26,7 @@
   }
 
   /** paises: [{iso, lat, lng, count}] → FeatureCollection de líneas hacia el estadio (Paraguay no dibuja: ya está ahí). */
-  function caminosFC(paises, destino = DEFENSORES) {
+  function caminosFC(paises, destino = CLUB_OLIMPIA) {
     const features = [];
     for (const p of paises || []) {
       if (p.lat == null || p.lng == null || String(p.iso || "").toUpperCase() === "PY") continue;
@@ -38,7 +38,7 @@
     return { type: "FeatureCollection", features };
   }
 
-  const api = { arco, caminosFC, DEFENSORES };
+  const api = { arco, caminosFC, CLUB_OLIMPIA };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else raiz.OLI_GEO = api;
 })(typeof window !== "undefined" ? window : globalThis);
