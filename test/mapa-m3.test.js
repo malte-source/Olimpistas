@@ -107,5 +107,5 @@ test("los scripts del mapa se piden con la versión del deploy (la de common.js)
   assert.match(c, /globe\.js\?v=" \+ VER/);
   assert.match(c, /geo-arcos\.js\?v=" \+ VER/);
   assert.ok(!/(globe|geo-arcos)\.js\?v=\d+/.test(c), "sin versión fija");
-  assert.match(c, /replace\(\/\[\^\w\.-\]\/g/, "la versión se limpia sin tocar las letras");
+  assert.ok(c.includes('.replace(/[^\\w.-]/g, "")'), "la versión se limpia sin tocar las letras");
 });
