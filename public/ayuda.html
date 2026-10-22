@@ -7,15 +7,15 @@
   <meta name="description" content="Tutoriales paso a paso y preguntas frecuentes para hinchas, comercios y peñas de Olimpistas." />
   <meta name="theme-color" content="#0a0a0a" />
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <script src="/js/tema.js"></script>
+  <link rel="stylesheet" href="/assets/fonts/fonts.css" />
+  <link rel="stylesheet" href="/css/styles.css?v=89" />
   <style>
-    :root { --fondo:#f4f2ee; --card:#ffffff; --card2:#efece6; --linea:rgba(0,0,0,.12); --texto:#15151a; --gris:#6a6a74; --oro:#b08d2e; --oro2:#c9a227; --inv:#0a0a0a; --inv-t:#ffffff; --sel:#e6e2d9; --donde:#f2f2f5;
-      --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-    @media (prefers-color-scheme: dark) { :root { --fondo:#0a0a0e; --card:#14141c; --card2:#1b1b25; --linea:rgba(255,255,255,.14); --texto:#f3efe4; --gris:#a2a2ae; --inv:#f3efe4; --inv-t:#0a0a0a; --sel:#23232e; --donde:#1b1b25; } }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--fondo); color: var(--texto); font-family: var(--sans); line-height: 1.5; }
+    body { margin: 0; background: var(--surface-grouped); color: var(--text-primary); line-height: 1.5; }
     a { color: inherit; }
     button { font: inherit; color: inherit; cursor: pointer; }
-    :focus-visible { outline: 2px solid var(--oro2); outline-offset: 2px; }
+    :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
     .head { background: #0a0a0a; color: #fff; padding: 22px 16px 26px; }
     .head-in { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 22px; }
     .head img { width: 92px; height: 92px; flex: 0 0 auto; }
@@ -26,69 +26,69 @@
     .busca svg { flex: 0 0 auto; color: #6a6a74; }
     .layout { max-width: 1080px; margin: 0 auto; padding: 22px 16px 70px; display: grid; grid-template-columns: 250px 1fr; gap: 26px; align-items: start; }
     .lado { position: sticky; top: 14px; }
-    .grupo-t { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--gris); margin: 16px 8px 6px; }
+    .grupo-t { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--text-secondary); margin: 16px 8px 6px; }
     .grupo-t:first-child { margin-top: 0; }
-    .perfil { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; padding: 9px 10px; border-radius: 12px; font-weight: 500; font-size: 14.5px; }
-    .perfil:hover { background: var(--card2); }
-    .perfil[aria-current="true"] { background: var(--sel); font-weight: 650; }
+    .ay-perfil { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; border: 0; background: transparent; padding: 9px 10px; border-radius: 12px; font-weight: 500; font-size: 14.5px; }
+    .ay-perfil:hover { background: var(--card2); }
+    .ay-perfil[aria-current="true"] { background: var(--overlay-medium); font-weight: 650; }
     .tile { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; }
-    .perfil .n { margin-left: auto; font-size: 12px; color: var(--gris); font-variant-numeric: tabular-nums; }
-    .perfil-hd { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
-    .perfil-hd .tile { width: 46px; height: 46px; border-radius: 13px; font-size: 20px; }
-    .perfil-hd h2 { margin: 0; font-size: 22px; }
-    .perfil-hd p { margin: 2px 0 0; color: var(--gris); font-size: 14px; }
+    .ay-perfil .n { margin-left: auto; font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .ay-perfil-hd { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
+    .ay-perfil-hd .tile { width: 46px; height: 46px; border-radius: 13px; font-size: 20px; }
+    .ay-perfil-hd h2 { margin: 0; font-size: 22px; }
+    .ay-perfil-hd p { margin: 2px 0 0; color: var(--text-secondary); font-size: 14px; }
     .cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
-    .cat { border: 1px solid var(--linea); background: var(--card); border-radius: 999px; padding: 7px 14px; font-size: 13.5px; font-weight: 600; }
-    .cat[aria-pressed="true"] { background: var(--inv); color: var(--inv-t); border-color: var(--inv); }
-    h3.sec { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--gris); margin: 22px 0 10px; }
+    .cat { border: 1px solid var(--border-default); background: var(--surface-card); border-radius: 999px; padding: 7px 14px; font-size: 13.5px; font-weight: 600; }
+    .cat[aria-pressed="true"] { background: var(--action-primary-bg); color: var(--action-primary-text); border-color: var(--action-primary-bg); }
+    h3.sec { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-secondary); margin: 22px 0 10px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-    .tut { text-align: left; border: 1px solid var(--linea); background: var(--card); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 6px; transition: transform .15s, border-color .15s; }
-    .tut:hover { transform: translateY(-2px); border-color: var(--gris); }
+    .tut { text-align: left; border: 1px solid var(--border-default); background: var(--surface-card); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 6px; transition: transform .15s, border-color .15s; }
+    .tut:hover { transform: translateY(-2px); border-color: var(--text-secondary); }
     .tut b { font-size: 15.5px; line-height: 1.25; }
-    .tut span { font-size: 13.5px; color: var(--gris); }
-    .tut small { font-size: 12px; color: var(--gris); margin-top: 4px; font-variant-numeric: tabular-nums; }
-    .faq { border: 1px solid var(--linea); background: var(--card); border-radius: 14px; margin: 0 0 10px; overflow: hidden; }
+    .tut span { font-size: 13.5px; color: var(--text-secondary); }
+    .tut small { font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .faq { border: 1px solid var(--border-default); background: var(--surface-card); border-radius: 14px; margin: 0 0 10px; overflow: hidden; }
     .faq > button { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; border: 0; background: transparent; padding: 14px 16px; font-weight: 600; font-size: 15px; }
-    .faq .flecha { margin-left: auto; flex: 0 0 auto; transition: transform .25s; color: var(--gris); }
+    .faq .flecha { margin-left: auto; flex: 0 0 auto; transition: transform .25s; color: var(--text-secondary); }
     .faq > button[aria-expanded="true"] .flecha { transform: rotate(180deg); }
     .faq .resp { padding: 0 16px 16px; font-size: 14.5px; }
     .faq .resp[hidden] { display: none; }
-    .dueno { display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 800; letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; background: var(--card2); color: var(--gris); }
-    .vacio { color: var(--gris); padding: 18px 4px; }
-    .aviso { background: var(--card2); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--gris); margin: 0 0 16px; }
+    .dueno { display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 800; letter-spacing: .06em; padding: 4px 10px; border-radius: 999px; background: var(--card2); color: var(--text-secondary); }
+    .vacio { color: var(--text-secondary); padding: 18px 4px; }
+    .aviso { background: var(--card2); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--text-secondary); margin: 0 0 16px; }
     /* Tutorial */
     .bg { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 16px; z-index: 50; }
     .bg[hidden] { display: none; }
-    .modal { background: var(--card); border-radius: 22px; width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; padding: 22px; animation: sube .3s cubic-bezier(.2,.8,.2,1); }
+    .ay-modal { background: var(--surface-card); border-radius: 22px; width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; padding: 22px; animation: sube .3s cubic-bezier(.2,.8,.2,1); }
     @keyframes sube { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
     .barras { display: flex; gap: 5px; margin-bottom: 18px; }
     .barras i { flex: 1; height: 5px; border-radius: 3px; background: var(--card2); }
-    .barras i.hecho { background: var(--oro2); }
-    .modal .tit { font-size: 13px; color: var(--gris); font-weight: 700; margin: 0 0 12px; display: flex; justify-content: space-between; gap: 10px; }
+    .barras i.hecho { background: var(--action-primary-bg); }
+    .ay-modal .tit { font-size: 13px; color: var(--text-secondary); font-weight: 700; margin: 0 0 12px; display: flex; justify-content: space-between; gap: 10px; }
     .paso { display: flex; gap: 16px; align-items: flex-start; }
-    .paso .num { font-size: 56px; line-height: .9; font-weight: 800; color: var(--oro); font-variant-numeric: tabular-nums; }
+    .paso .ay-num { font-size: 56px; line-height: .9; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
     .paso h4 { margin: 0 0 6px; font-size: 20px; line-height: 1.2; }
-    .paso p { margin: 0; color: var(--gris); }
-    .donde { display: inline-block; margin-top: 12px; padding: 5px 11px; border-radius: 8px; background: var(--donde); font-size: 12.5px; font-weight: 600; }
+    .paso p { margin: 0; color: var(--text-secondary); }
+    .donde { display: inline-block; margin-top: 12px; padding: 5px 11px; border-radius: 8px; background: var(--card2); font-size: 12.5px; font-weight: 600; }
     .lista { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 6px; }
-    .lista li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--gris); }
-    .lista li.hecho { color: var(--texto); }
-    .lista li.actual { color: var(--texto); font-weight: 650; }
-    .lista .ck { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--linea); display: grid; place-items: center; font-size: 11px; }
-    .lista li.hecho .ck { background: var(--oro2); border-color: var(--oro2); color: #0a0a0a; }
+    .lista li { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text-secondary); }
+    .lista li.hecho { color: var(--text-primary); }
+    .lista li.actual { color: var(--text-primary); font-weight: 650; }
+    .lista .ck { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border-default); display: grid; place-items: center; font-size: 11px; }
+    .lista li.hecho .ck { background: var(--action-primary-bg); border-color: var(--action-primary-bg); color: #0a0a0a; }
     .botones { display: flex; gap: 10px; margin-top: 22px; }
-    .botones button { flex: 1; padding: 13px; border-radius: 999px; font-weight: 700; font-size: 15px; border: 1px solid var(--linea); background: transparent; }
-    .botones .prim { background: var(--inv); color: var(--inv-t); border-color: var(--inv); }
+    .botones button { flex: 1; padding: 13px; border-radius: 999px; font-weight: 700; font-size: 15px; border: 1px solid var(--border-default); background: transparent; }
+    .botones .prim { background: var(--action-primary-bg); color: var(--action-primary-text); border-color: var(--action-primary-bg); }
     .botones button:disabled { opacity: .4; cursor: default; }
     @media (max-width: 800px) {
       .layout { grid-template-columns: 1fr; }
       .lado { position: static; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
       .grupo-t { display: none; }
-      .perfil { width: auto; flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--linea); background: var(--card); }
-      .perfil .n { display: none; }
+      .ay-perfil { width: auto; flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--border-default); background: var(--surface-card); }
+      .ay-perfil .n { display: none; }
       .head img { width: 64px; height: 64px; } .head h1 { font-size: 22px; }
     }
-    @media (prefers-reduced-motion: reduce) { .modal { animation: none; } .faq .flecha, .tut { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .ay-modal { animation: none; } .faq .flecha, .tut { transition: none; } }
   </style>
 </head>
 <body>
@@ -108,7 +108,7 @@
     <main id="main" aria-live="polite"><p class="vacio">Cargando…</p></main>
   </div>
 
-  <div class="bg" id="bg" hidden><div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="tutTit"></div></div>
+  <div class="bg" id="bg" hidden><div class="ay-modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="tutTit"></div></div>
 
   <script>
     var $ = function (id) { return document.getElementById(id); };
@@ -138,13 +138,13 @@
       var grupos = []; D.aud.forEach(function (a) { var g = grupos.filter(function (x) { return x.l === a.grupo; })[0]; if (!g) { g = { l: a.grupo, items: [] }; grupos.push(g); } g.items.push(a); });
       $("lado").innerHTML = grupos.map(function (g) {
         return '<div class="grupo-t">' + esc(g.l) + '</div>' + g.items.map(function (a) {
-          return '<button class="perfil" data-aud="' + esc(a.id) + '" aria-current="' + (a.id === aud) + '"><span class="tile" style="background:' + esc(a.tile) + '">' + esc(a.label.charAt(0)) + '</span><span>' + esc(a.label) + '</span><span class="n">' + a.n + '</span></button>';
+          return '<button class="ay-perfil" data-aud="' + esc(a.id) + '" aria-current="' + (a.id === aud) + '"><span class="tile" style="background:' + esc(a.tile) + '">' + esc(a.label.charAt(0)) + '</span><span>' + esc(a.label) + '</span><span class="n">' + a.n + '</span></button>';
         }).join("");
       }).join("");
       var a = D.aud.filter(function (x) { return x.id === aud; })[0];
       var cats = D.categorias.map(function (c) { return '<button class="cat" data-cat="' + esc(c.id) + '" aria-pressed="' + (c.id === cat) + '">' + esc(c.label) + '</button>'; }).join("");
       tuts = D.tuts;
-      var html = '<div class="perfil-hd"><span class="tile" style="background:' + esc(a.tile) + '">' + esc(a.label.charAt(0)) + '</span><div><h2>' + esc(a.label) + '</h2><p>' + esc(a.desc) + '</p></div></div>';
+      var html = '<div class="ay-perfil-hd"><span class="tile" style="background:' + esc(a.tile) + '">' + esc(a.label.charAt(0)) + '</span><div><h2>' + esc(a.label) + '</h2><p>' + esc(a.desc) + '</p></div></div>';
       html += '<div class="cats"><button class="cat" data-cat="todas" aria-pressed="' + (cat === "todas") + '">Todas</button>' + cats + '</div>';
       html += '<h3 class="sec">Tutoriales · ' + D.tuts.length + '</h3>';
       html += D.tuts.length ? '<div class="grid">' + D.tuts.map(function (t, i) {
@@ -167,7 +167,7 @@
       var p = tut.pasos[paso], ultimo = paso === tut.pasos.length - 1;
       $("modal").innerHTML = '<div class="barras" aria-hidden="true">' + tut.pasos.map(function (_, i) { return '<i class="' + (i <= paso ? "hecho" : "") + '"></i>'; }).join("") + '</div>' +
         '<p class="tit"><span id="tutTit">' + esc(tut.titulo) + '</span><span>Paso ' + (paso + 1) + ' de ' + tut.pasos.length + '</span></p>' +
-        '<div class="paso"><div class="num">' + (paso + 1) + '</div><div><h4>' + esc(p.titulo) + '</h4><p>' + esc(p.texto) + '</p>' + (p.donde ? '<span class="donde">Dónde: ' + esc(p.donde) + '</span>' : '') + '</div></div>' +
+        '<div class="paso"><div class="ay-num">' + (paso + 1) + '</div><div><h4>' + esc(p.titulo) + '</h4><p>' + esc(p.texto) + '</p>' + (p.donde ? '<span class="donde">Dónde: ' + esc(p.donde) + '</span>' : '') + '</div></div>' +
         '<ul class="lista">' + tut.pasos.map(function (s, i) { return '<li class="' + (i < paso ? "hecho" : i === paso ? "actual" : "") + '"><span class="ck">' + (i < paso ? "✓" : "") + '</span>' + esc(s.titulo) + '</li>'; }).join("") + '</ul>' +
         '<div class="botones"><button data-t="prev"' + (paso === 0 ? " disabled" : "") + '>Anterior</button><button class="prim" data-t="next">' + (ultimo ? "Listo" : "Siguiente") + '</button></div>';
     }
