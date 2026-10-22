@@ -1,125 +1,90 @@
-# Olimpistas — embudo de captación de Club Olimpia
+# Olimpistas
 
-Inspirado en [madridistas.com](https://madridistas.com), pero con un objetivo claro:
-ser un **gran embudo de captación de datos mundial**. La acción principal es
-**"Hacete Olimpista gratis"**; el registro arma una base de hinchas que después se
-nutre para venderles desde membresías hasta intangibles.
+Plataforma de hinchas y socios de Club Olimpia: **olimpistas.com**. Registro gratis, niveles de
+membresía, beneficios con comercios, sorteos, preventas, subastas, peñas, carnet digital y un
+mapa mundial de olimpistas. Es una web móvil primero e instalable (PWA), sin paso de build en el front.
 
-- **3 niveles:** Olimpista (gratis) · Olimpista Kids · Olimpista Premium (los 2 pagos).
-- **Registro mínimo** (nombre, email, contraseña) → alta automática como Olimpista gratis.
-- **Barra de progreso de perfil:** post-registro se incentiva completar WhatsApp, foto,
-  país y ciudad para enriquecer la base.
-- **Beneficios** detrás del registro: Olimpia Media+, sorteos, preventas y carnet digital.
-- **PWA instalable** y **mobile-first** (manifest, service worker, íconos, safe-area).
-- **Olimpistas en el mundo:** contador global en vivo + **globo 3D** (globe.gl) con
-  banderas por país. País por **prefill de IP** (cabecera del CDN en prod, geo-IP en
-  dev) y ubicación exacta opcional (geolocalización o tocando el globo). El globo se
-  alimenta de un agregado cacheado (`/api/stats`) — no manda puntos individuales, así
-  escala. La bandera del marcador (`/assets/flag-olimpia.svg`) es un placeholder.
-- No es la tienda ni la web principal de Olimpia (esas ya existen); está pensado para
-  **vincularse a la web de Olimpia como un apartado**.
+No es la tienda ni la web del club; se vincula a ellas como un apartado.
 
-> Para aguantar picos fuertes de tráfico (50k+ concurrentes), leer **[SCALING.md](SCALING.md)**:
-> CDN, Postgres con pooler y fotos en Cloud Storage son requisitos para producción.
+## Niveles
 
-**Proyecto standalone**, sin dependencias de otros sistemas.
+`olimpista` (gratis) · `kids` · `premium` (los dos pagos) · `socio` (se otorga al validar la
+cédula contra el padrón / la API de socios del club; no se compra). El catálogo y los precios
+viven en [`config.js`](config.js); el gateo por nivel, en [`lib/access.js`](lib/access.js).
 
 ## Correr en local
 
 ```bash
 npm install
 npm start
-# → http://localhost:3002        (landing)
-# → http://localhost:3002/socio  (área de socio)
+# → http://localhost:3002          landing
+# → http://localhost:3002/miembro  área de socio
 ```
 
-No necesita base de datos para verlo funcionar: sin `OLIMPISTAS_DATABASE_URL` usa un
-store en memoria con contenido/sorteos/preventas de ejemplo (se persiste a
-`data/.olimpistas-state.json`; desactivar con `OLIMPISTAS_PERSIST=0`).
+Sin `OLIMPISTAS_DATABASE_URL` usa un store en memoria con datos de ejemplo (se persiste a
+`data/.olimpistas-state.json`; `OLIMPISTAS_PERSIST=0` lo desactiva). Copiá `.env.example` a
+`.env` para configurar; **toda variable que lee el código está documentada ahí** (un test lo exige).
 
-Copiá `.env.example` a `.env` para configurar variables.
-
-## Pasar a Postgres (producción)
+## Tests
 
 ```bash
-# 1. Crear las tablas en la base de Olimpistas:
-psql "$OLIMPISTAS_DATABASE_URL" -f data/schema.sql
-# 2. Arrancar con la variable seteada:
-OLIMPISTAS_DATABASE_URL=postgres://... npm start
+npm test                                   # sin base: los tests de Postgres se saltean
+TEST_DATABASE_URL=postgres://postgres:test@127.0.0.1:55432/postgres npm test   # con Postgres real
 ```
 
-`data/memory-store.js` y `data/pg-store.js` implementan **la misma interfaz**, así que
-el resto de la app no cambia al pasar de uno a otro.
+`test/calidad.test.js` compila todo el JavaScript (servidor, `public/js` y los `<script>` en
+línea de cada página) y revisa `.env.example`. CI (`.github/workflows/ci.yml`) corre todo con
+Postgres 17, exige que los tests con base hayan corrido, audita dependencias de producción y
+construye la imagen Docker.
 
-## Integración de pagos — PAGOPAR (pendiente)
+## Base de datos
 
-Está stubbeada a propósito en [`lib/pagopar.js`](lib/pagopar.js). Hoy funciona en
-**modo simulado**: el botón "Unite" crea el pedido y lo confirma sin cobrar.
-
-Para activar el cobro real, el programador debe:
-
-1. Setear `PAGOPAR_PUBLIC_TOKEN` y `PAGOPAR_PRIVATE_TOKEN` (y `PAGOPAR_ENV=prod`).
-2. Completar `crearPedido()` y `verificarPago()` en `lib/pagopar.js` (los `TODO`
-   marcan exactamente dónde van las llamadas a la API de PAGOPAR).
-3. Conectar el webhook `POST /api/pagos/webhook` para que, al confirmarse el pago,
-   marque el pedido como `pagado` y active la membresía (`store.setMembresia`).
-
-No hay que tocar las rutas: ya llaman a esa interfaz.
+Las tablas las crean las migraciones de [`migraciones/`](migraciones/) (`NNNN_nombre.sql`, en
+orden, una vez cada una, con checksum). Ver pendientes: `node setup/migrar.js --ver`. Hay dos
+stores con la **misma interfaz** (`data/memory-store.js` y `data/pg-store.js`), y un test de
+contrato que verifica que se comporten igual. `data/schema.sql` es la foto histórica inicial,
+no la fuente de verdad.
 
 ## Estructura
 
 ```
-olimpistas/
-  server.js          Express: estáticos, cookies, sesión, monta /api
-  config.js          Branding + catálogo de tiers + precios (editable por negocio)
-  routes.js          API: auth, membresía, pagos, contenido, sorteos, preventas, carnet
-  lib/
-    auth.js          Registro/login/sesión (bcrypt + token en cookie httpOnly)
-    access.js        Gateo por nivel de membresía
-    pagopar.js       Cliente PAGOPAR (stub con interfaz estable)
-  data/
-    store.js         Selector memoria/Postgres
-    memory-store.js  Backend en memoria + semillas (demo)
-    pg-store.js      Backend Postgres
-    schema.sql       DDL Postgres
-  public/            Landing (réplica) + área de socio (HTML/CSS/JS sin build)
-  Dockerfile         Imagen autocontenida (node:20-slim)
-  deploy.ps1         Deploy a Cloud Run
+server.js          Express: seguridad (helmet/CSP), límites, estáticos, sesión, monta /api
+routes.js          API: auth, membresía, pagos, beneficios, sorteos, preventas, subastas,
+                   peñas, comercios, mapa, campañas y panel admin
+config.js          Marca, catálogo de niveles y precios
+lib/               auth, access (niveles), admin-auth (roles), pagopar, tuti (API de socios),
+                   email/resend, campanas, atencion (asistente IA), mapa/h3/ciudades, alert, log…
+data/              store (selector), memory-store, pg-store, países
+migraciones/       Esquema versionado
+public/            HTML + CSS + JS sin build (landing, miembro, admin, comercio, peña, ayuda, legal)
+setup/             Scripts operativos: migrar, importar padrón/ciudades, crear admin, backfills…
+docs/              Staging y promoción a producción
 ```
 
-## Endpoints principales
+## Entornos y deploy
 
-| Método | Ruta | Acceso | Qué hace |
-|---|---|---|---|
-| GET  | `/api/config` | público | Branding + tiers |
-| POST | `/api/auth/registro` · `/login` · `/logout` | público | Cuenta + sesión |
-| GET  | `/api/auth/yo` | socio | Datos + membresía + progreso de perfil |
-| GET  | `/api/perfil` · PATCH `/perfil` · POST `/perfil/foto` | socio | Enriquecimiento (WhatsApp, país, ciudad, foto) |
-| POST | `/api/membresia/unirse` | socio | Alta de plan → pago (o gratis) |
-| POST | `/api/pagos/confirmar-simulado` | socio | Confirma pago en modo demo |
-| POST | `/api/pagos/webhook` | PAGOPAR | Notificación de pago (a conectar) |
-| GET  | `/api/contenido` · `/contenido/:id` | público / socio | Olimpia Media+ (gateado) |
-| GET  | `/api/sorteos` · POST `/:id/participar` | socio | Sorteos |
-| GET  | `/api/preventas` · POST `/:id/reservar` | socio | Preventa de entradas |
-| GET  | `/api/carnet` | socio | Carnet digital |
+Producción (`olimpistas`) y staging (`olimpistas-staging`) en Cloud Run, región
+`southamerica-east1`, con bases Supabase separadas. **Toda función nueva se prueba en staging y
+pasa a producción solo con el OK explícito del dueño.** El procedimiento completo, las
+migraciones y el checklist de promoción están en [`docs/staging-y-promocion.md`](docs/staging-y-promocion.md).
 
-## Vincular a la web de Olimpia (como apartado)
+Regla de oro del deploy: nunca `--env-vars-file` ni `--set-env-vars`; cambian o borran la
+configuración del servicio. `deploy.ps1` reproduce la configuración existente. Para escalar
+(CDN, pooler, fotos en Cloud Storage) ver [`SCALING.md`](SCALING.md).
 
-Al ser standalone, se puede enganchar de tres formas, de menor a mayor integración:
-1. **Link** desde la web/redes de Olimpia a este dominio (lo más simple).
-2. **Subdominio** (ej. `olimpistas.olimpia.com.py`) apuntando a este servicio.
-3. **Embed** en una sección de la web de Olimpia vía `<iframe>` (revisar branding y
-   cabeceras `X-Frame-Options`/CSP para permitirlo desde el dominio de Olimpia).
+## Integraciones
 
-## Pendiente para producción
+| Qué | Dónde | Estado |
+|---|---|---|
+| Pagos Pagopar | `lib/pagopar.js`, `POST /api/pagos/webhook` (valida token) | Real con tokens; simulado sin ellos |
+| API de socios (Tuti/ITI) | `lib/tuti.js` (mock en staging: `lib/tuti-mock.js`) | Real en producción |
+| Correo | `lib/resend.js`, `lib/email.js` | Resend real en producción; simulado si falta la key |
+| Campañas de correo | `lib/campanas.js` | Armadas pero **apagadas** (`CAMPANAS_ACTIVAS`) |
+| Asistente de atención | `lib/atencion.js` | Anthropic, con respaldo de palabras clave (Gemini como motor principal está en el PR #12) |
 
-- **PAGOPAR real** (hoy modo simulado) — `lib/pagopar.js` + webhook `/api/pagos/webhook`.
-- **Panel admin** para ver/exportar la base y gestionar contenido/sorteos/preventas.
-- **Emails** (bienvenida, recuperar contraseña, confirmaciones) — sin proveedor aún.
-- **Foto de perfil en Cloud Storage** (hoy se guarda como data URL en la base; sirve
-  para el MVP, conviene migrar a GCS en producción).
+## Pendiente
 
-## Deploy
-
-`Dockerfile` autocontenido + `deploy.ps1` (Cloud Run). Ver comentarios del Dockerfile
-para variables de entorno y secretos.
+- Google Workspace del club (ingreso con Google, Calendar de partidos, Drive).
+- Base del mapa sin proveedor externo (hoy usa teselas de terceros).
+- Fotos de perfil a Cloud Storage (hoy van como data URL en la base).
+- Activar campañas de correo (decisión del dueño, con prueba previa).
