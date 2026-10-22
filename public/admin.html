@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <script src="/js/tema.js"></script>
   <link rel="stylesheet" href="/assets/fonts/fonts.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=94" />
+  <link rel="stylesheet" href="/css/styles.css?v=95" />
   <style>
     /* Panel del club · interfaz nativa sobre styles.css (roles --surface-*, --text-*, --action-*; sin paleta propia).
        Lo que choca con styles.css lleva prefijo .adm-; botones, .grupo, .interruptor y .ctl-seg son los globales. */
@@ -303,6 +303,15 @@
           <p class="hint">Un vistazo a cómo va el club: hinchas, ingresos, subastas, puntos, peñas y comercios. Son números agregados, sin datos personales.</p>
           <div class="cards" id="tabCards"><p class="loading">Cargando…</p></div>
           <div id="tabIngresos"></div>
+          <div data-sec="tablero">
+          <h2>Mapa del club</h2>
+          <p class="hint">Hinchas, conversión a Plus, peñas y comercios por ciudad. Son totales: nunca una persona ni una casa.</p>
+          <div class="row-actions" style="gap:8px;margin-bottom:8px;align-items:center">
+            <select id="admMapaCapa" style="width:auto"><option value="ciudades">Hinchas por ciudad</option><option value="plus">Conversión a Plus por ciudad</option><option value="penas">Peñas (altas)</option><option value="comercios">Comercios (canjes)</option></select>
+            <span class="muted" id="admMapaNota"></span>
+          </div>
+          <div id="admMapa" style="height:480px;border-radius:var(--r-22);overflow:hidden;background:#0a0a0a"></div>
+          </div>
           <h2>Salud del sistema</h2>
           <div class="cards" id="saludCards"><p class="loading">Cargando…</p></div>
           <h2>Reportes</h2>
@@ -645,7 +654,7 @@
     var AREA_TITLE = { dashboard: "Dashboard", socios: "Socios", atencion: "Atención", pagos: "Pagos", campanas: "Campañas", contenido: "Contenido", decisiones: "Decisiones", sistema: "Sistema" };
     // Loaders que se disparan la PRIMERA vez que se abre cada área (no todo de golpe al entrar).
     var AREA_LOADERS = {
-      dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount],
+      dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount, cargarMapaAdmin],
       socios: [],                                 // búsqueda/segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
       campanas: [cargarEmailMetricas, cargarComposer, cargarCampanas, cargarGhl],
@@ -882,6 +891,49 @@
     }
 
     // ── Tablero del club ──
+    // ── Mapa del club (MapLibre se baja recién cuando el tablero se abre) ──
+    var admMapa = null, admMapaListo = false, admPopup = null;
+    function cargarScript(src) { return new Promise(function (res, rej) { var s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+    async function cargarMapaAdmin() {
+      var caja = $("admMapa"); if (!caja || !veSeccion("tablero")) return;
+      try {
+        if (!window.maplibregl) {
+          var l = document.createElement("link"); l.rel = "stylesheet"; l.href = "/assets/vendor/maplibre-gl.css"; document.head.appendChild(l);
+          await cargarScript("/assets/vendor/maplibre-gl.js");
+        }
+        if (!admMapa) {
+          admMapa = new maplibregl.Map({ container: "admMapa", center: [-58, -23], zoom: 4.2, cooperativeGestures: true, attributionControl: { compact: true },
+            style: { version: 8, sources: { sat: { type: "raster", tileSize: 256, maxzoom: 19, attribution: "Imagery Esri, Maxar, Earthstar Geographics", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"] } },
+              layers: [{ id: "fondo", type: "background", paint: { "background-color": "#0a0a0a" } }, { id: "sat", type: "raster", source: "sat" }] } });
+          admMapa.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+          admMapa.on("load", function () { admMapaListo = true; admMapa.addSource("adm", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+            admMapa.addLayer({ id: "adm-puntos", type: "circle", source: "adm", paint: { "circle-color": ["get", "color"], "circle-opacity": 0.82, "circle-stroke-color": "#0a0a0a", "circle-stroke-width": 1.2, "circle-radius": ["get", "r"] } });
+            admMapa.on("click", "adm-puntos", function (e) { var p = e.features[0].properties; if (admPopup) admPopup.remove(); admPopup = new maplibregl.Popup({ closeButton: false, maxWidth: "240px" }).setLngLat(e.lngLat).setHTML("<strong>" + esc(p.titulo) + "</strong><br><span>" + esc(p.detalle) + "</span>").addTo(admMapa); });
+            admMapa.on("mouseenter", "adm-puntos", function () { admMapa.getCanvas().style.cursor = "pointer"; });
+            admMapa.on("mouseleave", "adm-puntos", function () { admMapa.getCanvas().style.cursor = ""; });
+            pintarMapaAdmin(); });
+        } else if (admMapaListo) pintarMapaAdmin();
+      } catch (e) { caja.innerHTML = '<p class="err" style="padding:14px">' + esc(e.message || "No se pudo cargar el mapa") + '</p>'; }
+    }
+    async function pintarMapaAdmin() {
+      var capa = $("admMapaCapa").value, nota = $("admMapaNota");
+      try {
+        var r = await api("/admin/mapa?capa=" + encodeURIComponent(capa)), items = r.items || [];
+        var gris = function (pct) { var v = Math.round(58 + 197 * Math.max(0, Math.min(1, pct))); return "rgb(" + v + "," + v + "," + v + ")"; };
+        var f = items.map(function (x) {
+          var v, color = "#ffffff", titulo = x.nombre, detalle;
+          if (capa === "ciudades") { v = x.total; detalle = x.total.toLocaleString("es-PY") + " hinchas · " + x.socios + " socios del club · " + x.plus + " Plus/Junior/Socio"; }
+          else if (capa === "plus") { v = x.total; var pct = x.total ? x.plus / x.total : 0; color = gris(Math.min(1, pct * 4)); detalle = Math.round(pct * 1000) / 10 + "% con Plus, Junior o Socio (" + x.plus + " de " + x.total + ")"; }
+          else if (capa === "penas") { v = x.altas; detalle = x.ciudad + " · " + x.altas + " altas · " + x.socios + " socios · " + x.plus + " Plus/Junior"; }
+          else { v = x.canjes; color = x.estado === "activo" ? "#ffffff" : "#6b6b70"; detalle = (x.rubro ? x.rubro + " · " : "") + x.canjes + " canjes · ahorro entregado ₲ " + Number(x.ahorro).toLocaleString("es-PY"); }
+          return { type: "Feature", geometry: { type: "Point", coordinates: [x.lng, x.lat] }, properties: { titulo: titulo, detalle: detalle, color: color, r: Math.max(5, Math.min(34, 5 + Math.sqrt(v) * (capa === "ciudades" || capa === "plus" ? 0.9 : 4))) } };
+        });
+        admMapa.getSource("adm").setData({ type: "FeatureCollection", features: f });
+        nota.textContent = f.length ? f.length + (capa === "penas" ? " peñas ubicadas" : capa === "comercios" ? " comercios ubicados" : " ciudades") : "Todavía no hay datos para esta capa";
+        if (f.length > 1 && (capa === "penas" || capa === "comercios")) { var b = new maplibregl.LngLatBounds(); f.forEach(function (x) { b.extend(x.geometry.coordinates); }); admMapa.fitBounds(b, { padding: 60, maxZoom: 10, duration: 0 }); }
+      } catch (e) { nota.textContent = e.message; }
+    }
+    $("admMapaCapa").addEventListener("change", function () { if (admMapaListo) pintarMapaAdmin(); });
     async function cargarTablero() {
       var box = $("tabCards"); if (!box) return;
       var gs = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); }, nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };

@@ -938,6 +938,25 @@ function createMemoryStore({ filePath = null } = {}) {
       }
       return [...cuenta].map(([k, n]) => { const [mes, iso] = k.split("|"); return { mes, iso, n }; }).sort((a, b) => a.mes.localeCompare(b.mes));
     },
+    // ── Panel del club: agregados para el mapa (solo totales, nunca una persona) ──
+    async contarPorCiudadId(id) { return (db.socios || []).filter((s) => s.ciudad_id === Number(id) && !String(s.email || "").endsWith("@demo.olimpistas.test")).length; },
+    async resumenPorCiudad(limit = 600) {
+      const out = new Map();
+      for (const s of (db.socios || [])) {
+        if (!s.ciudad_id || String(s.email || "").endsWith("@demo.olimpistas.test")) continue;
+        const c = (db.ciudades || []).find((x) => x.id === s.ciudad_id); if (!c) continue;
+        const m = (db.membresias || []).filter((x) => x.socio_id === s.id && x.estado === "activa").slice(-1)[0];
+        const e = out.get(c.id) || { id: c.id, nombre: c.nombre, pais_iso: c.pais_iso, lat: c.lat, lng: c.lng, total: 0, plus: 0, socios: 0 };
+        e.total++; if (m && ["premium", "kids", "socio"].includes(m.tier_slug)) e.plus++; if (s.es_socio_olimpia) e.socios++;
+        out.set(c.id, e);
+      }
+      return [...out.values()].sort((a, b) => b.total - a.total).slice(0, Math.min(Number(limit) || 600, 2000));
+    },
+    async canjesPorComercio() {
+      const m = new Map();
+      for (const c of (db.canjes || [])) { if (!c.comercio_id) continue; const e = m.get(c.comercio_id) || { comercio_id: c.comercio_id, canjes: 0, ahorro: 0 }; e.canjes++; e.ahorro += Number(c.ahorro || 0); m.set(c.comercio_id, e); }
+      return [...m.values()];
+    },
     // ── Ciudades normalizadas (GeoNames) ──
     async importarCiudades(rows) { db.ciudades = db.ciudades || []; for (const c of rows) { const i = db.ciudades.findIndex((x) => x.id === c.id); if (i >= 0) db.ciudades[i] = { ...c }; else db.ciudades.push({ ...c }); } persist(); return rows.length; },
     async contarCiudades() { return (db.ciudades || []).length; },

@@ -326,6 +326,15 @@ function buildRouter() {
     res.json({ k: h3lib.K, celdas: h3lib.celdasAnonimas(puntos).slice(0, 2000) });
   }));
 
+  // Para "Compartir mi bandera": cuántos olimpistas REALES hay en tu ciudad y en tu país (sin la rampa ni el agregado de demo).
+  r.get("/perfil/mapa", auth.requireSocio, wrap(async (req, res) => {
+    const s = (await store.getSocioById(req.socio.id)) || req.socio;
+    const ciudadN = s.ciudad_id && store.contarPorCiudadId ? await store.contarPorCiudadId(s.ciudad_id) : 0;
+    const iso = String(s.pais_iso || "").toUpperCase();
+    const porPais = store.contarPorPais ? await store.contarPorPais() : [];
+    const paisN = Number((porPais.find((p) => String(p.pais_iso || "").toUpperCase() === iso) || {}).count || 0);
+    res.json({ nombre: s.nombre || "", ciudad: s.ciudad || "", ciudad_n: ciudadN, pais: s.pais || "", iso, pais_n: paisN });
+  }));
   // "Mirá cómo crece": altas acumuladas por mes y país, solo hinchas reales. Totales por país: nada de una persona.
   r.get("/mapa/historia", wrap(async (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=600");
@@ -1657,6 +1666,22 @@ function buildRouter() {
     res.json({ ok: enviados > 0, enviados, fallidos, total: contactos.length });
   }));
 
+  // Mapa del panel del club: SOLO agregados por ciudad, peña y comercio. Nunca una persona ni una casa.
+  r.get("/admin/mapa", requireAdmin, wrap(async (req, res) => {
+    const capa = String(req.query.capa || "ciudades");
+    if (capa === "penas") {
+      const filas = (await store.listPenas({ estado: "verificada" })).filter((p) => p.lat != null && p.lng != null);
+      return res.json({ capa, items: filas.map((p) => ({ id: p.id, nombre: p.nombre, ciudad: p.ciudad, lat: Number(p.lat), lng: Number(p.lng), altas: p.altas || 0, socios: p.socios || 0, plus: p.plus || 0 })) });
+    }
+    if (capa === "comercios") {
+      const [cs, canjes] = await Promise.all([store.listComercios(), store.canjesPorComercio ? store.canjesPorComercio() : []]);
+      const porId = new Map(canjes.map((c) => [c.comercio_id, c]));
+      return res.json({ capa, items: cs.filter((c) => c.lat != null && c.lng != null).map((c) => ({ id: c.id, nombre: c.nombre, ciudad: c.ciudad || "", rubro: c.rubro || "", estado: c.estado, lat: Number(c.lat), lng: Number(c.lng), canjes: (porId.get(c.id) || {}).canjes || 0, ahorro: Number((porId.get(c.id) || {}).ahorro || 0) })) });
+    }
+    if (capa !== "ciudades" && capa !== "plus") throw httpError(400, "Capa inválida (ciudades, plus, penas o comercios)");
+    const filas = store.resumenPorCiudad ? await store.resumenPorCiudad(600) : [];
+    res.json({ capa, items: filas.map((c) => ({ id: c.id, nombre: c.nombre, pais_iso: c.pais_iso, lat: Number(c.lat), lng: Number(c.lng), total: c.total, plus: c.plus, socios: c.socios })) });
+  }));
   // ─── Campañas + tasa de conversión ───────────────────────────────────────────
   r.get("/admin/campanas", requireAdmin, wrap(async (_req, res) => {
     res.json({ items: store.listCampanas ? await store.listCampanas() : [] });

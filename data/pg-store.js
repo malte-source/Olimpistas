@@ -637,6 +637,23 @@ function createPgStore({ databaseUrl, debug }) {
           AND lat BETWEEN ${minLat} AND ${maxLat}
         LIMIT ${Math.min(Number(limit) || 600, 1500)}`;
     },
+    // ── Panel del club: agregados para el mapa (solo totales, nunca una persona) ──
+    async contarPorCiudadId(id) {
+      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios WHERE ciudad_id = ${Number(id) || 0} AND email NOT LIKE ${"%@" + SEED_DOMAIN}`;
+      return r.n;
+    },
+    async resumenPorCiudad(limit = 600) {
+      return sql`SELECT c.id, c.nombre, c.pais_iso, c.lat, c.lng, COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE m.tier_slug IN ('premium','kids','socio'))::int AS plus,
+          COUNT(*) FILTER (WHERE s.es_socio_olimpia)::int AS socios
+        FROM socios s JOIN ciudades c ON c.id = s.ciudad_id
+        LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
+        WHERE s.email NOT LIKE ${"%@" + SEED_DOMAIN}
+        GROUP BY c.id, c.nombre, c.pais_iso, c.lat, c.lng ORDER BY total DESC LIMIT ${Math.min(Number(limit) || 600, 2000)}`;
+    },
+    async canjesPorComercio() {
+      return sql`SELECT comercio_id, COUNT(*)::int AS canjes, COALESCE(SUM(ahorro), 0)::bigint AS ahorro FROM canjes WHERE comercio_id IS NOT NULL GROUP BY comercio_id`;
+    },
     // ── Ciudades normalizadas (GeoNames) ──
     async importarCiudades(rows) {
       for (let i = 0; i < rows.length; i += 1000) {
