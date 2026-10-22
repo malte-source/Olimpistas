@@ -4,7 +4,7 @@
  * instante) y usa la caché solo como respaldo offline. La API nunca se cachea.
  * (Se evita el cache-first para que el usuario no quede "pegado" a versiones viejas.)
  */
-const VERSION = "oli-v10";
+const VERSION = "oli-v11";
 
 self.addEventListener("install", () => self.skipWaiting());
 

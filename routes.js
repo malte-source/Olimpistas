@@ -30,6 +30,7 @@ const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib
 const carnetLib = require("./lib/carnet");
 const atencionLib = require("./lib/atencion");
 const campanasLib = require("./lib/campanas");
+const h3lib = require("./lib/h3");
 const { periodo } = require("./lib/periodo");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
@@ -308,6 +309,18 @@ function buildRouter() {
     });
     res.setHeader("Cache-Control", "public, max-age=20");
     res.json({ flags });
+  }));
+
+  // Barrios en hexágonos H3 con k-anonimato (lib/h3.js): reemplaza a /flags, que queda unas versiones más para no romper a nadie.
+  // Pública a propósito: no lleva ids ni nombres, y una celda con menos de K hinchas no se entrega.
+  r.get("/mapa/celdas", wrap(async (req, res) => {
+    const p = String(req.query.bbox || "").split(",").map(Number);
+    if (p.length !== 4 || p.some((n) => !Number.isFinite(n))) throw httpError(400, "bbox inválido (se espera minLng,minLat,maxLng,maxLat)");
+    const [minLng, minLat, maxLng, maxLat] = p;
+    if (minLng >= maxLng || minLat >= maxLat || maxLng - minLng > 2 || maxLat - minLat > 2) throw httpError(400, "Acercate más: el recuadro es demasiado grande para dibujar barrios.");
+    const puntos = await store.puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat });
+    res.setHeader("Cache-Control", "public, max-age=60");
+    res.json({ k: h3lib.K, celdas: h3lib.celdasAnonimas(puntos).slice(0, 2000) });
   }));
 
   const soloDigitos = (s) => String(s || "").replace(/\D/g, "");

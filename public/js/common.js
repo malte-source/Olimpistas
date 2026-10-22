@@ -45,7 +45,7 @@ window.OLI = (function () {
     if (_mapaP) return _mapaP;
     const css = (href) => new Promise((res) => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.onload = res; l.onerror = res; document.head.appendChild(l); });
     const js = (src) => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
-    _mapaP = (async () => { await css("/assets/vendor/maplibre-gl.css"); await js("/assets/vendor/maplibre-gl.js"); await js("/js/globe.js?v=90"); })().catch((e) => { _mapaP = null; throw e; });
+    _mapaP = (async () => { await css("/assets/vendor/maplibre-gl.css"); await js("/assets/vendor/maplibre-gl.js"); await js("/js/globe.js?v=91"); })().catch((e) => { _mapaP = null; throw e; });
     return _mapaP;
   }
   function setCurrency(c) { _cur = c; try { localStorage.setItem("oli_cur", c); } catch (e) {} }
