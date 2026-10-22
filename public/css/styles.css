@@ -1500,3 +1500,14 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .globo-pena[hidden] { display: none; }
 .globo-pena .btn { margin: 0; padding: 9px 18px; font-size: var(--t-13); color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
 .maplibregl-popup-content a { display: inline-block; margin-top: 6px; color: #fff; font-size: var(--t-13); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Beneficios cerca tuyo: segmentado Lista / Mapa y píldoras del valor sobre el mapa (handoff v3 · M3-E). */
+.ben-vista { display: flex; width: 100%; max-width: 320px; margin: 4px 0 14px; }
+.ben-vista .ctl-seg-b { flex: 1; }
+.ben-mapa-wrap { position: relative; margin-top: 4px; }
+.ben-mapa-wrap[hidden] { display: none; }
+.ben-mapa { height: 62vh; min-height: 340px; border-radius: var(--r-22); overflow: hidden; background: var(--surface-card); }
+.ben-cerca { position: absolute; left: 10px; bottom: 10px; margin: 0; padding: 8px 14px; font-size: var(--t-13); background: #0a0a0a; color: #fff; border-color: rgba(255,255,255,.2); }
+.ben-pin { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px; border: 2px solid #ffffff; background: #0a0a0a; color: #ffffff; font: inherit; font-size: var(--t-12); font-weight: 700; line-height: 1.1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.ben-pin.lock { background: #3a3a3c; opacity: .9; }
+.ben-pin:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }

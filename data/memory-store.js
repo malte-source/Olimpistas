@@ -311,7 +311,7 @@ function createMemoryStore({ filePath = null } = {}) {
     // ── Red de Beneficios ──
     async listComercios() { return (db.comercios || []).slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))); },
     async getComercio(id) { return (db.comercios || []).find((c) => c.id === id) || null; },
-    async crearComercio(d = {}) { const c = { id: uid("com"), nombre: d.nombre || "", rubro: d.rubro || "", logo: d.logo || "", direccion: d.direccion || "", ciudad: d.ciudad || "", contacto: d.contacto || "", usuario: null, password_hash: null, estado: d.estado || "activo", creado: nowIso() }; (db.comercios = db.comercios || []).push(c); persist(); return c; },
+    async crearComercio(d = {}) { const c = { id: uid("com"), nombre: d.nombre || "", rubro: d.rubro || "", logo: d.logo || "", direccion: d.direccion || "", ciudad: d.ciudad || "", contacto: d.contacto || "", usuario: null, password_hash: null, estado: d.estado || "activo", lat: d.lat != null ? d.lat : null, lng: d.lng != null ? d.lng : null, creado: nowIso() }; (db.comercios = db.comercios || []).push(c); persist(); return c; },
     async updateComercio(id, patch) { const c = (db.comercios || []).find((x) => x.id === id); if (!c) return null; Object.assign(c, patch); persist(); return c; },
     async deleteComercio(id) { db.comercios = (db.comercios || []).filter((c) => c.id !== id); db.beneficios = (db.beneficios || []).filter((b) => b.comercio_id !== id); persist(); return true; },
 
@@ -339,7 +339,7 @@ function createMemoryStore({ filePath = null } = {}) {
         const nivelReq = idxs.length ? Math.min.apply(null, idxs) : 0;
         const desbloqueado = Math.max(0, ORD.indexOf(tier)) >= nivelReq;
         const nivel_min = ORD[nivelReq] || "olimpista";
-        return { ...b, comercio_nombre: c.nombre, comercio_rubro: c.rubro, comercio_logo: c.logo, comercio_ciudad: c.ciudad, desbloqueado: desbloqueado, nivel_min: nivel_min };
+        return { ...b, comercio_nombre: c.nombre, comercio_rubro: c.rubro, comercio_logo: c.logo, comercio_ciudad: c.ciudad, comercio_lat: c.lat != null ? c.lat : null, comercio_lng: c.lng != null ? c.lng : null, desbloqueado: desbloqueado, nivel_min: nivel_min };
       });
     },
     async registrarCanje({ beneficioId, socioId, comercioId, validadoPor, monto, ahorro } = {}) { const c = { id: uid("cnj"), beneficio_id: beneficioId, socio_id: socioId || null, comercio_id: comercioId || null, validado_por: validadoPor || "", monto: monto != null ? Math.round(monto) : null, ahorro: ahorro != null ? Math.round(ahorro) : null, creado: nowIso() }; (db.canjes = db.canjes || []).push(c); persist(); return c; },

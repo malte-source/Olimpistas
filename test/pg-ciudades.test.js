@@ -78,3 +78,21 @@ for (const [nombre, get] of [["pg", () => pg], ["memoria", () => mem]]) {
     assert.strictEqual((await s.ciudadMasCercana({ lat: -25.34, lng: -57.5, pais: "PY", maxKm: 5 })).id, 5);
   });
 }
+
+for (const [nombre, get] of [["pg", () => pg], ["memoria", () => mem]]) {
+  test(`${nombre}: el comercio guarda su ubicación y los beneficios la traen (comercio_lat / comercio_lng)`, opts, async () => {
+    const s = get();
+    const com = await s.crearComercio({ nombre: "Comercio Ubicado", ciudad: "Asunción", estado: "activo", lat: -25.2916778, lng: -57.6085796 });
+    assert.strictEqual(Number(com.lat), -25.2916778);
+    const sin = await s.crearComercio({ nombre: "Comercio Sin Ubicar", ciudad: "X", estado: "activo" });
+    assert.ok(sin.lat == null);
+    for (const c of [com, sin]) await s.crearBeneficio({ comercio_id: c.id, titulo: "10% " + c.nombre, valor: "10%", pct: 10, niveles: "todos", activo: true, estado: "aprobado" });
+    const items = await s.beneficiosParaNivel("olimpista");
+    const a = items.find((x) => x.comercio_nombre === "Comercio Ubicado"), b = items.find((x) => x.comercio_nombre === "Comercio Sin Ubicar");
+    assert.strictEqual(Number(a.comercio_lat), -25.2916778);
+    assert.strictEqual(Number(a.comercio_lng), -57.6085796);
+    assert.ok(b.comercio_lat == null && b.comercio_lng == null);
+    const m = await s.updateComercio(sin.id, { lat: -25.5, lng: -57.5 });
+    assert.strictEqual(Number(m.lat), -25.5);
+  });
+}

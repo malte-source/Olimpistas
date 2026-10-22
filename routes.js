@@ -33,6 +33,7 @@ const campanasLib = require("./lib/campanas");
 const h3lib = require("./lib/h3");
 const mapaLib = require("./lib/mapa");
 const ciudadesLib = require("./lib/ciudades");
+const mapaUrl = require("./lib/mapaurl");
 const { periodo } = require("./lib/periodo");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
@@ -1496,6 +1497,7 @@ function buildRouter() {
       if (b[f] == null) continue;
       const t = campos[f];
       if (t === "int") out[f] = b[f] === "" ? null : Number(b[f]);
+      else if (t === "num") out[f] = b[f] === "" || b[f] === null ? null : (Number.isFinite(Number(b[f])) ? Number(b[f]) : null);
       else if (t === "date") out[f] = b[f] === "" ? null : String(b[f]).slice(0, 10);
       // "imagen": puede ser una data URL subida desde el admin (varios KB/MB de base64),
       // no una URL corta — el tope de "text" (500 chars) la truncaría y la rompería.
@@ -1510,12 +1512,15 @@ function buildRouter() {
     const permEscritura = PERM_ENTIDAD[nombre] || "contenido.write";
     r.get(`/admin/${nombre}`, requireAdmin, wrap(async (_req, res) => res.json({ items: await o.list() })));
     r.post(`/admin/${nombre}`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
-      const item = await o.crear(limpiarCampos(req.body, o.campos));
+      const d = limpiarCampos(req.body, o.campos);
+      if (o.preparar) await o.preparar(d, req.body || {}, true);
+      const item = await o.crear(d);
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: nombre + ":crear", targetId: item && item.id, por: req.adminUser });
       res.status(201).json({ ok: true, item });
     }));
     r.patch(`/admin/${nombre}/:id`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
       const d = limpiarCampos(req.body, o.campos);
+      if (o.preparar) await o.preparar(d, req.body || {}, false);
       if (!Object.keys(d).length) throw httpError(400, "Nada para actualizar");
       const item = await o.update(req.params.id, d);
       if (!item) throw httpError(404, "No encontrado");
@@ -1532,7 +1537,21 @@ function buildRouter() {
   crudEntidad("preventas", { list: () => store.listPreventas(), crear: (d) => store.crearPreventa(d), update: (id, d) => store.updatePreventa(id, d), del: (id) => store.deletePreventa(id), campos: { evento: "text", fecha: "date", sede: "text", abre: "date", tier_min: "text", precio_desde: "int", stock: "int", imagen: "text" } });
   crudEntidad("contenido", { list: () => store.listContenido(), crear: (d) => store.crearContenido(d), update: (id, d) => store.updateContenido(id, d), del: (id) => store.deleteContenido(id), campos: { titulo: "text", tipo: "text", tier_min: "text", duracion: "text", descripcion: "text", thumb: "text", publicado: "date" } });
   // Red de Beneficios (admin). comercio_id enlaza el beneficio; niveles = "todos" o CSV "premium,socio".
-  crudEntidad("comercios", { list: () => store.listComercios(), crear: (d) => store.crearComercio(d), update: (id, d) => store.updateComercio(id, d), del: (id) => store.deleteComercio(id), campos: { nombre: "text", rubro: "text", ciudad: "text", direccion: "text", contacto: "text", logo: "text", estado: "text" } });
+  const sinHash = (c) => { if (!c) return c; const { password_hash, ...resto } = c; return resto; }; // nunca el hash de la contraseña del comercio
+  crudEntidad("comercios", { list: async () => (await store.listComercios()).map(sinHash), crear: async (d) => sinHash(await store.crearComercio(d)), update: async (id, d) => sinHash(await store.updateComercio(id, d)), del: (id) => store.deleteComercio(id), campos: { nombre: "text", rubro: "text", ciudad: "text", direccion: "text", contacto: "text", logo: "text", estado: "text", lat: "num", lng: "num" },
+    // La ubicación se carga pegando el link de Google Maps del local ("mapa_url"); si es un alta sin ubicación, se usa su ciudad.
+    preparar: async (d, body, alta) => {
+      const link = String(body.mapa_url || "").trim();
+      if (link) {
+        const p = await mapaUrl.resolver(link);
+        if (!p) throw httpError(400, "No pude leer la ubicación de ese link. Copiá el link de Google Maps del local (Compartir → Copiar link).");
+        d.lat = p.lat; d.lng = p.lng;
+      } else if (alta && d.lat == null && d.lng == null && d.ciudad && store.ciudadPorNombre) {
+        const c = await store.ciudadPorNombre({ nombre: d.ciudad, pais: "PY" }).catch(() => null);
+        if (c) { d.lat = c.lat; d.lng = c.lng; }
+      }
+      if ((d.lat != null && Math.abs(d.lat) > 90) || (d.lng != null && Math.abs(d.lng) > 180)) throw httpError(400, "Coordenadas inválidas");
+    } });
   // ── Admin: aprobar o rechazar ofertas de comercios, y el reporte para sponsors ──
   // Se registra ANTES del CRUD genérico: con `estado` en el cuerpo resuelve la oferta; sin él, cede el paso al CRUD.
   r.patch("/admin/beneficios/:id", requireAdmin, requirePerm("beneficios.write"), (req, res, next) => (!req.body || req.body.estado === undefined) ? next("route") : next(), wrap(async (req, res) => {
