@@ -147,3 +147,15 @@ test("ciudades extra: las ciudades grandes que GeoNames trae sin población (Luq
   assert.ok(extra.some((e) => e.nombre === "Luque" && e.pais_iso === "PY"));
   assert.match(fs.readFileSync(path.join(__dirname, "..", "setup", "importar-ciudades.js"), "utf8"), /ciudades-extra\.json/);
 });
+
+test("localidades de un país: entran los pueblos (PPL, PPLA…), no los barrios ni lo abandonado; y masCercana sin base de datos", () => {
+  const fila = (id, nombre, clase, codigo, lat, lng, pob) => [id, nombre, nombre, "", lat, lng, clase, codigo, "PY", "", "", "", "", "", pob, "", "", "America/Asuncion", "2020-01-01"].join("\t");
+  const txt = [fila(1, "Areguá", "P", "PPLA", -25.31, -57.38, 11222), fila(2, "Ypané", "P", "PPL", -25.45, -57.53, 0), fila(3, "Barrio X", "P", "PPLX", -25.3, -57.6, 0),
+    fila(4, "Pueblo Muerto", "P", "PPLQ", -25, -57, 0), fila(5, "Cerro Y", "T", "MT", -25, -57, 0), fila(6, "Capital", "P", "PPLC", -25.28, -57.64, 500000)].join("\n");
+  assert.deepStrictEqual(ciudades.parsearLocalidades(txt).map((x) => x.nombre), ["Areguá", "Ypané", "Capital"]);
+  const lista = [{ id: 1, lat: -25.31, lng: -57.38 }, { id: 2, lat: -25.45, lng: -57.53 }];
+  assert.strictEqual(ciudades.masCercana(lista, -25.32, -57.39, 60).id, 1);
+  assert.strictEqual(ciudades.masCercana(lista, -25.44, -57.5, 60).id, 2);
+  assert.strictEqual(ciudades.masCercana(lista, -23, -59, 60), null, "a más de 60 km de todo");
+  assert.strictEqual(ciudades.masCercana([], -25, -57), null);
+});
