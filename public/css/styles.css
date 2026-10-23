@@ -1681,3 +1681,12 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
   .pn-bar { position: sticky; top: 0; z-index: 4; padding: 8px 0; background: var(--surface-grouped, var(--surface-page)); }
 }
 @media (prefers-reduced-motion: reduce) { .pn-card { transition: none; } .pn-card:hover { transform: none; } }
+/* Logos de los comercios: vienen en blanco, así que van sobre un recuadro negro (sin logo, la inicial). */
+.bx-logo { flex: none; width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: var(--r-14); background: #0a0a0a; }
+.bx-logo img { max-width: 80%; max-height: 62%; object-fit: contain; }
+.bx-logo.ini { color: #fff; font: 800 var(--t-22) / 1 var(--display); }
+.bx-logo.grande { width: 76px; height: 76px; }
+.bx-logo.grande.ini { font-size: var(--t-28); }
+.bx-ban-logo { position: absolute; top: 22px; right: 18px; max-width: 42%; max-height: 38px; object-fit: contain; object-position: right center; }
+/* Escudo del club en su versión correcta (no el negativo): sobre fondos oscuros va en un círculo blanco para que se vea completo. */
+.escudo-ok { box-sizing: border-box; padding: 3px; border-radius: 50%; background: #fff; object-fit: contain; }

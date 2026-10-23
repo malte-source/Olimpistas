@@ -9,6 +9,16 @@
 
 const NIVEL = "socio";
 
+// Logo de cada comercio: public/assets/comercios/<slug>.webp (se preparan con setup/procesar-logos.js). Son logos BLANCOS sobre transparente,
+// pensados para fondos oscuros: la app los muestra sobre un recuadro negro. Si no hay archivo, el comercio queda sin logo (muestra su inicial).
+const fs = require("fs");
+const path = require("path");
+const slugDe = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+const logoDe = (marca) => {
+  const rel = "/assets/comercios/" + slugDe(marca) + ".webp";
+  try { return fs.existsSync(path.join(__dirname, "..", "public", rel)) ? rel : ""; } catch (e) { return ""; }
+};
+
 // [marca, rubro, ciudad, valor, pct, dias, sucursales, incluye, acceso, notas]
 const FILAS = [
   ["Superseis", "Supermercado", "Todo el país", "10%", 10, "Todos los días del año", "Todas las sucursales de Superseis y Superseis Express a nivel nacional", "Todos los productos disponibles en las tiendas, sin excepción", "Presentá la cédula de identidad en la caja al momento de tu compra", "Exclusivo para socios al día. Tope mensual de Gs. 1.500.000."],
@@ -45,7 +55,7 @@ const CANJE_CON_CARNET = "Mostrá tu carnet de Olimpistas (el QR cambia cada min
 const CANAL_PROPIO = ["Petrosur", "G5 PRO"]; // conservan la mecánica acordada (app / ticketera)
 
 const BENEFICIOS_MUESTRA = FILAS.map(([marca, rubro, ciudad, valor, pct, dias, sucursales, incluye, acceso, notas]) => ({
-  comercio: { nombre: marca, rubro, ciudad, direccion: sucursales },
+  comercio: { nombre: marca, rubro, ciudad, direccion: sucursales, logo: logoDe(marca) },
   beneficio: {
     titulo: dias,
     valor,
