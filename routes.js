@@ -681,6 +681,7 @@ function buildRouter() {
     // Niveles OTORGADOS (ej. Socio): no se compran. Blindaje antes de la rama "gratis"
     // (si no, un precio 0 caería como membresía gratis por error).
     if (tier.comprable === false) throw httpError(403, "Ese nivel es exclusivo de los socios del Club — se otorga, no se adquiere");
+    if (tier.oculto) throw httpError(403, "Ese nivel ya no se ofrece");
 
     // Nivel gratis → membresía activa inmediata, sin pago.
     if (tier.slug === "olimpista" || !tier.precioAnio || tier.precioAnio <= 0) {

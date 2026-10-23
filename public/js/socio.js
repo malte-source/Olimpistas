@@ -1583,7 +1583,7 @@
       const carnet = carnetR.carnet;
       const membresia = memR.membresia, tier = memR.tier;
       try { localStorage.setItem("oli_carnet_offline", JSON.stringify({ carnet, ref: (SESSION.socio && SESSION.socio.ref_codigo) || "", guardado: Date.now() })); } catch (e) {}
-      const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0 && t.comprable !== false);
+      const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0 && t.comprable !== false && !t.oculto);
       const esGratis = !membresia || (tier && tier.nivel === 0);
       const s = SESSION.socio;
       await qrListo(); // la librería del QR carga diferida: sin esperarla el carnet salía con "Tu QR" vacío
