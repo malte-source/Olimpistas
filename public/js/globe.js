@@ -190,9 +190,9 @@ window.OLI_GLOBE = (function () {
       };
       if (map.hasImage("escudo-pena")) return pintar();
       const img = new Image();
-      img.onload = () => { try { const c = document.createElement("canvas"); c.width = 96; c.height = Math.round(96 * (img.height / img.width)); const x = c.getContext("2d"); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 6; x.fillStyle = "#ffffff"; x.beginPath(); x.arc(c.width / 2, c.height / 2, Math.min(c.width, c.height) / 2 - 6, 0, 6.2832); x.fill(); x.shadowBlur = 0; x.drawImage(img, 10, 10 + (c.height - c.width) / 2, c.width - 20, c.width - 20); map.addImage("escudo-pena", x.getImageData(0, 0, c.width, c.height), { pixelRatio: 2 }); } catch (e) {} pintar(); };
+      img.onload = () => { try { const c = document.createElement("canvas"); c.width = 96; c.height = Math.round(96 * (img.height / img.width)); const x = c.getContext("2d"); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 6; x.drawImage(img, 6, 6, 84, c.height - 12); map.addImage("escudo-pena", x.getImageData(0, 0, c.width, c.height), { pixelRatio: 2 }); } catch (e) {} pintar(); };
       img.onerror = () => {};
-      img.src = "/assets/escudo.png"; // escudo correcto sobre un círculo blanco (no el negativo)
+      img.src = "/assets/escudo.png"; // escudo oficial tal cual (no el negativo)
     }
     const popCiudad = (p) => `<strong>${esc(lugarDe(p))}</strong><span>${Number(p.count || 1).toLocaleString("es-PY")} Olimpista${(p.count || 1) === 1 ? "" : "s"}</span>`;
 

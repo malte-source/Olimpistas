@@ -1688,8 +1688,9 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .bx-logo.grande { width: 76px; height: 76px; }
 .bx-logo.grande.ini { font-size: var(--t-28); }
 .bx-ban-logo { position: absolute; top: 22px; right: 18px; max-width: 42%; max-height: 38px; object-fit: contain; object-position: right center; }
-/* Escudo del club en su versión correcta (no el negativo): sobre fondos oscuros va en un círculo blanco para que se vea completo. */
-.escudo-ok { box-sizing: border-box; padding: 3px; border-radius: 50%; background: #fff; object-fit: contain; }
+/* Escudo del club: el PNG oficial (escudo.png), tal cual, sin círculo ni fondo detrás. Trae su propio contorno blanco, que lo separa
+   del fondo negro de los encabezados y también se lee sobre fondo claro. */
+.escudo-ok { object-fit: contain; }
 
 /* Móvil: objetivos táctiles de al menos 44 px y la sección activa de la tira siempre a la vista. */
 .faltantes button { min-height: 40px; padding: 8px 14px; }
