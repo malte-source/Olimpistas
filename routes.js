@@ -594,13 +594,26 @@ function buildRouter() {
   // Reglas: cédula ÚNICA (1 cédula = 1 cuenta); el socio del club obtiene el nivel
   // "Socio" (superior a Plus, otorgado, no comprable), a cualquier edad;
   // todo el padrón = al día; entrega automática + se registra en staging para verificar.
+  //
+  // Automática: se consulta al club en el momento. Con `silencioso` (la app lo manda sola al abrir, con la cédula
+  // que la cuenta ya tiene) se reintenta sin dejar un reclamo en la bandeja ni mandar el mail de "en revisión":
+  // así quien se puso al día en el club sube de nivel solo, sin volver a escribir nada.
+  const _revalidacion = new Map();   // socio → última consulta silenciosa (cuida el límite de la API del club)
   r.post("/perfil/validar-socio", auth.requireSocio, wrap(async (req, res) => {
-    const cedula = soloDigitos(req.body?.cedula);
+    const socioFull = await store.getSocioById(req.socio.id);
+    const silencioso = req.body?.silencioso === true;
+    const cedula = soloDigitos(req.body?.cedula || (silencioso ? socioFull.cedula : ""));
+    if (silencioso) {
+      if (socioFull.es_socio_olimpia || !cedula) return res.json({ validado: false, omitido: true });
+      const ult = _revalidacion.get(req.socio.id) || 0;
+      if (Date.now() - ult < 6 * 3600000) return res.json({ validado: false, omitido: true });
+      _revalidacion.set(req.socio.id, Date.now());
+      if (_revalidacion.size > 20000) _revalidacion.clear();
+    }
     if (cedula.length < 5 || cedula.length > 12) throw httpError(400, "Número de cédula inválido");
 
     // El socio real del club recibe SIEMPRE el nivel "Socio" (la cima institucional),
     // sin importar la edad — es superior a Plus y no se compra, se otorga.
-    const socioFull = await store.getSocioById(req.socio.id);
     const tier = "socio";
 
     // Cédula ÚNICA: no puede estar en otra cuenta.
@@ -638,12 +651,18 @@ function buildRouter() {
       // de socio del club (id de padrón, o "tuti-<nº de socio>" si vino sólo de la API en vivo).
       const marca = fila ? fila.id : "tuti-" + (enClub.numeroSocio || cedula);
       await store.setMembresia(req.socio.id, { tierSlug: tier, ciclo: "anio", pagoRef: "socio:" + marca });
-      await store.updateSocio(req.socio.id, { es_socio_olimpia: true });
+      // Antigüedad real y número de socio del club (padrón o API en vivo); si el club no la tiene, queda vacía y el carnet no inventa una.
+      const antig = {};
+      const desde = (fila && fila.socio_desde) || (enClub && enClub.desde) || null;
+      if (desde) antig.socio_desde = String(desde).slice(0, 10);
+      const nro = (fila && fila.nro_socio) || (enClub && enClub.numeroSocio) || "";
+      if (nro) antig.nro_socio = String(nro).slice(0, 40);
+      await store.updateSocio(req.socio.id, { es_socio_olimpia: true, ...antig });
       validado = true;
       mailer.enviarReconocido && mailer.enviarReconocido({ ...socioFull, cedula }, tier).catch(() => {});
     }
     // Staging: registramos el claim para verificar/unificar después.
-    if (store.crearActualizacion) {
+    if (store.crearActualizacion && (validado || !silencioso)) {
       store.crearActualizacion({
         socioId: req.socio.id, tipo: "socio_claim",
         nombre: socioFull.nombre, apellido: socioFull.apellido, email: socioFull.email,
@@ -657,7 +676,7 @@ function buildRouter() {
             : "Cédula sin match en padrón ni en la API de socios — revisar manual",
       }).catch(() => {});
     }
-    if (!validado) {
+    if (!validado && !silencioso) {
       mailer.enviarEnRevision && mailer.enviarEnRevision(socioFull).catch(() => {});
     }
     // Misma respuesta para "no encontrado" y "no está al día": el motivo queda solo en la
@@ -3250,6 +3269,10 @@ function buildRouter() {
         tierSlug: membresia.tier_slug,
         color: tier?.color || "#000",
         desde: membresia.inicio,
+        // Para un Socio, la antigüedad que vale es la del club (si la tenemos), no la de su registro en Olimpistas.
+        socioDesde: req.socio.es_socio_olimpia && req.socio.socio_desde ? String(req.socio.socio_desde).slice(0, 10) : "",
+        nroSocio: req.socio.es_socio_olimpia ? (req.socio.nro_socio || "") : "",
+        esSocio: !!req.socio.es_socio_olimpia,
         numero: "OLI-" + req.socio.id.replace(/\D/g, "").slice(0, 8).padStart(8, "0"),
       },
     });
