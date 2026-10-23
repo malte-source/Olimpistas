@@ -1526,3 +1526,23 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .aviso-pago span { flex: 1; }
 .aviso-pago-x { background: none; border: 0; color: var(--gris); font-size: var(--t-22); line-height: 1; min-width: 44px; min-height: 44px; cursor: pointer; border-radius: var(--r-12); }
 .aviso-pago-x:hover { color: var(--blanco); }
+
+/* ── Mi carnet en escritorio: dos columnas (carnet fijo a la izquierda; estado, acciones, hinchada y nivel a la derecha) ── */
+.ubic-line { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; } /* el ícono era un bloque suelto a la izquierda */
+.cn2-hinchada { margin-top: 12px; text-align: center; }
+.cn2-hinchada h3 { margin: 0 0 6px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.cn2-hinchada .muted { margin: 0 0 12px; }
+.cn2-resumen { margin-top: 20px; text-align: center; }
+.cn2-resumen h3 { margin: 0; }
+.cn2-resumen .muted { margin: 4px 0 0; }
+.cn2-resumen .benefits { margin: 16px 0 0; }
+@media (min-width: 900px) {
+  .cn2-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 40px; align-items: start; justify-content: stretch; }
+  .cn2-grid .cn2 { position: sticky; top: 24px; }
+  .cn2-lado { max-width: none; flex: none; }
+  .cn2-hinchada, .cn2-resumen { text-align: left; }
+  .cn2-hinchada h3 { justify-content: flex-start; }
+  .cn2-resumen { padding-top: 20px; border-top: 1px solid var(--linea); }
+  .cn2-resumen .ubic-line { justify-content: flex-start; }
+  .cn2-resumen .social-pais { display: inline-flex; }
+}
