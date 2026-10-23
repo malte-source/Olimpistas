@@ -1723,7 +1723,7 @@
           <p class="lead">${T("m_carnet_p")}</p>
           <div class="cn2-grid">
             <div class="cn2" id="qrBen">
-              <div class="cn2-top"><img src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[carnet.tierSlug] || "#d9b65a"}">${esc(String(carnet.tier || "Olimpista").toUpperCase())}</span></div>
+              <div class="cn2-top"><img class="escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[carnet.tierSlug] || "#d9b65a"}">${esc(String(carnet.tier || "Olimpista").toUpperCase())}</span></div>
               <div class="cn2-fr" aria-hidden="true"></div>
               <div class="cn2-body">
                 <div class="cn2-id"><span class="cn2-nom">${esc(carnet.nombre)}</span><span class="cn2-lin">${T("m_cn_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}${ubic ? " · " + esc(ubic) : ""}</span></div>
@@ -1818,7 +1818,7 @@
       if (g && g.carnet && (!navigator.onLine || /fetch|network|load failed/i.test(String(e && e.message)))) {
         const c = g.carnet;
         view().innerHTML = `<div class="section" style="border:none;padding-top:8px"><h2>${T("m_carnet_h")}</h2><p class="lead">${T("m_carnet_p")}</p>
-          <div class="cn2-grid"><div class="cn2"><div class="cn2-top"><img src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[c.tierSlug] || "#d9b65a"}">${esc(String(c.tier || "Olimpista").toUpperCase())}</span></div>
+          <div class="cn2-grid"><div class="cn2"><div class="cn2-top"><img class="escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[c.tierSlug] || "#d9b65a"}">${esc(String(c.tier || "Olimpista").toUpperCase())}</span></div>
             <div class="cn2-fr" aria-hidden="true"></div>
             <div class="cn2-body"><div class="cn2-id"><span class="cn2-nom">${esc(c.nombre)}</span><span class="cn2-lin">${esc(c.numero)}</span></div>
               <span class="cn2-offline">${OLI.ic("reloj", 16)} ${T("m_cn_offline")}</span>

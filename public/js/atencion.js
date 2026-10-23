@@ -39,7 +39,7 @@
     panel.id = "atcPanel"; panel.className = "atc-panel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", S.titulo); panel.hidden = true;
     panel.innerHTML = `
       <header class="atc-head">
-        <span class="atc-sh"><img src="/assets/escudo-olimpia-blanco.png" alt="" height="26" /></span>
+        <span class="atc-sh"><img class="escudo-ok" src="/assets/escudo.png" alt="" height="26" /></span>
         <div class="atc-head-t"><b>${esc(S.titulo)}</b><span class="atc-estado"><i id="atcDot" class="atc-dot"></i><span id="atcEstado">${esc(S.ia)}</span></span></div>
         <button type="button" class="atc-x" id="atcX" aria-label="${esc(S.cerrar)}">${ICO.x}</button>
       </header>
