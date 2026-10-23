@@ -1623,20 +1623,20 @@
                 <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
                 <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
               </div>
+              <div class="card cn2-hinchada"><div class="body">
+                <h3>${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
+                <p class="muted">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
+                <button class="btn" id="copiarRef">${T("m_copiar_ref")}</button>
+              </div></div>
+              <div class="cn2-resumen">
+                <h3>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h3>
+                <p class="muted">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}.</p>
+                ${ubicHtml}
+                ${social}
+                <ul class="benefits">${(tier?.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+              </div>
             </div>
           </div>
-          <div class="card" style="max-width:520px;margin:18px auto 0;text-align:center"><div class="body">
-            <h3 style="margin:0 0 6px">${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
-            <p class="muted" style="margin:0 0 12px">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
-            <button class="btn" id="copiarRef">${T("m_copiar_ref")}</button>
-          </div></div>
-          <div style="text-align:center;margin-top:24px">
-            <h3 style="margin:0">${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h3>
-            <p class="muted" style="margin:4px 0 0">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}.</p>
-            ${ubicHtml}
-            ${social}
-          </div>
-          <ul class="benefits" style="max-width:520px;margin:18px auto 0">${(tier?.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
           ${socioCard}
           ${upsell}
         </div>`;
