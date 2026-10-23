@@ -426,7 +426,12 @@
     stopSub();
     _contentHost = document.getElementById("descHost");
     const nav = document.getElementById("descSegNav");
-    if (nav) nav.querySelectorAll("[data-seg]").forEach((b) => b.classList.toggle("on", b.dataset.seg === descSeg));
+    if (nav) {
+      nav.querySelectorAll("[data-seg]").forEach((b) => b.classList.toggle("on", b.dataset.seg === descSeg));
+      // En el celular la tira de secciones se desliza: la activa tiene que quedar a la vista (Peñas era la última y no se veía).
+      const on = nav.querySelector(".seg-b.on");
+      if (on && on.scrollIntoView) { try { nav.scrollTo({ left: Math.max(0, on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2), behavior: "smooth" }); } catch (e) {} }
+    }
     if (descSeg === "subastas" && _deepSub) { const id = _deepSub; _deepSub = null; curSubId = id; syncUrl(true); return vSubastaDetalle(id); }
     ({ subastas: vSubastas, sorteos: vSorteos, preventas: vPreventas, media: vContenido, penas: vPenas }[descSeg] || vSubastas)();
   }

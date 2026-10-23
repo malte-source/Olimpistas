@@ -2791,8 +2791,25 @@ function buildRouter() {
       ranking: mia ? mia.ranking : null, total_penas: ranking.length,
       kpis: { altas: f.pena.altas, socios: f.pena.socios, plus: f.pena.plus, saldo: f.saldo, miembros: f.pena.miembros || 0, hinchada: f.pena.hinchada != null ? f.pena.hinchada : f.pena.altas },
       link: linkPena(f.pena), pct: Number(pct) || 10, fondo_activo: process.env.PENA_FONDO_ACTIVO === "1",
+      // Del padrón del club la comisión ve solo CUÁNTOS son y cuántos ya usan la app; nunca quién debe ni las cédulas.
+      padron: { miembros: f.pena.miembros || 0, con_cuenta: f.pena.vinculados || 0, pendientes: Math.max(0, (f.pena.miembros || 0) - (f.pena.vinculados || 0)) },
+      top: ranking.slice(0, 5).map((x) => ({ nombre: x.nombre, ciudad: x.ciudad || "", hinchada: x.hinchada != null ? x.hinchada : x.altas, es_tuya: x.id === req.pena.id })),
+      datos: { nombre: f.pena.nombre, ciudad: f.pena.ciudad || "", pais_iso: f.pena.pais_iso || "PY", presidente: f.pena.presidente || "", contacto: f.pena.contacto || "" },
       ultimas_altas: altas.map((s) => ({ nombre: nombreCorto(s), ciudad: s.ciudad || "", nivel: (tierBySlug(s.tier_slug) || {}).nombre || "Olimpista", creado: s.creado })),
     });
+  }));
+  // La comisión completa y corrige los datos de su peña (se ven en el listado público: ciudad, país; presidente y contacto son internos).
+  r.patch("/pena/perfil", requirePena, noLectura, wrap(async (req, res) => {
+    const b = req.body || {}, patch = {};
+    if (b.ciudad !== undefined) patch.ciudad = limpioTxt(b.ciudad, 60);
+    if (b.presidente !== undefined) patch.presidente = limpioTxt(b.presidente, 80);
+    if (b.pais_iso !== undefined) { const iso = String(b.pais_iso || "").toUpperCase().trim(); if (!/^[A-Z]{2}$/.test(iso)) throw httpError(400, "El país va con su código de 2 letras (ej. PY, AR, US)"); patch.pais_iso = iso; }
+    if (b.contacto !== undefined) { const c = limpioTxt(b.contacto, 120).toLowerCase(); if (c && !emailOk(c)) throw httpError(400, "Poné un correo de contacto válido"); patch.contacto = c; }
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const p = await store.updatePena(req.pena.id, patch);
+    _penasPub = null;
+    log.info({ penaId: req.pena.id, campos: Object.keys(patch) }, "peña: datos editados por la comisión");
+    res.json({ ok: true, datos: { nombre: p.nombre, ciudad: p.ciudad || "", pais_iso: p.pais_iso || "PY", presidente: p.presidente || "", contacto: p.contacto || "" } });
   }));
   r.get("/pena/fondo", requirePena, wrap(async (req, res) => {
     const [f, mov, pct] = await Promise.all([fondoDe(req.pena.id), store.movimientosPena(req.pena.id, 40), decision("pct")]);
@@ -3085,7 +3102,10 @@ function buildRouter() {
   // Beneficios del comercio: `items` = lo publicado (para elegir cuál validar en caja), `ofertas` = todo lo suyo con su estado.
   r.get("/comercio/beneficios", requireComercio, wrap(async (req, res) => {
     const ofertas = store.ofertasDeComercio ? await store.ofertasDeComercio(req.comercio.id) : [];
-    res.json({ comercio: req.comercio, items: store.beneficiosDeComercio ? await store.beneficiosDeComercio(req.comercio.id) : [],
+    // Datos públicos del comercio (para la vista previa de sus promociones): nunca el usuario ni la contraseña.
+    const c = store.getComercio ? await store.getComercio(req.comercio.id).catch(() => null) : null;
+    const comercio = c ? { id: c.id, nombre: c.nombre, rubro: c.rubro || "", ciudad: c.ciudad || "", direccion: c.direccion || "", logo: c.logo || "" } : req.comercio;
+    res.json({ comercio, items: store.beneficiosDeComercio ? await store.beneficiosDeComercio(req.comercio.id) : [],
       ofertas: ofertas.map(ofertaOut) });
   }));
   const ofertaOut = (b) => ({ id: b.id, titulo: b.titulo, descripcion: b.descripcion, valor: b.valor, niveles: b.niveles, pct: b.pct, ahorro_estimado: b.ahorro_estimado,
@@ -3098,7 +3118,7 @@ function buildRouter() {
     const txt = (k, min, max, msg) => { if (b[k] !== undefined) { const v = String(b[k]).replace(/[<>]/g, "").replace(/\s+/g, " ").trim(); if (v.length < min || v.length > max) throw httpError(400, msg); o[k] = v; } };
     txt("titulo", 3, 100, "El título va de 3 a 100 caracteres");
     txt("valor", 1, 30, "Poné el beneficio en pocas palabras (ej. 10%, 2x1)");
-    if (b.descripcion !== undefined) o.descripcion = String(b.descripcion).replace(/[<>]/g, "").trim().slice(0, 300);
+    if (b.descripcion !== undefined) o.descripcion = String(b.descripcion).replace(/[<>]/g, "").trim().slice(0, 1000);
     if (b.para !== undefined) { if (!NIVELES_OFERTA[b.para]) throw httpError(400, "Elegí para quién es: todos, plus o socio"); o.niveles = NIVELES_OFERTA[b.para]; }
     if (o.valor !== undefined || b.valor !== undefined) { const m = /^(\d{1,3})\s*%$/.exec(o.valor || ""); if (m && Number(m[1]) >= 1 && Number(m[1]) <= 100) o.pct = Number(m[1]); else if (o.valor !== undefined) o.pct = null; }
     if (b.ahorro_estimado !== undefined) {
