@@ -210,7 +210,8 @@ test("panel: KPIs, link con QR y últimas altas SIN datos personales sensibles",
   assert.deepStrictEqual(Object.keys(d.ultimas_altas[0]).sort(), ["ciudad", "creado", "nivel", "nombre"]);
   assert.strictEqual(d.ultimas_altas[0].nombre, "Rocío P.");
   const txt = JSON.stringify(d);
-  for (const privado of ["1234567", "0981123456", "@ejemplo.com", "password"]) assert.ok(!txt.includes(privado), privado);
+  // El correo de contacto de la propia peña sí viaja (son sus datos, los edita la comisión); el del hincha, no.
+  for (const privado of ["1234567", "0981123456", a.email, "password"]) assert.ok(!txt.includes(privado), privado);
 });
 
 // ── Fondo ────────────────────────────────────────────────────────────────────

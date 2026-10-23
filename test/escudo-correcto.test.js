@@ -20,6 +20,7 @@ test("los escudos en <img> usan la versión correcta con el círculo blanco (.es
   for (const f of [...lista("."), ...lista("js")]) {
     for (const m of leer(f).matchAll(/<img\b[^>]*\/assets\/escudo\.png[^>]*>/g)) {
       if (f === "ayuda.html") continue; // ahí va sobre fondo claro
+      if (/c-escudo/.test(m[0])) continue; // el cartel de la peña se imprime sobre papel blanco
       n++; assert.match(m[0], /escudo-ok/, f);
     }
   }

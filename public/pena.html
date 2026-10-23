@@ -16,49 +16,104 @@
     body { background: var(--surface-grouped); color: var(--text-primary); min-height: 100vh; }
     .hide { display: none !important; }
     .pen-head { background: #0a0a0a; color: #fff; padding-top: env(safe-area-inset-top); }
-    .pen-head-in { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 14px; padding: 24px 20px 22px; }
+    .pen-head-in { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 14px; padding: 22px 20px 20px; }
     .pen-head-tx { flex: 1; min-width: 0; }
     .pen-eb { display: block; font-size: var(--t-11); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--oro-claro); }
-    .pen-head h1 { margin: 6px 0 2px; font: 600 var(--t-34)/1.05 var(--display); letter-spacing: -.03em; overflow-wrap: anywhere; }
+    .pen-head h1 { margin: 6px 0 2px; font: 600 var(--t-28)/1.1 var(--display); letter-spacing: -.03em; overflow-wrap: anywhere; }
     .pen-head p { margin: 0; font-size: var(--t-13); color: #a8a6a1; }
     .pen-escudo { height: 58px; width: auto; flex: none; display: block; }
-    .pen-salir { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; cursor: pointer; padding: 0; }
+    .pen-salir { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(255,255,255,.4); background: transparent; color: #fff; cursor: pointer; padding: 0; }
     .pen-salir:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     @media (hover: hover) and (pointer: fine) { .pen-salir:hover { background: rgba(255,255,255,.12); } }
     .pen-fr { height: 6px; background: repeating-linear-gradient(90deg, #fff 0 18px, #0a0a0a 18px 36px); }
     .pen-wrap { max-width: 1080px; margin: 0 auto; padding: 18px 16px calc(40px + env(safe-area-inset-bottom)); }
+    .pen-wrap.con-tabs { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
     .pen-login { max-width: 420px; margin: 4vh auto 0; }
 
     .pen-card { background: var(--surface-card); border-radius: var(--r-22); padding: 20px; }
+    .pen-card + .pen-card { margin-top: 12px; }
     .pen-card h3 { margin: 0 0 10px; font-size: var(--t-17); }
     .pen-muted { color: var(--text-secondary); font-size: var(--t-13); line-height: 1.45; }
     .pen-lbl { display: block; font-size: var(--t-13); font-weight: 600; color: var(--text-secondary); margin: 14px 0 6px; }
-    .pen-card input { width: 100%; font: inherit; font-size: 16px; padding: 13px 14px; border-radius: var(--r-14); background: var(--surface-input); color: var(--text-primary); border: 1px solid var(--border-default); }
-    .pen-card input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
-    .pen-card .btn { margin-top: 16px; padding: 13px 18px; }
+    .pen-card input, .pen-card select { width: 100%; font: inherit; font-size: 16px; padding: 13px 14px; border-radius: var(--r-14); background: var(--surface-input); color: var(--text-primary); border: 1px solid var(--border-default); }
+    .pen-card input:focus-visible, .pen-card select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+    .pen-card .btn { margin-top: 16px; padding: 14px 18px; min-height: 48px; }
     .pen-card .btn:hover, .pen-salir:hover { transform: none; }
     .pen-msg { font-size: var(--t-13); margin-top: 10px; min-height: 16px; color: var(--text-error); }
-    .pen-lectura { margin-bottom: 12px; padding: 11px 16px; border-radius: var(--r-14); background: #0a0a0a; color: #fff; font-size: var(--t-13); font-weight: 600; }
     .pen-msg.ok { color: var(--text-success); }
+    .pen-lectura { margin-bottom: 12px; padding: 11px 16px; border-radius: var(--r-14); background: #0a0a0a; color: #fff; font-size: var(--t-13); font-weight: 600; }
 
-    .pen-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0; }
-    .pen-kpi { background: var(--surface-card); border-radius: var(--r-22); padding: 16px; }
-    .pen-kpi b { display: block; font: 600 var(--t-28)/1.1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-    .pen-kpi span { font-size: var(--t-13); color: var(--text-secondary); }
-    .pen-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
-    @media (max-width: 760px) { .pen-cols { grid-template-columns: 1fr; } }
+    /* Resumen */
+    .pen-hero { position: relative; overflow: hidden; isolation: isolate; padding: 22px 20px; border-radius: var(--r-26); color: #fff; background: linear-gradient(145deg, #0a0a0a 0%, #1c1c21 62%, #2b2b32 100%); }
+    .pen-hero::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: repeating-linear-gradient(90deg, #fff 0 14px, #0a0a0a 14px 28px); }
+    .pen-hero::after { content: attr(data-ini); position: absolute; right: -4px; bottom: -34px; z-index: -1; font: 800 170px/1 var(--display); color: rgba(255, 255, 255, .06); pointer-events: none; }
+    .pen-hero .eb { font-size: var(--t-11); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--oro-claro); }
+    .pen-hero .num { display: block; margin: 6px 0 0; font: 800 var(--t-56)/1 var(--display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+    .pen-hero .sub { margin: 4px 0 0; font-size: var(--t-15); color: rgba(255,255,255,.82); }
+    .pen-prog { margin-top: 12px; }
+    .pen-prog h3 { margin: 0 0 4px; }
+    .pen-barra { height: 10px; border-radius: var(--r-pill); background: var(--card2); overflow: hidden; margin: 12px 0 8px; }
+    .pen-barra i { display: block; height: 100%; border-radius: var(--r-pill); background: var(--action-primary-bg); transition: width .5s var(--ease); }
+    .pen-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .pen-kpi { background: var(--surface-card); border-radius: var(--r-22); padding: 14px; }
+    .pen-kpi b { display: block; font: 600 var(--t-22)/1.1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .pen-kpi span { display: block; margin-top: 2px; font-size: var(--t-12); line-height: 1.25; color: var(--text-secondary); }
+    .pen-top-fila { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+    .pen-top-fila + .pen-top-fila { border-top: 1px solid var(--sep); }
+    .pen-top-n { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--card2); font-size: var(--t-13); font-weight: 700; }
+    .pen-top-fila.mia .pen-top-n { background: var(--action-primary-bg); color: var(--action-primary-text); }
+    .pen-top-t { flex: 1; min-width: 0; }
+    .pen-top-t b { display: block; font-size: var(--t-15); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pen-top-t small { font-size: var(--t-13); color: var(--text-secondary); }
+
+    /* Invitar */
     .pen-link { font: 500 var(--t-13)/1.3 ui-monospace, Menlo, Consolas, monospace; padding: 12px 14px; background: var(--card2); border-radius: var(--r-14); word-break: break-all; }
-    .pen-qr { display: block; width: 160px; height: 160px; margin: 14px 0 4px; border-radius: var(--r-14); background: #fff; padding: 6px; }
-    .pen-saldo { font: 600 var(--t-34)/1 var(--display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+    .pen-acc { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pen-acc .btn { flex: 1 1 160px; margin-top: 12px; }
+    .pen-wa { background: #1f7a3d; color: #fff; }
+    .pen-qr { display: block; width: 200px; height: 200px; margin: 16px auto 4px; border-radius: var(--r-14); background: #fff; padding: 8px; }
+    .pen-msgs { display: grid; gap: 10px; margin-top: 8px; }
+    .pen-plantilla { padding: 14px; border-radius: var(--r-14); background: var(--card2); }
+    .pen-plantilla p { margin: 0 0 8px; font-size: var(--t-15); line-height: 1.45; }
+    .pen-plantilla .btn { margin: 0; min-height: 40px; padding: 8px 16px; }
+
+    /* Hinchada */
     .pen-row { display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-top: 1px solid var(--sep); font-size: var(--t-15); }
     .pen-row:first-child { border-top: 0; }
     .pen-row small { display: block; color: var(--text-secondary); font-size: var(--t-12); }
     .pen-mas { color: var(--text-success); font-weight: 700; white-space: nowrap; }
     .pen-menos { font-weight: 700; white-space: nowrap; }
+    .pen-saldo { font: 600 var(--t-34)/1 var(--display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
     .pen-det summary { cursor: pointer; font-weight: 700; padding: 6px 0; }
-    .pen-altas { margin-top: 14px; }
-    .pen-altas h3 { margin: 0 0 6px; padding: 0 4px; font-size: var(--t-13); font-weight: 600; color: var(--text-secondary); font-family: var(--font-ui); letter-spacing: 0; }
-    .pen-altas .grupo { padding: 4px 16px; }
+
+    /* Navegación: pestañas abajo en el celular; todo junto en escritorio */
+    .pen-vistas { display: block; }
+    .pen-tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; background: var(--surface-card); border-top: 1px solid var(--sep); padding-bottom: env(safe-area-inset-bottom); }
+    .pen-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 58px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--t-11); font-weight: 600; cursor: pointer; }
+    .pen-tab[aria-current="page"] { color: var(--text-primary); }
+    .pen-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -4px; }
+    @media (min-width: 960px) {
+      .pen-tabs { display: none !important; }
+      .pen-wrap.con-tabs { padding-bottom: 40px; }
+      .pen-vistas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "resumen invitar" "hinchada perfil"; gap: 20px; align-items: start; }
+      .pen-vistas > .hide { display: block !important; }
+      #vResumen { grid-area: resumen; } #vInvitar { grid-area: invitar; } #vHinchada { grid-area: hinchada; } #vPerfil { grid-area: perfil; }
+    }
+
+    /* Cartel para imprimir (solo se ve al imprimir) */
+    .pen-cartel { display: none; }
+    @media print {
+      @page { size: A4; margin: 14mm; }
+      body.imprimiendo > :not(.pen-cartel) { display: none !important; }
+      body.imprimiendo { background: #fff; }
+      body.imprimiendo .pen-cartel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; min-height: 90vh; text-align: center; color: #0a0a0a; }
+      .pen-cartel img.c-escudo { height: 110px; width: auto; }
+      .pen-cartel h1 { margin: 0; font: 700 44px/1.1 var(--display); letter-spacing: -.02em; }
+      .pen-cartel p { margin: 0; font-size: 22px; }
+      .pen-cartel img.c-qr { width: 360px; height: 360px; }
+      .pen-cartel .c-link { font: 600 20px/1.3 ui-monospace, Menlo, Consolas, monospace; word-break: break-all; }
+    }
+    @media (prefers-reduced-motion: reduce) { .pen-barra i { transition: none; } }
   </style>
 </head>
 <body>
@@ -75,7 +130,7 @@
     <div class="pen-fr" aria-hidden="true"></div>
   </header>
 
-<main class="pen-wrap">
+<main class="pen-wrap" id="wrap">
 
   <!-- Elegir contraseña (link de un solo uso del correo) -->
   <div class="pen-card pen-login hide" id="claveCard">
@@ -104,32 +159,98 @@
   <!-- Panel -->
   <div id="panel" class="hide">
     <div class="pen-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club. <a href="/admin" style="color:#fff;text-decoration:underline;margin-left:8px">Volver al panel del club</a></div>
-    <div class="pen-kpis" id="kpis"></div>
-    <div class="pen-cols">
-      <div class="pen-card">
-        <h3>Link de captación</h3>
-        <div class="pen-link" id="link"></div>
-        <img class="pen-qr" id="qr" alt="QR del link de la peña" />
-        <button class="btn btn-ghost" id="copiarBtn" style="margin-top:8px">Copiar link</button>
-        <p class="pen-muted" id="linkNota" style="margin:12px 0 0"></p>
-      </div>
-      <div class="pen-card" id="fondoCard" hidden>
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3 style="margin:0">Fondo de la peña</h3><span class="pen-saldo" id="saldo"></span></div>
-        <p class="pen-muted" id="fondoNota" style="margin:6px 0 8px"></p>
-        <div id="mov"></div>
-        <details class="pen-det" style="margin-top:12px"><summary>Pedir canje</summary>
-          <label class="pen-lbl" for="cjItem">¿Qué querés canjear?</label>
-          <input id="cjItem" maxlength="120" placeholder="Ej: bus de ida y vuelta al estadio" />
-          <label class="pen-lbl" for="cjMonto">Monto (₲)</label>
-          <input id="cjMonto" type="number" inputmode="numeric" min="1000" step="1000" />
-          <button class="btn btn-block" id="cjBtn">Pedir canje</button>
-          <div class="pen-msg" id="cjMsg" role="alert"></div>
-        </details>
-      </div>
+
+    <div class="pen-vistas">
+      <!-- RESUMEN -->
+      <section id="vResumen" aria-label="Resumen">
+        <div class="pen-hero" id="hero" data-ini="P">
+          <span class="eb">Hinchada de la peña</span>
+          <span class="num" id="heroNum">0</span>
+          <p class="sub" id="heroSub"></p>
+        </div>
+        <div class="pen-card pen-prog hide" id="prog">
+          <h3>Del listado del club, ¿cuántos ya están en Olimpistas?</h3>
+          <div class="pen-barra" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="progBarra"><i id="progRelleno"></i></div>
+          <p class="pen-muted" id="progTx" style="margin:0"></p>
+          <button type="button" class="btn" id="progInvitar">Invitar a los que faltan</button>
+        </div>
+        <div class="pen-kpis" id="kpis"></div>
+        <div class="pen-card" style="margin-top:12px"><h3>Las peñas más grandes</h3><div id="top"></div></div>
+      </section>
+
+      <!-- INVITAR -->
+      <section id="vInvitar" class="hide" aria-label="Invitar">
+        <div class="pen-card">
+          <h3>Sumá gente a tu peña</h3>
+          <p class="pen-muted" style="margin:0 0 12px">Cada persona que se registre por este link o por su QR queda en tu peña.</p>
+          <div class="pen-link" id="link"></div>
+          <div class="pen-acc">
+            <a class="btn pen-wa" id="waBtn" target="_blank" rel="noopener">Compartir por WhatsApp</a>
+            <button type="button" class="btn btn-ghost" id="copiarBtn">Copiar link</button>
+          </div>
+          <img class="pen-qr" id="qr" alt="QR del link de la peña" />
+          <div class="pen-acc">
+            <button type="button" class="btn btn-ghost" id="qrBajar">Descargar QR</button>
+            <button type="button" class="btn btn-ghost" id="cartelBtn">Imprimir cartel</button>
+          </div>
+        </div>
+        <div class="pen-card">
+          <h3>Mensajes listos para mandar</h3>
+          <div class="pen-msgs" id="plantillas"></div>
+        </div>
+        <div class="pen-card" id="fondoCard" hidden>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3 style="margin:0">Fondo de la peña</h3><span class="pen-saldo" id="saldo"></span></div>
+          <p class="pen-muted" id="fondoNota" style="margin:6px 0 8px"></p>
+          <div id="mov"></div>
+          <details class="pen-det" style="margin-top:12px"><summary>Pedir canje</summary>
+            <label class="pen-lbl" for="cjItem">¿Qué querés canjear?</label>
+            <input id="cjItem" maxlength="120" placeholder="Ej: bus de ida y vuelta al estadio" />
+            <label class="pen-lbl" for="cjMonto">Monto (₲)</label>
+            <input id="cjMonto" type="number" inputmode="numeric" min="1000" step="1000" />
+            <button class="btn btn-block" id="cjBtn">Pedir canje</button>
+            <div class="pen-msg" id="cjMsg" role="alert"></div>
+          </details>
+        </div>
+      </section>
+
+      <!-- HINCHADA -->
+      <section id="vHinchada" class="hide" aria-label="Hinchada">
+        <div class="pen-card"><h3>Últimas altas por tu link</h3><div id="altas"></div>
+          <p class="pen-muted" style="margin:10px 0 0">Ves el nombre y la inicial del apellido. Los datos personales del listado del club no se comparten con la comisión.</p></div>
+      </section>
+
+      <!-- MI PEÑA -->
+      <section id="vPerfil" class="hide" aria-label="Mi peña">
+        <div class="pen-card">
+          <h3>Datos de la peña</h3>
+          <p class="pen-muted" style="margin:0 0 4px">Completalos para que los hinchas te encuentren. El nombre y el estado los cambia el club.</p>
+          <label class="pen-lbl" for="pfCiudad">Ciudad</label><input id="pfCiudad" maxlength="60" autocomplete="off" />
+          <label class="pen-lbl" for="pfPais">País (código de 2 letras)</label><input id="pfPais" maxlength="2" placeholder="PY" autocapitalize="characters" autocomplete="off" />
+          <label class="pen-lbl" for="pfPresi">Quién preside</label><input id="pfPresi" maxlength="80" autocomplete="off" />
+          <label class="pen-lbl" for="pfContacto">Correo de contacto</label><input id="pfContacto" type="email" maxlength="120" autocomplete="off" />
+          <button class="btn btn-block" id="pfGuardar">Guardar cambios</button>
+          <div class="pen-msg" id="pfMsg" role="alert"></div>
+        </div>
+      </section>
     </div>
-    <div class="pen-altas"><h3>Últimas altas</h3><div class="grupo" id="altas"></div></div>
+
+    <nav class="pen-tabs hide" id="tabs" aria-label="Secciones">
+      <button type="button" class="pen-tab" data-vista="resumen" aria-current="page"><svg class="ic" width="24" height="24" aria-hidden="true"><use href="/assets/icons.svg#i-tablero"/></svg><span>Resumen</span></button>
+      <button type="button" class="pen-tab" data-vista="invitar"><svg class="ic" width="24" height="24" aria-hidden="true"><use href="/assets/icons.svg#i-compartir"/></svg><span>Invitar</span></button>
+      <button type="button" class="pen-tab" data-vista="hinchada"><svg class="ic" width="24" height="24" aria-hidden="true"><use href="/assets/icons.svg#i-hinchas"/></svg><span>Hinchada</span></button>
+      <button type="button" class="pen-tab" data-vista="perfil"><svg class="ic" width="24" height="24" aria-hidden="true"><use href="/assets/icons.svg#i-editar"/></svg><span>Mi peña</span></button>
+    </nav>
   </div>
 </main>
+
+<!-- Cartel para imprimir -->
+<div class="pen-cartel" id="cartel" aria-hidden="true">
+  <img class="c-escudo" src="/assets/escudo.png" alt="" />
+  <h1 id="cartelNombre"></h1>
+  <p>Sumate a la peña en <b>Olimpistas.com</b><br>Escaneá el código con la cámara de tu celular</p>
+  <img class="c-qr" id="cartelQr" alt="" />
+  <div class="c-link" id="cartelLink"></div>
+</div>
 
 <script src="/assets/vendor/qrcode.js"></script>
 <script>
@@ -138,6 +259,7 @@
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function gs(n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); }
+  function nf(n) { return Number(n || 0).toLocaleString("es-PY"); }
   function token() { try { return sessionStorage.getItem(TK) || ""; } catch (e) { return ""; } }
   function setToken(t) { try { t ? sessionStorage.setItem(TK, t) : sessionStorage.removeItem(TK); } catch (e) {} }
   function fecha(s) { try { return new Date(s).toLocaleDateString("es-PY", { day: "numeric", month: "short" }); } catch (e) { return ""; } }
@@ -153,28 +275,79 @@
     $("claveCard").classList.toggle("hide", que !== "clave");
     $("panel").classList.toggle("hide", que !== "panel");
     $("salirBtn").classList.toggle("hide", que !== "panel");
+    $("tabs").classList.toggle("hide", que !== "panel");
+    $("wrap").classList.toggle("con-tabs", que === "panel");
     if (que !== "panel") { $("kick").textContent = "Panel de la peña"; $("nombre").textContent = "Peñas oficiales"; $("quien").textContent = "Para la comisión de una peña oficial"; }
   }
 
+  // Pestañas (celular); en escritorio se ve todo junto.
+  var VISTAS = { resumen: "vResumen", invitar: "vInvitar", hinchada: "vHinchada", perfil: "vPerfil" };
+  function irVista(v) {
+    Object.keys(VISTAS).forEach(function (k) { $(VISTAS[k]).classList.toggle("hide", k !== v); });
+    document.querySelectorAll("#tabs .pen-tab").forEach(function (t) { if (t.dataset.vista === v) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current"); });
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }
+  $("tabs").addEventListener("click", function (e) { var b = e.target.closest("button[data-vista]"); if (b) irVista(b.dataset.vista); });
+  $("progInvitar").onclick = function () { irVista("invitar"); };
+
   var NIVEL_MOV = { ingreso: "Aporte", canje: "Canje" };
+  var LINK = "", NOMBRE = "", QR_URL = "";
+  function mensajes(nombre, link) {
+    return [
+      "¡Sumate a la peña " + nombre + " en Olimpistas! Es gratis y es la app de los hinchas del Decano: " + link,
+      "Hinchas de " + nombre + ": registrate por este link y quedás en la peña. Carnet digital, beneficios en comercios y sorteos: " + link,
+      "Si sos de " + nombre + ", sumate acá así nos contamos todos: " + link,
+    ];
+  }
   async function cargar() {
     try {
       var d = await api("/pena/panel"), f = await api("/pena/fondo");
       mostrar("panel");
       $("modoLectura").classList.toggle("hide", token().indexOf("adm_") !== 0);
-      $("quien").textContent = d.pena.ciudad || "";
-      $("kick").textContent = "Panel de la comisión · verificada" + (d.ranking ? " · #" + d.ranking + " del ranking" : "");
+      var datos = d.datos || {};
+      NOMBRE = d.pena.nombre; LINK = d.link;
+      $("quien").textContent = [datos.ciudad, datos.pais_iso && datos.pais_iso !== "PY" ? datos.pais_iso : ""].filter(Boolean).join(", ") || "Completá la ciudad en “Mi peña”";
+      $("kick").textContent = "Panel de la comisión · verificada";
       $("nombre").textContent = d.pena.nombre;
-      $("kpis").innerHTML = [["Hinchada de la peña", d.kpis.hinchada], ["Se sumaron a la app", d.kpis.altas], ["Socios del club", d.kpis.socios], ["Pagan Plus", d.kpis.plus]]
-        .map(function (k) { return '<div class="pen-kpi"><b>' + esc(k[1]) + '</b><span>' + esc(k[0]) + '</span></div>'; }).join("");
+      // Resumen
+      $("hero").setAttribute("data-ini", String(d.pena.nombre || "P").replace(/^peña\s+/i, "").trim().charAt(0).toUpperCase());
+      $("heroNum").textContent = nf(d.kpis.hinchada);
+      $("heroSub").textContent = d.ranking ? "Puesto #" + d.ranking + " de " + d.total_penas + " peñas" : "";
+      var p = d.padron || { miembros: 0, con_cuenta: 0, pendientes: 0 };
+      $("prog").classList.toggle("hide", !p.miembros);
+      if (p.miembros) {
+        var pct = Math.round(100 * p.con_cuenta / p.miembros);
+        $("progRelleno").style.width = pct + "%"; $("progBarra").setAttribute("aria-valuenow", String(pct));
+        $("progTx").textContent = nf(p.con_cuenta) + " de " + nf(p.miembros) + " ya están en Olimpistas (" + pct + " %)" + (p.pendientes ? ". Faltan " + nf(p.pendientes) + ": compartiles el link." : ". ¡Están todos!");
+        $("progInvitar").classList.toggle("hide", !p.pendientes);
+      }
+      $("kpis").innerHTML = [["Se sumaron a la app", d.kpis.altas], ["Socios del club", d.kpis.socios], ["Pagan Plus", d.kpis.plus]]
+        .map(function (k) { return '<div class="pen-kpi"><b>' + esc(nf(k[1])) + '</b><span>' + esc(k[0]) + '</span></div>'; }).join("");
+      $("top").innerHTML = (d.top || []).map(function (t, i) {
+        return '<div class="pen-top-fila' + (t.es_tuya ? " mia" : "") + '"><span class="pen-top-n">' + (i + 1) + '</span><span class="pen-top-t"><b>' + esc(t.nombre) + (t.es_tuya ? " · tu peña" : "") + '</b><small>' + esc(nf(t.hinchada)) + ' hinchas' + (t.ciudad ? " · " + esc(t.ciudad) : "") + '</small></span></div>';
+      }).join("") || '<p class="pen-muted">Todavía no hay ranking.</p>';
+      // Invitar
       $("link").textContent = d.link;
-      $("linkNota").textContent = "Cada alta por este link o su QR queda en la peña.";
-      $("fondoCard").hidden = !d.fondo_activo; // el fondo del 10 % está apagado: la peña va a tener una recompensa por puntos
-      try { var qr = qrcode(0, "M"); qr.addData(d.link); qr.make(); $("qr").src = qr.createDataURL(5, 2); } catch (e) {}
+      var msgs = mensajes(d.pena.nombre, d.link);
+      $("waBtn").href = "https://wa.me/?text=" + encodeURIComponent(msgs[0]);
+      $("plantillas").innerHTML = msgs.map(function (m, i) { return '<div class="pen-plantilla"><p>' + esc(m) + '</p><button type="button" class="btn btn-ghost" data-copiar="' + i + '">Copiar mensaje</button></div>'; }).join("");
+      try {
+        var qr = qrcode(0, "M"); qr.addData(d.link); qr.make(); QR_URL = qr.createDataURL(8, 4); $("qr").src = QR_URL; $("cartelQr").src = QR_URL;
+      } catch (e) {}
+      $("cartelNombre").textContent = d.pena.nombre; $("cartelLink").textContent = d.link;
       $("copiarBtn").onclick = function () { navigator.clipboard.writeText(d.link).then(function () { $("copiarBtn").textContent = "¡Copiado!"; setTimeout(function () { $("copiarBtn").textContent = "Copiar link"; }, 1500); }); };
+      $("plantillas").onclick = function (e) {
+        var b = e.target.closest("button[data-copiar]"); if (!b) return;
+        navigator.clipboard.writeText(msgs[Number(b.dataset.copiar)]).then(function () { b.textContent = "¡Copiado!"; setTimeout(function () { b.textContent = "Copiar mensaje"; }, 1500); });
+      };
+      // Hinchada
       $("altas").innerHTML = d.ultimas_altas.length ? d.ultimas_altas.map(function (a) {
         return '<div class="pen-row"><div>' + esc(a.nombre) + '<small>' + esc(a.ciudad || "") + ' · ' + esc(a.nivel) + '</small></div><span class="pen-muted">' + esc(fecha(a.creado)) + '</span></div>';
-      }).join("") : '<p class="pen-muted" style="padding:12px 0;margin:0">Todavía no se sumó nadie por el link. Compartilo para empezar.</p>';
+      }).join("") : '<p class="pen-muted" style="padding:6px 0;margin:0">Todavía no se sumó nadie por el link. Compartilo para empezar.</p>';
+      // Mi peña
+      $("pfCiudad").value = datos.ciudad || ""; $("pfPais").value = datos.pais_iso || "PY"; $("pfPresi").value = datos.presidente || ""; $("pfContacto").value = datos.contacto || "";
+      // Fondo (apagado por decisión del club)
+      $("fondoCard").hidden = !d.fondo_activo;
       $("saldo").textContent = gs(f.saldo);
       $("fondoNota").textContent = f.pendiente ? "Disponible: " + gs(f.disponible) + " · " + gs(f.pendiente) + " esperan aprobación del club." : "Disponible: " + gs(f.disponible) + ".";
       $("mov").innerHTML = f.movimientos.length ? f.movimientos.map(function (m) {
@@ -187,6 +360,32 @@
       else $("panel").insertAdjacentHTML("afterbegin", '<p class="pen-msg">' + esc(e.message) + '</p>');
     }
   }
+
+  // QR descargable en PNG y cartel para imprimir
+  $("qrBajar").onclick = function () {
+    if (!QR_URL) return;
+    var img = new Image();
+    img.onload = function () {
+      var c = document.createElement("canvas"); c.width = 800; c.height = 800;
+      var x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, 800, 800); x.imageSmoothingEnabled = false; x.drawImage(img, 0, 0, 800, 800);
+      var a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = "qr-" + NOMBRE.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".png"; a.click();
+    };
+    img.src = QR_URL;
+  };
+  $("cartelBtn").onclick = function () {
+    document.body.classList.add("imprimiendo");
+    window.addEventListener("afterprint", function quitar() { document.body.classList.remove("imprimiendo"); window.removeEventListener("afterprint", quitar); });
+    setTimeout(function () { window.print(); }, 60);
+  };
+  // Guardar los datos de la peña
+  $("pfGuardar").onclick = async function () {
+    var m = $("pfMsg"); m.className = "pen-msg"; m.textContent = ""; $("pfGuardar").disabled = true;
+    try {
+      await api("/pena/perfil", { method: "PATCH", body: { ciudad: $("pfCiudad").value, pais_iso: $("pfPais").value, presidente: $("pfPresi").value, contacto: $("pfContacto").value } });
+      m.className = "pen-msg ok"; m.textContent = "Listo, guardamos los datos de tu peña."; cargar();
+    } catch (e) { m.textContent = e.message; }
+    $("pfGuardar").disabled = false;
+  };
 
   $("loginBtn").onclick = async function () {
     $("loginErr").textContent = ""; $("loginBtn").disabled = true;

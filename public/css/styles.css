@@ -1690,3 +1690,11 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .bx-ban-logo { position: absolute; top: 22px; right: 18px; max-width: 42%; max-height: 38px; object-fit: contain; object-position: right center; }
 /* Escudo del club en su versión correcta (no el negativo): sobre fondos oscuros va en un círculo blanco para que se vea completo. */
 .escudo-ok { box-sizing: border-box; padding: 3px; border-radius: 50%; background: #fff; object-fit: contain; }
+
+/* Móvil: objetivos táctiles de al menos 44 px y la sección activa de la tira siempre a la vista. */
+.faltantes button { min-height: 40px; padding: 8px 14px; }
+.ed-ubic { display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; }
+@media (max-width: 700px) {
+  #view .btn-sm { min-height: 44px; }
+  .seg-b { min-height: 44px; }
+}
