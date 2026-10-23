@@ -446,7 +446,7 @@
           <div data-sec="beneficios">
           <h2>Ofertas de comercios</h2>
           <p class="hint">Las ofertas que cargan los comercios esperan acá: <b>aprobá y publicá</b> o <b>rechazá</b> con el motivo (lo ve el comercio). El reporte para sponsors cruza canjes, ahorro y ventas por comercio, ciudad y nivel.</p>
-          <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">Reporte para sponsors (mes en curso)</button></div>
+          <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">Reporte para sponsors (mes en curso)</button> <button class="btn btn-sm btn-ghost" id="cargarMuestra">Cargar beneficios de muestra (socios)</button></div>
           <div id="ofertasWrap"><p class="loading">Cargando…</p></div>
           </div>
 
@@ -2111,6 +2111,15 @@
           if (!r.ok) return;
           await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofrec), { method: "PATCH", body: { estado: "rechazado", motivo: r.val } }); toast("Oferta rechazada");
         } else return;
+        cargarOfertasAdmin();
+      } catch (err) { toast(err.message, "err"); }
+    });
+    $("cargarMuestra").addEventListener("click", async function () {
+      var c = await confirmar("Se cargan los comercios y beneficios de la Matriz Unificada del club, todos exclusivos para socios y ya publicados. Si ya existen no se duplican ni se pisan.", { titulo: "Cargar beneficios de muestra", ok: "Cargar" });
+      if (!c.ok) return;
+      try {
+        var r = await api("/admin/beneficios/muestra", { method: "POST" });
+        toast(r.beneficios_creados + " beneficios nuevos · " + r.comercios_creados + " comercios nuevos" + (r.beneficios_existentes ? " (" + r.beneficios_existentes + " ya estaban)" : ""));
         cargarOfertasAdmin();
       } catch (err) { toast(err.message, "err"); }
     });

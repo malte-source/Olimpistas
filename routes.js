@@ -1592,6 +1592,12 @@ function buildRouter() {
       }
       if ((d.lat != null && Math.abs(d.lat) > 90) || (d.lng != null && Math.abs(d.lng) > 180)) throw httpError(400, "Coordenadas inválidas");
     } });
+  // Beneficios de muestra del club (exclusivos para socios): comercios + ofertas ya aprobadas. Idempotente: no duplica ni pisa ediciones.
+  r.post("/admin/beneficios/muestra", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
+    const out = await require("./lib/beneficios-muestra").cargarMuestra(store);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "beneficios:cargar_muestra", targetId: "muestra", detalle: JSON.stringify(out), por: req.adminUser });
+    res.json({ ok: true, ...out });
+  }));
   // ── Admin: aprobar o rechazar ofertas de comercios, y el reporte para sponsors ──
   // Se registra ANTES del CRUD genérico: con `estado` en el cuerpo resuelve la oferta; sin él, cede el paso al CRUD.
   r.patch("/admin/beneficios/:id", requireAdmin, requirePerm("beneficios.write"), (req, res, next) => (!req.body || req.body.estado === undefined) ? next("route") : next(), wrap(async (req, res) => {
