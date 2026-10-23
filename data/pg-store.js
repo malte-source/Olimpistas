@@ -529,7 +529,8 @@ function createPgStore({ databaseUrl, debug }) {
       return { canjes: t.canjes, ahorro: Number(t.ahorro), ventas: Number(t.ventas), ticket_promedio: t.con_monto ? Math.round(Number(t.ventas) / t.con_monto) : 0, mix: mix.map((m) => ({ nivel: m.nivel, canjes: m.canjes })) };
     },
     async canjesDeComercio({ comercioId, desde, hasta, limit = 5000 }) {
-      return sql`SELECT c.creado, b.titulo AS beneficio, COALESCE(c.tier_slug, '') AS nivel, c.monto, c.ahorro FROM canjes c LEFT JOIN beneficios b ON b.id = c.beneficio_id
+      return sql`SELECT c.creado, b.titulo AS beneficio, COALESCE(c.tier_slug, '') AS nivel, c.monto, c.ahorro, s.nombre AS socio_nombre, s.apellido AS socio_apellido
+        FROM canjes c LEFT JOIN beneficios b ON b.id = c.beneficio_id LEFT JOIN socios s ON s.id = c.socio_id
         WHERE c.comercio_id = ${comercioId} AND c.creado >= ${desde} AND c.creado < ${hasta} ORDER BY c.creado DESC LIMIT ${limit}`;
     },
     // Reporte para sponsors: por comercio, ciudad y nivel.

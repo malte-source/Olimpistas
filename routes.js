@@ -3121,6 +3121,22 @@ function buildRouter() {
     res.json({ periodo: p.etiqueta, ...(await store.estadisticasComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta })) });
   }));
 
+  // Lo de hoy en la caja (día calendario de Paraguay): totales y los últimos canjes. Del hincha solo se ve el nombre y la inicial del apellido.
+  r.get("/comercio/hoy", requireComercio, wrap(async (req, res) => {
+    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+    const p = periodo({ desde: hoy, hasta: hoy });
+    const filas = await store.canjesDeComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta, limit: 500 });
+    const quien = (f) => {
+      const n = String(f.socio_nombre || "").trim().split(" ")[0], a = String(f.socio_apellido || "").trim().charAt(0).toUpperCase();
+      return [n, a ? a + "." : ""].filter(Boolean).join(" ") || "Socio";
+    };
+    const suma = (k) => filas.reduce((t, f) => t + (Number(f[k]) || 0), 0);
+    res.json({
+      fecha: hoy, canjes: filas.length, ahorro: suma("ahorro"), ventas: suma("monto"),
+      ultimos: filas.slice(0, 15).map((f) => ({ hora: new Date(f.creado).toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Asuncion" }), socio: quien(f), beneficio: f.beneficio || "", monto: f.monto != null ? Number(f.monto) : null, ahorro: f.ahorro != null ? Number(f.ahorro) : null })),
+    });
+  }));
+
   // Validar un canje en caja: QR del carnet (rota cada 60 s) o código fijo del socio, + beneficio + monto.
   // Con QR: se verifica la firma y la ventana (±1) y cada QR sirve UNA vez. El registro (stock, límite de días, QR usado y canje)
   // es una sola transacción: dos cajas escaneando a la vez no duplican el canje ni pasan el cupo.

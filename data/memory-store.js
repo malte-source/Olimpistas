@@ -403,7 +403,7 @@ function createMemoryStore({ filePath = null } = {}) {
       const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
       return (db.canjes || []).filter((c) => c.comercio_id === comercioId && new Date(c.creado).getTime() >= d && new Date(c.creado).getTime() < h)
         .sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
-        .map((c) => { const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}; return { creado: c.creado, beneficio: b.titulo || null, nivel: c.tier_slug || "", monto: c.monto, ahorro: c.ahorro }; });
+        .map((c) => { const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}, s = (db.socios || []).find((x) => x.id === c.socio_id) || {}; return { creado: c.creado, beneficio: b.titulo || null, nivel: c.tier_slug || "", monto: c.monto, ahorro: c.ahorro, socio_nombre: s.nombre || "", socio_apellido: s.apellido || "" }; });
     },
     async estadisticasPorComercio({ desde, hasta }) {
       const d = new Date(desde).getTime(), h = new Date(hasta).getTime(), por = new Map();
