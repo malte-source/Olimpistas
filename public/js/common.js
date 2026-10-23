@@ -386,8 +386,13 @@ window.OLI = (function () {
       x.fillStyle = "#0a0a0a"; x.fillRect(0, 0, W, H);
       const franjas = (y) => { for (let i = 0; i * 18 < W; i++) { x.fillStyle = i % 2 ? "#0a0a0a" : "#ffffff"; x.fillRect(i * 18, y, 18, 22); } };
       franjas(0); franjas(H - 22);
-      const escudo = await _loadImg("/assets/escudo-olimpia-blanco.png");
-      if (escudo) { const ew = 190, eh = ew * ((escudo.height / escudo.width) || 1); x.drawImage(escudo, cx - ew / 2, 130, ew, eh); }
+      // Escudo correcto (no el negativo) sobre un círculo blanco, para que se vea completo en el fondo negro.
+      const escudo = await _loadImg("/assets/escudo.png");
+      if (escudo) {
+        const ew = 190, eh = ew * ((escudo.height / escudo.width) || 1);
+        x.fillStyle = "#ffffff"; x.beginPath(); x.arc(cx, 130 + eh / 2, ew / 2, 0, 6.2832); x.fill();
+        const iw = ew * 0.92, ih = eh * 0.92; x.drawImage(escudo, cx - iw / 2, 130 + (eh - ih) / 2, iw, ih);
+      }
       // Medallón del país: mitad Olimpia, mitad bandera (la misma idea que el globo).
       const cy = 720, r = 260;
       x.save(); x.beginPath(); x.arc(cx, cy, r, 0, 6.2832); x.clip();
