@@ -1907,11 +1907,14 @@
             '<div class="muted" style="font-size:13px">Saldo del fondo: ' + gsA(c.saldo) + ' · ' + esc(fmtFecha(c.creado)) + '</div>' +
             (wp ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" data-penacj="' + esc(c.id) + '">Aprobar</button><button class="btn btn-sm btn-ghost adm-neg" data-penacjno="' + esc(c.id) + '">Rechazar</button></div>' : '') + '</div>';
         }).join("");
-        html += ok.length ? '<table class="adm-tabla" style="font-size:13px"><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Peña</th><th>Hinchas</th><th>Socios</th><th>Plus/Junior</th><th>Fondo</th><th></th></tr></thead><tbody>' +
+        html += ok.length ? '<table class="adm-tabla" style="font-size:13px"><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Peña</th><th>Hinchada</th><th>Padrón del club</th>' + (d.owner ? '<th>Al día / en mora</th>' : '') + '<th>Socios</th><th>Plus</th><th></th></tr></thead><tbody>' +
           ok.map(function (p, i) {
             return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(p.nombre) + '</b><br><span class="muted">' + esc(p.ciudad) + (p.estado === "pausada" ? ' · en pausa' : '') + '</span></td>' +
-              '<td style="text-align:center">' + p.altas + '</td><td style="text-align:center">' + p.socios + '</td><td style="text-align:center">' + p.plus + '</td><td style="text-align:right">' + gsA(p.saldo) + '</td>' +
-              '<td style="text-align:right">' + (w ? '<button class="btn btn-sm btn-ghost" data-penaacc="' + esc(p.id) + '">Reenviar acceso</button> <button class="btn btn-sm btn-ghost" data-penaest="' + esc(p.id) + '" data-a="' + (p.estado === "pausada" ? "verificada" : "pausada") + '">' + (p.estado === "pausada" ? "Reactivar" : "Pausar") + '</button>' : '') + '</td></tr>';
+              '<td style="text-align:center"><b>' + (p.hinchada != null ? p.hinchada : p.altas) + '</b><br><span class="muted">' + p.altas + ' en la app</span></td>' +
+              '<td style="text-align:center">' + ((p.padron && p.padron.miembros) || 0) + '<br><span class="muted">' + ((p.padron && p.padron.con_cuenta) || 0) + ' con cuenta</span></td>' +
+              (d.owner ? '<td style="text-align:center">' + (p.padron && p.padron.al_dia != null ? p.padron.al_dia + ' / ' + p.padron.en_mora : '—') + '</td>' : '') +
+              '<td style="text-align:center">' + p.socios + '</td><td style="text-align:center">' + p.plus + '</td>' +
+              '<td style="text-align:right">' + (w ? '<button class="btn btn-sm btn-ghost" data-penaed="' + esc(p.id) + '">Datos</button> ' : '') + (d.owner ? '<button class="btn btn-sm btn-ghost" data-penapad="' + esc(p.id) + '" data-n="' + esc(p.nombre) + '">Padrón</button> ' : '') + (w ? '<button class="btn btn-sm btn-ghost" data-penaacc="' + esc(p.id) + '">Reenviar acceso</button> <button class="btn btn-sm btn-ghost" data-penaest="' + esc(p.id) + '" data-a="' + (p.estado === "pausada" ? "verificada" : "pausada") + '">' + (p.estado === "pausada" ? "Reactivar" : "Pausar") + '</button>' : '') + '</td></tr>';
           }).join("") + '</tbody></table>' : '';
         box.innerHTML = html || '<p class="empty">Todavía no hay peñas. Las solicitudes llegan desde la app de los hinchas.</p>';
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
@@ -2163,6 +2166,40 @@
         cargarPuntosAdmin();
       } catch (err) { toast(err.message, "err"); }
     });
+    function cerrarUiModal() { $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; $("uiModalBg").onclick = null; }
+    function editarPena(id) {
+      api("/admin/penas").then(function (d) {
+        var p = d.items.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+        var campos = [["nombre", "Nombre", p.nombre], ["ciudad", "Ciudad", p.ciudad], ["pais_iso", "País (código, ej. PY)", p.pais_iso], ["presidente", "Quién preside", p.presidente], ["contacto", "Correo de contacto", p.contacto]];
+        $("uiModalBox").innerHTML = '<button class="close" data-no>×</button><h3>Datos de la peña</h3>' +
+          campos.map(function (c) { return '<label class="muted" style="display:block;font-size:13px;margin:10px 0 4px" for="pe_' + c[0] + '">' + c[1] + '</label><input id="pe_' + c[0] + '" value="' + esc(c[2] || "") + '" maxlength="120" />'; }).join("") +
+          '<div class="row-actions" style="justify-content:flex-end;margin-top:16px"><button class="btn btn-ghost" data-no>Cancelar</button><button class="btn" id="peGuardar">Guardar</button></div>';
+        $("uiModalBg").hidden = false;
+        $("uiModalBg").onclick = function (ev) { if (ev.target === $("uiModalBg") || ev.target.closest("[data-no]")) cerrarUiModal(); };
+        $("peGuardar").onclick = async function () {
+          var body = {}; campos.forEach(function (c) { body[c[0]] = $("pe_" + c[0]).value; });
+          try { await api("/admin/penas/" + encodeURIComponent(id), { method: "PATCH", body: body }); cerrarUiModal(); toast("Datos guardados"); cargarPenasAdmin(); }
+          catch (err) { toast(err.message, "err"); }
+        };
+      }).catch(function (err) { toast(err.message, "err"); });
+    }
+    var ESTADO_CUOTA = { al_dia: "Al día", en_mora: "En mora", sin_dato: "Sin dato" };
+    async function verPadronPena(id, nombre) {
+      var r = await api("/admin/penas/" + encodeURIComponent(id) + "/miembros");
+      var filas = r.items.slice(0, 300);
+      infoModal("Padrón · " + nombre, '<p class="muted" style="font-size:13px">' + r.items.length + ' personas en el listado del club. El estado de la cuota lo ves solo vos.' + (r.items.length > filas.length ? ' Se muestran las primeras ' + filas.length + ': el CSV trae todas.' : '') + '</p>' +
+        '<div style="max-height:52vh;overflow:auto"><table class="adm-tabla" style="font-size:13px"><thead><tr><th style="text-align:left">Nombre</th><th>Cédula</th><th>N° socio</th><th>Cuota</th><th>Cuenta</th></tr></thead><tbody>' +
+        filas.map(function (m) { return '<tr><td>' + esc(m.nombre) + '</td><td>' + esc(m.cedula || "—") + '</td><td>' + esc(m.nro_socio || "—") + '</td><td>' + esc(ESTADO_CUOTA[m.estado_cuota] || "") + '</td><td>' + (m.socio_id ? "sí" : "no") + '</td></tr>'; }).join("") + '</tbody></table></div>' +
+        '<div class="row-actions" style="margin-top:12px"><button class="btn btn-sm btn-ghost" id="padCsv">Descargar CSV</button></div>');
+      $("padCsv").onclick = async function () {
+        try {
+          var res = await fetch("/api/admin/penas/" + encodeURIComponent(id) + "/miembros?format=csv", { headers: { "x-admin-token": getToken(), "x-admin-key": getKey() } });
+          if (!res.ok) { var j = await res.json().catch(function () { return {}; }); throw new Error(j.error || "No se pudo descargar"); }
+          var blob = await res.blob(), a = document.createElement("a");
+          a.href = URL.createObjectURL(blob); a.download = "padron-" + nombre.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".csv"; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+        } catch (err) { toast(err.message, "err"); }
+      };
+    }
     $("penasWrap").addEventListener("click", async function (e) {
       var b = e.target.closest("button"); if (!b) return;
       try {
@@ -2171,6 +2208,10 @@
           var r = await api("/admin/penas/" + encodeURIComponent(b.dataset.penaver) + "/verificar", { method: "POST" });
           if (r.correo_enviado) toast("Peña verificada. Le mandamos el acceso por correo.");
           else infoModal("Peña verificada", '<p class="muted">No se pudo mandar el correo. Pasale este link a la comisión (sirve una vez, vence en 7 días):</p><p style="word-break:break-all"><b>' + esc(r.url_clave || "") + '</b></p>');
+        } else if (b.dataset.penaed) {
+          editarPena(b.dataset.penaed); return;
+        } else if (b.dataset.penapad) {
+          await verPadronPena(b.dataset.penapad, b.dataset.n); return;
         } else if (b.dataset.penaacc) {
           var r2 = await api("/admin/penas/" + encodeURIComponent(b.dataset.penaacc) + "/acceso", { method: "POST" });
           if (r2.correo_enviado) toast("Acceso reenviado por correo."); else infoModal("Nuevo acceso", '<p style="word-break:break-all"><b>' + esc(r2.url_clave || "") + '</b></p>');

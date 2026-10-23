@@ -113,7 +113,7 @@
         <button class="btn btn-ghost" id="copiarBtn" style="margin-top:8px">Copiar link</button>
         <p class="pen-muted" id="linkNota" style="margin:12px 0 0"></p>
       </div>
-      <div class="pen-card">
+      <div class="pen-card" id="fondoCard" hidden>
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3 style="margin:0">Fondo de la peña</h3><span class="pen-saldo" id="saldo"></span></div>
         <p class="pen-muted" id="fondoNota" style="margin:6px 0 8px"></p>
         <div id="mov"></div>
@@ -165,10 +165,11 @@
       $("quien").textContent = d.pena.ciudad || "";
       $("kick").textContent = "Panel de la comisión · verificada" + (d.ranking ? " · #" + d.ranking + " del ranking" : "");
       $("nombre").textContent = d.pena.nombre;
-      $("kpis").innerHTML = [["Hinchas que se sumaron", d.kpis.altas], ["Socios del club", d.kpis.socios], ["Pagan Plus o Junior", d.kpis.plus], ["Saldo del fondo", gs(d.kpis.saldo)]]
+      $("kpis").innerHTML = [["Hinchada de la peña", d.kpis.hinchada], ["Se sumaron a la app", d.kpis.altas], ["Socios del club", d.kpis.socios], ["Pagan Plus", d.kpis.plus]]
         .map(function (k) { return '<div class="pen-kpi"><b>' + esc(k[1]) + '</b><span>' + esc(k[0]) + '</span></div>'; }).join("");
       $("link").textContent = d.link;
-      $("linkNota").textContent = "Cada alta por este link o su QR queda en la peña. El " + d.pct + "% de lo que esos hinchas pagan por Pagopar va al fondo.";
+      $("linkNota").textContent = "Cada alta por este link o su QR queda en la peña.";
+      $("fondoCard").hidden = !d.fondo_activo; // el fondo del 10 % está apagado: la peña va a tener una recompensa por puntos
       try { var qr = qrcode(0, "M"); qr.addData(d.link); qr.make(); $("qr").src = qr.createDataURL(5, 2); } catch (e) {}
       $("copiarBtn").onclick = function () { navigator.clipboard.writeText(d.link).then(function () { $("copiarBtn").textContent = "¡Copiado!"; setTimeout(function () { $("copiarBtn").textContent = "Copiar link"; }, 1500); }); };
       $("altas").innerHTML = d.ultimas_altas.length ? d.ultimas_altas.map(function (a) {

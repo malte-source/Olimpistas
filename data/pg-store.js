@@ -1330,13 +1330,62 @@ function createPgStore({ databaseUrl, debug }) {
       if (estado) conds.push(sql`p.estado = ${estado}`);
       if (id) conds.push(sql`p.id = ${id}`);
       const where = conds.length ? sql`WHERE ${conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`))}` : sql``;
-      return sql`SELECT p.*,
+      return sql`SELECT t.*, (t.miembros + t.altas - t.vinculados) AS hinchada FROM (SELECT p.*,
+          (SELECT COUNT(*) FROM pena_miembros m WHERE m.pena_id = p.id)::int AS miembros,
+          (SELECT COUNT(*) FROM pena_miembros m JOIN socios s ON s.id = m.socio_id AND s.pena_id = p.id WHERE m.pena_id = p.id)::int AS vinculados,
           (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id)::int AS altas,
           (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id AND s.es_socio_olimpia)::int AS socios,
           (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id AND EXISTS
              (SELECT 1 FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug IN ('premium','kids')))::int AS plus,
           COALESCE((SELECT SUM(-mv.monto) FROM pena_movimientos mv WHERE mv.pena_id = p.id AND mv.motivo = 'canje' AND mv.estado = 'pendiente'), 0)::int AS canje_pendiente
-        FROM penas p ${where} ORDER BY altas DESC, p.creado ASC`;
+        FROM penas p ${where}) t ORDER BY hinchada DESC, t.creado ASC`;
+    },
+    // ── Padrón de las peñas (migración 0013): el listado oficial de miembros, aparte de las cuentas de Olimpistas ──
+    // El estado de la cuota (al día / en mora) es dato del club: solo lo ve el admin, nunca la comisión de la peña.
+    // Idempotente: la misma cédula en la misma peña se actualiza, no se duplica. Quien no tiene cédula se identifica por nombre.
+    async importarMiembrosPena(penaId, filas, fuente = "") {
+      let nuevos = 0, actualizados = 0;
+      for (let i = 0; i < filas.length; i += 400) {
+        const lote = filas.slice(i, i + 400).map((f, k) => ({
+          id: uid("pmb"), pena_id: penaId, cedula: String(f.cedula || ""), nombre: String(f.nombre || "").trim(), nro_socio: String(f.nro_socio || ""),
+          estado_cuota: ["al_dia", "en_mora", "sin_dato"].includes(f.estado_cuota) ? f.estado_cuota : "sin_dato", orden: Number.isFinite(f.orden) ? f.orden : i + k, fuente,
+        }));
+        const con = lote.filter((x) => x.cedula), sin = lote.filter((x) => !x.cedula);
+        if (con.length) {
+          const r = await sql`INSERT INTO pena_miembros ${sql(con)} ON CONFLICT (pena_id, cedula) WHERE cedula <> '' DO UPDATE
+            SET nombre = EXCLUDED.nombre, nro_socio = EXCLUDED.nro_socio, estado_cuota = EXCLUDED.estado_cuota, orden = EXCLUDED.orden, fuente = EXCLUDED.fuente, actualizado = now()
+            RETURNING (xmax = 0) AS nuevo`;
+          r.forEach((x) => (x.nuevo ? nuevos++ : actualizados++));
+        }
+        if (sin.length) {
+          const r = await sql`INSERT INTO pena_miembros ${sql(sin)} ON CONFLICT (pena_id, nombre) WHERE cedula = '' DO UPDATE
+            SET nro_socio = EXCLUDED.nro_socio, estado_cuota = EXCLUDED.estado_cuota, orden = EXCLUDED.orden, fuente = EXCLUDED.fuente, actualizado = now()
+            RETURNING (xmax = 0) AS nuevo`;
+          r.forEach((x) => (x.nuevo ? nuevos++ : actualizados++));
+        }
+      }
+      return { nuevos, actualizados };
+    },
+    // Vincula el padrón con las cuentas (misma cédula) y le da su peña a quien no tiene ninguna: la PRIMERA según el orden del informe.
+    // Con { socioId } solo mira esa cuenta (se llama cuando alguien carga o valida su cédula).
+    async sincronizarMiembrosPena({ socioId } = {}) {
+      const solo = socioId ? sql`AND s.id = ${socioId}` : sql``;
+      const v = await sql`UPDATE pena_miembros m SET socio_id = s.id FROM socios s
+        WHERE m.socio_id IS NULL AND m.cedula <> '' AND regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g') = m.cedula ${solo} RETURNING m.id`;
+      const a = await sql`UPDATE socios s SET pena_id = x.pena_id FROM (
+          SELECT DISTINCT ON (m.socio_id) m.socio_id, m.pena_id FROM pena_miembros m JOIN penas p ON p.id = m.pena_id AND p.estado = 'verificada'
+          WHERE m.socio_id IS NOT NULL ORDER BY m.socio_id, m.orden, m.creado) x
+        WHERE s.id = x.socio_id AND s.pena_id IS NULL ${solo} RETURNING s.id`;
+      return { vinculados: v.length, asignados: a.length };
+    },
+    async resumenMiembrosPena() {
+      return sql`SELECT pena_id, COUNT(*)::int AS miembros, COUNT(socio_id)::int AS con_cuenta,
+          COUNT(*) FILTER (WHERE estado_cuota = 'al_dia')::int AS al_dia, COUNT(*) FILTER (WHERE estado_cuota = 'en_mora')::int AS en_mora, COUNT(*) FILTER (WHERE estado_cuota = 'sin_dato')::int AS sin_dato
+        FROM pena_miembros GROUP BY pena_id`;
+    },
+    async listarMiembrosPena(penaId) {
+      return sql`SELECT m.id, m.cedula, m.nombre, m.nro_socio, m.estado_cuota, m.orden, m.fuente, m.socio_id, m.actualizado, (s.pena_id = m.pena_id) AS es_su_pena
+        FROM pena_miembros m LEFT JOIN socios s ON s.id = m.socio_id WHERE m.pena_id = ${penaId} ORDER BY m.nombre`;
     },
     async ultimasAltasPena(penaId, limit = 8) {
       return sql`SELECT s.id, s.nombre, s.apellido, s.ciudad, s.creado, coalesce(m.tier_slug, 'olimpista') AS tier_slug

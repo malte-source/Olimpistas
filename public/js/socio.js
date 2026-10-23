@@ -298,7 +298,7 @@
       w.push(`<button type="button" class="wg" data-goto="descubrir" data-seg="penas" aria-label="${T("m_wg_pena")}">
         <span class="wg-ic" style="background:#C2410C">${OLI.ic("pena", 22)}</span>
         <span class="wg-t wg-pie">${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</span>
-        <span class="wg-sub">${mia ? "#" + mia.ranking + " · " + mia.altas + " " + T(mia.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</span>
+        <span class="wg-sub">${mia ? "#" + mia.ranking + " · " + (mia.hinchada != null ? mia.hinchada : mia.altas) + " " + T((mia.hinchada != null ? mia.hinchada : mia.altas) === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</span>
       </button>`);
     }
     w.push(`<button type="button" class="wg wg-negro" data-goto="carnet" aria-label="${T("tab_carnet")}">
@@ -1061,25 +1061,34 @@
     }));
   }
 
-  // ─── Peñas: ranking, sumarse, compartir el link y pedir una peña nueva ───────────
+  // ─── Peñas: tu peña, elegir una (buscador, orden, las más cercanas), ranking, compartir y pedir una peña nueva ───────────
+  // Escritorio: dos columnas (la lista a la izquierda; a la derecha tu peña, las más grandes y el pedido de una nueva).
   async function vPenas() {
     cv().innerHTML = skeleton(3);
     let d;
     try { d = await api("/penas"); } catch (e) { cv().innerHTML = vacio(T("m_error_generico")); return; }
-    const items = Array.isArray(d.items) ? d.items : [];
-    const mia = items.find((p) => p.es_tuya);
+    const todas = Array.isArray(d.items) ? d.items : [];
+    const mia = todas.find((p) => p.es_tuya) || null;
     const link = (p) => location.origin + "/?pena=" + encodeURIComponent(p.slug);
-    cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      <p class="lead">${T("m_pena_p")}</p>
-      ${mia ? `<div class="pena-mia"><b>${esc(mia.nombre)}</b><span class="muted"> · ${T("m_pena_tuya")}</span>
-        <p class="muted" style="font-size:13px;margin:6px 0 10px">${T("m_pena_link_p")}</p>
-        <div class="pena-acc"><button class="btn btn-sm" id="penaCompartir">${T("m_pena_compartir")}</button><button class="btn btn-ghost btn-sm" id="penaDejar">${T("m_pena_dejar")}</button></div></div>` : ""}
-      <div class="pena-lista">${items.length ? items.map((p) => `<div class="pena-fila">
-          <span class="pena-rk">${p.ranking}</span>
-          <div class="pena-nm"><b>${esc(p.nombre)}</b><span class="muted">${esc(p.ciudad || "")} · ${p.altas} ${T(p.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas")}</span></div>
-          ${p.es_tuya ? `<span class="chip on">${T("m_pena_tuya_chip")}</span>` : `<button class="btn btn-sm btn-ghost" data-pena="${esc(p.id)}">${T("m_pena_sumarme")}</button>`}
-        </div>`).join("") : vacio(T("m_pena_vacio"))}</div>
-      <details class="pena-sol"><summary>${T("m_pena_solicitar")}</summary>
+    const norm = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const ciudadSocio = norm(SESSION && SESSION.socio && SESSION.socio.ciudad);
+    const enMiCiudad = (p) => !!(ciudadSocio && norm(p.ciudad) === ciudadSocio);
+    const nHinchas = (p) => (p.hinchada != null ? p.hinchada : p.altas) || 0;
+    const hinchasTxt = (p) => nHinchas(p).toLocaleString(LOC) + " " + T(nHinchas(p) === 1 ? "m_pena_hincha" : "m_pena_hinchas");
+    const lugar = (p) => [p.ciudad, p.pais_iso && p.pais_iso !== "PY" ? p.pais_iso : ""].filter(Boolean).join(", ") || T("pn_sin_ciudad");
+    const inicial = (p) => esc(String(p.nombre || "?").replace(/^peña\s+/i, "").trim().charAt(0).toUpperCase());
+
+    const heroMia = mia ? `<section class="pn-hero" data-ini="${inicial(mia)}">
+        <span class="pn-hero-eb">${T("pn_tu")}</span>
+        <h3>${esc(mia.nombre)}</h3>
+        <p class="pn-hero-sub">${esc(lugar(mia))} · #${mia.ranking} · ${esc(hinchasTxt(mia))}</p>
+        <p class="pn-hero-p">${T("m_pena_link_p")}</p>
+        <div class="pn-hero-acc"><button type="button" class="btn" id="penaCompartir">${T("m_pena_compartir")}</button><button type="button" class="btn btn-ghost" id="penaDejar">${T("m_pena_dejar")}</button></div>
+      </section>` : `<section class="pn-elegi"><h3>${T("pn_elegi")}</h3><p>${T("pn_elegi_p")}</p><button type="button" class="btn btn-ghost" id="penaCerca">${T("pn_cerca_btn")}</button></section>`;
+
+    const top = todas.slice().sort((a, b) => nHinchas(b) - nHinchas(a)).slice(0, 5);
+    const rankingCard = top.length ? `<div class="pn-top"><h3>${T("pn_top")}</h3>${top.map((p, i) => `<button type="button" class="pn-top-fila" data-pena-det="${esc(p.id)}"><span class="pn-top-n">${i + 1}</span><span class="pn-top-t"><b>${esc(p.nombre)}</b><small>${esc(hinchasTxt(p))}</small></span></button>`).join("")}</div>` : "";
+    const solicitud = `<details class="pena-sol"><summary>${T("m_pena_solicitar")}</summary>
         <p class="muted" style="font-size:13px;margin:8px 0">${T("m_pena_sol_p")}</p>
         <form id="penaSolForm" class="pena-form">
           <input name="nombre" placeholder="${T("m_pena_f_nombre")}" maxlength="80" required />
@@ -1087,26 +1096,95 @@
           <input name="presidente" placeholder="${T("m_pena_f_presi")}" maxlength="80" required />
           <input name="contacto" type="email" placeholder="${T("m_pena_f_email")}" maxlength="120" required />
           <button class="btn btn-block" type="submit">${T("m_pena_enviar")}</button>
-        </form></details>
-    </div>`;
-    cv().querySelectorAll("[data-pena]").forEach((b) => b.addEventListener("click", async () => {
-      try {
-        const r = await api("/perfil", { method: "PATCH", body: { pena_id: b.dataset.pena } });
-        if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = r.socio.pena_id;
-        toast(T("m_pena_sumada"));
-        vPenas();
-      } catch (e) { toast(e.message); }
-    }));
+        </form></details>`;
+
+    cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <p class="lead">${T("m_pena_p")}</p>
+      <div class="pn">
+        <div class="pn-main">
+          ${heroMia}
+          <div class="bx-bar pn-bar">
+            <label class="bx-busca">${OLI.ic("buscar", 18)}<input type="search" id="pnQ" autocomplete="off" placeholder="${esc(T("pn_buscar"))}" aria-label="${esc(T("pn_buscar"))}"></label>
+            <div class="bx-ctl"><select id="pnOrden" class="bx-orden" aria-label="${esc(T("bx_orden"))}" style="margin-left:0"><option value="grandes">${T("pn_o_grandes")}</option><option value="az">${T("bx_o_az")}</option></select>
+              <p class="bx-n" id="pnN" aria-live="polite" style="margin-left:auto"></p></div>
+          </div>
+          <div class="pn-lista" id="pnLista"></div>
+        </div>
+        <aside class="pn-side">${rankingCard}${solicitud}</aside>
+      </div></div>`;
+
+    // Lista: buscador y orden. "Las más cercanas" (con la distancia) reordena y reemplaza el orden por tamaño.
+    const st = { q: "", orden: "grandes", cerca: null };
+    const lista = cv().querySelector("#pnLista"), nEl = cv().querySelector("#pnN");
+    const card = (p) => `<button type="button" class="pn-card${p.es_tuya ? " mia" : ""}" data-pena-det="${esc(p.id)}">
+        <span class="pn-av" aria-hidden="true">${inicial(p)}</span>
+        <span class="pn-tx"><b>${esc(p.nombre)}</b><small>${esc(lugar(p))}${p.distancia_km != null ? " · " + T("pn_km").replace("{km}", p.distancia_km.toLocaleString(LOC)) : ""}</small>
+          <span class="pn-meta"><span class="bx-tag">${esc(hinchasTxt(p))}</span><span class="bx-tag">#${p.ranking}</span>${enMiCiudad(p) ? `<span class="ben-loc">${T("pn_en_ciudad")}</span>` : ""}</span></span>
+        ${p.es_tuya ? `<span class="chip on">${T("m_pena_tuya_chip")}</span>` : OLI.ic("chevron-derecha", 18).replace('class="ic"', 'class="ic grupo-chev"')}</button>`;
+    const pintar = () => {
+      const toks = norm(st.q).split(/\s+/).filter(Boolean);
+      let a = (st.cerca || todas).filter((p) => !toks.length || toks.every((t) => norm([p.nombre, p.ciudad, p.pais_iso].join(" ")).includes(t)));
+      if (!st.cerca) a = a.slice().sort((x, y) => st.orden === "az" ? String(x.nombre).localeCompare(String(y.nombre), "es") : (enMiCiudad(y) - enMiCiudad(x)) || nHinchas(y) - nHinchas(x));
+      nEl.textContent = a.length + " " + T(a.length === 1 ? "pn_una" : "pn_varias");
+      lista.innerHTML = a.length ? a.map(card).join("") : `<div class="bx-vacio"><p>${todas.length ? T("pn_sin_resultados") : T("m_pena_vacio")}</p></div>`;
+    };
+    let deb = null;
+    cv().querySelector("#pnQ").addEventListener("input", (e) => { clearTimeout(deb); deb = setTimeout(() => { st.q = e.target.value; pintar(); }, 120); });
+    cv().querySelector("#pnOrden").addEventListener("change", (e) => { st.orden = e.target.value; st.cerca = null; pintar(); });
+    pintar();
+
+    // Ficha de la peña: datos, y sumarse (o dejarla) con confirmación.
+    const abrirPena = (p) => {
+      if (!p) return;
+      const { root, close } = OLI.modal(`
+        <p class="ben-hoja-eb">${T("pn_tit")}</p>
+        <div class="bx-hoja-cab"><span class="pn-av grande" aria-hidden="true">${inicial(p)}</span><div><h3 class="ben-hoja-t">${esc(p.nombre)}</h3><p class="ben-hoja-p muted">${esc(lugar(p))}</p></div></div>
+        <dl class="bx-dl"><div><dt>${T("pn_hinchada")}</dt><dd>${esc(hinchasTxt(p))}</dd></div><div><dt>${T("pn_puesto")}</dt><dd>#${p.ranking} ${T("pn_de")} ${todas.length}</dd></div>${p.miembros ? `<div><dt>${T("pn_listado")}</dt><dd>${p.miembros.toLocaleString(LOC)}</dd></div>` : ""}</dl>
+        ${p.es_tuya ? `<p class="ben-hoja-p">${T("pn_ya_sos")}</p>` : `<p class="ben-hoja-p">${T("pn_sumarte_p")}</p>`}
+        ${p.es_tuya ? "" : `<button type="button" class="btn btn-block" id="pnSumar">${T("pn_confirmar")}</button>`}
+        <button type="button" class="btn btn-ghost btn-block" id="pnCerrar">${T("up_cerrar")}</button>`);
+      root.querySelector("#pnCerrar").onclick = close;
+      const sumar = root.querySelector("#pnSumar");
+      if (sumar) sumar.onclick = async () => {
+        sumar.disabled = true;
+        try {
+          const r = await api("/perfil", { method: "PATCH", body: { pena_id: p.id } });
+          if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = r.socio.pena_id;
+          close(); toast(T("m_pena_sumada")); vPenas();
+        } catch (e) { sumar.disabled = false; toast(e.message); }
+      };
+    };
+    cv().querySelectorAll(".pn-top [data-pena-det]").forEach((el) => el.addEventListener("click", () => abrirPena(todas.find((p) => p.id === el.dataset.penaDet))));
+    lista.addEventListener("click", (e) => { const el = e.target.closest("[data-pena-det]"); if (el) abrirPena(todas.find((p) => p.id === el.dataset.penaDet)); });
+
+    // Dejar la peña (con confirmación), compartir su link, y las más cercanas.
     const dejar = cv().querySelector("#penaDejar");
-    if (dejar) dejar.addEventListener("click", async () => {
-      try { const r = await api("/perfil", { method: "PATCH", body: { pena_id: null } }); if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = null; toast(T("m_pena_dejada")); vPenas(); }
-      catch (e) { toast(e.message); }
+    if (dejar && mia) dejar.addEventListener("click", () => {
+      const { root, close } = OLI.modal(`<h3 class="ben-hoja-t">${T("pn_dejar_t").replace("{nombre}", esc(mia.nombre))}</h3><p class="ben-hoja-p">${T("pn_dejar_p")}</p>
+        <button type="button" class="btn btn-block" id="pnSi">${T("m_pena_dejar")}</button><button type="button" class="btn btn-ghost btn-block" id="pnNo">${T("m_cancelar_no")}</button>`);
+      root.querySelector("#pnNo").onclick = close;
+      root.querySelector("#pnSi").onclick = async () => {
+        try { const r = await api("/perfil", { method: "PATCH", body: { pena_id: null } }); if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = null; close(); toast(T("m_pena_dejada")); vPenas(); }
+        catch (e) { toast(e.message); }
+      };
     });
     const comp = cv().querySelector("#penaCompartir");
     if (comp && mia) comp.addEventListener("click", async () => {
       const url = link(mia), txt = T("m_pena_compartir_txt") + " " + mia.nombre;
       try { if (navigator.share) { await navigator.share({ text: txt, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
       try { await navigator.clipboard.writeText(url); toast(T("m_pena_link_copiado")); } catch (e) { toast(url); }
+    });
+    const cerca = cv().querySelector("#penaCerca");
+    if (cerca) cerca.addEventListener("click", () => {
+      if (!navigator.geolocation) return toast(T("m_geo_no"));
+      toast(T("m_ben_ubicando"));
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+          const r = await api("/penas?cerca=" + pos.coords.latitude.toFixed(4) + "," + pos.coords.longitude.toFixed(4));
+          if (!(r.items || []).length) return toast(T("pn_sin_ubicacion"));
+          st.cerca = r.items; pintar();
+        } catch (e) { toast(e.message); }
+      }, () => toast(T("m_geo_err")), { timeout: 8000, maximumAge: 600000 });
     });
     const form = cv().querySelector("#penaSolForm");
     if (form) form.addEventListener("submit", async (e) => {
