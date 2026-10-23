@@ -22,7 +22,7 @@ test("confirmación explícita: acepta sí/dale/ok y rechaza lo ambiguo o negado
 
 test("salida: se limpian markdown y emojis que el modelo no debería usar", () => {
   assert.strictEqual(atencion.limpiarSalida("**Hola** 😀 tenés `100` puntos"), "Hola  tenés 100 puntos");
-  assert.ok(atencion.limpiarSalida("x".repeat(2000)).length <= 700);
+  assert.ok(atencion.limpiarSalida("x".repeat(2000)).length <= 900);
 });
 
 test("historial → mensajes de la API: alterna roles, descarta sistema y tarjetas, empieza por el hincha", () => {

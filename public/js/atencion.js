@@ -10,17 +10,26 @@
     es: {
       abrir: "Atención", titulo: "Atención Olimpistas", ia: "Asistente con IA · responde al instante", humano: "Agente del club · persona",
       asistente: "Asistente · IA", persona: "Atención del club", placeholder: "Escribí tu consulta…", enviar: "Enviar", cerrar: "Cerrar",
-      bienvenida: "Hola, soy el asistente de Olimpistas. Contame en qué te ayudo.", pensando: "El asistente está escribiendo",
-      esperando: "Una persona del club te va a responder acá mismo.", error: "No pudimos enviar tu mensaje. Probá de nuevo.", abrirLink: "Abrir",
+      bienvenida: "Soy el asistente de Olimpistas.\n\nContame en qué te puedo ayudar: miro tus puntos, tus beneficios o te paso con una persona del club.", pensando: "El asistente está escribiendo",
+      esperando: "Una persona del club te va a responder acá mismo.", error: "No pudimos enviar tu mensaje. Probá de nuevo.", abrirLink: "Abrir", verTodos: "Ver todos los beneficios",
     },
     en: {
       abrir: "Support", titulo: "Olimpistas Support", ia: "AI assistant · replies instantly", humano: "Club agent · person",
       asistente: "Assistant · AI", persona: "Club support", placeholder: "Type your question…", enviar: "Send", cerrar: "Close",
-      bienvenida: "Hi, I'm the Olimpistas assistant. Tell me how I can help.", pensando: "The assistant is typing",
-      esperando: "A person from the club will reply right here.", error: "We couldn't send your message. Try again.", abrirLink: "Open",
+      bienvenida: "I'm the Olimpistas assistant.\n\nTell me how I can help: I can check your points, your benefits or pass you to a club agent.", pensando: "The assistant is typing",
+      esperando: "A person from the club will reply right here.", error: "We couldn't send your message. Try again.", abrirLink: "Open", verTodos: "See all benefits",
     },
   }[LANG === "en" ? "en" : "es"];
 
+  // Saludo según la hora y por el primer nombre ("Buenas tardes, Eduardo.").
+  const saludo = (nombre) => {
+    const h = new Date().getHours();
+    const base = LANG === "en" ? (h < 12 ? "Good morning" : h < 19 ? "Good afternoon" : "Good evening") : (h < 12 ? "Buen día" : h < 20 ? "Buenas tardes" : "Buenas noches");
+    return nombre ? base + ", " + nombre + "." : base + ".";
+  };
+  // Los mensajes largos se leen mejor en párrafos: una línea en blanco separa las ideas.
+  const parrafos = (t) => String(t || "").split(/\n{2,}/).map((p) => "<p>" + esc(p.trim()).replace(/\n/g, "<br>") + "</p>").join("");
+  let nombrePila = "";
   let panel = null, lista = null, campo = null, sugBox = null, estado = "ia", abierto = false, timer = null, visto = new Set(), enviando = false;
 
   // Íconos del sprite propio (/assets/icons.svg · 10-iconos.md)
@@ -71,12 +80,21 @@
     visto.add(m.id);
     let h = "";
     if (m.de === "hincha") h = `<div class="atc-msg yo"><div class="atc-b">${esc(m.texto)}</div></div>`;
-    else if (m.de === "ia") h = `<div class="atc-msg ia"><span class="atc-et">${esc(S.asistente)}</span><div class="atc-b">${esc(m.texto)}</div></div>`;
+    else if (m.de === "ia") h = `<div class="atc-msg ia"><span class="atc-et">${esc(S.asistente)}</span><div class="atc-b atc-p">${parrafos(m.texto)}</div></div>`;
     else if (m.de === "humano") h = `<div class="atc-msg hu"><span class="atc-et">${esc(((m.meta && m.meta.agente) || "").replace(/[-_.]+/g, " ") || S.persona)} · ${esc(S.persona)}</span><div class="atc-b">${esc(m.texto)}</div></div>`;
     else if (m.de === "sistema") h = `<div class="atc-sis">${esc(m.texto)}</div>`;
     else if (m.de === "tarjeta") {
       const t = m.meta || {}, url = typeof t.url === "string" && /^(\/|https:\/\/)/.test(t.url) ? t.url : "";
       const ic = t.tipo === "derivado" ? ICO.persona : t.tipo === "pago_subasta" ? ICO.pago : ICO.check;
+      // Beneficios destacados: mini tarjetas con logo, comercio y descuento (el asistente los nombra y acá se ven).
+      if (t.tipo === "beneficios" && Array.isArray(t.items) && t.items.length) {
+        const filas = t.items.slice(0, 3).map((x) => {
+          const logo = typeof x.logo === "string" && /^\/assets\//.test(x.logo) ? `<span class="atc-bl"><img src="${esc(x.logo)}" alt="" loading="lazy"></span>` : `<span class="atc-bl ini" aria-hidden="true">${esc(String(x.comercio || "?").charAt(0).toUpperCase())}</span>`;
+          return `<div class="atc-bf">${logo}<span class="atc-bt"><b>${esc(x.comercio)}</b><small>${esc(x.dias || "")}</small></span><span class="atc-bv${x.bloqueado ? " lock" : ""}">${esc(x.valor)}</span></div>`;
+        }).join("");
+        lista.insertAdjacentHTML("beforeend", `<div class="atc-bens"><span class="atc-bens-t">${esc(m.texto)}</span>${filas}${url ? `<a data-tj class="atc-tj-a atc-bens-a" href="${esc(url)}">${esc(S.verTodos)}</a>` : ""}</div>`);
+        return;
+      }
       h = `<div class="atc-tj"><span class="atc-tj-ic">${ic}</span><span class="atc-tj-t">${esc(m.texto)}</span>${url ? `<a data-tj class="atc-tj-a" href="${esc(url)}"${/^https:/.test(url) ? ' target="_blank" rel="noopener"' : ""}>${esc(S.abrirLink)}</a>` : ""}</div>`;
     }
     lista.insertAdjacentHTML("beforeend", h);
@@ -92,7 +110,8 @@
       const d = await api("/atencion/chat");
       estado = d.conversacion ? d.conversacion.estado : "ia";
       lista.innerHTML = ""; visto = new Set();
-      if (!d.mensajes.length) lista.insertAdjacentHTML("beforeend", `<div class="atc-msg ia"><span class="atc-et">${esc(S.asistente)}</span><div class="atc-b">${esc(S.bienvenida)}</div></div>`);
+      nombrePila = d.nombre || "";
+      if (!d.mensajes.length) lista.insertAdjacentHTML("beforeend", `<div class="atc-msg ia"><span class="atc-et">${esc(S.asistente)}</span><div class="atc-b atc-p">${parrafos(saludo(nombrePila) + "\n\n" + S.bienvenida)}</div></div>`);
       d.mensajes.forEach(burbuja);
       pintarSugerencias(d.mensajes.length ? [] : d.sugerencias);
       pintarEstado(); abajo();
@@ -119,6 +138,7 @@
       const propio = d.mensajes.find((m) => m.de === "hincha"); if (propio) visto.add(propio.id);
       d.mensajes.filter((m) => m.de !== "hincha").forEach(burbuja);
       estado = d.estado; pintarEstado();
+      pintarSugerencias(estado === "humano" ? [] : d.sugerencias);
       if (estado === "humano") { if (!d.mensajes.some((m) => m.de !== "hincha")) burbuja({ id: "esp-" + Date.now(), de: "sistema", texto: S.esperando }); esperar(); }
       abajo();
     } catch (e) { escribiendo(false); toast(e.message || S.error); }

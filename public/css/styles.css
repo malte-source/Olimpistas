@@ -1699,3 +1699,88 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
   #view .btn-sm { min-height: 44px; }
   .seg-b { min-height: 44px; }
 }
+
+/* ── Inicio PRO: hero con el carnet a un toque, beneficios destacados, lo que cierra pronto y tu resumen ── */
+.ih { display: flex; flex-direction: column; gap: 22px; }
+.ih-main, .ih-side { display: contents; }
+.ih-hero { order: 1; }
+.ih-side > .ih-res { order: 2; }
+.ih-main > .ih-rail { order: 3; }
+.ih-main > .ih-vivo { order: 4; }
+.ih-side > .ih-reto { order: 5; }
+.ih-main > .ih-nov { order: 6; }
+.ih-side > .ih-pf { order: 7; }
+.ih-side > .socio-banner { order: 8; margin-top: 0 !important; }
+
+.ih-hero { position: relative; overflow: hidden; isolation: isolate; padding: 24px 18px 18px; border-radius: var(--r-28); color: #fff; background: linear-gradient(145deg, #0a0a0a 0%, #1c1c21 58%, #2b2b32 100%); }
+.ih-hero::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px; background: repeating-linear-gradient(90deg, #fff 0 18px, #0a0a0a 18px 36px); }
+.ih-hero::after { content: ""; position: absolute; right: -70px; top: -70px; z-index: -1; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(closest-side, rgba(217, 182, 90, .22), transparent); }
+.ih-eb { display: block; margin-top: 6px; font-size: var(--t-11); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--oro-claro); }
+.ih-hi { margin: 8px 0 4px; font: 800 var(--t-34) / 1.05 var(--display); letter-spacing: -.03em; color: #fff; }
+.ih-lead { margin: 0; font-size: var(--t-17); line-height: 1.35; color: rgba(255, 255, 255, .84); }
+.ih-somos { display: inline-block; margin-top: 12px; padding: 6px 12px; border-radius: var(--r-pill); background: rgba(255, 255, 255, .12); font-size: var(--t-12); font-weight: 600; color: rgba(255, 255, 255, .88); }
+.ih-carnet { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 18px; padding: 12px 12px 12px 14px; border: 0; border-radius: var(--r-22); background: #fff; color: #0a0a0a; text-align: left; font: inherit; cursor: pointer; box-shadow: 0 16px 32px -18px rgba(0, 0, 0, .7); transition: transform .15s var(--ease); }
+.ih-carnet:hover { transform: translateY(-2px); }
+.ih-carnet:focus-visible, .ih-pena:focus-visible, .ih-reto:focus-visible, .ih-ver:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.ih-c-esc { flex: none; width: 44px; height: 44px; }
+.ih-c-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ih-c-tx b { font-size: var(--t-15); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ih-c-tx small { font-size: var(--t-12); color: #6b6b70; }
+.ih-c-qr { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 11px; border-radius: var(--r-14); background: #0a0a0a; color: #fff; }
+.ih-c-qr i { font-style: normal; font-size: var(--t-11); font-weight: 700; white-space: nowrap; }
+
+.ih-b { min-width: 0; }
+.ih-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 10px; }
+.ih-h h3 { margin: 0; font: 700 var(--t-20) / 1.2 var(--display); letter-spacing: -.02em; }
+.ih-ver { min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: var(--t-13); font-weight: 700; cursor: pointer; }
+.ih-res-g { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ih-res-g .wg-2 { grid-column: 1 / -1; }
+.ih-vivo .destacado { margin: 0; }
+
+.ih-pena { position: relative; overflow: hidden; isolation: isolate; display: flex; flex-direction: column; gap: 2px; min-height: 176px; padding: 16px; border: 0; border-radius: var(--r-26); text-align: left; font: inherit; color: var(--text-primary); background: var(--surface-card); cursor: pointer; }
+.ih-pena.mia { color: #fff; background: linear-gradient(145deg, #0a0a0a, #1f1f25); }
+.ih-pena.mia::after { content: attr(data-ini); position: absolute; right: -4px; bottom: -26px; z-index: -1; font: 800 120px / 1 var(--display); color: rgba(255, 255, 255, .07); pointer-events: none; }
+.ih-pena-eb { font-size: var(--t-11); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--text-secondary); }
+.ih-pena.mia .ih-pena-eb { color: var(--oro-claro); }
+.ih-pena b { margin-top: 6px; font: 700 var(--t-17) / 1.15 var(--display); }
+.ih-pena small { font-size: var(--t-13); line-height: 1.35; color: var(--text-secondary); }
+.ih-pena.mia small { color: rgba(255, 255, 255, .78); }
+.ih-pena-go { margin-top: auto; padding-top: 10px; font-size: var(--t-13); font-weight: 700; }
+
+.ih-reto { display: flex; flex-direction: column; gap: 8px; padding: 18px; border: 0; border-radius: var(--r-26); text-align: left; font: inherit; color: var(--text-primary); background: var(--surface-card); box-shadow: inset 0 0 0 1.5px var(--text-primary); cursor: pointer; }
+.ih-reto-eb { font-size: var(--t-11); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--text-secondary); }
+.ih-reto b { font: 700 var(--t-17) / 1.25 var(--display); }
+.ih-reto-cta { font-size: var(--t-13); font-weight: 700; }
+.ih-nov .ini-feed { margin-top: 0; }
+.ih-pf .progreso { margin: 0; }
+
+@media (min-width: 1180px) {
+  .ih { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
+  .ih-main, .ih-side { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .ih-hero, .ih-side > *, .ih-main > * { order: 0; }
+  .ih-side { position: sticky; top: 24px; }
+  .ih-hero { padding: 32px 28px 24px; }
+  .ih-hi { font-size: var(--t-40); }
+}
+@media (prefers-reduced-motion: reduce) { .ih-carnet { transition: none; } .ih-carnet:hover { transform: none; } }
+
+/* Chat: los mensajes del asistente van en párrafos con aire entre ideas. */
+.atc-b.atc-p { white-space: normal; }
+.atc-b.atc-p p { margin: 0 0 .75em; }
+.atc-b.atc-p p:last-child { margin-bottom: 0; }
+.atc-b { line-height: 1.5; }
+@media (max-width: 420px) { .ih-c-qr i { display: none; } .ih-c-qr { padding: 10px; } .ih-c-tx small { white-space: normal; } }
+
+/* Chat: tarjeta de beneficios destacados (logo, comercio y descuento). */
+.atc-bens { display: flex; flex-direction: column; gap: 8px; max-width: 92%; padding: 12px; border-radius: var(--r-14); background: var(--surface-card); border: 1px solid var(--border-default); }
+.atc-bens-t { font-size: var(--t-11); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); }
+.atc-bf { display: flex; align-items: center; gap: 10px; }
+.atc-bl { flex: none; width: 40px; height: 40px; display: grid; place-items: center; overflow: hidden; border-radius: var(--r-12); background: #0a0a0a; }
+.atc-bl img { max-width: 80%; max-height: 62%; object-fit: contain; }
+.atc-bl.ini { color: #fff; font: 800 var(--t-17) / 1 var(--display); }
+.atc-bt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.atc-bt b { font-size: var(--t-13); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atc-bt small { font-size: var(--t-12); color: var(--text-secondary); }
+.atc-bv { flex: none; padding: 5px 10px; border-radius: var(--r-12); background: #0a0a0a; color: #fff; font: 800 var(--t-13) / 1 var(--display); }
+.atc-bv.lock { background: var(--card2); color: var(--text-secondary); }
+.atc-bens-a { align-self: flex-start; margin-top: 2px; }
