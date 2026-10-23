@@ -266,6 +266,7 @@ app.get("/legal", sendPage("legal.html"));
 app.get("/reset", sendPage("reset.html"));           // página para crear nueva contraseña
 app.get("/admin", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "admin.html")); });
 app.get("/comercio", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "comercio.html")); });
+app.get("/guia-comercio", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "guia-comercio.html")); }); // guía de una página para el cajero (imprimible)
 app.get("/ayuda", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "ayuda.html")); }); // centro de ayuda
 app.get("/pena", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "pena.html")); }); // panel de la comisión de una peña
 app.get("/socio", (_req, res) => res.redirect(301, "/miembro")); // compat: links viejos
