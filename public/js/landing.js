@@ -21,7 +21,7 @@
     document.getElementById("heroSub").textContent = fld(CONFIG.brand, "bajada");
     document.getElementById("heroCta").textContent = fld(CONFIG.brand, "ctaPrincipal");
     const heroStatNiveles = document.getElementById("heroStatNiveles");
-    if (heroStatNiveles) heroStatNiveles.textContent = CONFIG.tiers.length;
+    if (heroStatNiveles) heroStatNiveles.textContent = CONFIG.tiers.filter((t) => !t.oculto).length;
     renderTiers();
     renderNav();
     wireModal();
@@ -410,7 +410,7 @@
   function renderTiers() {
     const cont = document.getElementById("tiers");
     const previewQR = makeQR("https://olimpistas.olimpia.com"); // QR genérico para la vista previa
-    cont.innerHTML = CONFIG.tiers.filter((t) => t.comprable !== false).map((t) => {
+    cont.innerHTML = CONFIG.tiers.filter((t) => t.comprable !== false && !t.oculto).map((t) => {
       const p = precioTier(t, CONFIG.brand.usdRate);
       const bullets = fld(t, "beneficios").map((b) => `<li>${esc(b)}</li>`).join("");
       const carnetHtml = carnet({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre",
