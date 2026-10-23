@@ -1638,3 +1638,6 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
   .bx-bar { position: sticky; top: 0; z-index: 4; padding: 8px 0; background: var(--surface-grouped, var(--surface-page)); }
 }
 @media (prefers-reduced-motion: reduce) { .bx-ban, .bx-card { transition: none; } .bx-ban:hover, .bx-card:hover { transform: none; } }
+
+/* Escudo del club en su versión correcta (no el negativo): sobre fondos oscuros va en un círculo blanco para que se vea completo. */
+.escudo-ok { box-sizing: border-box; padding: 3px; border-radius: 50%; background: #fff; object-fit: contain; }
