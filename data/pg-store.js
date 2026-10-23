@@ -10,6 +10,7 @@
 const crypto = require("crypto");
 const postgres = require("postgres");
 
+const ciudadesLib = require("../lib/ciudades");
 const SEED_DOMAIN = "demo.olimpistas.test"; // filas de demo (no cuentan como miembros reales)
 
 function uid(prefix) { return `${prefix}_${crypto.randomBytes(8).toString("hex")}`; }
@@ -60,7 +61,9 @@ function createPgStore({ databaseUrl, debug }) {
   // reutilizarla después sale ECONNRESET. 1800s (30min) recicla la conexión DESDE el
   // cliente antes de que el servidor tenga chance de hacerlo por su cuenta.
   const DB_MAX_LIFETIME = Number(process.env.DB_MAX_LIFETIME || 1800);
-  const sqlRaw = postgres(databaseUrl, { max: DB_POOL_MAX, idle_timeout: 20, max_lifetime: DB_MAX_LIFETIME, connect_timeout: 10, prepare: false, ssl: process.env.DB_SSL === "disable" ? false : "require", ...(debug ? { debug } : {}) });
+  // Las columnas `date` (cierre de sorteos, fecha de nacimiento, vigencias) se leen como texto 'AAAA-MM-DD', igual que en memory-store y como
+  // espera todo el código y el frontend. Antes llegaban como objetos Date y `String(cierra).slice(0, 10)` daba "Tue Dec…": ningún sorteo cerraba.
+  const sqlRaw = postgres(databaseUrl, { types: { date: { to: 1082, from: [1082], parse: (x) => x, serialize: (x) => (x instanceof Date ? x.toISOString().slice(0, 10) : x) } }, max: DB_POOL_MAX, idle_timeout: 20, max_lifetime: DB_MAX_LIFETIME, connect_timeout: 10, prepare: false, ssl: process.env.DB_SSL === "disable" ? false : "require", ...(debug ? { debug } : {}) });
 
   // ── Plazo máximo por consulta (caída del 2026-08-09) ───────────────────────
   // `connect_timeout` sólo cubre el momento de conectar: una vez conectada, una consulta
@@ -157,6 +160,7 @@ function createPgStore({ databaseUrl, debug }) {
   // Cache en memoria para listas públicas que cambian poco (sorteos/contenido/preventas):
   // bajo carga de lanzamiento le sacan presión al pool del DB. TTL corto + bust en escritura.
   const _cache = {};
+  let _colsSesion = null; // columnas de socios sin la foto (se lee una vez; ver getSession)
   const cacheado = async (clave, ttl, fn) => {
     const c = _cache[clave];
     if (c && Date.now() - c.t < ttl) return c.v;
@@ -164,7 +168,7 @@ function createPgStore({ databaseUrl, debug }) {
   };
   const cacheBust = (clave) => { delete _cache[clave]; };
 
-  return {
+  const store = {
     kind: "postgres",
     _sql: sql,
 
@@ -293,7 +297,7 @@ function createPgStore({ databaseUrl, debug }) {
     // Filtro de socios por segmento (tier actual, país, validó socio, sin foto, texto).
     async filtrarSocios(f = {}) {
       const dom = "%@" + SEED_DOMAIN;
-      const lim = Math.min(Number(f.limit) || 500, 5000);
+      const lim = f.paraEnvio ? 200000 : Math.min(Number(f.limit) || 500, 5000);
       const conds = [sql`s.email NOT LIKE ${dom}`];
       if (f.paisIso) conds.push(sql`s.pais_iso = ${String(f.paisIso).toUpperCase()}`);
       if (f.validoSocio) conds.push(sql`s.es_socio_olimpia = true`);
@@ -309,6 +313,12 @@ function createPgStore({ databaseUrl, debug }) {
       if (f.tier) conds.push(sql`coalesce(m.tier_slug, 'olimpista') = ${f.tier}`);
       if (f.q) { const term = "%" + String(f.q).toLowerCase() + "%"; conds.push(sql`(lower(s.email) LIKE ${term} OR lower(coalesce(s.nombre,'')) LIKE ${term} OR lower(coalesce(s.apellido,'')) LIKE ${term} OR coalesce(s.cedula,'') LIKE ${term})`); }
       const where = conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`));
+      // Destinatarios de una campaña: sin tope y con lo que hace falta para decidir si reciben (baja, teléfono). Nunca se devuelve al navegador.
+      if (f.paraEnvio) return sql`
+        SELECT s.id, s.nombre, s.apellido, s.email, s.telefono, s.whatsapp, s.idioma, s.pais_iso, s.marketing_baja, coalesce(m.tier_slug,'olimpista') AS tier_slug
+        FROM socios s
+        LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
+        WHERE ${where} ORDER BY s.creado ASC LIMIT ${lim}`;
       return sql`
         SELECT s.id, s.nombre, s.apellido, s.email, s.cedula, s.pais, s.pais_iso, s.ciudad, s.es_socio_olimpia, s.gasto_total, s.ultima_actividad,
                (s.foto IS NOT NULL AND s.foto <> '') AS tiene_foto, coalesce(m.tier_slug,'olimpista') AS tier_slug, s.creado
@@ -414,8 +424,8 @@ function createPgStore({ databaseUrl, debug }) {
     async getComercio(id) { const [c] = await sql`SELECT * FROM comercios WHERE id = ${id} LIMIT 1`; return c || null; },
     async crearComercio(d = {}) {
       const id = uid("com");
-      const [c] = await sql`INSERT INTO comercios (id, nombre, rubro, logo, direccion, ciudad, contacto, estado)
-        VALUES (${id}, ${d.nombre || ""}, ${d.rubro || ""}, ${d.logo || ""}, ${d.direccion || ""}, ${d.ciudad || ""}, ${d.contacto || ""}, ${d.estado || "activo"}) RETURNING *`;
+      const [c] = await sql`INSERT INTO comercios (id, nombre, rubro, logo, direccion, ciudad, contacto, estado, lat, lng)
+        VALUES (${id}, ${d.nombre || ""}, ${d.rubro || ""}, ${d.logo || ""}, ${d.direccion || ""}, ${d.ciudad || ""}, ${d.contacto || ""}, ${d.estado || "activo"}, ${d.lat != null ? d.lat : null}, ${d.lng != null ? d.lng : null}) RETURNING *`;
       return c;
     },
     async updateComercio(id, patch) { const [c] = await sql`UPDATE comercios SET ${sql(patch)} WHERE id = ${id} RETURNING *`; return c || null; },
@@ -436,7 +446,7 @@ function createPgStore({ databaseUrl, debug }) {
     // Devuelve TODOS los beneficios activos/vigentes con flag desbloqueado + nivel_min (para
     // mostrarle al socio lo suyo Y lo bloqueado como gancho de upsell).
     async beneficiosParaNivel(tier) {
-      const rows = await sql`SELECT b.*, c.nombre AS comercio_nombre, c.rubro AS comercio_rubro, c.logo AS comercio_logo, c.ciudad AS comercio_ciudad
+      const rows = await sql`SELECT b.*, c.nombre AS comercio_nombre, c.rubro AS comercio_rubro, c.logo AS comercio_logo, c.ciudad AS comercio_ciudad, c.lat AS comercio_lat, c.lng AS comercio_lng
         FROM beneficios b JOIN comercios c ON c.id = b.comercio_id
         WHERE b.activo = true AND b.estado = 'aprobado' AND c.estado = 'activo'
           AND (b.vigencia_desde IS NULL OR b.vigencia_desde <= now()::date)
@@ -519,7 +529,8 @@ function createPgStore({ databaseUrl, debug }) {
       return { canjes: t.canjes, ahorro: Number(t.ahorro), ventas: Number(t.ventas), ticket_promedio: t.con_monto ? Math.round(Number(t.ventas) / t.con_monto) : 0, mix: mix.map((m) => ({ nivel: m.nivel, canjes: m.canjes })) };
     },
     async canjesDeComercio({ comercioId, desde, hasta, limit = 5000 }) {
-      return sql`SELECT c.creado, b.titulo AS beneficio, COALESCE(c.tier_slug, '') AS nivel, c.monto, c.ahorro FROM canjes c LEFT JOIN beneficios b ON b.id = c.beneficio_id
+      return sql`SELECT c.creado, b.titulo AS beneficio, COALESCE(c.tier_slug, '') AS nivel, c.monto, c.ahorro, s.nombre AS socio_nombre, s.apellido AS socio_apellido
+        FROM canjes c LEFT JOIN beneficios b ON b.id = c.beneficio_id LEFT JOIN socios s ON s.id = c.socio_id
         WHERE c.comercio_id = ${comercioId} AND c.creado >= ${desde} AND c.creado < ${hasta} ORDER BY c.creado DESC LIMIT ${limit}`;
     },
     // Reporte para sponsors: por comercio, ciudad y nivel.
@@ -609,7 +620,7 @@ function createPgStore({ databaseUrl, debug }) {
     async contarPorCiudad() {
       return sql`
         SELECT pais_iso, COALESCE(ciudad, '') AS ciudad, COUNT(*)::int AS count,
-               AVG(lat) AS lat, AVG(lng) AS lng
+               CASE WHEN COUNT(*) >= 3 THEN AVG(lat) END AS lat, CASE WHEN COUNT(*) >= 3 THEN AVG(lng) END AS lng
         FROM socios WHERE pais_iso IS NOT NULL AND pais_iso <> '' AND email NOT LIKE ${"%@" + SEED_DOMAIN}
         GROUP BY pais_iso, COALESCE(ciudad, '')
         ORDER BY count DESC LIMIT 600`;
@@ -630,6 +641,74 @@ function createPgStore({ databaseUrl, debug }) {
           AND lat BETWEEN ${minLat} AND ${maxLat}
         LIMIT ${Math.min(Number(limit) || 600, 1500)}`;
     },
+    // ── Panel del club: agregados para el mapa (solo totales, nunca una persona) ──
+    async contarPorCiudadId(id) {
+      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios WHERE ciudad_id = ${Number(id) || 0} AND email NOT LIKE ${"%@" + SEED_DOMAIN}`;
+      return r.n;
+    },
+    async resumenPorCiudad(limit = 600) {
+      return sql`SELECT c.id, c.nombre, c.pais_iso, c.lat, c.lng, COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE m.tier_slug IN ('premium','kids','socio'))::int AS plus,
+          COUNT(*) FILTER (WHERE s.es_socio_olimpia)::int AS socios
+        FROM socios s JOIN ciudades c ON c.id = s.ciudad_id
+        LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
+        WHERE s.email NOT LIKE ${"%@" + SEED_DOMAIN}
+        GROUP BY c.id, c.nombre, c.pais_iso, c.lat, c.lng ORDER BY total DESC LIMIT ${Math.min(Number(limit) || 600, 2000)}`;
+    },
+    async canjesPorComercio() {
+      return sql`SELECT comercio_id, COUNT(*)::int AS canjes, COALESCE(SUM(ahorro), 0)::bigint AS ahorro FROM canjes WHERE comercio_id IS NOT NULL GROUP BY comercio_id`;
+    },
+    // ── Ciudades normalizadas (GeoNames) ──
+    async importarCiudades(rows) {
+      for (let i = 0; i < rows.length; i += 1000) {
+        const lote = rows.slice(i, i + 1000).map((c) => ({ id: c.id, nombre: c.nombre, nombre_norm: c.nombre_norm, pais_iso: c.pais_iso, lat: c.lat, lng: c.lng, poblacion: c.poblacion || 0 }));
+        await sql`INSERT INTO ciudades ${sql(lote)} ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, nombre_norm = EXCLUDED.nombre_norm,
+          pais_iso = EXCLUDED.pais_iso, lat = EXCLUDED.lat, lng = EXCLUDED.lng, poblacion = EXCLUDED.poblacion`;
+      }
+      return rows.length;
+    },
+    async contarCiudades() { const [r] = await sql`SELECT COUNT(*)::int AS n FROM ciudades`; return r.n; },
+    async buscarCiudades({ q, pais, limit = 10 }) {
+      const n = ciudadesLib.norm(q).replace(/[\\%_]/g, "\\$&");
+      if (n.length < 2) return [];
+      const lim = Math.min(Number(limit) || 10, 20), iso = String(pais || "").toUpperCase();
+      return /^[A-Z]{2}$/.test(iso)
+        ? sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE pais_iso = ${iso} AND nombre_norm LIKE ${n + "%"} ORDER BY poblacion DESC LIMIT ${lim}`
+        : sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE nombre_norm LIKE ${n + "%"} ORDER BY poblacion DESC LIMIT ${lim}`;
+    },
+    async getCiudad(id) { const [c] = await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE id = ${Number(id) || 0}`; return c || null; },
+    async ciudadPorNombre({ nombre, pais }) {
+      const n = ciudadesLib.norm(nombre), iso = String(pais || "").toUpperCase();
+      if (!n) return null;
+      const [c] = /^[A-Z]{2}$/.test(iso)
+        ? await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE pais_iso = ${iso} AND nombre_norm = ${n} ORDER BY poblacion DESC LIMIT 1`
+        : await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE nombre_norm = ${n} ORDER BY poblacion DESC LIMIT 1`;
+      return c || null;
+    },
+    async ciudadMasCercana({ lat, lng, pais, maxKm = 60 }) {
+      const d = maxKm / 111 + 0.05, iso = String(pais || "").toUpperCase();
+      const cand = /^[A-Z]{2}$/.test(iso)
+        ? await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE pais_iso = ${iso} AND lat BETWEEN ${lat - d} AND ${lat + d} AND lng BETWEEN ${lng - d * 1.6} AND ${lng + d * 1.6}`
+        : await sql`SELECT id, nombre, pais_iso, lat, lng, poblacion FROM ciudades WHERE lat BETWEEN ${lat - d} AND ${lat + d} AND lng BETWEEN ${lng - d * 1.6} AND ${lng + d * 1.6}`;
+      let mejor = null, mejorKm = Infinity;
+      for (const c of cand) { const km = ciudadesLib.distanciaKm(lat, lng, c.lat, c.lng); if (km < mejorKm) { mejor = c; mejorKm = km; } }
+      return mejor && mejorKm <= maxKm ? { ...mejor, km: Math.round(mejorKm * 10) / 10 } : null;
+    },
+    // Solo posiciones (sin id, nombre ni ciudad) de quienes eligieron mostrarse: alimenta las celdas H3 del mapa público.
+    // Altas por mes y país de hinchas reales (sin las filas de demo): alimenta "Mirá cómo crece". Solo totales.
+    async historiaAltas() {
+      const dom = "%@" + SEED_DOMAIN;
+      return sql`SELECT to_char(creado AT TIME ZONE 'America/Asuncion', 'YYYY-MM') AS mes, upper(pais_iso) AS iso, COUNT(*)::int AS n
+        FROM socios WHERE email NOT LIKE ${dom} AND pais_iso IS NOT NULL AND pais_iso <> '' GROUP BY 1, 2 ORDER BY 1`;
+    },
+    async puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat, limit = 20000 }) {
+      return sql`
+        SELECT lat, lng FROM socios
+        WHERE mostrar_exacto = true AND lat IS NOT NULL AND lng IS NOT NULL
+          AND lng BETWEEN ${minLng} AND ${maxLng}
+          AND lat BETWEEN ${minLat} AND ${maxLat}
+        LIMIT ${Math.min(Number(limit) || 20000, 50000)}`;
+    },
     async updateSocio(id, patch) {
       const [s] = await sql`UPDATE socios SET ${sql(patch)} WHERE id = ${id} RETURNING *`;
       return s || null;
@@ -642,14 +721,25 @@ function createPgStore({ databaseUrl, debug }) {
         VALUES (${token}, ${socioId}, ${expiraIso}) RETURNING *`;
       return s;
     },
+    // La sesión se consulta en CADA request autenticado: no trae la foto (un data URL de hasta 800 KB). En su lugar
+    // devuelve `tiene_foto`; quien necesite la imagen la pide con getSocioFoto. Las columnas se leen una vez del catálogo
+    // (así una columna nueva entra sola); si eso falla se cae a so.* (más pesado, pero correcto).
     async getSession(token) {
+      if (!_colsSesion) _colsSesion = sql`SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'socios' ORDER BY ordinal_position`
+        .then((r) => r.map((x) => x.column_name).filter((c) => c !== "foto")).catch(() => { _colsSesion = null; return null; });
+      const cols = await _colsSesion;
+      const cuerpo = cols && cols.length ? sql`${sql(cols.map((c) => "so." + c))}, (so.foto IS NOT NULL AND so.foto <> '') AS tiene_foto` : sql`so.*`;
       const [row] = await sql`
-        SELECT s.token, s.socio_id, s.expira, so.*
+        SELECT s.token, s.socio_id, s.expira, ${cuerpo}
         FROM sesiones s JOIN socios so ON so.id = s.socio_id
         WHERE s.token = ${token} AND s.expira > now() LIMIT 1`;
       if (!row) return null;
       const { token: t, socio_id, expira, ...socio } = row;
       return { session: { token: t, socio_id, expira }, socio };
+    },
+    async getSocioFoto(id) {
+      const [r] = await sql`SELECT foto FROM socios WHERE id = ${id} LIMIT 1`;
+      return (r && r.foto) || "";
     },
     async deleteSession(token) {
       await sql`DELETE FROM sesiones WHERE token = ${token}`;
@@ -741,6 +831,8 @@ function createPgStore({ databaseUrl, debug }) {
     async listCampanas() {
       return sql`SELECT c.*,
         (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id)::int AS envios,
+        (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id AND e.estado IN ('pendiente','tomado'))::int AS pendientes,
+        (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id AND e.estado = 'fallido')::int AS fallidos,
         (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id AND e.enviado_ok)::int AS enviados_ok,
         (SELECT COUNT(*) FROM campana_envios e WHERE e.campana_id = c.id AND e.convertido)::int AS convertidos
         FROM campanas c ORDER BY c.creada DESC`;
@@ -751,6 +843,51 @@ function createPgStore({ databaseUrl, debug }) {
         : sql`SELECT * FROM campana_envios WHERE campana_id = ${campanaId} ORDER BY creado ASC`;
     },
     async marcarEnviado(envioId) { await sql`UPDATE campana_envios SET enviado_ok = true WHERE id = ${envioId}`; },
+    // ── Compositor de campañas: envío por tandas ──
+    async crearCampanaEnvio(d) {
+      const [c] = await sql`INSERT INTO campanas (id, nombre, tipo, canal, plantilla, asunto, titulo, cuerpo, cta_texto, cta_url, cta_valor, filtros, estado, creada_por)
+        VALUES (${uid("cmp")}, ${d.nombre}, ${"composer"}, ${d.canal}, ${d.plantilla || ""}, ${d.asunto}, ${d.titulo || ""}, ${d.cuerpo}, ${d.cta_texto || ""}, ${d.cta_url || ""}, ${!!d.cta_valor}, ${d.filtros ? sql.json(d.filtros) : null}, 'enviando', ${d.por || ""})
+        RETURNING *`;
+      return c;
+    },
+    async agregarEnviosPendientes(campanaId, lista) {
+      for (let i = 0; i < lista.length; i += 500) {
+        const filas = lista.slice(i, i + 500).map((s) => ({ id: uid("env"), campana_id: campanaId, socio_id: s.id, email: s.email || "", tier_pretendido: s.tier_slug || "", estado_inicial: s.tier_slug || "olimpista", estado: "pendiente" }));
+        await sql`INSERT INTO campana_envios ${sql(filas)}`;
+      }
+      await sql`UPDATE campanas SET total_enviados = ${lista.length} WHERE id = ${campanaId}`;
+      return lista.length;
+    },
+    async campanasEnCurso() { return sql`SELECT * FROM campanas WHERE estado = 'enviando' ORDER BY creada ASC`; },
+    // Reclama hasta n envíos de forma atómica (dos corridas del cron nunca toman el mismo). Un envío 'tomado' hace más de 10 minutos se reintenta.
+    async tomarPendientesCampana(campanaId, n) {
+      return sql`UPDATE campana_envios SET estado = 'tomado', tomado_en = now() WHERE id IN (
+        SELECT id FROM campana_envios WHERE campana_id = ${campanaId}
+          AND (estado = 'pendiente' OR (estado = 'tomado' AND tomado_en < now() - interval '10 minutes'))
+        ORDER BY id LIMIT ${n} FOR UPDATE SKIP LOCKED) RETURNING *`;
+    },
+    async marcarEnvioResultado(id, { ok, omitido, error } = {}) {
+      if (omitido) return sql`UPDATE campana_envios SET estado = 'omitido', error = ${error || null}, enviado_en = now() WHERE id = ${id}`;
+      return sql`UPDATE campana_envios SET estado = ${ok ? "enviado" : "fallido"}, enviado_ok = ${!!ok}, error = ${ok ? null : (error || "no se pudo enviar")}, enviado_en = now() WHERE id = ${id}`;
+    },
+    async cerrarCampanasTerminadas() {
+      const r = await sql`UPDATE campanas c SET estado = 'enviada', finalizada = now() WHERE c.estado = 'enviando'
+        AND NOT EXISTS (SELECT 1 FROM campana_envios e WHERE e.campana_id = c.id AND e.estado IN ('pendiente','tomado')) RETURNING c.id`;
+      return r.map((x) => x.id);
+    },
+    async cancelarCampana(id) {
+      const [c] = await sql`UPDATE campanas SET estado = 'cancelada', finalizada = now() WHERE id = ${id} AND estado = 'enviando' RETURNING *`;
+      if (!c) return null;
+      await sql`UPDATE campana_envios SET estado = 'omitido', error = 'campaña cancelada' WHERE campana_id = ${id} AND estado = 'pendiente'`;
+      return c;
+    },
+    async getCampanaDetalle(id) {
+      const [c] = await sql`SELECT * FROM campanas WHERE id = ${id}`;
+      if (!c) return null;
+      const filas = await sql`SELECT estado, COUNT(*)::int AS n FROM campana_envios WHERE campana_id = ${id} GROUP BY estado`;
+      const fallos = await sql`SELECT email, error FROM campana_envios WHERE campana_id = ${id} AND estado = 'fallido' ORDER BY enviado_en DESC LIMIT 20`;
+      return { campana: c, conteo: Object.fromEntries(filas.map((f) => [f.estado || "legado", f.n])), fallos };
+    },
     async recalcularConversion(campanaId) {
       await sql`UPDATE campana_envios e SET convertido = true, convertido_en = now()
         FROM membresias m
@@ -793,6 +930,9 @@ function createPgStore({ databaseUrl, debug }) {
       return sql.begin(async (tx) => {
         const [pv] = await tx`SELECT * FROM preventas WHERE id = ${preventaId} FOR UPDATE`;
         if (!pv) return null;
+        // Tope por persona y por preventa (reservas vivas): sin esto, una persona acapara el cupo reservando de a 4 sin parar.
+        const [{ vivas }] = await tx`SELECT COALESCE(SUM(cantidad), 0)::int AS vivas FROM reservas WHERE preventa_id = ${preventaId} AND socio_id = ${socioId} AND estado <> 'cancelada'`;
+        if (vivas + cantidad > 4) return { error: "limite", vivas };
         if (pv.stock < cantidad) return { error: "sin_stock" };
         await tx`UPDATE preventas SET stock = stock - ${cantidad} WHERE id = ${preventaId}`;
         const id = uid("res");
@@ -806,9 +946,33 @@ function createPgStore({ databaseUrl, debug }) {
       const [r] = await sql`SELECT * FROM reservas WHERE id = ${id} LIMIT 1`;
       return r || null;
     },
+    // Confirma una reserva pagada. Si el cupo ya se liberó por falta de pago a tiempo (cancelada), intenta
+    // volver a tomarlo; si ya no hay stock devuelve { error: "sin_stock" } para que se reembolse.
     async confirmarReserva(id) {
-      const [r] = await sql`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`;
-      return r || null;
+      return sql.begin(async (tx) => {
+        const [r] = await tx`SELECT * FROM reservas WHERE id = ${id} FOR UPDATE`;
+        if (!r) return null;
+        if (r.estado !== "cancelada") { const [u] = await tx`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`; return u; }
+        const [pv] = await tx`SELECT * FROM preventas WHERE id = ${r.preventa_id} FOR UPDATE`;
+        if (!pv || pv.stock < r.cantidad) return { error: "sin_stock", reserva: r };
+        await tx`UPDATE preventas SET stock = stock - ${r.cantidad} WHERE id = ${r.preventa_id}`;
+        const [u] = await tx`UPDATE reservas SET estado = 'pagada' WHERE id = ${id} RETURNING *`;
+        return u;
+      });
+    },
+    // Libera el cupo de las reservas que quedaron sin pagar pasadas `horas` (la ventana de Pagopar es de 3 días).
+    // Devuelve cuántas liberó. SKIP LOCKED: dos corridas del cron a la vez no se pisan.
+    async liberarReservasVencidas({ horas = 75, limit = 200 } = {}) {
+      return sql.begin(async (tx) => {
+        const rs = await tx`SELECT id, preventa_id, cantidad FROM reservas
+          WHERE estado = 'pendiente_pago' AND creado < now() - make_interval(hours => ${horas})
+          ORDER BY creado LIMIT ${limit} FOR UPDATE SKIP LOCKED`;
+        for (const r of rs) {
+          await tx`UPDATE reservas SET estado = 'cancelada' WHERE id = ${r.id}`;
+          await tx`UPDATE preventas SET stock = stock + ${r.cantidad} WHERE id = ${r.preventa_id}`;
+        }
+        return rs.length;
+      });
     },
     // Reversión: cancela la reserva y repone el stock (transacción).
     async cancelarReservaYreponer(id) {
@@ -991,7 +1155,7 @@ function createPgStore({ databaseUrl, debug }) {
     async getComercioSession(token) {
       const [row] = await sql`SELECT s.token, s.expira, c.id AS comercio_id, c.nombre, c.estado
         FROM comercio_sesiones s JOIN comercios c ON c.id = s.comercio_id
-        WHERE s.token = ${token} AND s.expira > now() AND c.estado = 'activo' LIMIT 1`;
+        WHERE s.token = ${token} AND s.expira > now() AND (c.estado = 'activo' OR s.token LIKE 'adm\_%') LIMIT 1`;
       return row || null;
     },
     async beneficiosDeComercio(comercioId) { return sql`SELECT * FROM beneficios WHERE comercio_id = ${comercioId} AND activo = true AND estado = 'aprobado' ORDER BY creado DESC`; },
@@ -1166,13 +1330,62 @@ function createPgStore({ databaseUrl, debug }) {
       if (estado) conds.push(sql`p.estado = ${estado}`);
       if (id) conds.push(sql`p.id = ${id}`);
       const where = conds.length ? sql`WHERE ${conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`))}` : sql``;
-      return sql`SELECT p.*,
+      return sql`SELECT t.*, (t.miembros + t.altas - t.vinculados) AS hinchada FROM (SELECT p.*,
+          (SELECT COUNT(*) FROM pena_miembros m WHERE m.pena_id = p.id)::int AS miembros,
+          (SELECT COUNT(*) FROM pena_miembros m JOIN socios s ON s.id = m.socio_id AND s.pena_id = p.id WHERE m.pena_id = p.id)::int AS vinculados,
           (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id)::int AS altas,
           (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id AND s.es_socio_olimpia)::int AS socios,
           (SELECT COUNT(*) FROM socios s WHERE s.pena_id = p.id AND EXISTS
              (SELECT 1 FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug IN ('premium','kids')))::int AS plus,
           COALESCE((SELECT SUM(-mv.monto) FROM pena_movimientos mv WHERE mv.pena_id = p.id AND mv.motivo = 'canje' AND mv.estado = 'pendiente'), 0)::int AS canje_pendiente
-        FROM penas p ${where} ORDER BY altas DESC, p.creado ASC`;
+        FROM penas p ${where}) t ORDER BY hinchada DESC, t.creado ASC`;
+    },
+    // ── Padrón de las peñas (migración 0013): el listado oficial de miembros, aparte de las cuentas de Olimpistas ──
+    // El estado de la cuota (al día / en mora) es dato del club: solo lo ve el admin, nunca la comisión de la peña.
+    // Idempotente: la misma cédula en la misma peña se actualiza, no se duplica. Quien no tiene cédula se identifica por nombre.
+    async importarMiembrosPena(penaId, filas, fuente = "") {
+      let nuevos = 0, actualizados = 0;
+      for (let i = 0; i < filas.length; i += 400) {
+        const lote = filas.slice(i, i + 400).map((f, k) => ({
+          id: uid("pmb"), pena_id: penaId, cedula: String(f.cedula || ""), nombre: String(f.nombre || "").trim(), nro_socio: String(f.nro_socio || ""),
+          estado_cuota: ["al_dia", "en_mora", "sin_dato"].includes(f.estado_cuota) ? f.estado_cuota : "sin_dato", orden: Number.isFinite(f.orden) ? f.orden : i + k, fuente,
+        }));
+        const con = lote.filter((x) => x.cedula), sin = lote.filter((x) => !x.cedula);
+        if (con.length) {
+          const r = await sql`INSERT INTO pena_miembros ${sql(con)} ON CONFLICT (pena_id, cedula) WHERE cedula <> '' DO UPDATE
+            SET nombre = EXCLUDED.nombre, nro_socio = EXCLUDED.nro_socio, estado_cuota = EXCLUDED.estado_cuota, orden = EXCLUDED.orden, fuente = EXCLUDED.fuente, actualizado = now()
+            RETURNING (xmax = 0) AS nuevo`;
+          r.forEach((x) => (x.nuevo ? nuevos++ : actualizados++));
+        }
+        if (sin.length) {
+          const r = await sql`INSERT INTO pena_miembros ${sql(sin)} ON CONFLICT (pena_id, nombre) WHERE cedula = '' DO UPDATE
+            SET nro_socio = EXCLUDED.nro_socio, estado_cuota = EXCLUDED.estado_cuota, orden = EXCLUDED.orden, fuente = EXCLUDED.fuente, actualizado = now()
+            RETURNING (xmax = 0) AS nuevo`;
+          r.forEach((x) => (x.nuevo ? nuevos++ : actualizados++));
+        }
+      }
+      return { nuevos, actualizados };
+    },
+    // Vincula el padrón con las cuentas (misma cédula) y le da su peña a quien no tiene ninguna: la PRIMERA según el orden del informe.
+    // Con { socioId } solo mira esa cuenta (se llama cuando alguien carga o valida su cédula).
+    async sincronizarMiembrosPena({ socioId } = {}) {
+      const solo = socioId ? sql`AND s.id = ${socioId}` : sql``;
+      const v = await sql`UPDATE pena_miembros m SET socio_id = s.id FROM socios s
+        WHERE m.socio_id IS NULL AND m.cedula <> '' AND regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g') = m.cedula ${solo} RETURNING m.id`;
+      const a = await sql`UPDATE socios s SET pena_id = x.pena_id FROM (
+          SELECT DISTINCT ON (m.socio_id) m.socio_id, m.pena_id FROM pena_miembros m JOIN penas p ON p.id = m.pena_id AND p.estado = 'verificada'
+          WHERE m.socio_id IS NOT NULL ORDER BY m.socio_id, m.orden, m.creado) x
+        WHERE s.id = x.socio_id AND s.pena_id IS NULL ${solo} RETURNING s.id`;
+      return { vinculados: v.length, asignados: a.length };
+    },
+    async resumenMiembrosPena() {
+      return sql`SELECT pena_id, COUNT(*)::int AS miembros, COUNT(socio_id)::int AS con_cuenta,
+          COUNT(*) FILTER (WHERE estado_cuota = 'al_dia')::int AS al_dia, COUNT(*) FILTER (WHERE estado_cuota = 'en_mora')::int AS en_mora, COUNT(*) FILTER (WHERE estado_cuota = 'sin_dato')::int AS sin_dato
+        FROM pena_miembros GROUP BY pena_id`;
+    },
+    async listarMiembrosPena(penaId) {
+      return sql`SELECT m.id, m.cedula, m.nombre, m.nro_socio, m.estado_cuota, m.orden, m.fuente, m.socio_id, m.actualizado, (s.pena_id = m.pena_id) AS es_su_pena
+        FROM pena_miembros m LEFT JOIN socios s ON s.id = m.socio_id WHERE m.pena_id = ${penaId} ORDER BY m.nombre`;
     },
     async ultimasAltasPena(penaId, limit = 8) {
       return sql`SELECT s.id, s.nombre, s.apellido, s.ciudad, s.creado, coalesce(m.tier_slug, 'olimpista') AS tier_slug
@@ -1501,6 +1714,22 @@ function createPgStore({ databaseUrl, debug }) {
       return u.mensajes;
     },
   };
+
+  // Las listas públicas cacheadas (sorteos, contenido, preventas) se invalidan al escribir: antes el TTL de 30 s era lo único que las
+  // refrescaba y un sorteo recién creado o una reserva de entradas tardaba hasta 30 s en verse.
+  const BUST = {
+    sorteos: ["crearSorteo", "updateSorteo", "deleteSorteo", "participarSorteo"],
+    contenido: ["crearContenido", "updateContenido", "deleteContenido"],
+    preventas: ["crearPreventa", "updatePreventa", "deletePreventa", "reservarPreventa", "confirmarReserva", "cancelarReservaYreponer"],
+  };
+  for (const [clave, metodos] of Object.entries(BUST)) {
+    for (const m of metodos) {
+      const original = store[m];
+      if (typeof original !== "function") continue;
+      store[m] = async (...args) => { try { return await original.apply(store, args); } finally { cacheBust(clave); } };
+    }
+  }
+  return store;
 }
 
 module.exports = { createPgStore };

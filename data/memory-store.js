@@ -13,6 +13,7 @@
  */
 
 const fs   = require("fs");
+const ciudadesLib = require("../lib/ciudades");
 const path = require("path");
 const crypto = require("crypto");
 const log = require("../lib/log");
@@ -273,6 +274,7 @@ function createMemoryStore({ filePath = null } = {}) {
         if (term && !((s.email || "").toLowerCase().includes(term) || ((s.nombre || "") + " " + (s.apellido || "")).toLowerCase().includes(term) || (s.cedula || "").includes(term))) return false;
         return true;
       }).sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
+      if (f.paraEnvio) return rows.map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, telefono: s.telefono || "", whatsapp: s.whatsapp || "", idioma: s.idioma || "es", pais_iso: s.pais_iso || "", marketing_baja: !!s.marketing_baja, tier_slug: tierDe(s.id) }));
       return rows.slice(0, Math.min(Number(f.limit) || 500, 5000)).map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, cedula: s.cedula, pais: s.pais, pais_iso: s.pais_iso, ciudad: s.ciudad, es_socio_olimpia: s.es_socio_olimpia, gasto_total: s.gasto_total || 0, ultima_actividad: s.ultima_actividad || null, tiene_foto: !!s.foto, tier_slug: tierDe(s.id), creado: s.creado }));
     },
     async cuadrePagos() {
@@ -309,7 +311,7 @@ function createMemoryStore({ filePath = null } = {}) {
     // ── Red de Beneficios ──
     async listComercios() { return (db.comercios || []).slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))); },
     async getComercio(id) { return (db.comercios || []).find((c) => c.id === id) || null; },
-    async crearComercio(d = {}) { const c = { id: uid("com"), nombre: d.nombre || "", rubro: d.rubro || "", logo: d.logo || "", direccion: d.direccion || "", ciudad: d.ciudad || "", contacto: d.contacto || "", usuario: null, password_hash: null, estado: d.estado || "activo", creado: nowIso() }; (db.comercios = db.comercios || []).push(c); persist(); return c; },
+    async crearComercio(d = {}) { const c = { id: uid("com"), nombre: d.nombre || "", rubro: d.rubro || "", logo: d.logo || "", direccion: d.direccion || "", ciudad: d.ciudad || "", contacto: d.contacto || "", usuario: null, password_hash: null, estado: d.estado || "activo", lat: d.lat != null ? d.lat : null, lng: d.lng != null ? d.lng : null, creado: nowIso() }; (db.comercios = db.comercios || []).push(c); persist(); return c; },
     async updateComercio(id, patch) { const c = (db.comercios || []).find((x) => x.id === id); if (!c) return null; Object.assign(c, patch); persist(); return c; },
     async deleteComercio(id) { db.comercios = (db.comercios || []).filter((c) => c.id !== id); db.beneficios = (db.beneficios || []).filter((b) => b.comercio_id !== id); persist(); return true; },
 
@@ -337,7 +339,7 @@ function createMemoryStore({ filePath = null } = {}) {
         const nivelReq = idxs.length ? Math.min.apply(null, idxs) : 0;
         const desbloqueado = Math.max(0, ORD.indexOf(tier)) >= nivelReq;
         const nivel_min = ORD[nivelReq] || "olimpista";
-        return { ...b, comercio_nombre: c.nombre, comercio_rubro: c.rubro, comercio_logo: c.logo, comercio_ciudad: c.ciudad, desbloqueado: desbloqueado, nivel_min: nivel_min };
+        return { ...b, comercio_nombre: c.nombre, comercio_rubro: c.rubro, comercio_logo: c.logo, comercio_ciudad: c.ciudad, comercio_lat: c.lat != null ? c.lat : null, comercio_lng: c.lng != null ? c.lng : null, desbloqueado: desbloqueado, nivel_min: nivel_min };
       });
     },
     async registrarCanje({ beneficioId, socioId, comercioId, validadoPor, monto, ahorro } = {}) { const c = { id: uid("cnj"), beneficio_id: beneficioId, socio_id: socioId || null, comercio_id: comercioId || null, validado_por: validadoPor || "", monto: monto != null ? Math.round(monto) : null, ahorro: ahorro != null ? Math.round(ahorro) : null, creado: nowIso() }; (db.canjes = db.canjes || []).push(c); persist(); return c; },
@@ -401,7 +403,7 @@ function createMemoryStore({ filePath = null } = {}) {
       const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
       return (db.canjes || []).filter((c) => c.comercio_id === comercioId && new Date(c.creado).getTime() >= d && new Date(c.creado).getTime() < h)
         .sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
-        .map((c) => { const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}; return { creado: c.creado, beneficio: b.titulo || null, nivel: c.tier_slug || "", monto: c.monto, ahorro: c.ahorro }; });
+        .map((c) => { const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}, s = (db.socios || []).find((x) => x.id === c.socio_id) || {}; return { creado: c.creado, beneficio: b.titulo || null, nivel: c.tier_slug || "", monto: c.monto, ahorro: c.ahorro, socio_nombre: s.nombre || "", socio_apellido: s.apellido || "" }; });
     },
     async estadisticasPorComercio({ desde, hasta }) {
       const d = new Date(desde).getTime(), h = new Date(hasta).getTime(), por = new Map();
@@ -462,7 +464,7 @@ function createMemoryStore({ filePath = null } = {}) {
       const s = (db.comercio_sesiones || []).find((x) => x.token === token);
       if (!s || new Date(s.expira).getTime() < Date.now()) return null;
       const c = (db.comercios || []).find((x) => x.id === s.comercio_id);
-      if (!c || c.estado !== "activo") return null;
+      if (!c || (c.estado !== "activo" && !String(s.token).startsWith("adm_"))) return null; // "ver como" (owner): se puede mirar un comercio inactivo
       return { token: s.token, expira: s.expira, comercio_id: c.id, nombre: c.nombre, estado: c.estado };
     },
     async beneficiosDeComercio(comercioId) { return (db.beneficios || []).filter((b) => b.comercio_id === comercioId && b.activo && (b.estado || "aprobado") === "aprobado").sort((a, b) => String(b.creado).localeCompare(String(a.creado))); },
@@ -638,8 +640,55 @@ function createMemoryStore({ filePath = null } = {}) {
       return (db.penas || []).filter((p) => (!estado || p.estado === estado) && (!id || p.id === id)).map((p) => {
         const mios = (db.socios || []).filter((s) => s.pena_id === p.id);
         const pend = (db.pena_movimientos || []).filter((m) => m.pena_id === p.id && m.motivo === "canje" && m.estado === "pendiente").reduce((a, m) => a - m.monto, 0);
-        return { ...p, altas: mios.length, socios: mios.filter((s) => s.es_socio_olimpia).length, plus: mios.filter((s) => ["premium", "kids"].includes(tier(s.id))).length, canje_pendiente: pend };
-      }).sort((a, b) => (b.altas - a.altas) || String(a.creado).localeCompare(String(b.creado)));
+        const padron = (db.pena_miembros || []).filter((m) => m.pena_id === p.id);
+        const vinculados = padron.filter((m) => mios.some((s) => s.id === m.socio_id)).length;
+        return { ...p, miembros: padron.length, vinculados, hinchada: padron.length + mios.length - vinculados, altas: mios.length, socios: mios.filter((s) => s.es_socio_olimpia).length, plus: mios.filter((s) => ["premium", "kids"].includes(tier(s.id))).length, canje_pendiente: pend };
+      }).sort((a, b) => (b.hinchada - a.hinchada) || String(a.creado).localeCompare(String(b.creado)));
+    },
+    // ── Padrón de las peñas: el listado oficial de miembros, aparte de las cuentas (mismo contrato que pg-store) ──
+    async importarMiembrosPena(penaId, filas, fuente = "") {
+      db.pena_miembros = db.pena_miembros || [];
+      let nuevos = 0, actualizados = 0;
+      filas.forEach((f, i) => {
+        const cedula = String(f.cedula || ""), nombre = String(f.nombre || "").trim();
+        const previo = db.pena_miembros.find((m) => m.pena_id === penaId && (cedula ? m.cedula === cedula : (!m.cedula && m.nombre === nombre)));
+        const datos = { nombre, nro_socio: String(f.nro_socio || ""), estado_cuota: ["al_dia", "en_mora", "sin_dato"].includes(f.estado_cuota) ? f.estado_cuota : "sin_dato", orden: Number.isFinite(f.orden) ? f.orden : i, fuente };
+        if (previo) { Object.assign(previo, datos, { actualizado: nowIso() }); actualizados++; }
+        else { db.pena_miembros.push({ id: uid("pmb"), pena_id: penaId, cedula, ...datos, socio_id: null, creado: nowIso(), actualizado: nowIso() }); nuevos++; }
+      });
+      persist();
+      return { nuevos, actualizados };
+    },
+    async sincronizarMiembrosPena({ socioId } = {}) {
+      const digitos = (v) => String(v || "").replace(/\D/g, "");
+      let vinculados = 0, asignados = 0;
+      for (const m of (db.pena_miembros || [])) {
+        if (m.socio_id || !m.cedula) continue;
+        const s = (db.socios || []).find((x) => digitos(x.cedula) === m.cedula && (!socioId || x.id === socioId));
+        if (s) { m.socio_id = s.id; vinculados++; }
+      }
+      const orden = (db.pena_miembros || []).filter((m) => m.socio_id && (db.penas || []).some((p) => p.id === m.pena_id && p.estado === "verificada"))
+        .sort((a, b) => (a.orden - b.orden) || String(a.creado).localeCompare(String(b.creado)));
+      const visto = new Set();
+      for (const m of orden) {
+        if (visto.has(m.socio_id)) continue; visto.add(m.socio_id);
+        const s = (db.socios || []).find((x) => x.id === m.socio_id);
+        if (s && !s.pena_id && (!socioId || s.id === socioId)) { s.pena_id = m.pena_id; asignados++; }
+      }
+      persist();
+      return { vinculados, asignados };
+    },
+    async resumenMiembrosPena() {
+      const por = new Map();
+      for (const m of (db.pena_miembros || [])) {
+        const r = por.get(m.pena_id) || { pena_id: m.pena_id, miembros: 0, con_cuenta: 0, al_dia: 0, en_mora: 0, sin_dato: 0 };
+        r.miembros++; if (m.socio_id) r.con_cuenta++; r[m.estado_cuota] = (r[m.estado_cuota] || 0) + 1; por.set(m.pena_id, r);
+      }
+      return [...por.values()];
+    },
+    async listarMiembrosPena(penaId) {
+      return (db.pena_miembros || []).filter((m) => m.pena_id === penaId).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)))
+        .map((m) => { const s = (db.socios || []).find((x) => x.id === m.socio_id); return { id: m.id, cedula: m.cedula, nombre: m.nombre, nro_socio: m.nro_socio, estado_cuota: m.estado_cuota, orden: m.orden, fuente: m.fuente, socio_id: m.socio_id, actualizado: m.actualizado, es_su_pena: !!(s && s.pena_id === penaId) }; });
     },
     async ultimasAltasPena(penaId, limit = 8) {
       const tier = (sid) => { const m = (db.membresias || []).filter((x) => x.socio_id === sid && x.estado === "activa").slice(-1)[0]; return m ? m.tier_slug : "olimpista"; };
@@ -923,8 +972,68 @@ function createMemoryStore({ filePath = null } = {}) {
       }
       return Object.values(g).map((r) => ({
         pais_iso: r.pais_iso, ciudad: r.ciudad, count: r.count,
-        lat: r.n ? r.latSum / r.n : null, lng: r.n ? r.lngSum / r.n : null,
+        lat: r.n && r.count >= 3 ? r.latSum / r.n : null, lng: r.n && r.count >= 3 ? r.lngSum / r.n : null, // menos de 3 hinchas: se cuentan pero sin coordenadas (privacidad)
       }));
+    },
+    async historiaAltas() {
+      const cuenta = new Map();
+      for (const s of db.socios) {
+        if (!s.pais_iso || String(s.email || "").endsWith("@demo.olimpistas.test")) continue;
+        const d = new Date(s.creado); if (isNaN(d)) continue;
+        const mes = new Date(d.getTime() - 3 * 3600 * 1000).toISOString().slice(0, 7); // hora de Paraguay (aprox.)
+        const k = mes + "|" + String(s.pais_iso).toUpperCase(); cuenta.set(k, (cuenta.get(k) || 0) + 1);
+      }
+      return [...cuenta].map(([k, n]) => { const [mes, iso] = k.split("|"); return { mes, iso, n }; }).sort((a, b) => a.mes.localeCompare(b.mes));
+    },
+    // ── Panel del club: agregados para el mapa (solo totales, nunca una persona) ──
+    async contarPorCiudadId(id) { return (db.socios || []).filter((s) => s.ciudad_id === Number(id) && !String(s.email || "").endsWith("@demo.olimpistas.test")).length; },
+    async resumenPorCiudad(limit = 600) {
+      const out = new Map();
+      for (const s of (db.socios || [])) {
+        if (!s.ciudad_id || String(s.email || "").endsWith("@demo.olimpistas.test")) continue;
+        const c = (db.ciudades || []).find((x) => x.id === s.ciudad_id); if (!c) continue;
+        const m = (db.membresias || []).filter((x) => x.socio_id === s.id && x.estado === "activa").slice(-1)[0];
+        const e = out.get(c.id) || { id: c.id, nombre: c.nombre, pais_iso: c.pais_iso, lat: c.lat, lng: c.lng, total: 0, plus: 0, socios: 0 };
+        e.total++; if (m && ["premium", "kids", "socio"].includes(m.tier_slug)) e.plus++; if (s.es_socio_olimpia) e.socios++;
+        out.set(c.id, e);
+      }
+      return [...out.values()].sort((a, b) => b.total - a.total).slice(0, Math.min(Number(limit) || 600, 2000));
+    },
+    async canjesPorComercio() {
+      const m = new Map();
+      for (const c of (db.canjes || [])) { if (!c.comercio_id) continue; const e = m.get(c.comercio_id) || { comercio_id: c.comercio_id, canjes: 0, ahorro: 0 }; e.canjes++; e.ahorro += Number(c.ahorro || 0); m.set(c.comercio_id, e); }
+      return [...m.values()];
+    },
+    // ── Ciudades normalizadas (GeoNames) ──
+    async importarCiudades(rows) { db.ciudades = db.ciudades || []; for (const c of rows) { const i = db.ciudades.findIndex((x) => x.id === c.id); if (i >= 0) db.ciudades[i] = { ...c }; else db.ciudades.push({ ...c }); } persist(); return rows.length; },
+    async contarCiudades() { return (db.ciudades || []).length; },
+    async buscarCiudades({ q, pais, limit = 10 }) {
+      const n = ciudadesLib.norm(q), iso = String(pais || "").toUpperCase();
+      if (n.length < 2) return [];
+      return (db.ciudades || []).filter((c) => c.nombre_norm.startsWith(n) && (!/^[A-Z]{2}$/.test(iso) || c.pais_iso === iso)).sort((a, b) => b.poblacion - a.poblacion).slice(0, Math.min(Number(limit) || 10, 20)).map(({ id, nombre, pais_iso, lat, lng, poblacion }) => ({ id, nombre, pais_iso, lat, lng, poblacion }));
+    },
+    async getCiudad(id) { const c = (db.ciudades || []).find((x) => x.id === Number(id)); return c ? { id: c.id, nombre: c.nombre, pais_iso: c.pais_iso, lat: c.lat, lng: c.lng, poblacion: c.poblacion } : null; },
+    async ciudadPorNombre({ nombre, pais }) {
+      const n = ciudadesLib.norm(nombre), iso = String(pais || "").toUpperCase();
+      if (!n) return null;
+      const c = (db.ciudades || []).filter((x) => x.nombre_norm === n && (!/^[A-Z]{2}$/.test(iso) || x.pais_iso === iso)).sort((a, b) => b.poblacion - a.poblacion)[0];
+      return c ? { id: c.id, nombre: c.nombre, pais_iso: c.pais_iso, lat: c.lat, lng: c.lng, poblacion: c.poblacion } : null;
+    },
+    async ciudadMasCercana({ lat, lng, pais, maxKm = 60 }) {
+      const iso = String(pais || "").toUpperCase();
+      let mejor = null, mejorKm = Infinity;
+      for (const c of (db.ciudades || [])) { if (/^[A-Z]{2}$/.test(iso) && c.pais_iso !== iso) continue; const km = ciudadesLib.distanciaKm(lat, lng, c.lat, c.lng); if (km < mejorKm) { mejor = c; mejorKm = km; } }
+      return mejor && mejorKm <= maxKm ? { id: mejor.id, nombre: mejor.nombre, pais_iso: mejor.pais_iso, lat: mejor.lat, lng: mejor.lng, poblacion: mejor.poblacion, km: Math.round(mejorKm * 10) / 10 } : null;
+    },
+    async puntosPublicosEnBBox({ minLng, minLat, maxLng, maxLat, limit = 20000 }) {
+      const out = [];
+      for (const s of db.socios) {
+        if (!s.mostrar_exacto || s.lat == null || s.lng == null) continue;
+        if (s.lng < minLng || s.lng > maxLng || s.lat < minLat || s.lat > maxLat) continue;
+        out.push({ lat: s.lat, lng: s.lng });
+        if (out.length >= Math.min(Number(limit) || 20000, 50000)) break;
+      }
+      return out;
     },
     async flagsEnBBox({ minLng, minLat, maxLng, maxLat, limit = 600 }) {
       const out = [];
@@ -956,9 +1065,13 @@ function createMemoryStore({ filePath = null } = {}) {
         db.sesiones = db.sesiones.filter(s => s.token !== token); persist();
         return null;
       }
-      const socio = db.socios.find(s => s.id === sess.socio_id) || null;
-      return socio ? { session: sess, socio } : null;
+      const full = db.socios.find(s => s.id === sess.socio_id) || null;
+      if (!full) return null;
+      const { foto, ...socio } = full; // igual que Postgres: la sesión no carga la foto; tiene_foto la reemplaza
+      socio.tiene_foto = !!foto;
+      return { session: sess, socio };
     },
+    async getSocioFoto(id) { const s = db.socios.find(x => x.id === id); return (s && s.foto) || ""; },
     async deleteSession(token) {
       db.sesiones = db.sesiones.filter(s => s.token !== token); persist();
     },
@@ -1030,9 +1143,18 @@ function createMemoryStore({ filePath = null } = {}) {
     // ── Campañas (memoria) ──
     async crearCampana({ nombre, tipo } = {}) { db.campanas = db.campanas || []; const c = { id: "cmp_" + Date.now() + "_" + db.campanas.length, nombre: nombre || "Campaña", tipo: tipo || "", total_enviados: 0, creada: new Date().toISOString() }; db.campanas.push(c); persist(); return c; },
     async crearEnviosCampana(campanaId, socios) { db.campana_envios = db.campana_envios || []; socios.forEach((s, i) => db.campana_envios.push({ id: "env_" + Date.now() + "_" + i, campana_id: campanaId, socio_id: s.id, email: s.email || "", tier_pretendido: s.tier_slug || "", estado_inicial: s.estado_inicial || "olimpista", enviado_ok: false, convertido: false, convertido_en: null, creado: new Date().toISOString() })); const c = (db.campanas || []).find((x) => x.id === campanaId); if (c) c.total_enviados = socios.length; persist(); return socios.length; },
-    async listCampanas() { return (db.campanas || []).slice().sort((a, b) => String(b.creada).localeCompare(String(a.creada))).map((c) => { const es = (db.campana_envios || []).filter((e) => e.campana_id === c.id); return Object.assign({}, c, { envios: es.length, enviados_ok: es.filter((e) => e.enviado_ok).length, convertidos: es.filter((e) => e.convertido).length }); }); },
+    async listCampanas() { return (db.campanas || []).slice().sort((a, b) => String(b.creada).localeCompare(String(a.creada))).map((c) => { const es = (db.campana_envios || []).filter((e) => e.campana_id === c.id); return Object.assign({ estado: "enviada", canal: "email" }, c, { envios: es.length, pendientes: es.filter((e) => e.estado === "pendiente" || e.estado === "tomado").length, fallidos: es.filter((e) => e.estado === "fallido").length, enviados_ok: es.filter((e) => e.enviado_ok).length, convertidos: es.filter((e) => e.convertido).length }); }); },
     async listEnviosCampana(campanaId, soloPendientes) { return (db.campana_envios || []).filter((e) => e.campana_id === campanaId && (!soloPendientes || !e.enviado_ok)); },
     async marcarEnviado(envioId) { const e = (db.campana_envios || []).find((x) => x.id === envioId); if (e) { e.enviado_ok = true; persist(); } },
+    // ── Compositor de campañas: envío por tandas ──
+    async crearCampanaEnvio(d) { db.campanas = db.campanas || []; const c = { id: "cmp_" + Date.now() + "_" + db.campanas.length + "_" + Math.random().toString(36).slice(2, 6), nombre: d.nombre, tipo: "composer", canal: d.canal, plantilla: d.plantilla || "", asunto: d.asunto, titulo: d.titulo || "", cuerpo: d.cuerpo, cta_texto: d.cta_texto || "", cta_url: d.cta_url || "", cta_valor: !!d.cta_valor, filtros: d.filtros || null, estado: "enviando", creada_por: d.por || "", total_enviados: 0, creada: new Date().toISOString(), finalizada: null }; db.campanas.push(c); persist(); return c; },
+    async agregarEnviosPendientes(campanaId, lista) { db.campana_envios = db.campana_envios || []; lista.forEach((s, i) => db.campana_envios.push({ id: "env_" + campanaId + "_" + i, campana_id: campanaId, socio_id: s.id, email: s.email || "", tier_pretendido: s.tier_slug || "", estado_inicial: s.tier_slug || "olimpista", enviado_ok: false, convertido: false, convertido_en: null, estado: "pendiente", error: null, enviado_en: null, tomado_en: null, creado: new Date().toISOString() })); const c = (db.campanas || []).find((x) => x.id === campanaId); if (c) c.total_enviados = lista.length; persist(); return lista.length; },
+    async campanasEnCurso() { return (db.campanas || []).filter((c) => c.estado === "enviando").slice().sort((a, b) => String(a.creada).localeCompare(String(b.creada))); },
+    async tomarPendientesCampana(campanaId, n) { const hace10 = Date.now() - 10 * 60000; const out = []; for (const e of (db.campana_envios || [])) { if (out.length >= n) break; if (e.campana_id !== campanaId) continue; if (e.estado === "pendiente" || (e.estado === "tomado" && new Date(e.tomado_en).getTime() < hace10)) { e.estado = "tomado"; e.tomado_en = new Date().toISOString(); out.push({ ...e }); } } persist(); return out; },
+    async marcarEnvioResultado(id, { ok, omitido, error } = {}) { const e = (db.campana_envios || []).find((x) => x.id === id); if (!e) return; if (omitido) { e.estado = "omitido"; e.error = error || null; } else { e.estado = ok ? "enviado" : "fallido"; e.enviado_ok = !!ok; e.error = ok ? null : (error || "no se pudo enviar"); } e.enviado_en = new Date().toISOString(); persist(); },
+    async cerrarCampanasTerminadas() { const ids = []; for (const c of (db.campanas || [])) { if (c.estado !== "enviando") continue; if (!(db.campana_envios || []).some((e) => e.campana_id === c.id && (e.estado === "pendiente" || e.estado === "tomado"))) { c.estado = "enviada"; c.finalizada = new Date().toISOString(); ids.push(c.id); } } if (ids.length) persist(); return ids; },
+    async cancelarCampana(id) { const c = (db.campanas || []).find((x) => x.id === id && x.estado === "enviando"); if (!c) return null; c.estado = "cancelada"; c.finalizada = new Date().toISOString(); (db.campana_envios || []).forEach((e) => { if (e.campana_id === id && e.estado === "pendiente") { e.estado = "omitido"; e.error = "campaña cancelada"; } }); persist(); return c; },
+    async getCampanaDetalle(id) { const c = (db.campanas || []).find((x) => x.id === id); if (!c) return null; const es = (db.campana_envios || []).filter((e) => e.campana_id === id); const conteo = {}; es.forEach((e) => { const k = e.estado || "legado"; conteo[k] = (conteo[k] || 0) + 1; }); return { campana: c, conteo, fallos: es.filter((e) => e.estado === "fallido").slice(0, 20).map((e) => ({ email: e.email, error: e.error })) }; },
     async recalcularConversion(campanaId) {
       const es = (db.campana_envios || []).filter((e) => e.campana_id === campanaId); let conv = 0;
       es.forEach((e) => {
@@ -1047,6 +1169,8 @@ function createMemoryStore({ filePath = null } = {}) {
     async reservarPreventa(preventaId, socioId, cantidad) {
       const pv = db.preventas.find(p => p.id === preventaId);
       if (!pv) return null;
+      const vivas = (db.reservas || []).filter((x) => x.preventa_id === preventaId && x.socio_id === socioId && x.estado !== "cancelada").reduce((a, x) => a + x.cantidad, 0);
+      if (vivas + cantidad > 4) return { error: "limite", vivas };
       if (pv.stock < cantidad) return { error: "sin_stock" };
       pv.stock -= cantidad;
       const r = { id: uid("res"), preventa_id: preventaId, socio_id: socioId, cantidad, estado: "pendiente_pago", creado: nowIso() };
@@ -1057,8 +1181,26 @@ function createMemoryStore({ filePath = null } = {}) {
     async confirmarReserva(id) {
       const r = (db.reservas || []).find(x => x.id === id);
       if (!r) return null;
+      if (r.estado === "cancelada") {
+        const pv = db.preventas.find((p) => p.id === r.preventa_id);
+        if (!pv || pv.stock < r.cantidad) return { error: "sin_stock", reserva: r };
+        pv.stock -= r.cantidad;
+      }
       r.estado = "pagada"; persist();
       return r;
+    },
+    async liberarReservasVencidas({ horas = 75, limit = 200 } = {}) {
+      const corte = Date.now() - horas * 3600000;
+      let n = 0;
+      for (const r of (db.reservas || [])) {
+        if (n >= limit) break;
+        if (r.estado !== "pendiente_pago" || new Date(r.creado).getTime() >= corte) continue;
+        r.estado = "cancelada"; n++;
+        const pv = db.preventas.find((p) => p.id === r.preventa_id);
+        if (pv) pv.stock += r.cantidad;
+      }
+      if (n) persist();
+      return n;
     },
     async cancelarReservaYreponer(id) {
       const r = (db.reservas || []).find(x => x.id === id);

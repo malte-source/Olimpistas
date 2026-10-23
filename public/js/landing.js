@@ -15,13 +15,13 @@
 
   async function init() {
     CONFIG = await api("/config");
-    SESSION = await yo();
+    SESSION = (await window.OLI.yoEstado()).sesion;
     await initIdiomaMoneda();
     document.getElementById("heroTitle").textContent = fld(CONFIG.brand, "lema");
     document.getElementById("heroSub").textContent = fld(CONFIG.brand, "bajada");
     document.getElementById("heroCta").textContent = fld(CONFIG.brand, "ctaPrincipal");
     const heroStatNiveles = document.getElementById("heroStatNiveles");
-    if (heroStatNiveles) heroStatNiveles.textContent = CONFIG.tiers.length;
+    if (heroStatNiveles) heroStatNiveles.textContent = CONFIG.tiers.filter((t) => !t.oculto).length;
     renderTiers();
     renderNav();
     wireModal();
@@ -86,13 +86,7 @@
   function cargarJs(src) {
     return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
   }
-  let _mapaCargado = false;
-  async function cargarMapa() {
-    if (_mapaCargado) return; _mapaCargado = true;
-    await cargarCss("/assets/vendor/maplibre-gl.css");
-    await cargarJs("/assets/vendor/maplibre-gl.js");
-    await cargarJs("/js/globe.js?v=88");
-  }
+  const cargarMapa = () => OLI.cargarMapa(); // misma carga diferida que usa la app del hincha (common.js)
 
   async function initIdiomaMoneda() {
     OLI.initThemeToggle("themeSw");
@@ -215,14 +209,97 @@
     const construir = async () => {
       await cargarMapa();
       if (!window.OLI_GLOBE) return;
-      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600, flagsUrl: "/api/flags" });
+      const gl = window.OLI_GLOBE.create(document.getElementById("globo"), { maxH: 600, flagsUrl: "/api/flags", celdasUrl: "/api/mapa/celdas" });
       if (!gl) return;
       gl.setCountries(stats.porPais || []);                    // nivel mundo: 1 badge por país
       gl.setData(stats.puntos || stats.porPais || []);         // nivel ciudad: badges/banderas
       gl.pov({ lat: -23.4, lng: -58.4, zoom: 2.4 });           // arranca mostrando Sudamérica (PY destacado)
       window.__oliGl = gl;
+      iniciarVistasMapa(gl);
+      etiquetarMapa(stats.porPais || []);
+      iniciarTiempo(gl);
+      iniciarPenas(gl);
       focarNuevo();                                            // si recién se inscribió, vuela a su ciudad
     };
+
+    // Botonera "Mi ciudad · Paraguay · El mundo": encontrarse en el globo sin tener que girarlo a mano.
+    const PY_BBOX = [[-62.65, -27.6], [-54.25, -19.3]];
+    function iniciarVistasMapa(gl) {
+      const barra = document.getElementById("globoVista"); if (!barra || barra.dataset.listo) return; barra.dataset.listo = "1";
+      const marcar = (v) => barra.querySelectorAll("button[data-vista]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.vista === v)));
+      barra.addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-vista]"); if (!b) return;
+        const v = b.dataset.vista; marcar(v);
+        if (v === "mundo") gl.vista("mundo");
+        else if (v === "pais") gl.vista("pais", { bbox: PY_BBOX });
+        else {
+          if (!navigator.geolocation) return OLI.toast(T("mapa_sin_geo"));
+          OLI.toast(T("mapa_buscando"));
+          navigator.geolocation.getCurrentPosition(
+            (pos) => gl.vista("ciudad", { lat: pos.coords.latitude, lng: pos.coords.longitude, zoom: 10 }),
+            () => { OLI.toast(T("mapa_sin_geo")); marcar("pais"); gl.vista("pais", { bbox: PY_BBOX }); },
+            { timeout: 8000, maximumAge: 600000 });
+        }
+      });
+      // Si el hincha mueve el mapa a mano, ninguna vista rápida sigue "activa".
+      gl.raw.on("dragstart", () => marcar(""));
+    }
+    // Peñas en el mapa + "Encontrá tu peña": la más cercana según la ubicación del navegador.
+    async function iniciarPenas(gl) {
+      let lista = []; try { lista = (await api("/penas")).items || []; } catch (e) { return; }
+      const ubicadas = lista.filter((p) => p.lat != null && p.lng != null);
+      if (!ubicadas.length) return;
+      gl.setPenas(ubicadas);
+      const caja = document.getElementById("globoPena"), btn = document.getElementById("penaCerca"); if (!caja || !btn) return;
+      caja.hidden = false;
+      btn.addEventListener("click", () => {
+        if (!navigator.geolocation) return OLI.toast(T("mapa_sin_geo"));
+        OLI.toast(T("mapa_pena_buscando"));
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          try {
+            const r = await api("/penas?cerca=" + pos.coords.latitude.toFixed(4) + "," + pos.coords.longitude.toFixed(4));
+            const p = (r.items || [])[0];
+            if (!p) return OLI.toast(T("mapa_pena_ninguna"));
+            gl.abrirPena(p);
+            OLI.toast(p.nombre + " · " + T("mapa_pena_km").replace("{km}", Math.round(p.distancia_km).toLocaleString(LANG === "en" ? "en-US" : "es-PY")));
+          } catch (e) { OLI.toast(T("mapa_pena_ninguna")); }
+        }, () => OLI.toast(T("mapa_sin_geo")), { timeout: 8000, maximumAge: 600000 });
+      });
+    }
+    // "Mirá cómo crece": altas acumuladas mes a mes (solo hinchas reales). Reproduce o se arrastra a mano.
+    async function iniciarTiempo(gl) {
+      const caja = document.getElementById("globoTiempo"); if (!caja || caja.dataset.listo) return;
+      let meses; try { meses = (await api("/mapa/historia")).meses || []; } catch (e) { return; }
+      if (meses.length < 2) return;
+      caja.dataset.listo = "1"; caja.hidden = false;
+      const rango = document.getElementById("tiempoRango"), play = document.getElementById("tiempoPlay"), et = document.getElementById("tiempoEt");
+      const loc = LANG === "en" ? "en-US" : "es-PY";
+      rango.max = String(meses.length - 1); rango.value = String(meses.length - 1);
+      const mostrar = (i) => {
+        const m = meses[i];
+        const lista = (stats.porPais || []).filter((p) => m.porPais[p.iso]).map((p) => ({ ...p, count: m.porPais[p.iso] }));
+        gl.setCountries(lista);
+        const nombre = new Date(m.mes + "-01T12:00:00").toLocaleDateString(loc, { month: "long", year: "numeric" });
+        et.textContent = nombre + " · " + m.total.toLocaleString(loc) + " " + T("mapa_reales");
+      };
+      let timer = null;
+      const parar = () => { clearInterval(timer); timer = null; play.textContent = T("mapa_crece_play"); };
+      rango.addEventListener("input", () => { parar(); mostrar(Number(rango.value)); });
+      play.addEventListener("click", () => {
+        if (timer) return parar();
+        let i = Number(rango.value) >= meses.length - 1 ? 0 : Number(rango.value);
+        play.textContent = T("mapa_crece_pausa");
+        mostrar(i); rango.value = String(i);
+        timer = setInterval(() => { i++; if (i >= meses.length) return parar(); rango.value = String(i); mostrar(i); }, 1800);
+      });
+    }
+
+    // Descripción del mapa para lectores de pantalla + lista completa de países (la alternativa accesible).
+    function etiquetarMapa(lista) {
+      const total = (lista || []).reduce((a, p) => a + Number(p.count || 0), 0);
+      const loc = LANG === "en" ? "en-US" : "es-PY";
+      if (window.__oliGl && window.__oliGl.etiqueta) window.__oliGl.etiqueta(T("mapa_aria").replace("{n}", total.toLocaleString(loc)).replace("{p}", String(lista.length)));
+    }
 
     // "Tu bandera aterrizó": tras inscribirse, vuela a su ciudad y la destaca.
     function focarNuevo() {
@@ -230,6 +307,8 @@
       let info; try { info = JSON.parse(sessionStorage.getItem("oli_nuevo") || "null"); } catch (e) {}
       if (!info) return;
       try { sessionStorage.removeItem("oli_nuevo"); } catch (e) {}
+      // Desde el perfil ("Ver cómo queda") llega el punto exacto elegido: se vuela directo ahí.
+      if (info.lat != null && info.lng != null) { gl.destacar({ lat: Number(info.lat), lng: Number(info.lng), label: "¡Vos!" }); return; }
       let pt = (stats.puntos || []).find((p) => (p.ciudad || "").toLowerCase() === (info.ciudad || "").toLowerCase() && (!info.iso || p.iso === info.iso));
       if (!pt) pt = (stats.porPais || []).find((p) => p.iso === info.iso);
       if (!pt) return;
@@ -287,8 +366,17 @@
     const loc = LANG === "en" ? "en-US" : "es-PY";
     const top = list.slice(0, 8);
     el.innerHTML = `<h4>${T("top_title")}</h4>` + top.map((p, i) =>
-      `<div class="tp-row"><span>${i + 1}. ${p.nombre}</span><strong>${Number(p.count).toLocaleString(loc)}</strong></div>`
-    ).join("");
+      `<div class="tp-row"><span>${i + 1}. ${OLI.esc(p.nombre)}</span><strong>${Number(p.count).toLocaleString(loc)}</strong></div>`
+    ).join("") + (list.length > top.length ? `<button type="button" class="tp-todos" id="tpTodos">${T("mapa_ver_todos")}</button>` : "");
+    // Lista completa de países: lo mismo que dibuja el mapa, en texto (lectores de pantalla y quien no quiere girar el globo).
+    const ol = document.getElementById("mapaLista"), sum = document.getElementById("mapaListaSum"), wrap = document.getElementById("mapaListaWrap");
+    if (ol && sum) {
+      sum.textContent = T("mapa_ver_los").replace("{n}", String(list.length));
+      ol.innerHTML = list.map((p) => `<li><span>${OLI.esc(p.nombre)}</span><strong>${Number(p.count).toLocaleString(loc)}</strong></li>`).join("");
+      const todos = document.getElementById("tpTodos");
+      if (todos) todos.onclick = () => { wrap.open = true; wrap.scrollIntoView({ behavior: "smooth", block: "center" }); };
+    }
+    if (window.__oliGl && window.__oliGl.etiqueta) etiquetarMapa(list);
   }
 
   function renderNav() {
@@ -322,7 +410,7 @@
   function renderTiers() {
     const cont = document.getElementById("tiers");
     const previewQR = makeQR("https://olimpistas.olimpia.com"); // QR genérico para la vista previa
-    cont.innerHTML = CONFIG.tiers.filter((t) => t.comprable !== false).map((t) => {
+    cont.innerHTML = CONFIG.tiers.filter((t) => t.comprable !== false && !t.oculto).map((t) => {
       const p = precioTier(t, CONFIG.brand.usdRate);
       const bullets = fld(t, "beneficios").map((b) => `<li>${esc(b)}</li>`).join("");
       const carnetHtml = carnet({ tierSlug: t.slug, tierNombre: t.nombre, nombre: "Tu nombre",

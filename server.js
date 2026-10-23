@@ -22,7 +22,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 // Cabeceras de seguridad (helmet) + CSP a medida con TODAS las fuentes que usa
-// la app (tiles Esri, fuentes Google, banderas flagcdn, Plausible, workers del
+// la app (tiles Esri, fuentes Google, Plausible, workers del
 // mapa). Defensa en profundidad junto al escape anti-XSS del front/back.
 // Meta Pixel: solo se enciende si META_PIXEL_ID es un id numérico válido. Si no, queda apagado
 // (no inyecta nada y el CSP no abre dominios de Facebook). Encenderlo = setear la env, sin tocar código.
@@ -35,8 +35,8 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://plausible.io", ...(PIXEL_ON ? ["https://connect.facebook.net"] : []), ...(GA_ON ? ["https://www.googletagmanager.com"] : [])],
       styleSrc: ["'self'", "'unsafe-inline'"],
       fontSrc: ["'self'", "data:"],
-      imgSrc: ["'self'", "data:", "blob:", "https://flagcdn.com", "https://server.arcgisonline.com", ...(PIXEL_ON ? ["https://www.facebook.com"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com"] : [])],
-      connectSrc: ["'self'", "https://plausible.io", "https://server.arcgisonline.com", "https://demotiles.maplibre.org", ...(PIXEL_ON ? ["https://www.facebook.com", "https://connect.facebook.net"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com", "https://*.analytics.google.com", "https://www.googletagmanager.com"] : [])],
+      imgSrc: ["'self'", "data:", "blob:", "https://server.arcgisonline.com", ...(PIXEL_ON ? ["https://www.facebook.com"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com"] : [])],
+      connectSrc: ["'self'", "https://plausible.io", "https://server.arcgisonline.com", ...(PIXEL_ON ? ["https://www.facebook.com", "https://connect.facebook.net"] : []), ...(GA_ON ? ["https://www.google-analytics.com", "https://*.google-analytics.com", "https://*.analytics.google.com", "https://www.googletagmanager.com"] : [])],
       workerSrc: ["'self'", "blob:"],
       childSrc: ["'self'", "blob:"],
       frameAncestors: ["'self'"],
@@ -79,6 +79,8 @@ const sinLimitarEnTest = () => process.env.NODE_ENV === "test" && process.env.TE
 const limitePenaAcceso = rateLimit({ windowMs: 15 * 60_000, max: 12, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiados intentos. Esperá unos minutos." } });
 app.use("/api/pena/login", limitePenaAcceso);
 app.use("/api/pena/clave", limitePenaAcceso);
+app.use("/api/comercio/login", limitePenaAcceso);
+app.use("/api/ciudades", rateLimit({ windowMs: 60_000, max: 90, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiadas búsquedas. Esperá un momento." } })); // mismo tope que el login del panel: acepta también las credenciales de un owner
 app.use("/api/penas/solicitud", rateLimit({ windowMs: 60 * 60_000, max: 10, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiadas solicitudes desde esta red. Probá más tarde." } }));
 // TODO /api/admin/*: corta el brute-force de la llave break-glass (x-admin-key) contra
 // cualquier endpoint (no solo /login). Generoso para uso humano real (pocos admins, no
@@ -264,6 +266,7 @@ app.get("/legal", sendPage("legal.html"));
 app.get("/reset", sendPage("reset.html"));           // página para crear nueva contraseña
 app.get("/admin", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "admin.html")); });
 app.get("/comercio", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "comercio.html")); });
+app.get("/guia-comercio", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "guia-comercio.html")); }); // guía de una página para el cajero (imprimible)
 app.get("/ayuda", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "ayuda.html")); }); // centro de ayuda
 app.get("/pena", (_req, res) => { res.setHeader("Cache-Control", "no-store"); res.sendFile(path.join(PUBLIC, "pena.html")); }); // panel de la comisión de una peña
 app.get("/socio", (_req, res) => res.redirect(301, "/miembro")); // compat: links viejos
@@ -514,6 +517,16 @@ img{width:160px;max-width:70%;margin-bottom:20px}a{color:#f0d873;font-weight:700
 <p style="color:#c6c6d0">Volvé al <a href="/">inicio</a> y hacete Olimpista.</p></div></body></html>`);
 });
 
+// Errores que se escapan de los middlewares (JSON malformado, cuerpo muy grande…): siempre JSON, nunca HTML ni stack.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err && err.type === "entity.parse.failed") return res.status(400).json({ error: "El cuerpo del pedido no es un JSON válido" });
+  if (err && err.type === "entity.too.large") return res.status(413).json({ error: "El pedido es demasiado grande" });
+  const status = Number(err && (err.status || err.statusCode)) || 500;
+  if (status >= 500) log.error({ err: err && err.message, ruta: req.path }, "error no manejado");
+  res.status(status >= 400 && status < 600 ? status : 500).json({ error: status >= 500 ? "Error interno" : (err && err.message) || "Error" });
+});
+
 // Migraciones al arrancar: solo si se pide (MIGRAR_AL_ARRANCAR=1, pensado para staging). En
 // producción se migra ANTES del deploy con `node setup/migrar.js`, para que un fallo de
 // migración no tire el servicio mientras atiende tráfico.
@@ -525,9 +538,16 @@ async function arrancar() {
       catch (e) { log.fatal({ err: e.message }, "migraciones: falló, no se arranca"); process.exit(1); }
     }
   }
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     log.info({ port: PORT, club: BRAND.club }, `Olimpistas arriba en http://localhost:${PORT}`);
   });
+  // Una promesa sin manejar mataría el proceso (Node 22) y con él las pujas y pagos en vuelo: se registra y se avisa.
+  process.on("unhandledRejection", (e) => {
+    log.error({ err: e && e.message, stack: e && e.stack }, "promesa sin manejar");
+    try { require("./lib/alert").alertar("proceso:unhandledRejection", "Promesa sin manejar en el servidor", String(e && e.message)); } catch (x) { /* sin alerta */ }
+  });
+  // Deploy o escalado hacia abajo: dejar terminar lo que está en vuelo (hasta 8 s) antes de cortar.
+  process.on("SIGTERM", () => { log.info({}, "SIGTERM: cerrando"); server.close(() => process.exit(0)); setTimeout(() => process.exit(0), 8000).unref(); });
 }
 if (require.main === module) arrancar();
 

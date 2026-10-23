@@ -38,7 +38,7 @@ async function pedido(store, socioId, monto = 100000) { return store.createPedid
 
 test("0005: crea las tablas de peñas y las columnas de socios y comercios", opts, async () => {
   const t = (await pg._sql`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name LIKE 'pena%'`).map((r) => r.table_name).sort();
-  assert.deepStrictEqual(t, ["pena_movimientos", "pena_sesiones", "pena_usuarios", "penas"]);
+  assert.deepStrictEqual(t, ["pena_miembros", "pena_movimientos", "pena_sesiones", "pena_usuarios", "penas"]);
   for (const tabla of ["socios", "comercios"]) {
     const [c] = await pg._sql`SELECT 1 AS x FROM information_schema.columns WHERE table_name = ${tabla} AND column_name = 'pena_id'`;
     assert.ok(c, tabla + ".pena_id");

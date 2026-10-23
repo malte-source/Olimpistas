@@ -5,6 +5,7 @@ process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";
 process.env.ADMIN_KEY = "clave-admin-de-prueba";
 process.env.CRON_SECRET = "secreto-de-cron-de-prueba";
+process.env.PENA_FONDO_ACTIVO = "1"; // el aporte al fondo está apagado por defecto (decisión del club); acá se prueba el mecanismo encendido
 process.env.PAGOPAR_PRIVATE_TOKEN = "privado-de-prueba"; // valida webhooks; sin público Pagopar queda simulado
 
 const { test, before, after, beforeEach } = require("node:test");

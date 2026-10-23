@@ -10,11 +10,13 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
   <script src="/js/tema.js"></script>
   <link rel="stylesheet" href="/assets/fonts/fonts.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=89" />
+  <link rel="stylesheet" href="/css/styles.css?v=96" />
   <style>
     /* Panel del comercio · sobre styles.css (roles --surface-*, --text-*, --action-*) · prefijo .com- */
     body { background: var(--surface-grouped); color: var(--text-primary); min-height: 100vh; }
     .hide { display: none !important; }
+    .com-paso { margin-top: 14px; padding: 14px; border: 1px solid var(--border-default); border-radius: var(--r-12); background: var(--surface-input); }
+    .com-paso-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .com-head { background: #0a0a0a; color: #fff; padding-top: env(safe-area-inset-top); }
     .com-head-in { max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 14px; padding: 22px 20px 20px; }
     .com-head-tx { flex: 1; min-width: 0; }
@@ -28,6 +30,7 @@
     .com-fr { height: 6px; background: repeating-linear-gradient(90deg, #fff 0 18px, #0a0a0a 18px 36px); }
     .com-wrap { max-width: 1080px; margin: 0 auto; padding: 18px 16px calc(40px + env(safe-area-inset-bottom)); }
     .com-login { max-width: 420px; margin: 4vh auto 0; }
+    .com-lectura { margin-bottom: 12px; padding: 11px 16px; border-radius: var(--r-14); background: #0a0a0a; color: #fff; font-size: var(--t-13); font-weight: 600; }
 
     .com-card { background: var(--surface-card); border-radius: var(--r-22); padding: 18px; }
     .com-card + .com-card { margin-top: 12px; }
@@ -48,13 +51,6 @@
     .com-seg-wrap .ctl-seg { display: flex; width: 100%; }
     .com-seg-wrap .ctl-seg-b { flex: 1; }
     .com-vistas { display: block; }
-    @media (min-width: 960px) {
-      .com-seg-wrap { display: none; }
-      .com-vistas { display: grid; grid-template-columns: minmax(340px, 5fr) 7fr; gap: 20px; align-items: start; }
-      .com-vistas #vValidar.hide, .com-vistas #vMi.hide { display: block !important; }
-      .com-wrap { padding-top: 26px; }
-    }
-
     .com-res { margin-top: 16px; border-radius: var(--r-22); padding: 16px; display: flex; gap: 14px; align-items: flex-start; animation: dcPop .22s var(--ease) both; }
     .com-res.ok { background: color-mix(in srgb, var(--text-success) 14%, var(--surface-card)); }
     .com-res.no { background: color-mix(in srgb, var(--text-error) 14%, var(--surface-card)); }
@@ -91,6 +87,81 @@
     .com-visor .barra { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); background: #000; text-align: center; color: #fff; }
     .com-visor .btn { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.4); }
     @media (prefers-reduced-motion: reduce) { .com-res { animation: none; } }
+    /* ── Panel del comercio PRO: caja grande, pestañas abajo en el celular, resultado a pantalla completa, "Hoy" y ayuda ── */
+    .sr-solo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .com-caja-cab h2 { margin: 0 0 4px; font: 600 var(--t-22) / 1.15 var(--display); letter-spacing: -.02em; }
+    .com-caja-cab .com-muted { margin: 0 0 16px; }
+    .com-caja select { font-weight: 600; }
+    .com-card .com-escanear { margin-top: 18px; width: 100%; min-height: 72px; padding: 20px 18px; font-size: var(--t-17); border-radius: var(--r-22); }
+    .com-tip { margin: 12px 0 0; }
+    .com-mas, .com-nueva { margin-top: 16px; }
+    .com-mas { border-top: 1px solid var(--sep); padding-top: 4px; }
+    .com-mas summary, .com-nueva summary, .com-guia summary { display: flex; align-items: center; min-height: 48px; cursor: pointer; font-size: var(--t-15); font-weight: 600; list-style: none; }
+    .com-mas summary::-webkit-details-marker, .com-nueva summary::-webkit-details-marker, .com-guia summary::-webkit-details-marker { display: none; }
+    .com-mas summary::after, .com-nueva summary::after, .com-guia summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); opacity: .55; transition: transform .15s; }
+    .com-mas[open] > summary::after, .com-nueva[open] > summary::after, .com-guia details[open] > summary::after { transform: rotate(-135deg); }
+    .com-mas summary:focus-visible, .com-nueva summary:focus-visible, .com-guia summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: var(--r-8); }
+    .com-nueva { margin-top: 12px; }
+    .com-guia { padding-top: 6px; padding-bottom: 6px; }
+    .com-guia details + details { border-top: 1px solid var(--sep); }
+    .com-guia p, .com-guia ol { margin: 0 0 14px; font-size: var(--t-15); line-height: 1.5; color: var(--text-secondary); }
+    .com-guia ol { padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+    .com-guia b { color: var(--text-primary); }
+    .com-guia a { color: var(--text-primary); }
+
+    .com-hoy { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .com-hoy .com-kpi { padding: 14px; }
+    .com-hoy .com-kpi b { font-size: var(--t-17); white-space: nowrap; }
+    .com-hoy .com-kpi span { display: block; line-height: 1.25; }
+    .com-ult { margin-top: 12px; padding: 6px 16px; }
+    .com-ult-fila { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; }
+    .com-ult-fila + .com-ult-fila { border-top: 1px solid var(--sep); }
+    .com-ult-h { font-size: var(--t-13); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+    .com-ult-tx b { display: block; font-size: var(--t-15); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .com-ult-tx small { font-size: var(--t-13); color: var(--text-secondary); }
+    .com-ult-ah { font-size: var(--t-13); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Resultado del canje: se lee de un vistazo desde la caja. */
+    .com-ov { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+    .com-ov-in { width: min(100%, 460px); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 32px 22px 24px; border-radius: var(--r-28); text-align: center; color: #fff; animation: dcPop .22s var(--ease) both; }
+    .com-ov-in.ok { background: #0f3d22; }
+    .com-ov-in.no { background: #4a1612; }
+    .com-ov-ic { width: 92px; height: 92px; }
+    .com-ov-in.ok .com-ov-ic { color: #7fe3a6; }
+    .com-ov-in.no .com-ov-ic { color: #ff8a80; }
+    .com-ov-in h2 { margin: 4px 0 0; font: 600 var(--t-28) / 1.1 var(--display); letter-spacing: -.02em; }
+    .com-ov-in .com-who { justify-content: center; color: #fff; }
+    .com-ov-in .com-av { background: #fff; color: #0a0a0a; }
+    .com-ov-in .com-badge { background: rgba(255, 255, 255, .18); color: #fff; }
+    .com-ov-p { margin: 0; font-size: var(--t-15); line-height: 1.45; color: rgba(255, 255, 255, .86); }
+    .com-ov-ah { margin-top: 4px; font: 700 var(--t-28) / 1.1 var(--display); }
+    .com-ov-s { margin: 0; font-size: var(--t-13); color: rgba(255, 255, 255, .7); }
+    .com-ov .com-ov-btn { margin-top: 18px; width: 100%; min-height: 56px; background: #fff; color: #0a0a0a; font-size: var(--t-17); }
+    @media (max-width: 700px) {
+      .com-ov { padding: 0; align-items: stretch; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+      .com-ov-in { width: 100%; justify-content: center; border-radius: 0; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+    }
+
+    /* Pestañas abajo (celular). */
+    .com-tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; background: var(--surface-card); border-top: 1px solid var(--sep); padding-bottom: env(safe-area-inset-bottom); }
+    .com-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 58px; padding: 8px 4px; border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--t-11); font-weight: 600; cursor: pointer; }
+    .com-tab[aria-current="page"] { color: var(--text-primary); }
+    .com-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -4px; }
+    .com-wrap.con-tabs { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+    /* Escritorio: la caja a la izquierda (fija) y, a la derecha, el comercio y la ayuda. */
+    @media (min-width: 960px) {
+      .com-tabs { display: none !important; }
+      .com-wrap.con-tabs { padding-bottom: 40px; }
+      .com-vistas { display: grid; grid-template-columns: minmax(380px, 460px) minmax(0, 1fr); grid-template-areas: "caja mi" "caja ayuda"; gap: 20px 28px; align-items: start; }
+      .com-vistas > .hide { display: block !important; }
+      #vValidar { grid-area: caja; position: sticky; top: 16px; }
+      #vMi { grid-area: mi; }
+      #vAyuda { grid-area: ayuda; }
+      #vAyuda > .com-h { margin-top: 0; }
+      .com-wrap { padding-top: 26px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .com-ov-in { animation: none; } }
   </style>
 </head>
 <body>
@@ -101,7 +172,7 @@
         <h1 id="comTitulo">Red de Beneficios</h1>
         <p id="comSub">Validá los beneficios de la Red del Decano</p>
       </div>
-      <img class="com-escudo" src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" />
+      <img class="com-escudo escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" />
       <button type="button" class="com-salir hide" id="salir" aria-label="Salir"><svg class="ic" width="20" height="20"><use href="/assets/icons.svg#i-salir"/></svg></button>
     </div>
     <div class="com-fr" aria-hidden="true"></div>
@@ -120,42 +191,64 @@
 
     <!-- PANEL -->
     <div id="panel" class="hide">
-      <div class="com-seg-wrap">
-        <div class="ctl-seg" role="radiogroup" aria-label="Vista" id="seg">
-          <button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-vista="validar">Validar</button>
-          <button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-vista="mi">Mi comercio</button>
-        </div>
-      </div>
+      <div class="com-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club. <a href="/admin" style="color:#fff;text-decoration:underline;margin-left:8px">Volver al panel del club</a></div>
 
       <div class="com-vistas">
-        <!-- VALIDAR -->
-        <div id="vValidar">
-          <div class="com-card">
+        <!-- CAJA: lo que se usa todo el día -->
+        <section id="vValidar" aria-label="Caja">
+          <div class="com-card com-caja">
+            <div class="com-caja-cab">
+              <h2>Canjear un beneficio</h2>
+              <p class="com-muted">Elegí el beneficio, escaneá el carnet del hincha y listo.</p>
+            </div>
             <label class="com-lbl" for="benSel">Beneficio a canjear</label>
             <select id="benSel"></select>
-            <label class="com-lbl" for="monto">Monto de la compra (opcional)</label>
-            <input id="monto" type="number" inputmode="numeric" placeholder="₲ 0" />
-            <button class="btn btn-block" id="escanearBtn"><svg class="ic" width="20" height="20"><use href="/assets/icons.svg#i-qr"/></svg> Escanear carnet</button>
-            <p class="com-muted" style="margin:12px 0 0">Pedile al hincha que abra su carnet en la app: el QR cambia cada minuto.</p>
-            <label class="com-lbl" for="codigo">Código del socio o texto del QR (si no se puede escanear)</label>
-            <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" autocomplete="off" />
-            <button class="btn btn-ghost btn-block" id="validarBtn" style="margin-top:12px">Validar canje</button>
+            <button class="btn btn-block com-escanear" id="escanearBtn"><svg class="ic" width="26" height="26"><use href="/assets/icons.svg#i-qr"/></svg> Escanear carnet</button>
+            <p class="com-muted com-tip">El hincha abre su carnet en la app de Olimpistas: el QR cambia cada minuto y sirve una sola vez.</p>
             <div class="com-msg" id="valErr" role="alert"></div>
-            <div id="res" aria-live="polite"></div>
+
+            <!-- Paso del monto: el QR se lee primero y el monto se sabe después, así que se pide acá si no se cargó antes. -->
+            <div id="pasoMonto" class="com-paso hide" role="group" aria-labelledby="pasoMontoTit">
+              <b id="pasoMontoTit">QR leído. ¿De cuánto fue la compra?</b>
+              <label class="com-lbl" for="montoPaso">Monto de la compra (opcional)</label>
+              <input id="montoPaso" type="number" inputmode="numeric" min="0" placeholder="₲ 0" />
+              <div class="com-paso-acc">
+                <button class="btn" id="pasoOk" type="button">Confirmar canje</button>
+                <button class="btn btn-ghost" id="pasoSin" type="button">Sin monto</button>
+                <button class="btn btn-ghost" id="pasoNo" type="button">Cancelar</button>
+              </div>
+            </div>
+
+            <details class="com-mas">
+              <summary>¿No se puede escanear? Ingresá el código</summary>
+              <label class="com-lbl" for="codigo">Código del socio o texto del QR</label>
+              <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" autocomplete="off" />
+              <label class="com-lbl" for="monto">Monto de la compra (opcional)</label>
+              <input id="monto" type="number" inputmode="numeric" placeholder="₲ 0" />
+              <button class="btn btn-ghost btn-block" id="validarBtn">Validar canje</button>
+            </details>
+            <div id="res" class="sr-solo" aria-live="polite"></div>
           </div>
-        </div>
+
+          <div class="com-h">Hoy</div>
+          <div class="com-hoy" id="hoyKpis"></div>
+          <div class="com-card com-ult"><div id="ultimos"><p class="com-muted">Cargando…</p></div></div>
+        </section>
 
         <!-- MI COMERCIO -->
-        <div id="vMi" class="hide">
+        <section id="vMi" class="hide" aria-label="Mi comercio">
           <p class="com-muted" id="periodo" style="margin:0 0 10px 4px"></p>
           <div class="com-kpis" id="kpis"></div>
           <div class="com-h">Canjes por nivel</div>
           <div class="com-card"><div class="com-mix" id="mix"></div></div>
           <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" id="csvBtn">Descargar canjes (CSV)</button></div>
 
-          <div class="com-h">Cargar una oferta nueva</div>
-          <div class="com-card">
-            <p class="com-muted" style="margin:0 0 4px">El club la revisa antes de publicarla.</p>
+          <div class="com-h">Mis ofertas</div>
+          <div id="ofertas"></div>
+
+          <details class="com-card com-nueva">
+            <summary>Cargar una oferta nueva</summary>
+            <p class="com-muted" style="margin:10px 0 4px">El club la revisa antes de publicarla.</p>
             <label class="com-lbl" for="ofTitulo">Título</label><input id="ofTitulo" maxlength="100" placeholder="Ej. 10% en protectores solares" />
             <label class="com-lbl" for="ofValor">Beneficio</label><input id="ofValor" maxlength="30" placeholder="10%  ·  2x1  ·  Gratis el envío" />
             <label class="com-lbl" for="ofPara">Para quién</label>
@@ -164,12 +257,53 @@
             <label class="com-lbl" for="ofStock">Cupo (cantidad de canjes)</label><input id="ofStock" type="number" inputmode="numeric" min="0" placeholder="Opcional: sin tope" />
             <button class="btn btn-block" id="ofEnviar">Enviar para aprobación</button>
             <div class="com-msg" id="ofMsg" role="alert"></div>
+          </details>
+        </section>
+
+        <!-- AYUDA PARA CAJA -->
+        <section id="vAyuda" class="hide" aria-label="Ayuda para caja">
+          <div class="com-h" style="margin-top:0">Ayuda para caja</div>
+          <div class="com-card com-guia">
+            <details open>
+              <summary>Cómo canjear, en 3 pasos</summary>
+              <ol>
+                <li>Elegí el <b>beneficio</b> que corresponde a la compra.</li>
+                <li>Pedile al hincha que abra su <b>carnet de Olimpistas</b> y tocá <b>Escanear carnet</b>.</li>
+                <li>Cargá el <b>monto</b> (o tocá <i>Sin monto</i>) y confirmá. Si dice <b>Canje aprobado</b>, aplicá el descuento.</li>
+              </ol>
+            </details>
+            <details>
+              <summary>El QR dice "venció" o "ya se usó"</summary>
+              <p>El QR cambia cada minuto y sirve una sola vez. Pedile al hincha que espere el siguiente y lo muestre de nuevo. No sirve una captura de pantalla.</p>
+            </details>
+            <details>
+              <summary>No puedo escanear</summary>
+              <p>Abrí <b>Ingresá el código</b> y pegá el texto del QR o el código del socio. Si el celular no deja usar la cámara, probá abrir este panel en Chrome y aceptá el permiso de cámara.</p>
+            </details>
+            <details>
+              <summary>Dice "su nivel no incluye este beneficio"</summary>
+              <p>Algunos beneficios son solo para socios del club. Invitalo a validar su cédula de socio en la app de Olimpistas: es gratis y se desbloquea al instante.</p>
+            </details>
+            <details>
+              <summary>Dice "ya usó este beneficio" o "se agotó el cupo"</summary>
+              <p>El beneficio tiene un límite por persona o un cupo total. No se puede canjear de nuevo hasta que pase el plazo; el club puede ajustar el cupo.</p>
+            </details>
+            <p class="com-muted" style="margin:14px 0 0"><a href="/guia-comercio" target="_blank" rel="noopener">Abrir la guía de una página para imprimir</a></p>
           </div>
-          <div class="com-h">Mis ofertas</div>
-          <div id="ofertas"></div>
-        </div>
+        </section>
       </div>
     </div>
+
+    <!-- Resultado de un canje: pantalla completa en el celular, diálogo en escritorio. Se lee de un vistazo desde la caja. -->
+    <div class="com-ov hide" id="resOv" role="alertdialog" aria-modal="true" aria-labelledby="resTit">
+      <div class="com-ov-in" id="resBody"></div>
+    </div>
+
+    <nav class="com-tabs hide" id="tabs" aria-label="Secciones">
+      <button type="button" class="com-tab" data-vista="validar" aria-current="page"><svg class="ic" width="24" height="24" aria-hidden="true"><use href="/assets/icons.svg#i-qr"/></svg><span>Caja</span></button>
+      <button type="button" class="com-tab" data-vista="mi"><svg class="ic" width="24" height="24" aria-hidden="true"><use href="/assets/icons.svg#i-tablero"/></svg><span>Mi comercio</span></button>
+      <button type="button" class="com-tab" data-vista="ayuda"><svg class="ic" width="24" height="24" aria-hidden="true"><use href="/assets/icons.svg#i-ayuda"/></svg><span>Ayuda</span></button>
+    </nav>
   </main>
 
   <div class="com-visor hide" id="visor"><video id="video" playsinline muted></video><div class="barra"><div id="visorMsg" style="margin-bottom:10px">Apuntá al QR del carnet</div><button class="btn btn-sm" id="visorCerrar">Cancelar</button></div></div>
@@ -210,21 +344,81 @@
       $("loginErr").textContent = "";
       try{
         var j = await api("/comercio/login", { method:"POST", body:{ usuario:$("usuario").value, password:$("password").value } });
+        if(j.admin){ elegirComercio(j); return; }
         try{ localStorage.setItem(TK, j.token); }catch(e){}
         entrarPanel();
       }catch(e){ $("loginErr").textContent = e.message; }
     });
     $("password").addEventListener("keydown", function(e){ if(e.key === "Enter") $("loginBtn").click(); });
+    // Un owner del panel entra con su usuario del club y elige qué comercio mirar (solo lectura, queda en la auditoría).
+    function elegirComercio(j){
+      var ops = j.opciones || [];
+      $("loginCard").innerHTML = '<p class="com-muted">Entraste como administrador del club. ' + (ops.length ? 'Elegí el comercio que querés ver en modo lectura.' : 'Todavía no hay comercios cargados: creá uno desde el admin (Contenido → Comercios) y volvé a entrar.') + '</p>' +
+        (ops.length ? '<label class="com-lbl" for="comoSel">Comercio</label><select id="comoSel">' +
+        ops.map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.nombre)+(c.ciudad?' · '+esc(c.ciudad):'')+(c.estado && c.estado !== "activo" ? ' (' + esc(c.estado) + ')' : '')+'</option>'; }).join("") + '</select>' +
+        '<button class="btn btn-block" id="comoBtn">Ver este comercio</button>' : '') +
+        '<div class="com-msg" id="comoErr" role="alert"></div><p class="com-muted" style="margin:14px 0 0"><a href="/admin">Ir al panel del club</a> · <a href="/comercio">Entrar con otro usuario</a></p>';
+      if(!ops.length) return;
+      $("comoBtn").addEventListener("click", async function(){
+        $("comoErr").textContent = "";
+        try{
+          var r = await fetch("/api/comercio/entrar-como", { method:"POST", headers:{ "Content-Type":"application/json", "x-admin-token": j.token_admin }, body: JSON.stringify({ id: $("comoSel").value }) });
+          var k = await r.json().catch(function(){ return {}; });
+          if(!r.ok) throw new Error(k.error || ("Error "+r.status));
+          try{ localStorage.setItem(TK, k.token); }catch(e){}
+          location.reload();
+        }catch(e){ $("comoErr").textContent = e.message; }
+      });
+    }
     $("salir").addEventListener("click", function(){ try{ localStorage.removeItem(TK); }catch(e){} location.reload(); });
 
-    // ── Vistas (en el móvil se alternan; en escritorio se ven las dos lado a lado) ──
-    $("seg").addEventListener("click", function(e){
+    // ── Vistas: en el celular se alternan con las pestañas de abajo; en escritorio se ven todas juntas ──
+    var VISTAS = { validar: "vValidar", mi: "vMi", ayuda: "vAyuda" };
+    function irVista(v){
+      Object.keys(VISTAS).forEach(function(k){ $(VISTAS[k]).classList.toggle("hide", k !== v); });
+      document.querySelectorAll("#tabs .com-tab").forEach(function(t){ if(t.dataset.vista === v) t.setAttribute("aria-current", "page"); else t.removeAttribute("aria-current"); });
+      if(v === "mi") cargarMiComercio();
+      if(v === "validar") cargarHoy();
+      try{ window.scrollTo(0, 0); }catch(e){}
+    }
+    $("tabs").addEventListener("click", function(e){
       var b = e.target.closest("button[data-vista]"); if(!b) return;
-      document.querySelectorAll("#seg button").forEach(function(x){ x.setAttribute("aria-checked", String(x === b)); });
-      $("vValidar").classList.toggle("hide", b.dataset.vista !== "validar");
-      $("vMi").classList.toggle("hide", b.dataset.vista !== "mi");
-      if(b.dataset.vista === "mi") cargarMiComercio();
+      irVista(b.dataset.vista);
     });
+
+    // Resultado del canje: pantalla completa en el celular, diálogo en escritorio (se lee de un vistazo desde la caja).
+    var ovPrev = null;
+    function mostrarResultado(ok, d){
+      var cuerpo = ok
+        ? ic("check-circulo-f","com-ov-ic") + '<h2 id="resTit">Canje aprobado</h2>' + quien(d.socio) + '<p class="com-ov-p">' + esc(d.beneficio) + '</p>' +
+          (d.ahorro ? '<div class="com-ov-ah">El socio ahorró ' + gs(d.ahorro) + '</div>' : "") + (d.cupo ? '<p class="com-ov-s">' + esc(d.cupo) + '</p>' : "")
+        : ic("error-circulo-f","com-ov-ic") + '<h2 id="resTit">No aplica</h2>' + (d.socio ? quien(d.socio) : "") + '<p class="com-ov-p">' + d.msg + '</p>';
+      $("resBody").className = "com-ov-in " + (ok ? "ok" : "no");
+      $("resBody").innerHTML = cuerpo + '<button type="button" class="btn com-ov-btn" id="resListo">' + (ok ? "Listo" : "Entendido") + '</button>';
+      $("res").textContent = ok ? "Canje aprobado" : "No aplica";
+      ovPrev = document.activeElement;
+      $("resOv").classList.remove("hide");
+      $("resListo").addEventListener("click", cerrarResultado);
+      $("resListo").focus();
+    }
+    function cerrarResultado(){
+      $("resOv").classList.add("hide"); $("res").textContent = "";
+      if(ovPrev && ovPrev.focus){ try{ ovPrev.focus(); }catch(e){} }
+      cargarHoy();
+    }
+    document.addEventListener("keydown", function(e){ if(e.key === "Escape" && !$("resOv").classList.contains("hide")) cerrarResultado(); });
+
+    // Lo de hoy: totales y últimos canjes (así el cajero comprueba que quedó registrado).
+    async function cargarHoy(){
+      try{
+        var h = await api("/comercio/hoy");
+        $("hoyKpis").innerHTML = [["Canjes", h.canjes], ["Ahorro entregado", gs(h.ahorro)], ["Ventas", gs(h.ventas)]]
+          .map(function(k){ return '<div class="com-kpi"><b>'+esc(k[1])+'</b><span>'+esc(k[0])+'</span></div>'; }).join("");
+        $("ultimos").innerHTML = (h.ultimos || []).length ? h.ultimos.map(function(u){
+          return '<div class="com-ult-fila"><span class="com-ult-h">'+esc(u.hora)+'</span><span class="com-ult-tx"><b>'+esc(u.socio)+'</b><small>'+esc(u.beneficio)+(u.monto ? ' · '+gs(u.monto) : '')+'</small></span><span class="com-ult-ah">'+(u.ahorro ? gs(u.ahorro) : '')+'</span></div>';
+        }).join("") : '<p class="com-muted" style="margin:12px 0">Todavía no hay canjes hoy. Cuando registres el primero, aparece acá.</p>';
+      }catch(err){ $("ultimos").innerHTML = '<p class="com-muted" style="margin:12px 0">No se pudo cargar lo de hoy.</p>'; }
+    }
 
     async function entrarPanel(){
       try{
@@ -238,8 +432,15 @@
         $("loginCard").classList.add("hide");
         $("panel").classList.remove("hide");
         $("salir").classList.remove("hide");
-        cargarMiComercio(); // en escritorio las dos vistas conviven
-      }catch(e){ /* token inválido → seguir en login */ }
+        $("tabs").classList.remove("hide"); document.querySelector(".com-wrap").classList.add("con-tabs");
+        $("modoLectura").classList.toggle("hide", tok().indexOf("adm_") !== 0);
+        cargarMiComercio(); cargarHoy(); // en escritorio las vistas conviven
+      }catch(e){
+        // Sesión vencida o inválida → volver al login, avisando por qué (antes se quedaba mudo en la pantalla de elección).
+        try{ localStorage.removeItem(TK); }catch(x){}
+        $("loginCard").classList.remove("hide"); $("panel").classList.add("hide");
+        if(typeof e.message === "string" && e.message) $("loginErr").textContent = /inválid|autoriz/i.test(e.message) ? "La sesión venció. Entrá de nuevo." : e.message;
+      }
     }
 
     // ── Validar ──
@@ -258,20 +459,34 @@
           token: esQr ? v : undefined, codigo: esQr ? undefined : v, beneficioId: $("benSel").value, monto: Number($("monto").value)||0
         }});
         if(j.ok){
-          var ah = j.ahorro ? '<div class="com-ah">El socio ahorró '+gs(j.ahorro)+'</div>' : "";
-          var cupo = (j.stock != null) ? ' Quedan '+j.stock+' en el cupo.' : "";
-          $("res").innerHTML = '<div class="com-res ok">'+ic("check-circulo-f","com-res-ic")+'<div class="com-res-tx"><span class="com-big">Canje aprobado</span>'+quien(j.socio)+
-            '<small>"'+esc(j.beneficio)+'" registrado.'+cupo+'</small>'+ah+'</div></div>';
+          mostrarResultado(true, { socio: j.socio, beneficio: j.beneficio, ahorro: j.ahorro, cupo: (j.stock != null) ? "Quedan " + j.stock + " en el cupo." : "" });
           $("codigo").value = ""; $("monto").value = "";
         }else{
           var msg = MOTIVOS[j.motivo] || "No se pudo validar.";
           var extra = (j.motivo==="nivel_no_aplica" && j.requiere) ? ' Invitalo a subir a '+(LBL[j.requiere]||esc(j.requiere))+'.' : "";
-          $("res").innerHTML = '<div class="com-res no">'+ic("error-circulo-f","com-res-ic")+'<div class="com-res-tx"><span class="com-big">No aplica</span>'+(j.socio ? quien(j.socio) : "")+'<small>'+msg+extra+'</small></div></div>';
+          mostrarResultado(false, { socio: j.socio, msg: msg + extra });
         }
       }catch(e){ $("valErr").textContent = e.message; }
       btn.disabled = false;
     }
     $("validarBtn").addEventListener("click", function(){ validar(); });
+
+    // Después de escanear sin monto cargado: se pide el monto antes de registrar el canje (el QR dura un minuto).
+    var qrPendiente = null;
+    function cerrarPaso(){ qrPendiente = null; $("pasoMonto").classList.add("hide"); $("montoPaso").value = ""; }
+    function pedirMonto(qr){
+      qrPendiente = qr; $("montoPaso").value = ""; $("pasoMonto").classList.remove("hide");
+      $("montoPaso").focus();
+    }
+    function confirmarPaso(conMonto){
+      var qr = qrPendiente; if(!qr) return;
+      $("monto").value = conMonto ? String(Math.max(0, Math.round(Number($("montoPaso").value) || 0))) : "";
+      cerrarPaso(); validar(qr);
+    }
+    $("pasoOk").addEventListener("click", function(){ confirmarPaso(true); });
+    $("pasoSin").addEventListener("click", function(){ confirmarPaso(false); });
+    $("pasoNo").addEventListener("click", function(){ cerrarPaso(); $("codigo").value = ""; });
+    $("montoPaso").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); confirmarPaso(true); } });
 
     // ── Escanear el QR del carnet con la cámara (BarcodeDetector; si el navegador no lo trae, se pega el texto) ──
     var stream = null, escaneando = false;
@@ -297,7 +512,7 @@
             try{
               var cs = await det.detect(v);
               var hit = cs.find(function(c){ return /^OLI1\./.test(c.rawValue || ""); });
-              if(hit){ cerrarVisor(); $("codigo").value = hit.rawValue; validar(hit.rawValue); return; }
+              if(hit){ cerrarVisor(); $("codigo").value = hit.rawValue; if(Number($("monto").value) > 0) validar(hit.rawValue); else pedirMonto(hit.rawValue); return; }
             }catch(e){}
             await new Promise(function(r){ setTimeout(r, 250); });
           }

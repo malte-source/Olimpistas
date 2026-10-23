@@ -29,6 +29,11 @@ const { urlImagen } = require("./lib/imagen-subasta");
 const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib/puntos");
 const carnetLib = require("./lib/carnet");
 const atencionLib = require("./lib/atencion");
+const campanasLib = require("./lib/campanas");
+const h3lib = require("./lib/h3");
+const mapaLib = require("./lib/mapa");
+const ciudadesLib = require("./lib/ciudades");
+const mapaUrl = require("./lib/mapaurl");
 const { periodo } = require("./lib/periodo");
 // Comparación de secretos en tiempo constante (sha256 de ambos → mismo largo, sin filtrar el largo).
 const igualesSeguro = (a, b) => {
@@ -83,7 +88,7 @@ function perfilProgreso(socio) {
   let hechos = 0;
   const faltantes = [];
   for (const c of PERFIL_CAMPOS) {
-    const lleno = socio && String(socio[c.key] || "").trim() !== "";
+    const lleno = socio && (String(socio[c.key] || "").trim() !== "" || (c.key === "foto" && !!socio.tiene_foto));
     if (lleno) hechos += c.peso;
     else faltantes.push({ key: c.key, label: c.label });
   }
@@ -295,18 +300,54 @@ function buildRouter() {
     if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n)))
       throw httpError(400, "bbox inválido (se espera minLng,minLat,maxLng,maxLat)");
     const [minLng, minLat, maxLng, maxLat] = parts;
-    const raw = await store.flagsEnBBox({ minLng, minLat, maxLng, maxLat, limit: req.query.limit });
+    // DESACTIVADO por privacidad: devolvía casas con un desfase fijo y sin k-anonimato (se podía recorrer el mapa en teselas).
+    // La app usa /api/mapa/celdas. Se deja la ruta (responde vacío) para no romper cachés de versiones viejas del navegador.
+    const raw = [];
     // Privacidad: NUNCA exponer el domicilio exacto en público. Difuminamos la coordenada
     // ~150m con un offset determinístico por socio (estable, no salta) y mostramos solo el
-    // nombre de pila. El punto exacto solo lo ve el propio socio en su perfil.
+    // ni nombre ni ciudad: solo una bandera. El punto exacto solo lo ve el propio socio en su perfil.
     const flags = raw.map((f) => {
       const h = crypto.createHash("sha256").update(String(f.id)).digest();
       const dLat = ((h[0] / 255) - 0.5) * 0.003;  // ±0.0015° ≈ ±165m
       const dLng = ((h[1] / 255) - 0.5) * 0.003;
-      return { nombre: String(f.nombre || "").split(" ")[0], ciudad: f.ciudad, lat: Number(f.lat) + dLat, lng: Number(f.lng) + dLng };
+      return { lat: Number(f.lat) + dLat, lng: Number(f.lng) + dLng };
     });
     res.setHeader("Cache-Control", "public, max-age=20");
     res.json({ flags });
+  }));
+
+  // Barrios en hexágonos H3 con k-anonimato (lib/h3.js): reemplaza a /flags, que queda unas versiones más para no romper a nadie.
+  // Pública a propósito: no lleva ids ni nombres, y una celda con menos de K hinchas no se entrega.
+  let _celdasGlobal = null;
+  r.get("/mapa/celdas", wrap(async (req, res) => {
+    const p = String(req.query.bbox || "").split(",").map(Number);
+    if (p.length !== 4 || p.some((n) => !Number.isFinite(n))) throw httpError(400, "bbox inválido (se espera minLng,minLat,maxLng,maxLat)");
+    const [minLng, minLat, maxLng, maxLat] = p;
+    if (minLng >= maxLng || minLat >= maxLat || maxLng - minLng > 2 || maxLat - minLat > 2) throw httpError(400, "Acercate más: el recuadro es demasiado grande para dibujar barrios.");
+    // Se agrupa y se aplica el k-anonimato sobre TODOS los puntos (caché 5 min) y recién después se recorta por recuadro. Si se agrupara
+    // solo lo que cae dentro del recuadro, deslizar el borde mostraría cuándo aparece o desaparece una celda y delataría a cada persona.
+    if (!_celdasGlobal || Date.now() - _celdasGlobal.t > (process.env.NODE_ENV === "test" ? 0 : 300000)) {
+      const todos = await store.puntosPublicosEnBBox({ minLng: -180, minLat: -90, maxLng: 180, maxLat: 90, limit: 50000 });
+      _celdasGlobal = { t: Date.now(), v: h3lib.celdasAnonimas(todos).map((c) => { const [la, lo] = h3lib.centro(c.c); return { ...c, la, lo }; }) };
+    }
+    const dentro = _celdasGlobal.v.filter((c) => c.lo >= minLng && c.lo <= maxLng && c.la >= minLat && c.la <= maxLat).slice(0, 2000).map(({ c, n, r: rr }) => ({ c, n, r: rr }));
+    res.setHeader("Cache-Control", "public, max-age=60");
+    res.json({ k: h3lib.K, celdas: dentro });
+  }));
+
+  // Para "Compartir mi bandera": cuántos olimpistas REALES hay en tu ciudad y en tu país (sin la rampa ni el agregado de demo).
+  r.get("/perfil/mapa", auth.requireSocio, wrap(async (req, res) => {
+    const s = (await store.getSocioById(req.socio.id)) || req.socio;
+    const ciudadN = s.ciudad_id && store.contarPorCiudadId ? await store.contarPorCiudadId(s.ciudad_id) : 0;
+    const iso = String(s.pais_iso || "").toUpperCase();
+    const porPais = store.contarPorPais ? await store.contarPorPais() : [];
+    const paisN = Number((porPais.find((p) => String(p.pais_iso || "").toUpperCase() === iso) || {}).count || 0);
+    res.json({ nombre: s.nombre || "", ciudad: s.ciudad || "", ciudad_n: ciudadN, pais: s.pais || "", iso, pais_n: paisN });
+  }));
+  // "Mirá cómo crece": altas acumuladas por mes y país, solo hinchas reales. Totales por país: nada de una persona.
+  r.get("/mapa/historia", wrap(async (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=600");
+    res.json({ meses: mapaLib.acumularHistoria(await store.historiaAltas()) });
   }));
 
   const soloDigitos = (s) => String(s || "").replace(/\D/g, "");
@@ -416,10 +457,15 @@ function buildRouter() {
     res.json({ ok: true });
   }));
 
+  // req.socio (la sesión) no trae la foto para no arrastrarla en cada request; las pantallas que la muestran la piden acá.
+  async function conFoto(socio) {
+    const foto = store.getSocioFoto ? await store.getSocioFoto(socio.id) : socio.foto;
+    return { ...socio, foto: foto || "" };
+  }
   r.get("/auth/yo", auth.requireSocio, wrap(async (req, res) => {
     const membresia = await store.getMembresia(req.socio.id);
     const referidos = store.contarReferidos ? await store.contarReferidos(req.socio.id).catch(() => 0) : 0;
-    res.json({ socio: req.socio, membresia, progreso: perfilProgreso(req.socio), referidos });
+    res.json({ socio: await conFoto(req.socio), membresia, progreso: perfilProgreso(req.socio), referidos });
   }));
 
   // Ranking de referidores ("la hinchada que más suma"). Público, cacheado liviano.
@@ -441,9 +487,30 @@ function buildRouter() {
 
   // ─── Perfil (enriquecimiento + barra de progreso) ────────────────────────────
   r.get("/perfil", auth.requireSocio, wrap(async (req, res) => {
-    res.json({ socio: req.socio, progreso: perfilProgreso(req.socio) });
+    res.json({ socio: await conFoto(req.socio), progreso: perfilProgreso(req.socio) });
   }));
 
+  // Autocompletar de ciudades (público): por prefijo, sin acentos, por población. Tope de 10.
+  r.get("/ciudades", wrap(async (req, res) => {
+    const items = store.buscarCiudades ? await store.buscarCiudades({ q: String(req.query.q || "").slice(0, 60), pais: req.query.pais, limit: 10 }) : [];
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.json({ items: items.map((c) => ({ id: c.id, nombre: c.nombre, pais_iso: c.pais_iso })) });
+  }));
+  async function asignarCiudad(socio, patch, b) {
+    if (!store.getCiudad) return;
+    const iso = String(patch.pais_iso != null ? patch.pais_iso : (socio.pais_iso || "")).toUpperCase();
+    if (b.ciudad_id != null && b.ciudad_id !== "") {
+      const c = await store.getCiudad(Number(b.ciudad_id));
+      if (c) { patch.ciudad_id = c.id; patch.ciudad = c.nombre; }
+    } else if (typeof patch.ciudad === "string") {
+      if (!patch.ciudad) patch.ciudad_id = null;
+      else { const c = await store.ciudadPorNombre({ nombre: patch.ciudad, pais: iso }); patch.ciudad_id = c ? c.id : null; }
+    } else if (patch.lat != null && patch.lng != null && !socio.ciudad_id) {
+      // Eligió su casa y todavía no tiene ciudad: la más cercana del mismo país (hasta 60 km).
+      const c = await store.ciudadMasCercana({ lat: patch.lat, lng: patch.lng, pais: iso, maxKm: 60 });
+      if (c) { patch.ciudad_id = c.id; if (!socio.ciudad) patch.ciudad = c.nombre; }
+    }
+  }
   r.patch("/perfil", auth.requireSocio, wrap(async (req, res) => {
     const b = req.body || {};
     const patch = {};
@@ -484,6 +551,8 @@ function buildRouter() {
       if (!["auto", "claro", "oscuro"].includes(b.tema)) throw httpError(400, "Apariencia inválida (auto, claro u oscuro)");
       patch.tema = b.tema;
     }
+    // Ciudad oficial (GeoNames): la elegida con el autocompletado, la que coincide con el texto, o la más cercana a su casa.
+    await asignarCiudad(req.socio, patch, b);
     // Peña: sumarse a una peña verificada, o dejarla (null / "").
     if (b.pena_id !== undefined) {
       if (b.pena_id === null || b.pena_id === "") patch.pena_id = null;
@@ -542,6 +611,7 @@ function buildRouter() {
     // Guardamos la cédula en la cuenta (el índice único de la DB es el backstop).
     try { await store.updateSocio(req.socio.id, { cedula }); }
     catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta de Olimpistas"); }
+    unirPenaPorCedula(req.socio.id);
 
     // Estado EN VIVO en el club (API de socios, ITI/Tuti) + padrón estático como respaldo.
     //  · 200 = autoritativo (sólo trae titulares): al día → socio; mora/baja → NO, aunque
@@ -612,6 +682,7 @@ function buildRouter() {
     // Niveles OTORGADOS (ej. Socio): no se compran. Blindaje antes de la rama "gratis"
     // (si no, un precio 0 caería como membresía gratis por error).
     if (tier.comprable === false) throw httpError(403, "Ese nivel es exclusivo de los socios del Club — se otorga, no se adquiere");
+    if (tier.oculto) throw httpError(403, "Ese nivel ya no se ofrece");
 
     // Nivel gratis → membresía activa inmediata, sin pago.
     if (tier.slug === "olimpista" || !tier.precioAnio || tier.precioAnio <= 0) {
@@ -654,7 +725,7 @@ function buildRouter() {
         const otra = await store.getSocioByCedula(cedulaBody);
         if (otra && otra.id !== req.socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
       }
-      try { await store.updateSocio(req.socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
+      try { await store.updateSocio(req.socio.id, { cedula: cedulaBody }); documento = cedulaBody; unirPenaPorCedula(req.socio.id); }
       catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta"); }
     }
     if (!documento) return res.json({ falta_cedula: true }); // el front pide la cédula y reintenta
@@ -707,7 +778,14 @@ function buildRouter() {
       return { membresia };
     }
     if (pedido.reserva_id && store.confirmarReserva) {
-      await store.confirmarReserva(pedido.reserva_id);
+      const conf = await store.confirmarReserva(pedido.reserva_id);
+      if (conf && conf.error === "sin_stock") {
+        // El pago llegó después de que se liberó el cupo (no se pagó a tiempo) y ya no quedan entradas.
+        log.error({ pedidoId: pedido.id, reservaId: pedido.reserva_id, socioId: pedido.socio_id }, "pago recibido por una reserva liberada y sin stock");
+        alertar("preventa:pago-sin-stock:" + pedido.id, "Pago recibido por entradas que ya no hay — REEMBOLSAR",
+          "Pedido " + pedido.id + " · ₲ " + Number(pedido.monto || 0).toLocaleString("es-PY") + " · la reserva se liberó por falta de pago a tiempo y las entradas se agotaron. Reembolsar por Pagopar.");
+        return { huerfano: true };
+      }
       try {
         const reserva = store.getReserva ? await store.getReserva(pedido.reserva_id) : null;
         const preventa = reserva && store.getPreventa ? await store.getPreventa(reserva.preventa_id) : null;
@@ -869,6 +947,13 @@ function buildRouter() {
   // Configurar en Cloud Scheduler: POST https://www.olimpistas.com/api/cron/diario con header
   // x-cron-token = CRON_SECRET, frecuencia diaria. Reemplaza correr los scripts a mano.
   // Tarea horaria (Cloud Scheduler): vence plazos de pago de subastas + conciliación de pagos.
+  // Entradas reservadas que no se pagaron dentro de la ventana de Pagopar (3 días + margen) vuelven al stock.
+  async function liberarReservas() {
+    if (!store.liberarReservasVencidas) return 0;
+    const n = await store.liberarReservasVencidas({ horas: Number(process.env.RESERVA_HORAS) || 75 });
+    if (n) log.info({ liberadas: n }, "reservas de preventa liberadas por falta de pago");
+    return n;
+  }
   r.post("/cron/horario", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
     if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
@@ -876,6 +961,8 @@ function buildRouter() {
     try { await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron horario: cierre"); }
     try { out.subastas = await procesarPlazosSubastas(); } catch (e) { out.subastas = { error: true }; log.error({ err: e.message }, "cron horario: plazos"); }
     try { out.pagos = await conciliarPagos(); } catch (e) { out.pagos = { error: true }; log.error({ err: e.message }, "cron horario: pagos"); }
+    try { out.campanas = await campanasLib.procesarLote({ store, log: () => {} }); } catch (e) { out.campanas = { error: true }; log.error({ err: e.message }, "cron horario: campañas"); }
+    try { out.reservasLiberadas = await liberarReservas(); } catch (e) { out.reservasLiberadas = { error: true }; log.error({ err: e.message }, "cron horario: reservas"); }
     res.json(out);
   }));
   r.post("/cron/conciliar-pagos", wrap(async (req, res) => {
@@ -892,10 +979,11 @@ function buildRouter() {
     // (INSERT ON CONFLICT) → si el cron corre 2 veces el mismo día, o falla a mitad y
     // reintenta, cada socio recibe el correo UNA sola vez. Sin esto = spam + gasto de cuota.
     const puede = store.reservarNotificacion ? (clave) => store.reservarNotificacion(clave) : async () => true;
-    try { out.subastas = await cerrarYnotificarSubastas(); } catch (e) { log.error({ err: e.message }, "cron subastas"); }
-    try { out.pagos = await conciliarPagos(); } catch (e) { log.error({ err: e.message }, "cron conciliación de pagos"); }
-    try { out.plazosSubastas = await procesarPlazosSubastas(); } catch (e) { log.error({ err: e.message }, "cron plazos de subastas"); }
-    try { out.puntos = await procesarPuntosDiario(); } catch (e) { log.error({ err: e.message }, "cron puntos"); }
+    const falla = (paso) => (e) => { log.error({ err: e.message }, "cron " + paso); alertar("cron:diario:" + paso, "Falló un paso del cron diario: " + paso, String(e && e.message)); };
+    try { out.subastas = await cerrarYnotificarSubastas(); } catch (e) { falla("subastas")(e); }
+    try { out.pagos = await conciliarPagos(); } catch (e) { falla("conciliación de pagos")(e); }
+    try { out.plazosSubastas = await procesarPlazosSubastas(); } catch (e) { falla("plazos de subastas")(e); }
+    try { out.puntos = await procesarPuntosDiario(); } catch (e) { falla("puntos")(e); }
     try {
       const cumples = store.cumplenHoy ? await store.cumplenHoy() : [];
       for (const s of cumples) {
@@ -946,12 +1034,13 @@ function buildRouter() {
   // que ambos lo leen de la query. NO afecta los correos transaccionales (pagos, seguridad).
   async function procesarBaja(u) {
     const id = mailer.unsubValido ? mailer.unsubValido(u) : null;
-    if (id) { try { await store.updateSocio(id, { marketing_baja: true, marketing_baja_en: new Date().toISOString() }); } catch (e) {} }
+    // Si no se pudo guardar, el error sube (500): NO se le dice "listo, te diste de baja" a quien va a seguir recibiendo correos.
+    if (id) await store.updateSocio(id, { marketing_baja: true, marketing_baja_en: new Date().toISOString() });
     return !!id;
   }
   r.post("/baja", wrap(async (req, res) => {
     await procesarBaja(req.query.u || (req.body && req.body.u));
-    res.status(200).json({ ok: true }); // one-click: siempre 200
+    res.status(200).json({ ok: true }); // one-click (RFC 8058): 200 cuando quedó guardada; 5xx si no, para que el cliente de correo reintente
   }));
   r.get("/baja", wrap(async (req, res) => {
     const ok = await procesarBaja(req.query.u);
@@ -1166,6 +1255,7 @@ function buildRouter() {
     }
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const actualizado = await store.updateSocio(socio.id, patch);
+    if (patch.cedula) unirPenaPorCedula(socio.id);
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "editar_socio", targetId: socio.id, detalle: Object.keys(patch).join(", "), por: req.adminUser });
     const safe = { ...actualizado }; delete safe.password_hash; delete safe.password; delete safe.verif_token; delete safe.reset_token; delete safe.reset_token_exp; delete safe.carnet_secreto;
     res.json({ ok: true, socio: safe });
@@ -1280,7 +1370,7 @@ function buildRouter() {
   // Export CSV de los pagos Metrepay (contabilidad).
   r.get("/admin/export/pagos.csv", requireAdmin, requirePerm("export"), wrap(async (_req, res) => {
     const items = store.listActualizaciones ? await store.listActualizaciones({ tipo: "pago_metrepay", limit: 2000 }) : [];
-    const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const q = csvCelda; // neutraliza = + - @ (inyección de fórmulas en Excel)
     const head = ["fecha", "pagador", "cedula_o_tel", "nivel", "estado", "notas"];
     const rows = items.map((a) => [a.creado, [a.nombre, a.apellido].filter(Boolean).join(" "), a.email, a.tier_pretendido, a.estado, a.notas].map(q).join(","));
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -1296,7 +1386,7 @@ function buildRouter() {
   r.get("/admin/export/socios.csv", requireAdmin, requirePerm("export"), wrap(async (req, res) => {
     const f = { tier: req.query.tier || undefined, paisIso: req.query.pais || undefined, validoSocio: req.query.validoSocio === "1", sinFoto: req.query.sinFoto === "1", q: req.query.q || undefined, limit: 5000 };
     const items = store.filtrarSocios ? await store.filtrarSocios(f) : [];
-    const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const q = csvCelda; // neutraliza = + - @ (inyección de fórmulas en Excel)
     const head = ["nombre", "apellido", "email", "cedula", "pais", "pais_iso", "tier", "socio_olimpia", "tiene_foto", "creado"];
     const rows = items.map((s) => [s.nombre, s.apellido, s.email, s.cedula, s.pais, s.pais_iso, s.tier_slug, s.es_socio_olimpia ? "si" : "no", s.tiene_foto ? "si" : "no", s.creado].map(q).join(","));
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -1450,6 +1540,7 @@ function buildRouter() {
       if (b[f] == null) continue;
       const t = campos[f];
       if (t === "int") out[f] = b[f] === "" ? null : Number(b[f]);
+      else if (t === "num") out[f] = b[f] === "" || b[f] === null ? null : (Number.isFinite(Number(b[f])) ? Number(b[f]) : null);
       else if (t === "date") out[f] = b[f] === "" ? null : String(b[f]).slice(0, 10);
       // "imagen": puede ser una data URL subida desde el admin (varios KB/MB de base64),
       // no una URL corta — el tope de "text" (500 chars) la truncaría y la rompería.
@@ -1464,12 +1555,15 @@ function buildRouter() {
     const permEscritura = PERM_ENTIDAD[nombre] || "contenido.write";
     r.get(`/admin/${nombre}`, requireAdmin, wrap(async (_req, res) => res.json({ items: await o.list() })));
     r.post(`/admin/${nombre}`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
-      const item = await o.crear(limpiarCampos(req.body, o.campos));
+      const d = limpiarCampos(req.body, o.campos);
+      if (o.preparar) await o.preparar(d, req.body || {}, true);
+      const item = await o.crear(d);
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: nombre + ":crear", targetId: item && item.id, por: req.adminUser });
       res.status(201).json({ ok: true, item });
     }));
     r.patch(`/admin/${nombre}/:id`, requireAdmin, requirePerm(permEscritura), wrap(async (req, res) => {
       const d = limpiarCampos(req.body, o.campos);
+      if (o.preparar) await o.preparar(d, req.body || {}, false);
       if (!Object.keys(d).length) throw httpError(400, "Nada para actualizar");
       const item = await o.update(req.params.id, d);
       if (!item) throw httpError(404, "No encontrado");
@@ -1486,7 +1580,35 @@ function buildRouter() {
   crudEntidad("preventas", { list: () => store.listPreventas(), crear: (d) => store.crearPreventa(d), update: (id, d) => store.updatePreventa(id, d), del: (id) => store.deletePreventa(id), campos: { evento: "text", fecha: "date", sede: "text", abre: "date", tier_min: "text", precio_desde: "int", stock: "int", imagen: "text" } });
   crudEntidad("contenido", { list: () => store.listContenido(), crear: (d) => store.crearContenido(d), update: (id, d) => store.updateContenido(id, d), del: (id) => store.deleteContenido(id), campos: { titulo: "text", tipo: "text", tier_min: "text", duracion: "text", descripcion: "text", thumb: "text", publicado: "date" } });
   // Red de Beneficios (admin). comercio_id enlaza el beneficio; niveles = "todos" o CSV "premium,socio".
-  crudEntidad("comercios", { list: () => store.listComercios(), crear: (d) => store.crearComercio(d), update: (id, d) => store.updateComercio(id, d), del: (id) => store.deleteComercio(id), campos: { nombre: "text", rubro: "text", ciudad: "text", direccion: "text", contacto: "text", logo: "text", estado: "text" } });
+  const sinHash = (c) => { if (!c) return c; const { password_hash, ...resto } = c; return resto; }; // nunca el hash de la contraseña del comercio
+  crudEntidad("comercios", { list: async () => (await store.listComercios()).map(sinHash), crear: async (d) => sinHash(await store.crearComercio(d)), update: async (id, d) => sinHash(await store.updateComercio(id, d)), del: (id) => store.deleteComercio(id), campos: { nombre: "text", rubro: "text", ciudad: "text", direccion: "text", contacto: "text", logo: "text", estado: "text", lat: "num", lng: "num" },
+    // La ubicación se carga pegando el link de Google Maps del local ("mapa_url"); si es un alta sin ubicación, se usa su ciudad.
+    preparar: async (d, body, alta) => {
+      const link = String(body.mapa_url || "").trim();
+      if (link) {
+        const p = await mapaUrl.resolver(link);
+        if (!p) throw httpError(400, "No pude leer la ubicación de ese link. Copiá el link de Google Maps del local (Compartir → Copiar link).");
+        d.lat = p.lat; d.lng = p.lng;
+      } else if (alta && d.lat == null && d.lng == null && d.ciudad && store.ciudadPorNombre) {
+        const c = await store.ciudadPorNombre({ nombre: d.ciudad, pais: "PY" }).catch(() => null);
+        if (c) { d.lat = c.lat; d.lng = c.lng; }
+      }
+      if ((d.lat != null && Math.abs(d.lat) > 90) || (d.lng != null && Math.abs(d.lng) > 180)) throw httpError(400, "Coordenadas inválidas");
+    } });
+  // Destacar / quitar de destacados: los destacados van de banner arriba de la Red de Beneficios.
+  r.post("/admin/beneficios/:id/destacar", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
+    const destacado = req.body && req.body.destacado === true;
+    const item = await store.updateBeneficio(req.params.id, { destacado });
+    if (!item) throw httpError(404, "Beneficio no encontrado");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: destacado ? "beneficios:destacar" : "beneficios:quitar_destacado", targetId: req.params.id, por: req.adminUser });
+    res.json({ ok: true, item });
+  }));
+  // Beneficios de muestra del club (exclusivos para socios): comercios + ofertas ya aprobadas. Idempotente: no duplica ni pisa ediciones.
+  r.post("/admin/beneficios/muestra", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
+    const out = await require("./lib/beneficios-muestra").cargarMuestra(store, { actualizar: req.query.actualizar === "1" });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "beneficios:cargar_muestra", targetId: "muestra", detalle: JSON.stringify(out), por: req.adminUser });
+    res.json({ ok: true, ...out });
+  }));
   // ── Admin: aprobar o rechazar ofertas de comercios, y el reporte para sponsors ──
   // Se registra ANTES del CRUD genérico: con `estado` en el cuerpo resuelve la oferta; sin él, cede el paso al CRUD.
   r.patch("/admin/beneficios/:id", requireAdmin, requirePerm("beneficios.write"), (req, res, next) => (!req.body || req.body.estado === undefined) ? next("route") : next(), wrap(async (req, res) => {
@@ -1592,6 +1714,22 @@ function buildRouter() {
     res.json({ ok: enviados > 0, enviados, fallidos, total: contactos.length });
   }));
 
+  // Mapa del panel del club: SOLO agregados por ciudad, peña y comercio. Nunca una persona ni una casa.
+  r.get("/admin/mapa", requireAdmin, wrap(async (req, res) => {
+    const capa = String(req.query.capa || "ciudades");
+    if (capa === "penas") {
+      const filas = (await store.listPenas({ estado: "verificada" })).filter((p) => p.lat != null && p.lng != null);
+      return res.json({ capa, items: filas.map((p) => ({ id: p.id, nombre: p.nombre, ciudad: p.ciudad, lat: Number(p.lat), lng: Number(p.lng), altas: p.altas || 0, socios: p.socios || 0, plus: p.plus || 0 })) });
+    }
+    if (capa === "comercios") {
+      const [cs, canjes] = await Promise.all([store.listComercios(), store.canjesPorComercio ? store.canjesPorComercio() : []]);
+      const porId = new Map(canjes.map((c) => [c.comercio_id, c]));
+      return res.json({ capa, items: cs.filter((c) => c.lat != null && c.lng != null).map((c) => ({ id: c.id, nombre: c.nombre, ciudad: c.ciudad || "", rubro: c.rubro || "", estado: c.estado, lat: Number(c.lat), lng: Number(c.lng), canjes: (porId.get(c.id) || {}).canjes || 0, ahorro: Number((porId.get(c.id) || {}).ahorro || 0) })) });
+    }
+    if (capa !== "ciudades" && capa !== "plus") throw httpError(400, "Capa inválida (ciudades, plus, penas o comercios)");
+    const filas = store.resumenPorCiudad ? await store.resumenPorCiudad(600) : [];
+    res.json({ capa, items: filas.map((c) => ({ id: c.id, nombre: c.nombre, pais_iso: c.pais_iso, lat: Number(c.lat), lng: Number(c.lng), total: c.total, plus: c.plus, socios: c.socios })) });
+  }));
   // ─── Campañas + tasa de conversión ───────────────────────────────────────────
   r.get("/admin/campanas", requireAdmin, wrap(async (_req, res) => {
     res.json({ items: store.listCampanas ? await store.listCampanas() : [] });
@@ -1614,6 +1752,85 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "campana:recalcular", targetId: req.params.id, detalle: r0.convertidos + "/" + r0.enviados, por: req.adminUser });
     res.json({ ok: true, enviados: r0.enviados, convertidos: r0.convertidos });
   }));
+  // ─── Compositor de campañas (correo / WhatsApp): a quién · por dónde · qué · vista previa · envío por tandas ───
+  // Mandar de verdad lo hace el cron por tandas (lib/campanas.js procesarLote), nunca este request.
+  const whatsappConectado = () => /^https:\/\//i.test(String(process.env.GHL_WHATSAPP_URL || "").trim());
+  async function audienciaDe(body) {
+    let filtros;
+    if (body.segmento_id) {
+      const seg = (await store.listSegmentos()).find((s) => s.id === body.segmento_id);
+      if (!seg) throw httpError(404, "Segmento no encontrado");
+      filtros = limpiarFiltros(seg.filtros);
+    } else filtros = limpiarFiltros(body.filtros);
+    if (!Object.keys(filtros).length && body.todos !== true) throw httpError(400, "Elegí a quién va: un segmento, un filtro o todos los hinchas.");
+    return { filtros, socios: await store.filtrarSocios({ ...filtros, paraEnvio: true }) };
+  }
+  const camposDe = (body) => { const v = campanasLib.validarCampos(body); if (!v.ok) throw httpError(400, v.error); return v.campos; };
+  const SOCIO_MUESTRA = { id: "muestra", nombre: "Marcos", tier_slug: "premium" };
+  r.get("/admin/campanas/plantillas", requireAdmin, wrap(async (_req, res) => {
+    res.json({ items: campanasLib.PLANTILLAS, activas: campanasLib.activas(), whatsapp_conectado: whatsappConectado(), limites: { asunto: campanasLib.MAX_ASUNTO, titulo: campanasLib.MAX_TITULO, cuerpo: campanasLib.MAX_CUERPO } });
+  }));
+  r.post("/admin/campanas/vista-previa", requireAdmin, wrap(async (req, res) => {
+    const c = camposDe(req.body || {});
+    const mail = campanasLib.renderEmail(c, SOCIO_MUESTRA);
+    res.json({ asunto: mail.subject, html: mail.html, whatsapp: campanasLib.renderWhatsApp(c, SOCIO_MUESTRA) });
+  }));
+  r.post("/admin/campanas/audiencia", requireAdmin, wrap(async (req, res) => {
+    const canal = (req.body && req.body.canal) === "whatsapp" ? "whatsapp" : "email";
+    const { socios } = await audienciaDe(req.body || {});
+    const { reciben, excluidos } = campanasLib.clasificarAudiencia(socios, canal);
+    res.json({ canal, total: socios.length, reciben: reciben.length, excluidos, whatsapp_conectado: whatsappConectado() });
+  }));
+  const exigirActivas = () => { if (!campanasLib.activas()) throw httpError(403, "Las campañas todavía no están activas. Podés armarlas y ver la vista previa; se encienden cuando el club lo decida."); };
+  r.post("/admin/campanas/prueba", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    exigirActivas();
+    const b = req.body || {};
+    if (b.canal === "whatsapp") throw httpError(400, "La prueba por WhatsApp se hace desde GoHighLevel. Probá el texto con la vista previa.");
+    const a = String(b.a || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) throw httpError(400, "Poné un correo válido para la prueba.");
+    const mail = campanasLib.renderEmail(camposDe(b), { ...SOCIO_MUESTRA, id: undefined });
+    const out = await mailer.enviar({ to: a, subject: "[PRUEBA] " + mail.subject, html: mail.html });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "campana:prueba", detalle: a, por: req.adminUser });
+    res.json({ ok: !!(out && out.ok), modo: out && out.modo });
+  }));
+  r.post("/admin/campanas/enviar", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    exigirActivas();
+    const b = req.body || {};
+    const canal = b.canal === "whatsapp" ? "whatsapp" : "email";
+    if (canal === "whatsapp" && !whatsappConectado()) throw httpError(400, "WhatsApp no está conectado todavía (falta GHL_WHATSAPP_URL).");
+    const c = camposDe(b);
+    const nombre = String(b.nombre || "").trim().slice(0, 80) || (campanasLib.PLANTILLAS.find((p) => p.id === b.plantilla) || { nombre: "Campaña" }).nombre + " · " + new Date().toLocaleDateString("es-PY");
+    const { filtros, socios } = await audienciaDe(b);
+    const { reciben, excluidos } = campanasLib.clasificarAudiencia(socios, canal);
+    if (!reciben.length) throw httpError(400, "Nadie recibiría esta campaña: todos están dados de baja o sin " + (canal === "whatsapp" ? "teléfono" : "correo") + ".");
+    if (reciben.length > 50000) throw httpError(400, "La audiencia es muy grande (" + reciben.length + "). Dividila con un segmento.");
+    // Seguro contra errores: tiene que coincidir con lo que la pantalla mostró (la audiencia pudo cambiar).
+    if (Number(b.total_esperado) !== reciben.length) throw httpError(409, "La audiencia cambió: ahora son " + reciben.length + " destinatarios. Revisala y confirmá de nuevo.");
+    // Contra el doble clic: la misma campaña, en curso, no se crea dos veces.
+    const enCurso = await store.campanasEnCurso();
+    if (enCurso.some((x) => x.asunto === c.asunto && x.canal === canal && x.total_enviados === reciben.length && Date.now() - new Date(x.creada).getTime() < 10 * 60000)) throw httpError(409, "Esa campaña ya se está enviando.");
+    const camp = await store.crearCampanaEnvio({ nombre, canal, plantilla: String(b.plantilla || ""), ...c, filtros, por: req.adminUser });
+    await store.agregarEnviosPendientes(camp.id, reciben);
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "campana:enviar", targetId: camp.id, detalle: nombre + " · " + canal + " · " + reciben.length, por: req.adminUser });
+    res.status(201).json({ ok: true, id: camp.id, total: reciben.length, excluidos });
+  }));
+  r.post("/admin/campanas/:id/cancelar", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    const c = await store.cancelarCampana(req.params.id);
+    if (!c) throw httpError(409, "La campaña no existe o ya terminó.");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "campana:cancelar", targetId: c.id, por: req.adminUser });
+    res.json({ ok: true });
+  }));
+  r.get("/admin/campanas/:id", requireAdmin, wrap(async (req, res) => {
+    const d = await store.getCampanaDetalle(req.params.id);
+    if (!d) throw httpError(404, "Campaña no encontrada");
+    res.json(d);
+  }));
+  // Cloud Scheduler (cada minuto): manda la siguiente tanda de las campañas en curso.
+  r.post("/cron/campanas", wrap(async (req, res) => {
+    const tok = process.env.CRON_SECRET;
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
+    res.json(await campanasLib.procesarLote({ store, log: (...a) => log.info({ detalle: a.map(String).join(" ") }, "campañas") }));
+  }));
   // Confirmar un pago (tras verificarlo en la pasarela) → activa la membresía.
   r.post("/admin/pedidos/:id/activar", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
     const pedido = await store.getPedidoPago(req.params.id);
@@ -1629,6 +1846,7 @@ function buildRouter() {
   r.post("/admin/pedidos/:id/rechazar", requireAdmin, requirePerm("pagos.write"), wrap(async (req, res) => {
     const pedido = await store.getPedidoPago(req.params.id);
     if (!pedido) throw httpError(404, "Pedido no encontrado");
+    if (pedido.estado !== "pendiente") throw httpError(409, "Solo se puede rechazar un pedido pendiente (este está " + pedido.estado + "): lo ya cobrado se revierte desde el reembolso, no desde acá.");
     await store.updatePedidoPago(pedido.id, { estado: "rechazado" });
     res.json({ ok: true });
   }));
@@ -1814,13 +2032,16 @@ function buildRouter() {
     try {
       const pend = store.subastasSinNotificar ? await store.subastasSinNotificar() : [];
       for (const s of pend) {
+        let enviado = true;
         try {
           const ganador = await store.getSocioById(s.ganador_id);
           const urlSubasta = urlLote(s);
           if (ganador && mailer.enviarSubastaGanador) {
             const limitePago = s.pago_vence || null; // fijado al cerrar, según la decisión del club (72 h por defecto)
             const horas = limitePago ? Math.max(1, Math.round((new Date(limitePago).getTime() - Date.now()) / 3600000)) : undefined;
-            await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago, horas }).catch(() => {});
+            const r0 = await mailer.enviarSubastaGanador(ganador, { titulo: s.titulo, monto: s.puja_actual, urlSubasta, limitePago, horas }).catch((e) => ({ ok: false, error: e && e.message }));
+            enviado = !!(r0 && r0.ok !== false);
+            if (!enviado) alertar("subasta:aviso:fallo:" + s.id, "No se pudo avisar al ganador de una subasta", `"${s.titulo}" → ${ganador.email}. Se reintenta en el próximo barrido; mientras tanto avisale a mano: el plazo de pago corre.`);
           }
           // Avisar AL EQUIPO (no solo al ganador): así saben que hay un ganador, aunque
           // recién escriban por WhatsApp cuando el pago esté confirmado (ver
@@ -1833,8 +2054,9 @@ function buildRouter() {
               `"${s.titulo}" → ganador: ${ganador.nombre || ganador.email} · ${monto} · email: ${ganador.email}`
             );
           }
-        } catch (e) { /* seguir con las demás */ }
-        await store.marcarSubastaNotificada(s.id);
+        } catch (e) { enviado = false; log.error({ err: e && e.message, subasta: s.id }, "aviso al ganador de subasta"); }
+        // Solo se da por avisado si el correo salió: si falló, el próximo barrido lo reintenta (antes quedaba "notificado" sin enviar).
+        if (enviado) await store.marcarSubastaNotificada(s.id);
       }
       return pend.length;
     } catch (e) { log.error({ err: e.message }, "subastas notificar"); return 0; }
@@ -2032,6 +2254,9 @@ function buildRouter() {
     await chequearDeudaPuja(req.socio);
     const monto = Math.round(Number(req.body && req.body.monto) || 0);
     if (!monto) throw httpError(400, "Monto inválido");
+    // Tope: una puja absurda (p. ej. 2.147.483.647) no la supera nadie, desborda el integer de la base y traba el lote.
+    const TOPE_PUJA = Math.min(Number(process.env.PUJA_MAX) || 200000000, 2000000000);
+    if (monto < 0 || monto > TOPE_PUJA) throw httpError(400, "Monto fuera de rango: la puja máxima es ₲ " + TOPE_PUJA.toLocaleString("es-PY"));
     const out = await store.pujar({ subastaId: s.id, socioId: req.socio.id, monto });
     if (!out.ok) {
       const msg = {
@@ -2065,7 +2290,7 @@ function buildRouter() {
         const otra = await store.getSocioByCedula(cedulaBody);
         if (otra && otra.id !== socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
       }
-      try { await store.updateSocio(socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
+      try { await store.updateSocio(socio.id, { cedula: cedulaBody }); documento = cedulaBody; unirPenaPorCedula(socio.id); }
       catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta"); }
     }
     if (!documento) return { falta_cedula: true };
@@ -2104,6 +2329,7 @@ function buildRouter() {
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (!s.titulo || !(s.precio_inicial > 0)) throw httpError(400, "Faltan datos: título y precio inicial");
+    if (s.estado === "cerrada" || s.estado === "activa") throw httpError(409, "Este lote está " + (s.estado === "activa" ? "en vivo" : "cerrado") + ": publicarlo de nuevo borraría el ganador y el estado de pago.");
     const horas = Number(s.duracion_horas) || Number(req.body && req.body.horas) || 48;
     const inicia = new Date().toISOString();
     const termina = new Date(Date.now() + horas * 3600 * 1000).toISOString();
@@ -2449,13 +2675,20 @@ function buildRouter() {
   async function penasVerificadas() {
     if (_penasPub && Date.now() - _penasPub.t < 30000) return _penasPub.v;
     const filas = store.listPenas ? await store.listPenas({ estado: "verificada" }) : [];
-    const v = filas.map((p, i) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, socios: p.socios, plus: p.plus, ranking: i + 1 }));
+    const v = filas.map((p, i) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, lat: p.lat != null ? Number(p.lat) : null, lng: p.lng != null ? Number(p.lng) : null, altas: p.altas, miembros: p.miembros || 0, hinchada: p.hinchada != null ? p.hinchada : p.altas, socios: p.socios, plus: p.plus, ranking: i + 1 }));
     _penasPub = { t: Date.now(), v };
     return v;
   }
   r.get("/penas", wrap(async (req, res) => {
     const mia = req.socio && req.socio.pena_id;
-    res.json({ items: (await penasVerificadas()).map((p) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, altas: p.altas, ranking: p.ranking, es_tuya: p.id === mia })), mia: mia || null });
+    // ?cerca=lat,lng → las peñas con ubicación, de la más cercana a la más lejana (con la distancia en km). "Encontrá tu peña".
+    const cerca = String(req.query.cerca || "").split(",").map(Number);
+    const conUbic = cerca.length === 2 && cerca.every(Number.isFinite) && Math.abs(cerca[0]) <= 90 && Math.abs(cerca[1]) <= 180;
+    let items = (await penasVerificadas()).map((p) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, lat: p.lat, lng: p.lng, altas: p.altas, miembros: p.miembros, hinchada: p.hinchada, ranking: p.ranking, es_tuya: p.id === mia }));
+    if (conUbic) {
+      items = items.filter((p) => p.lat != null && p.lng != null).map((p) => ({ ...p, distancia_km: Math.round(ciudadesLib.distanciaKm(cerca[0], cerca[1], p.lat, p.lng) * 10) / 10 })).sort((a, b) => a.distancia_km - b.distancia_km).slice(0, 5);
+    }
+    res.json({ items, mia: mia || null });
   }));
   r.get("/penas/:slug", wrap(async (req, res) => {
     const p = (await penasVerificadas()).find((x) => x.slug === String(req.params.slug).toLowerCase());
@@ -2474,7 +2707,9 @@ function buildRouter() {
     if (!PAISES[iso]) throw httpError(400, "País inválido");
     const pendientes = await store.listPenas({ estado: "pendiente" });
     if (pendientes.some((p) => String(p.contacto).toLowerCase() === contacto)) throw httpError(409, "Ya recibimos una solicitud con ese email. Te vamos a escribir.");
-    const p = await store.crearPena({ nombre, ciudad, pais_iso: iso, presidente, contacto });
+    let p = await store.crearPena({ nombre, ciudad, pais_iso: iso, presidente, contacto });
+    // Ubicación de la peña = su ciudad (GeoNames): así aparece en "la peña más cercana" apenas se verifica.
+    try { const c = store.ciudadPorNombre ? await store.ciudadPorNombre({ nombre: ciudad, pais: iso }) : null; if (c) p = (await store.updatePena(p.id, { lat: c.lat, lng: c.lng })) || p; } catch (e) { /* sin ubicación: se carga después */ }
     alertar("pena:solicitud:" + p.id, "Peña nueva para verificar", `${nombre} · ${ciudad} · preside ${presidente} · ${contacto}`);
     res.status(201).json({ ok: true, id: p.id });
   }));
@@ -2482,22 +2717,45 @@ function buildRouter() {
   // ── Panel de la comisión (usuario de peña, sesión de 12 h, header x-pena-token) ──
   async function requirePena(req, res, next) {
     try {
-      const s = await store.getPenaSesion(req.headers["x-pena-token"] || "");
+      const tok = req.headers["x-pena-token"] || "";
+      const s = await store.getPenaSesion(tok);
       if (!s) return res.status(401).json({ error: "Sesión de peña inválida" });
-      if (s.estado !== "verificada") return res.status(403).json({ error: "Tu peña está en pausa. Escribinos al club." });
+      req.soloLectura = esSesionVerComo(tok);
+      if (s.estado !== "verificada" && !req.soloLectura) return res.status(403).json({ error: "Tu peña está en pausa. Escribinos al club." });
       req.pena = { id: s.pena_id, nombre: s.nombre, slug: s.slug };
       next();
     } catch (e) { res.status(401).json({ error: "no autorizado" }); }
   }
-  async function abrirSesionPena(penaId) {
-    const token = crypto.randomBytes(32).toString("base64url");
+  // "Ver como" (solo owner): el login de la peña y del comercio acepta las credenciales de un owner del panel y le deja
+  // elegir a quién mirar. La sesión resultante es de SOLO LECTURA (token con prefijo VER_COMO) y cada ingreso queda en la auditoría.
+  const VER_COMO = "adm_";
+  const esSesionVerComo = (tok) => String(tok || "").startsWith(VER_COMO);
+  const noLectura = (req, res, next) => (req.soloLectura ? res.status(403).json({ error: "Modo lectura: entraste como administrador del club, no podés hacer cambios desde acá." }) : next());
+  async function loginOwner(usuario, password) {
+    try {
+      const out = await adminAuth.loginAdmin({ usuario: String(usuario || "").toLowerCase().trim(), password: String(password || "") });
+      if (out.rol === "owner") return out;
+      await adminAuth.logoutAdmin(out.token);
+    } catch (e) { /* credenciales que no son de un admin: se sigue con el login normal */ }
+    return null;
+  }
+  const exigirOwner = (req, res, next) => (req.adminRole === "owner" ? next() : res.status(403).json({ error: "Solo el owner del panel puede entrar como otro usuario." }));
+  async function abrirSesionPena(penaId, prefijo = "") {
+    const token = prefijo + crypto.randomBytes(32).toString("base64url");
     await store.crearPenaSesion(penaId, token, new Date(Date.now() + 12 * 3600 * 1000).toISOString());
     return token;
   }
   r.post("/pena/login", wrap(async (req, res) => {
     const u = store.getPenaUsuarioPorUsuario ? await store.getPenaUsuarioPorUsuario(String(req.body?.usuario || "")) : null;
     const ok = u && (await bcrypt.compare(String(req.body?.password || ""), u.password_hash));
-    if (!ok) throw httpError(401, "Usuario o contraseña incorrectos");
+    if (!ok) {
+      const owner = await loginOwner(req.body?.usuario, req.body?.password);
+      if (owner) {
+        const peñas = (await store.listPenas()).map((p) => ({ id: p.id, nombre: p.nombre, ciudad: p.ciudad || "", estado: p.estado }));
+        return res.json({ admin: true, token_admin: owner.token, opciones: peñas });
+      }
+      throw httpError(401, "Usuario o contraseña incorrectos");
+    }
     const p = await store.getPena(u.pena_id);
     if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
     res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
@@ -2513,6 +2771,12 @@ function buildRouter() {
     if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
     res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
   }));
+  r.post("/pena/entrar-como", requireAdmin, exigirOwner, wrap(async (req, res) => {
+    const [p] = await store.listPenas({ id: String(req.body?.id || "") });
+    if (!p) throw httpError(404, "Peña no encontrada");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "ver_como:pena", targetId: p.id, detalle: p.nombre, por: req.adminUser });
+    res.json({ token: await abrirSesionPena(p.id, VER_COMO), pena: { nombre: p.nombre, slug: p.slug }, solo_lectura: true });
+  }));
   r.post("/pena/logout", requirePena, wrap(async (req, res) => { await store.borrarPenaSesion(req.headers["x-pena-token"]); res.json({ ok: true }); }));
 
   async function fondoDe(penaId) {
@@ -2525,8 +2789,8 @@ function buildRouter() {
     res.json({
       pena: { nombre: f.pena.nombre, slug: f.pena.slug, ciudad: f.pena.ciudad, pais_iso: f.pena.pais_iso, estado: f.pena.estado },
       ranking: mia ? mia.ranking : null, total_penas: ranking.length,
-      kpis: { altas: f.pena.altas, socios: f.pena.socios, plus: f.pena.plus, saldo: f.saldo },
-      link: linkPena(f.pena), pct: Number(pct) || 10,
+      kpis: { altas: f.pena.altas, socios: f.pena.socios, plus: f.pena.plus, saldo: f.saldo, miembros: f.pena.miembros || 0, hinchada: f.pena.hinchada != null ? f.pena.hinchada : f.pena.altas },
+      link: linkPena(f.pena), pct: Number(pct) || 10, fondo_activo: process.env.PENA_FONDO_ACTIVO === "1",
       ultimas_altas: altas.map((s) => ({ nombre: nombreCorto(s), ciudad: s.ciudad || "", nivel: (tierBySlug(s.tier_slug) || {}).nombre || "Olimpista", creado: s.creado })),
     });
   }));
@@ -2535,7 +2799,7 @@ function buildRouter() {
     res.json({ saldo: f.saldo, pendiente: f.pendiente, disponible: f.disponible, pct: Number(pct) || 10,
       movimientos: mov.map((m) => ({ id: m.id, motivo: m.motivo, monto: m.monto, detalle: m.detalle, estado: m.estado, creado: m.creado })) });
   }));
-  r.post("/pena/fondo/canje", requirePena, wrap(async (req, res) => {
+  r.post("/pena/fondo/canje", requirePena, noLectura, wrap(async (req, res) => {
     const item = limpioTxt(req.body?.item, 120), monto = Math.round(Number(req.body?.monto) || 0);
     if (item.length < 3) throw httpError(400, "Contanos qué querés canjear (ej: bus para ir al estadio)");
     if (!(monto >= 1000)) throw httpError(400, "El monto mínimo es ₲ 1.000");
@@ -2546,9 +2810,12 @@ function buildRouter() {
   }));
 
   // ── Admin (club): verificar, pausar, aprobar canjes ──
-  r.get("/admin/penas", requireAdmin, wrap(async (_req, res) => {
-    const [items, canjes, pct] = await Promise.all([store.listPenas(), store.canjesPendientesPena(), decision("pct")]);
-    res.json({ items, canjes, pct: Number(pct) || 10 });
+  r.get("/admin/penas", requireAdmin, wrap(async (req, res) => {
+    const [items, canjes, pct, padron] = await Promise.all([store.listPenas(), store.canjesPendientesPena(), decision("pct"), store.resumenMiembrosPena ? store.resumenMiembrosPena() : []]);
+    const porPena = new Map(padron.map((x) => [x.pena_id, x]));
+    const esOwner = req.adminRole === "owner";
+    // El estado de la cuota (al día / en mora) solo lo ve el owner; el resto ve cuántos miembros hay.
+    res.json({ items: items.map((p) => { const x = porPena.get(p.id) || {}; return { ...p, padron: { miembros: x.miembros || 0, con_cuenta: x.con_cuenta || 0, ...(esOwner ? { al_dia: x.al_dia || 0, en_mora: x.en_mora || 0, sin_dato: x.sin_dato || 0 } : {}) } }; }), canjes, pct: Number(pct) || 10, owner: esOwner });
   }));
   async function enviarAccesoPena(pena, { renovar = false } = {}) {
     let u = await store.getPenaUsuarioDePena(pena.id);
@@ -2613,8 +2880,11 @@ function buildRouter() {
 
   // Aporte al fondo: el % que decide el club (10 por defecto) de lo que paga cada hincha de la peña.
   // Un pedido acredita UNA vez (pedido_id único en el libro). Una falla acá nunca frena la entrega del pago.
+  // APAGADO por decisión del club (2026-10-23): ya no se acredita el 10 % al fondo de la peña; se va a reemplazar por puntos u otra
+  // recompensa. Se puede volver a encender con PENA_FONDO_ACTIVO=1 sin tocar código.
   async function acreditarFondoPena(pedido) {
     try {
+      if (process.env.PENA_FONDO_ACTIVO !== "1") return;
       if (!store.acreditarPena || !pedido.socio_id) return;
       const socio = await store.getSocioById(pedido.socio_id);
       if (!socio || !socio.pena_id) return;
@@ -2630,6 +2900,37 @@ function buildRouter() {
       alertar("pena:fondo-fallo:" + pedido.id, "Falló el aporte al fondo de una peña", `Pedido ${pedido.id}: ${e.message}. El pago se entregó igual; hay que acreditar el fondo a mano.`);
     }
   }
+  // Cuando alguien carga o valida su cédula: si figura en el padrón de una peña se vincula con su cuenta y, si no tenía peña, se suma a la primera
+  // según el informe del club. Nunca frena el flujo que la dispara.
+  function unirPenaPorCedula(socioId) {
+    if (!store.sincronizarMiembrosPena) return;
+    store.sincronizarMiembrosPena({ socioId }).then((r) => { if (r && r.asignados) { _penasPub = null; log.info({ socioId }, "peña: asignada por el padrón del club"); } }).catch((e) => log.warn({ err: e.message }, "peña: no se pudo vincular con el padrón"));
+  }
+  // Padrón de una peña (solo el owner del panel): incluye el estado de la cuota, que es dato del club y no se comparte con la comisión.
+  r.get("/admin/penas/:id/miembros", requireAdmin, exigirOwner, wrap(async (req, res) => {
+    const pena = await store.getPena(req.params.id);
+    if (!pena) throw httpError(404, "Peña no encontrada");
+    const items = store.listarMiembrosPena ? await store.listarMiembrosPena(pena.id) : [];
+    if (req.query.format === "csv") {
+      const ETQ = { al_dia: "Al día", en_mora: "En mora", sin_dato: "Sin dato" };
+      return enviarCsv(res, "padron-" + pena.slug + ".csv", ["nombre", "cedula", "n_socio", "estado_cuota", "tiene_cuenta", "peña_asignada"],
+        items.map((m) => [m.nombre, m.cedula, m.nro_socio, ETQ[m.estado_cuota] || "", m.socio_id ? "sí" : "no", m.es_su_pena ? "sí" : "no"]));
+    }
+    res.json({ pena: { id: pena.id, nombre: pena.nombre }, items });
+  }));
+  // Completar o corregir los datos de una peña (ciudad, país, presidente, contacto, nombre).
+  r.patch("/admin/penas/:id", requireAdmin, requirePerm("penas.write"), wrap(async (req, res) => {
+    const b = req.body || {}, patch = {};
+    for (const [k, max] of [["nombre", 80], ["ciudad", 60], ["presidente", 80], ["contacto", 120]]) if (b[k] !== undefined) patch[k] = limpioTxt(b[k], max);
+    if (b.pais_iso !== undefined) patch.pais_iso = String(b.pais_iso || "PY").toUpperCase().slice(0, 2);
+    if (patch.nombre === "") throw httpError(400, "El nombre no puede quedar vacío");
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const p = await store.updatePena(req.params.id, patch);
+    if (!p) throw httpError(404, "Peña no encontrada");
+    _penasPub = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:editar", targetId: p.id, detalle: Object.keys(patch).join(","), por: req.adminUser });
+    res.json({ ok: true, pena: p });
+  }));
   // Aviso a la comisión de que se sumó un hincha: como máximo uno por día y peña.
   async function avisarPenaSumo(pena, socio) {
     if (!emailOk(pena.contacto) || !mailer.enviarPenaSumoSocio) return;
@@ -2658,7 +2959,9 @@ function buildRouter() {
     const cantidad = Math.max(1, Math.min(4, parseInt(req.body?.cantidad || "1", 10)));
     const reserva = await store.reservarPreventa(preventa.id, req.socio.id, cantidad);
     if (reserva?.error === "sin_stock") throw httpError(409, "No hay stock suficiente");
-    res.json({ ok: true, reserva });
+    if (reserva?.error === "limite") throw httpError(409, "Ya tenés el máximo de 4 entradas para esta preventa");
+    await store.confirmarReserva(reserva.id); // reserva sin cobro: queda confirmada (no se libera por falta de pago)
+    res.json({ ok: true, reserva: { ...reserva, estado: "pagada" } });
   }));
 
   // ─── Comprar entradas de una preventa (PAGO por PAGOPAR) ──────────────────────
@@ -2679,6 +2982,7 @@ function buildRouter() {
     const reserva = await store.reservarPreventa(preventa.id, req.socio.id, cantidad);
     if (!reserva) throw httpError(404, "Preventa no encontrada");
     if (reserva.error === "sin_stock") throw httpError(409, "No hay stock suficiente");
+    if (reserva.error === "limite") throw httpError(409, "Ya tenés el máximo de 4 entradas para esta preventa");
 
     const modoPrueba = !!process.env.PAGOPAR_TEST_KEY && req.body?.testPagopar === process.env.PAGOPAR_TEST_KEY;
     const cobrar = precioUnit > 0 && pagopar.habilitado && (process.env.PAGOPAR_PREVENTAS_LIVE === "1" || modoPrueba);
@@ -2745,13 +3049,27 @@ function buildRouter() {
   r.post("/comercio/login", wrap(async (req, res) => {
     const usuario = String(req.body?.usuario || "").toLowerCase().trim();
     const c = store.getComercioByUsuario ? await store.getComercioByUsuario(usuario) : null;
-    if (!c || c.estado !== "activo" || !c.password_hash) throw httpError(401, "Usuario o contraseña incorrectos");
-    const ok = await bcrypt.compare(String(req.body?.password || ""), c.password_hash);
-    if (!ok) throw httpError(401, "Usuario o contraseña incorrectos");
+    const ok = c && c.estado === "activo" && c.password_hash && (await bcrypt.compare(String(req.body?.password || ""), c.password_hash));
+    if (!ok) {
+      const owner = await loginOwner(usuario, req.body?.password);
+      if (owner) {
+        const comercios = (await store.listComercios()).map((x) => ({ id: x.id, nombre: x.nombre, ciudad: x.ciudad || "", estado: x.estado }));
+        return res.json({ admin: true, token_admin: owner.token, opciones: comercios });
+      }
+      throw httpError(401, "Usuario o contraseña incorrectos");
+    }
     const token = crypto.randomBytes(32).toString("base64url");
     const expira = new Date(Date.now() + 12 * 3600 * 1000).toISOString();
     await store.createComercioSession(c.id, token, expira);
     res.json({ token, comercio: { id: c.id, nombre: c.nombre } });
+  }));
+  r.post("/comercio/entrar-como", requireAdmin, exigirOwner, wrap(async (req, res) => {
+    const c = (await store.listComercios()).find((x) => x.id === String(req.body?.id || ""));
+    if (!c) throw httpError(404, "Comercio no encontrado");
+    const token = VER_COMO + crypto.randomBytes(32).toString("base64url");
+    await store.createComercioSession(c.id, token, new Date(Date.now() + 4 * 3600 * 1000).toISOString());
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "ver_como:comercio", targetId: c.id, detalle: c.nombre, por: req.adminUser });
+    res.json({ token, comercio: { id: c.id, nombre: c.nombre }, solo_lectura: true });
   }));
   // Middleware: sesión de comercio (header x-comercio-token).
   async function requireComercio(req, res, next) {
@@ -2760,6 +3078,7 @@ function buildRouter() {
       const s = token && store.getComercioSession ? await store.getComercioSession(token) : null;
       if (!s) return res.status(401).json({ error: "Sesión de comercio inválida" });
       req.comercio = { id: s.comercio_id, nombre: s.nombre };
+      req.soloLectura = esSesionVerComo(token);
       next();
     } catch (e) { res.status(401).json({ error: "no autorizado" }); }
   }
@@ -2799,7 +3118,7 @@ function buildRouter() {
     if (!parcial && (!o.titulo || !o.valor)) throw httpError(400, "Poné el título y el beneficio");
     return o;
   }
-  r.post("/comercio/beneficios", requireComercio, wrap(async (req, res) => {
+  r.post("/comercio/beneficios", requireComercio, noLectura, wrap(async (req, res) => {
     const o = limpiarOferta(req.body || {}, false);
     const abiertas = (await store.ofertasDeComercio(req.comercio.id)).filter((x) => (x.estado || "aprobado") === "borrador").length;
     if (abiertas >= 10) throw httpError(409, "Ya tenés 10 ofertas esperando aprobación. Esperá a que el club las revise.");
@@ -2810,7 +3129,7 @@ function buildRouter() {
   }));
   // Editar una oferta PROPIA. Cambiar lo que ve el hincha (título, beneficio, para quién, ahorro, vigencia) de una oferta ya
   // aprobada o rechazada la devuelve a "espera aprobación"; pausarla o ajustar el cupo no.
-  r.patch("/comercio/beneficios/:id", requireComercio, wrap(async (req, res) => {
+  r.patch("/comercio/beneficios/:id", requireComercio, noLectura, wrap(async (req, res) => {
     const actual = (await store.ofertasDeComercio(req.comercio.id)).find((x) => x.id === req.params.id);
     if (!actual) throw httpError(404, "Oferta no encontrada");
     const patch = limpiarOferta(req.body || {}, true);
@@ -2841,10 +3160,26 @@ function buildRouter() {
     res.json({ periodo: p.etiqueta, ...(await store.estadisticasComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta })) });
   }));
 
+  // Lo de hoy en la caja (día calendario de Paraguay): totales y los últimos canjes. Del hincha solo se ve el nombre y la inicial del apellido.
+  r.get("/comercio/hoy", requireComercio, wrap(async (req, res) => {
+    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+    const p = periodo({ desde: hoy, hasta: hoy });
+    const filas = await store.canjesDeComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta, limit: 500 });
+    const quien = (f) => {
+      const n = String(f.socio_nombre || "").trim().split(" ")[0], a = String(f.socio_apellido || "").trim().charAt(0).toUpperCase();
+      return [n, a ? a + "." : ""].filter(Boolean).join(" ") || "Socio";
+    };
+    const suma = (k) => filas.reduce((t, f) => t + (Number(f[k]) || 0), 0);
+    res.json({
+      fecha: hoy, canjes: filas.length, ahorro: suma("ahorro"), ventas: suma("monto"),
+      ultimos: filas.slice(0, 15).map((f) => ({ hora: new Date(f.creado).toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Asuncion" }), socio: quien(f), beneficio: f.beneficio || "", monto: f.monto != null ? Number(f.monto) : null, ahorro: f.ahorro != null ? Number(f.ahorro) : null })),
+    });
+  }));
+
   // Validar un canje en caja: QR del carnet (rota cada 60 s) o código fijo del socio, + beneficio + monto.
   // Con QR: se verifica la firma y la ventana (±1) y cada QR sirve UNA vez. El registro (stock, límite de días, QR usado y canje)
   // es una sola transacción: dos cajas escaneando a la vez no duplican el canje ni pasan el cupo.
-  r.post("/comercio/validar", requireComercio, wrap(async (req, res) => {
+  r.post("/comercio/validar", requireComercio, noLectura, wrap(async (req, res) => {
     const monto = Math.max(0, Number(req.body?.monto) || 0);
     const tokenQr = String(req.body?.token || "").trim();
     let socio = null, ventana = null, via = "codigo";
@@ -2863,7 +3198,7 @@ function buildRouter() {
     const tier = (m && m.tier_slug) || "olimpista";
     const nivs = ben.niveles === "todos" ? "todos" : String(ben.niveles).split(",").map((x) => x.trim());
     const socioOut = { nombre: [socio.nombre, socio.apellido].filter(Boolean).join(" ") || socio.email, tier };
-    if (!(nivs === "todos" || nivs.indexOf(tier) > -1)) return res.json({ ok: false, motivo: "nivel_no_aplica", socio: socioOut, requiere: (nivs === "todos" ? "olimpista" : nivs[0]) });
+    if (!access.nivelAplica(tier, nivs)) return res.json({ ok: false, motivo: "nivel_no_aplica", socio: socioOut, requiere: (nivs === "todos" ? "olimpista" : nivs[0]) });
     const ahorro = ben.pct ? Math.round(monto * Number(ben.pct) / 100) : (Number(ben.ahorro_estimado) || 0);
     const out = await store.canjearBeneficio({ beneficioId: ben.id, socioId: socio.id, comercioId: req.comercio.id, validadoPor: req.comercio.nombre, monto: monto || null, ahorro: ahorro || null, tierSlug: tier, ventana });
     if (!out.ok) return res.json({ ok: false, motivo: out.motivo, socio: socioOut });
@@ -2890,7 +3225,7 @@ function buildRouter() {
         socioId: req.socio.id,
         nombre: [req.socio.nombre, req.socio.apellido].filter(Boolean).join(" ") || req.socio.email,
         iso: req.socio.pais_iso || "",
-        foto: req.socio.foto || "",
+        foto: (store.getSocioFoto ? await store.getSocioFoto(req.socio.id) : req.socio.foto) || "",
         tier: tier?.nombre || membresia.tier_slug,
         tierSlug: membresia.tier_slug,
         color: tier?.color || "#000",

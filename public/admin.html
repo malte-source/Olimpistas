@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <script src="/js/tema.js"></script>
   <link rel="stylesheet" href="/assets/fonts/fonts.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=89" />
+  <link rel="stylesheet" href="/css/styles.css?v=96" />
   <style>
     /* Panel del club · interfaz nativa sobre styles.css (roles --surface-*, --text-*, --action-*; sin paleta propia).
        Lo que choca con styles.css lleva prefijo .adm-; botones, .grupo, .interruptor y .ctl-seg son los globales. */
@@ -234,7 +234,7 @@
 <body class="adm">
   <!-- Login -->
   <div class="login" id="login">
-    <div class="adm-login-hd"><img src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" /></div>
+    <div class="adm-login-hd"><img class="escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" /></div>
     <div class="adm-franjas" aria-hidden="true"></div>
     <h1>Panel de administración</h1>
     <div id="loginUser">
@@ -254,7 +254,7 @@
   <!-- Dashboard -->
   <div id="dash" hidden>
     <aside class="sidebar">
-      <div class="adm-brand"><img src="/assets/escudo-olimpia-blanco.png" alt="" /><div class="t"><b>Club Olimpia</b><small id="admRol">Panel del club</small></div></div>
+      <div class="adm-brand"><img class="escudo-ok" src="/assets/escudo.png" alt="" /><div class="t"><b>Club Olimpia</b><small id="admRol">Panel del club</small></div></div>
       <nav class="grupo adm-nav" aria-label="Secciones">
         <a class="grupo-fila nav-link" data-area="dashboard" href="#/dashboard"><span class="grupo-ic" style="background:#48484A"><svg class="ic"><use href="/assets/icons.svg#i-tablero-f"/></svg></span><span class="grupo-tx"><b>Dashboard</b></span></a>
         <a class="grupo-fila nav-link" data-area="socios" href="#/socios"><span class="grupo-ic" style="background:#2F5FD0"><svg class="ic"><use href="/assets/icons.svg#i-hinchas"/></svg></span><span class="grupo-tx"><b>Socios</b></span></a>
@@ -303,6 +303,15 @@
           <p class="hint">Un vistazo a cómo va el club: hinchas, ingresos, subastas, puntos, peñas y comercios. Son números agregados, sin datos personales.</p>
           <div class="cards" id="tabCards"><p class="loading">Cargando…</p></div>
           <div id="tabIngresos"></div>
+          <div data-sec="tablero">
+          <h2>Mapa del club</h2>
+          <p class="hint">Hinchas, conversión a Plus, peñas y comercios por ciudad. Son totales: nunca una persona ni una casa.</p>
+          <div class="row-actions" style="gap:8px;margin-bottom:8px;align-items:center">
+            <select id="admMapaCapa" style="width:auto"><option value="ciudades">Hinchas por ciudad</option><option value="plus">Conversión a Plus por ciudad</option><option value="penas">Peñas (altas)</option><option value="comercios">Comercios (canjes)</option></select>
+            <span class="muted" id="admMapaNota"></span>
+          </div>
+          <div id="admMapa" style="height:480px;border-radius:var(--r-22);overflow:hidden;background:#0a0a0a"></div>
+          </div>
           <h2>Salud del sistema</h2>
           <div class="cards" id="saludCards"><p class="loading">Cargando…</p></div>
           <h2>Reportes</h2>
@@ -383,6 +392,30 @@
           <p class="hint">Entrega, aperturas y clics de los correos. La apertura es referencial (Apple Mail y otros la inflan/bloquean); el clic y la conversión en el sitio son más fiables.</p>
           <div class="cards" id="emailCards"><p class="loading">Cargando…</p></div>
 
+          <h2 style="margin-top:34px">Nueva campaña</h2>
+          <p class="hint">Elegí a quién va, por dónde, qué decir y mirá cómo queda antes de enviar. Quien se dio de baja de novedades nunca la recibe, y el envío sale por tandas (podés cancelar lo que todavía no salió).</p>
+          <p class="hint" id="cmpOff" hidden><span class="pill pill-warn">Desactivadas</span> Las campañas todavía no están activas: podés armar el mensaje y ver cómo queda, pero no probar ni enviar. Se encienden cuando el club lo decida.</p>
+          <div class="cmp" id="cmpBox">
+            <div class="fgrid">
+              <div><label for="cmpAud">A quién</label><select id="cmpAud"></select></div>
+              <div><label for="cmpCanal">Por dónde</label><select id="cmpCanal"><option value="email">Correo</option><option value="whatsapp">WhatsApp</option></select></div>
+              <div class="full"><label>Plantilla</label><div class="row-actions" id="cmpPlantillas" style="gap:8px;flex-wrap:wrap"></div></div>
+              <div class="full"><label for="cmpAsunto">Asunto</label><input id="cmpAsunto" maxlength="120" /></div>
+              <div class="full"><label for="cmpTitulo">Título dentro del correo</label><input id="cmpTitulo" maxlength="90" /></div>
+              <div class="full"><label for="cmpCuerpo">Mensaje <span class="muted">· podés usar {{nombre}} y {{nivel}}; dejá una línea en blanco entre párrafos</span></label><textarea id="cmpCuerpo" rows="7" maxlength="2000" style="width:100%"></textarea></div>
+              <div><label for="cmpCtaT">Texto del botón</label><input id="cmpCtaT" maxlength="40" /></div>
+              <div><label for="cmpCtaU">Link del botón <span class="muted">· /miembro/... o https://...</span></label><input id="cmpCtaU" maxlength="500" /></div>
+            </div>
+            <p class="hint" id="cmpAudInfo" aria-live="polite">Elegí a quién va para ver cuántos la reciben.</p>
+            <div class="row-actions" style="gap:8px;flex-wrap:wrap;align-items:center">
+              <button class="btn btn-sm btn-ghost" id="cmpPrevBtn">Ver cómo queda</button>
+              <input id="cmpPruebaA" type="email" placeholder="tu correo para la prueba" style="width:220px" />
+              <button class="btn btn-sm btn-ghost" id="cmpPruebaBtn">Enviar prueba</button>
+              <button class="btn btn-sm" id="cmpEnviarBtn">Enviar campaña</button>
+            </div>
+            <div id="cmpPrev" style="margin-top:14px"></div>
+          </div>
+
           <h2 style="margin-top:34px">Campañas <button class="btn btn-sm" id="campLanzar" style="font-size:12px;font-weight:700">+ Lanzar "Completá tu pago"</button></h2>
           <p class="hint">Congela el cohort de abandonos y mide cuántos pagan después (tasa de conversión). El envío de emails se corre por CLI.</p>
           <div id="campWrap"><p class="loading">Cargando…</p></div>
@@ -397,7 +430,7 @@
           <div data-sec="contenido,subastas,estadio">
           <h2>Sorteos, preventas y contenido</h2>
           <div class="search-row" style="gap:8px">
-            <select id="crudSel" style="flex:0 0 auto;width:auto"><option value="sorteos">Sorteos</option><option value="preventas">Preventas</option><option value="subastas">Subastas</option><option value="encuestas">Encuestas</option><option value="contenido">Contenido</option></select>
+            <select id="crudSel" style="flex:0 0 auto;width:auto"><option value="sorteos">Sorteos</option><option value="preventas">Preventas</option><option value="subastas">Subastas</option><option value="encuestas">Encuestas</option><option value="comercios">Comercios</option><option value="contenido">Contenido</option></select>
             <button class="btn btn-sm" id="crudNuevo">Nuevo</button>
           </div>
           <div id="crudForm"></div>
@@ -413,7 +446,7 @@
           <div data-sec="beneficios">
           <h2>Ofertas de comercios</h2>
           <p class="hint">Las ofertas que cargan los comercios esperan acá: <b>aprobá y publicá</b> o <b>rechazá</b> con el motivo (lo ve el comercio). El reporte para sponsors cruza canjes, ahorro y ventas por comercio, ciudad y nivel.</p>
-          <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">Reporte para sponsors (mes en curso)</button></div>
+          <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">Reporte para sponsors (mes en curso)</button> <button class="btn btn-sm btn-ghost" id="cargarMuestra">Cargar beneficios de muestra (socios)</button></div>
           <div id="ofertasWrap"><p class="loading">Cargando…</p></div>
           </div>
 
@@ -621,10 +654,10 @@
     var AREA_TITLE = { dashboard: "Dashboard", socios: "Socios", atencion: "Atención", pagos: "Pagos", campanas: "Campañas", contenido: "Contenido", decisiones: "Decisiones", sistema: "Sistema" };
     // Loaders que se disparan la PRIMERA vez que se abre cada área (no todo de golpe al entrar).
     var AREA_LOADERS = {
-      dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount],
+      dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount, cargarMapaAdmin],
       socios: [],                                 // búsqueda/segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
-      campanas: [cargarEmailMetricas, cargarCampanas, cargarGhl],
+      campanas: [cargarEmailMetricas, cargarComposer, cargarCampanas, cargarGhl],
       contenido: [function () {
         if (veSeccion("contenido", "subastas", "estadio")) cargarCrud();
         if (veSeccion("contenido")) cargarActualizaciones();
@@ -697,7 +730,7 @@
       var sel = $("crudSel");
       if (sel) {
         if (sel._orig == null) sel._orig = sel.innerHTML; else sel.innerHTML = sel._orig;
-        var SEC_CRUD = { sorteos: "subastas", subastas: "subastas", preventas: "estadio", contenido: "contenido", encuestas: "contenido" };
+        var SEC_CRUD = { sorteos: "subastas", subastas: "subastas", preventas: "estadio", contenido: "contenido", encuestas: "contenido", comercios: "beneficios" };
         for (var o = sel.options.length - 1; o >= 0; o--) { if (!veSeccion(SEC_CRUD[sel.options[o].value] || "contenido")) sel.remove(o); }
       }
       // Botones de acción a nivel sección (los por-fila se gatean al renderizar).
@@ -858,6 +891,49 @@
     }
 
     // ── Tablero del club ──
+    // ── Mapa del club (MapLibre se baja recién cuando el tablero se abre) ──
+    var admMapa = null, admMapaListo = false, admPopup = null;
+    function cargarScript(src) { return new Promise(function (res, rej) { var s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+    async function cargarMapaAdmin() {
+      var caja = $("admMapa"); if (!caja || !veSeccion("tablero")) return;
+      try {
+        if (!window.maplibregl) {
+          var l = document.createElement("link"); l.rel = "stylesheet"; l.href = "/assets/vendor/maplibre-gl.css"; document.head.appendChild(l);
+          await cargarScript("/assets/vendor/maplibre-gl.js");
+        }
+        if (!admMapa) {
+          admMapa = new maplibregl.Map({ container: "admMapa", center: [-58, -23], zoom: 4.2, cooperativeGestures: true, attributionControl: { compact: true },
+            style: { version: 8, sources: { sat: { type: "raster", tileSize: 256, maxzoom: 19, attribution: "Imagery Esri, Maxar, Earthstar Geographics", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"] } },
+              layers: [{ id: "fondo", type: "background", paint: { "background-color": "#0a0a0a" } }, { id: "sat", type: "raster", source: "sat" }] } });
+          admMapa.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+          admMapa.on("load", function () { admMapaListo = true; admMapa.addSource("adm", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+            admMapa.addLayer({ id: "adm-puntos", type: "circle", source: "adm", paint: { "circle-color": ["get", "color"], "circle-opacity": 0.82, "circle-stroke-color": "#0a0a0a", "circle-stroke-width": 1.2, "circle-radius": ["get", "r"] } });
+            admMapa.on("click", "adm-puntos", function (e) { var p = e.features[0].properties; if (admPopup) admPopup.remove(); admPopup = new maplibregl.Popup({ closeButton: false, maxWidth: "240px" }).setLngLat(e.lngLat).setHTML("<strong>" + esc(p.titulo) + "</strong><br><span>" + esc(p.detalle) + "</span>").addTo(admMapa); });
+            admMapa.on("mouseenter", "adm-puntos", function () { admMapa.getCanvas().style.cursor = "pointer"; });
+            admMapa.on("mouseleave", "adm-puntos", function () { admMapa.getCanvas().style.cursor = ""; });
+            pintarMapaAdmin(); });
+        } else if (admMapaListo) pintarMapaAdmin();
+      } catch (e) { caja.innerHTML = '<p class="err" style="padding:14px">' + esc(e.message || "No se pudo cargar el mapa") + '</p>'; }
+    }
+    async function pintarMapaAdmin() {
+      var capa = $("admMapaCapa").value, nota = $("admMapaNota");
+      try {
+        var r = await api("/admin/mapa?capa=" + encodeURIComponent(capa)), items = r.items || [];
+        var gris = function (pct) { var v = Math.round(58 + 197 * Math.max(0, Math.min(1, pct))); return "rgb(" + v + "," + v + "," + v + ")"; };
+        var f = items.map(function (x) {
+          var v, color = "#ffffff", titulo = x.nombre, detalle;
+          if (capa === "ciudades") { v = x.total; detalle = x.total.toLocaleString("es-PY") + " hinchas · " + x.socios + " socios del club · " + x.plus + " Plus/Junior/Socio"; }
+          else if (capa === "plus") { v = x.total; var pct = x.total ? x.plus / x.total : 0; color = gris(Math.min(1, pct * 4)); detalle = Math.round(pct * 1000) / 10 + "% con Plus, Junior o Socio (" + x.plus + " de " + x.total + ")"; }
+          else if (capa === "penas") { v = x.altas; detalle = x.ciudad + " · " + x.altas + " altas · " + x.socios + " socios · " + x.plus + " Plus/Junior"; }
+          else { v = x.canjes; color = x.estado === "activo" ? "#ffffff" : "#6b6b70"; detalle = (x.rubro ? x.rubro + " · " : "") + x.canjes + " canjes · ahorro entregado ₲ " + Number(x.ahorro).toLocaleString("es-PY"); }
+          return { type: "Feature", geometry: { type: "Point", coordinates: [x.lng, x.lat] }, properties: { titulo: titulo, detalle: detalle, color: color, r: Math.max(5, Math.min(34, 5 + Math.sqrt(v) * (capa === "ciudades" || capa === "plus" ? 0.9 : 4))) } };
+        });
+        admMapa.getSource("adm").setData({ type: "FeatureCollection", features: f });
+        nota.textContent = f.length ? f.length + (capa === "penas" ? " peñas ubicadas" : capa === "comercios" ? " comercios ubicados" : " ciudades") : "Todavía no hay datos para esta capa";
+        if (f.length > 1 && (capa === "penas" || capa === "comercios")) { var b = new maplibregl.LngLatBounds(); f.forEach(function (x) { b.extend(x.geometry.coordinates); }); admMapa.fitBounds(b, { padding: 60, maxZoom: 10, duration: 0 }); }
+      } catch (e) { nota.textContent = e.message; }
+    }
+    $("admMapaCapa").addEventListener("change", function () { if (admMapaListo) pintarMapaAdmin(); });
     async function cargarTablero() {
       var box = $("tabCards"); if (!box) return;
       var gs = function (n) { return "₲ " + Number(n || 0).toLocaleString("es-PY"); }, nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
@@ -1094,6 +1170,11 @@
         estado: function (x) { return { borrador: { l: "Borrador", c: "" }, programada: { l: "Programada", c: "pill-warn" }, activa: { l: "En vivo", c: "pill-ok" }, pausada: { l: "Pausada", c: "pill-warn" }, cerrada: { l: "Cerrada", c: "" } }[x.estado] || { l: x.estado, c: "" }; },
         info: function (x) { var extra = (x.estado === "programada" && x.inicia) ? "arranca " + new Date(x.inicia).toLocaleString("es-PY") + " · " : ""; return extra + (TIER[x.nivel_min] || x.nivel_min) + " · desde ₲" + Number(x.precio_inicial || 0).toLocaleString("es-PY") + (Number(x.puja_actual) > Number(x.precio_inicial) ? " · actual ₲" + Number(x.puja_actual).toLocaleString("es-PY") : ""); },
         campos: [["titulo", "Título", "text"], ["descripcion", "Descripción", "text"], ["emoji", "Emoji", "text"], ["imagen", "Imagen", "imagen"], ["nivel_min", "Quién puja (nivel mínimo)", "tier"], ["precio_inicial", "Precio inicial (₲)", "number"], ["incremento", "Incremento (₲)", "number"], ["duracion_horas", "Duración (horas)", "number"]], subasta: true },
+       comercios: { t: "Comercios", comercio: true, lbl: function (x) { return x.nombre; },
+         estado: function (x) { return x.estado === "activo" ? { l: "Activo", c: "pill-ok" } : { l: x.estado || "—", c: "pill-warn" }; },
+         info: function (x) { return [x.rubro, x.ciudad].filter(Boolean).join(" · ") + (x.lat != null ? " · ubicado" : " · sin ubicación") + (x.usuario ? " · acceso: " + x.usuario : " · sin acceso al portal"); },
+         campos: [["nombre", "Nombre", "text"], ["rubro", "Rubro", "text"], ["ciudad", "Ciudad", "text"], ["direccion", "Dirección", "text"], ["contacto", "Contacto (correo o teléfono)", "text"], ["logo", "Logo", "imagen"], ["estado", "Estado", ["activo", "inactivo"]],
+           ["mapa_url", "Link de Google Maps del local (ubica el comercio en el mapa)", "text"], ["lat", "Latitud (se completa con el link)", "text"], ["lng", "Longitud", "text"]] },
       encuestas: { t: "Encuestas",
         lbl: function (x) { return x.titulo || x.pregunta; },
         estado: function (x) { return { borrador: { l: "Borrador", c: "" }, activa: { l: "Activa", c: "pill-ok" }, cerrada: { l: "Cerrada", c: "" } }[x.estado] || { l: x.estado, c: "" }; },
@@ -1146,12 +1227,28 @@
             else encb += '<button class="btn btn-sm btn-ghost adm-neg" data-enccer="' + esc(x.id) + '">Cerrar</button>';
             encb += '<button class="btn btn-sm btn-ghost" data-encres="' + esc(x.id) + '">Resultados</button>';
           }
-          var acc = w ? ('<button class="btn btn-sm btn-ghost" data-edit="' + esc(x.id) + '">Editar</button>' + parts + sub + encb + (cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-gana="' + esc(x.id) + '">Ganador</button>' : '') + '<button class="btn btn-sm btn-ghost adm-neg" data-del="' + esc(x.id) + '">Borrar</button>') : (parts + sub + encb);
+          var comb = "";
+          if (cfg.comercio) comb = '<button class="btn btn-sm btn-ghost" data-comacc="' + esc(x.id) + '">Acceso</button><a class="btn btn-sm btn-ghost" href="/comercio" target="_blank" rel="noopener">Ver como</a>';
+          var acc = w ? ('<button class="btn btn-sm btn-ghost" data-edit="' + esc(x.id) + '">Editar</button>' + parts + sub + encb + comb + (cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-gana="' + esc(x.id) + '">Ganador</button>' : '') + '<button class="btn btn-sm btn-ghost adm-neg" data-del="' + esc(x.id) + '">Borrar</button>') : (parts + sub + encb);
           var estadoPill = cfg.estado ? '<span class="pill ' + (cfg.estado(x).c || "") + '" style="margin-right:8px">' + esc(cfg.estado(x).l) + '</span>' : "";
           return '<tr><td data-l="Item"><strong>' + esc(cfg.lbl(x) || "—") + '</strong><br>' + estadoPill + '<span class="muted">' + esc(cfg.info(x)) + '</span></td><td data-l=""><div class="row-actions" style="flex-wrap:wrap">' + acc + '</div></td></tr>';
         }).join("");
         $("crudList").innerHTML = '<table class="adm-tabla"><tbody>' + rows + '</tbody></table>';
       } catch (e) { $("crudList").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // Usuario y contraseña con los que un comercio entra a su portal (/comercio). La contraseña solo se guarda cifrada.
+    function accesoComercio(id) {
+      var it = crudItems.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+      infoModal("Acceso del comercio", '<p class="muted" style="margin:6px 0 12px">Con esto entra <b>' + esc(it.nombre) + '</b> a ' + esc(location.origin) + '/comercio. Elegí una contraseña de al menos 6 caracteres y pasásela por un canal seguro.</p>' +
+        '<div class="fgrid"><div class="full"><label>Usuario</label><input id="ca_u" autocomplete="off" value="' + esc(it.usuario || "") + '" /></div><div class="full"><label>Contraseña nueva</label><input id="ca_p" type="text" autocomplete="off" /></div></div>' +
+        '<p class="err" id="ca_err"></p><div class="row-actions"><button class="btn" id="ca_ok">Guardar acceso</button></div>');
+      $("ca_ok").onclick = async function () {
+        try {
+          await api("/admin/comercios/" + encodeURIComponent(id) + "/acceso", { method: "POST", body: { usuario: $("ca_u").value, password: $("ca_p").value } });
+          $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; $("uiModalBg").onclick = null;
+          toast("Acceso guardado"); cargarCrud();
+        } catch (e) { $("ca_err").textContent = e.message; }
+      };
     }
     // Valores sugeridos al CREAR (no al editar): igual al default real que aplica el
     // servidor si se deja vacío, para que el form no mienta con un campo vacío.
@@ -1415,21 +1512,129 @@
     }
 
     // ── Campañas + conversión ──
+    var campTimer = 0;
     async function cargarCampanas() {
+      clearTimeout(campTimer);
       try {
         var r = await api("/admin/campanas");
         var list = r.items || [];
-        if (!list.length) { $("campWrap").innerHTML = '<p class="empty">Sin campañas todavía. Tocá "Lanzar".</p>'; return; }
+        if (!list.length) { $("campWrap").innerHTML = '<p class="empty">Sin campañas todavía.</p>'; return; }
+        var hayEnCurso = false;
         var rows = list.map(function (c) {
-          var env = c.envios || 0, conv = c.convertidos || 0, pct = env ? Math.round(100 * conv / env) : 0;
-          return '<tr><td data-l="Campaña"><strong>' + esc(c.nombre) + '</strong><br><span class="muted">' + esc(fmtFecha(c.creada)) + '</span></td>' +
-            '<td data-l="Enviados">' + env + ' <span class="muted">(' + (c.enviados_ok || 0) + ' mail ok)</span></td>' +
-            '<td data-l="Convirtieron"><strong>' + conv + '</strong></td>' +
-            '<td data-l="Conversión"><span class="pill">' + pct + '%</span></td>' +
-            '<td data-l="">' + (puede("campanas.write") ? '<button class="btn btn-sm btn-ghost" data-recalc="' + esc(c.id) + '">Recalcular</button>' : '') + '</td></tr>';
+          var env = c.envios || 0, ok = c.enviados_ok || 0, conv = c.convertidos || 0, pct = env ? Math.round(100 * conv / env) : 0;
+          var compuesta = c.tipo === "composer";
+          var estado = c.estado || "enviada";
+          if (estado === "enviando") hayEnCurso = true;
+          var pill = estado === "enviando" ? '<span class="pill">Enviando</span>' : estado === "cancelada" ? '<span class="pill pill-warn">Cancelada</span>' : '<span class="pill pill-ok">Enviada</span>';
+          var prog = compuesta
+            ? ok + ' de ' + env + (c.fallidos ? ' <span class="muted">(' + c.fallidos + ' fallaron)</span>' : '') + (estado === "enviando" && c.pendientes ? ' <span class="muted">· faltan ' + c.pendientes + '</span>' : '')
+            : env + ' <span class="muted">(' + ok + ' mail ok)</span>';
+          var acc = '';
+          if (puede("campanas.write")) {
+            if (compuesta && estado === "enviando") acc = '<button class="btn btn-sm btn-ghost" data-cancelar="' + esc(c.id) + '">Cancelar lo pendiente</button>';
+            else if (!compuesta) acc = '<button class="btn btn-sm btn-ghost" data-recalc="' + esc(c.id) + '">Recalcular</button>';
+          }
+          return '<tr><td data-l="Campaña"><strong>' + esc(c.nombre) + '</strong><br><span class="muted">' + esc(fmtFecha(c.creada)) + (compuesta ? ' · ' + (c.canal === "whatsapp" ? 'WhatsApp' : 'Correo') : '') + '</span></td>' +
+            '<td data-l="Estado">' + pill + '</td>' +
+            '<td data-l="Enviados">' + prog + '</td>' +
+            '<td data-l="Conversión">' + (compuesta ? '<span class="muted">—</span>' : '<strong>' + conv + '</strong> <span class="pill">' + pct + '%</span>') + '</td>' +
+            '<td data-l="">' + acc + '</td></tr>';
         }).join("");
-        $("campWrap").innerHTML = '<table class="adm-tabla"><thead><tr><th>Campaña</th><th>Enviados</th><th>Convirtieron</th><th>Conversión</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+        $("campWrap").innerHTML = '<table class="adm-tabla"><thead><tr><th>Campaña</th><th>Estado</th><th>Enviados</th><th>Conversión</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+        // Mientras haya envíos en curso la lista se refresca sola (solo si el área sigue a la vista).
+        if (hayEnCurso) campTimer = setTimeout(function () { if (!$("area-campanas").hidden) cargarCampanas(); }, 15000);
       } catch (e) { $("campWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+
+    // ── Compositor de campañas ──
+    var CMP = { plantillas: [], wa: false, tipos: [["olimpista", "Olimpista (gratis)"], ["kids", "Olimpista Junior"], ["premium", "Olimpista Plus"], ["socio", "Olimpista Socio"]] };
+    function cmpAudCuerpo() {
+      var v = $("cmpAud").value;
+      var b = { canal: $("cmpCanal").value };
+      if (v === "todos") b.todos = true;
+      else if (v.indexOf("tier:") === 0) b.filtros = { tier: v.slice(5) };
+      else if (v.indexOf("seg:") === 0) b.segmento_id = v.slice(4);
+      return b;
+    }
+    function cmpCampos() {
+      var p = CMP.plantillas.filter(function (x) { return x.id === CMP.plantilla; })[0];
+      return { plantilla: CMP.plantilla || "", asunto: $("cmpAsunto").value, titulo: $("cmpTitulo").value, cuerpo: $("cmpCuerpo").value, cta_texto: $("cmpCtaT").value, cta_url: $("cmpCtaU").value, cta_valor: !!(p && p.cta_valor) };
+    }
+    function cmpElegirPlantilla(id) {
+      var p = CMP.plantillas.filter(function (x) { return x.id === id; })[0];
+      if (!p) return;
+      CMP.plantilla = id;
+      $("cmpAsunto").value = p.asunto; $("cmpTitulo").value = p.titulo; $("cmpCuerpo").value = p.cuerpo; $("cmpCtaT").value = p.cta_texto; $("cmpCtaU").value = p.cta_url;
+      document.querySelectorAll("#cmpPlantillas button").forEach(function (b) { b.classList.toggle("btn-ghost", b.dataset.p !== id); });
+    }
+    async function cargarComposer() {
+      var escribe = puede("campanas.write");
+      ["cmpPruebaBtn", "cmpEnviarBtn", "cmpPruebaA"].forEach(function (id) { var el = $(id); if (el) el.style.display = escribe ? "" : "none"; });
+      try {
+        var r = await Promise.all([api("/admin/campanas/plantillas"), api("/admin/segmentos")]);
+        CMP.plantillas = r[0].items || []; CMP.wa = !!r[0].whatsapp_conectado; CMP.activas = !!r[0].activas;
+        $("cmpOff").hidden = CMP.activas;
+        ["cmpPruebaBtn", "cmpEnviarBtn"].forEach(function (id) { var el = $(id); if (el) { el.disabled = !CMP.activas; el.title = CMP.activas ? "" : "Las campañas todavía no están activas"; } });
+        var segs = (r[1].items || []);
+        $("cmpAud").innerHTML = '<option value="">Elegí a quién…</option><option value="todos">Todos los hinchas</option>' +
+          '<optgroup label="Por nivel">' + CMP.tipos.map(function (x) { return '<option value="tier:' + x[0] + '">' + esc(x[1]) + '</option>'; }).join("") + '</optgroup>' +
+          (segs.length ? '<optgroup label="Segmentos guardados">' + segs.map(function (s) { return '<option value="seg:' + esc(s.id) + '">' + esc(s.nombre) + '</option>'; }).join("") + '</optgroup>' : "");
+        $("cmpCanal").querySelector('option[value="whatsapp"]').textContent = CMP.wa ? "WhatsApp" : "WhatsApp (sin conectar)";
+        $("cmpPlantillas").innerHTML = CMP.plantillas.map(function (p) { return '<button type="button" class="btn btn-sm btn-ghost" data-p="' + esc(p.id) + '" title="' + esc(p.descripcion) + '">' + esc(p.nombre) + '</button>'; }).join("");
+        if (!CMP.plantilla && CMP.plantillas.length) cmpElegirPlantilla(CMP.plantillas[0].id);
+      } catch (e) { $("cmpAudInfo").textContent = e.message; }
+    }
+    var audSeq = 0;
+    async function cmpAudiencia() {
+      var mi = ++audSeq, info = $("cmpAudInfo");
+      if (!$("cmpAud").value) { info.textContent = "Elegí a quién va para ver cuántos la reciben."; return null; }
+      info.textContent = "Calculando…";
+      try {
+        var a = await api("/admin/campanas/audiencia", { method: "POST", body: cmpAudCuerpo() });
+        if (mi !== audSeq) return null;
+        var ex = a.excluidos || {}, partes = [];
+        if (ex.baja) partes.push(ex.baja + " dados de baja");
+        if (ex.sin_email) partes.push(ex.sin_email + " sin correo");
+        if (ex.sin_telefono) partes.push(ex.sin_telefono + " sin teléfono");
+        info.innerHTML = '<strong>' + a.reciben + '</strong> ' + (a.reciben === 1 ? 'hincha la recibe' : 'hinchas la reciben') + ' de ' + a.total + (partes.length ? ' <span class="muted">· no entran: ' + partes.join(", ") + '</span>' : '') +
+          (a.canal === "whatsapp" && !a.whatsapp_conectado ? ' <span class="pill pill-warn">WhatsApp sin conectar</span>' : '');
+        return a;
+      } catch (e) { if (mi === audSeq) info.textContent = e.message; return null; }
+    }
+    async function cmpVistaPrevia() {
+      try {
+        var v = await api("/admin/campanas/vista-previa", { method: "POST", body: cmpCampos() });
+        if ($("cmpCanal").value === "whatsapp") $("cmpPrev").innerHTML = '<p class="hint">Así se ve el mensaje de WhatsApp (nombre de ejemplo):</p><pre style="white-space:pre-wrap;background:var(--card2);padding:14px;border-radius:var(--r-12);font:inherit;margin:0">' + esc(v.whatsapp) + '</pre>';
+        else {
+          $("cmpPrev").innerHTML = '<p class="hint">Asunto: <strong>' + esc(v.asunto) + '</strong> · así se ve (nombre de ejemplo):</p><iframe id="cmpFrame" title="Vista previa del correo" sandbox="" style="width:100%;height:560px;border:1px solid var(--border-default);border-radius:var(--r-12);background:#fff"></iframe>';
+          $("cmpFrame").srcdoc = v.html;
+        }
+      } catch (e) { toast(e.message, "err"); }
+    }
+    async function cmpPrueba() {
+      try { var r = await api("/admin/campanas/prueba", { method: "POST", body: Object.assign(cmpCampos(), { canal: $("cmpCanal").value, a: $("cmpPruebaA").value }) }); toast(r.modo === "simulado" ? "Prueba simulada (este entorno no manda correos de verdad)" : "Te mandamos la prueba"); }
+      catch (e) { toast(e.message, "err"); }
+    }
+    async function cmpEnviar() {
+      var a = await cmpAudiencia();
+      if (!a) { toast("Elegí a quién va la campaña", "err"); return; }
+      if (!a.reciben) { toast("Nadie recibiría esta campaña", "err"); return; }
+      var c = cmpCampos();
+      var canalTxt = a.canal === "whatsapp" ? "WhatsApp" : "correo";
+      var q = await confirmar('Asunto: "' + c.asunto + '"\nPor ' + canalTxt + ' a ' + a.reciben + ' hinchas.\nSale por tandas de a poco y, si te arrepentís, podés cancelar lo que todavía no salió. Lo que ya salió no se puede deshacer.', { titulo: "Enviar la campaña", ok: "Enviar a " + a.reciben });
+      if (!q.ok) return;
+      $("cmpEnviarBtn").disabled = true;
+      try {
+        var body = Object.assign(cmpAudCuerpo(), c, { total_esperado: a.reciben, nombre: "" });
+        var r = await api("/admin/campanas/enviar", { method: "POST", body: body });
+        toast("Campaña en marcha: " + r.total + " destinatarios"); cargarCampanas(); cargarAcciones();
+      } catch (e) { toast(e.message, "err"); if (/cambi/i.test(e.message)) cmpAudiencia(); }
+      $("cmpEnviarBtn").disabled = false;
+    }
+    async function cancelarCampana(id) {
+      if (!(await confirmar("Se frena el envío: lo que ya salió queda enviado y lo pendiente no sale.", { titulo: "Cancelar lo pendiente", ok: "Cancelar el envío", danger: true })).ok) return;
+      try { await api("/admin/campanas/" + encodeURIComponent(id) + "/cancelar", { method: "POST" }); toast("Envío cancelado"); cargarCampanas(); }
+      catch (e) { toast(e.message, "err"); }
     }
     async function lanzarCampana() {
       if (!(await confirmar("Congela el cohort actual de abandonos para medir conversión. El envío de emails se corre después por CLI (con tu OK).", { titulo: "Lanzar 'Completá tu pago'", ok: "Lanzar" })).ok) return;
@@ -1628,6 +1833,7 @@
         var d = await api("/admin/beneficios"), w = puede("beneficios.write");
         var pend = d.items.filter(function (b) { return b.estado === "borrador"; });
         var rech = d.items.filter(function (b) { return b.estado === "rechazado"; }).slice(0, 5);
+        var pub = d.items.filter(function (b) { return b.estado === "aprobado" && b.activo !== false; }).sort(function (a, b) { return (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0); }).slice(0, 60);
         var PARA = { todos: "Todos", "premium,socio": "Plus y Socio", socio: "Solo socios" };
         var fila = function (b, acciones) {
           return '<div class="card-row" style="border:1px solid var(--border-default);border-radius:10px;padding:10px;margin:8px 0"><b>' + esc(b.comercio_nombre || "") + '</b> — ' + esc(b.titulo) +
@@ -1637,6 +1843,9 @@
         box.innerHTML = (pend.length ? pend.map(function (b) {
           return fila(b, '<button class="btn btn-sm" data-ofapr="' + esc(b.id) + '">Aprobar y publicar</button><button class="btn btn-sm btn-ghost adm-neg" data-ofrec="' + esc(b.id) + '">Rechazar</button>');
         }).join("") : '<p class="empty">No hay ofertas esperando aprobación.</p>') +
+          (pub.length ? '<div class="mini" style="margin-top:14px">Publicadas · tocá "Destacar" para que salgan de banner arriba de la Red de Beneficios (' + pub.filter(function (b) { return b.destacado; }).length + ' destacadas)</div>' + pub.map(function (b) {
+            return fila(b, '<button class="btn btn-sm ' + (b.destacado ? "" : "btn-ghost") + '" data-ofdest="' + esc(b.id) + '" data-on="' + (b.destacado ? "0" : "1") + '">' + (b.destacado ? "Destacada · quitar" : "Destacar") + '</button>');
+          }).join("") : "") +
           (rech.length ? '<div class="mini">Rechazadas recientes</div>' + rech.map(function (b) { return fila(b, '<button class="btn btn-sm btn-ghost" data-ofapr="' + esc(b.id) + '">Aprobar igual</button>'); }).join("") : "");
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
@@ -1698,11 +1907,14 @@
             '<div class="muted" style="font-size:13px">Saldo del fondo: ' + gsA(c.saldo) + ' · ' + esc(fmtFecha(c.creado)) + '</div>' +
             (wp ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" data-penacj="' + esc(c.id) + '">Aprobar</button><button class="btn btn-sm btn-ghost adm-neg" data-penacjno="' + esc(c.id) + '">Rechazar</button></div>' : '') + '</div>';
         }).join("");
-        html += ok.length ? '<table class="adm-tabla" style="font-size:13px"><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Peña</th><th>Hinchas</th><th>Socios</th><th>Plus/Junior</th><th>Fondo</th><th></th></tr></thead><tbody>' +
+        html += ok.length ? '<table class="adm-tabla" style="font-size:13px"><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Peña</th><th>Hinchada</th><th>Padrón del club</th>' + (d.owner ? '<th>Al día / en mora</th>' : '') + '<th>Socios</th><th>Plus</th><th></th></tr></thead><tbody>' +
           ok.map(function (p, i) {
             return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(p.nombre) + '</b><br><span class="muted">' + esc(p.ciudad) + (p.estado === "pausada" ? ' · en pausa' : '') + '</span></td>' +
-              '<td style="text-align:center">' + p.altas + '</td><td style="text-align:center">' + p.socios + '</td><td style="text-align:center">' + p.plus + '</td><td style="text-align:right">' + gsA(p.saldo) + '</td>' +
-              '<td style="text-align:right">' + (w ? '<button class="btn btn-sm btn-ghost" data-penaacc="' + esc(p.id) + '">Reenviar acceso</button> <button class="btn btn-sm btn-ghost" data-penaest="' + esc(p.id) + '" data-a="' + (p.estado === "pausada" ? "verificada" : "pausada") + '">' + (p.estado === "pausada" ? "Reactivar" : "Pausar") + '</button>' : '') + '</td></tr>';
+              '<td style="text-align:center"><b>' + (p.hinchada != null ? p.hinchada : p.altas) + '</b><br><span class="muted">' + p.altas + ' en la app</span></td>' +
+              '<td style="text-align:center">' + ((p.padron && p.padron.miembros) || 0) + '<br><span class="muted">' + ((p.padron && p.padron.con_cuenta) || 0) + ' con cuenta</span></td>' +
+              (d.owner ? '<td style="text-align:center">' + (p.padron && p.padron.al_dia != null ? p.padron.al_dia + ' / ' + p.padron.en_mora : '—') + '</td>' : '') +
+              '<td style="text-align:center">' + p.socios + '</td><td style="text-align:center">' + p.plus + '</td>' +
+              '<td style="text-align:right">' + (w ? '<button class="btn btn-sm btn-ghost" data-penaed="' + esc(p.id) + '">Datos</button> ' : '') + (d.owner ? '<button class="btn btn-sm btn-ghost" data-penapad="' + esc(p.id) + '" data-n="' + esc(p.nombre) + '">Padrón</button> ' : '') + (w ? '<button class="btn btn-sm btn-ghost" data-penaacc="' + esc(p.id) + '">Reenviar acceso</button> <button class="btn btn-sm btn-ghost" data-penaest="' + esc(p.id) + '" data-a="' + (p.estado === "pausada" ? "verificada" : "pausada") + '">' + (p.estado === "pausada" ? "Reactivar" : "Pausar") + '</button>' : '') + '</td></tr>';
           }).join("") + '</tbody></table>' : '';
         box.innerHTML = html || '<p class="empty">Todavía no hay peñas. Las solicitudes llegan desde la app de los hinchas.</p>';
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
@@ -1809,6 +2021,67 @@
       if (!$("uiModalBg").hidden) { var no = $("uiModalBox").querySelector("[data-no]"); if (no) no.click(); else { $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; } return; }
       if (!$("fichaBg").hidden) cerrarFicha();
     });
+    // A11y de los modales (ficha y confirmar/info): rol de diálogo, foco adentro, Tab que no se escapa y foco que vuelve
+    // a donde estaba. Se engancha a que el modal se muestre u oculte, así cubre todos los que ya existen sin tocarlos.
+    (function () {
+      var FOCOS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      function enganchar(bgId, boxId) {
+        var bg = $(bgId), box = $(boxId); if (!bg || !box) return;
+        var previo = null;
+        box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
+        function armar() {
+          var h = box.querySelector("h2, h3"); if (h) { if (!h.id) h.id = boxId + "Tit"; box.setAttribute("aria-labelledby", h.id); } else box.removeAttribute("aria-labelledby");
+          Array.prototype.forEach.call(box.querySelectorAll("button.close"), function (b) { if (!b.getAttribute("aria-label")) b.setAttribute("aria-label", "Cerrar"); });
+        }
+        new MutationObserver(function () { if (!bg.hidden) armar(); }).observe(box, { childList: true, subtree: true });
+        new MutationObserver(function () {
+          if (!bg.hidden) {
+            if (!previo) previo = document.activeElement;
+            armar();
+            setTimeout(function () { if (bg.hidden || box.contains(document.activeElement)) return; var f = box.querySelectorAll(FOCOS); (f[0] || box).focus && (f[0] || box).focus(); }, 30);
+          } else if (previo) {
+            var p = previo; previo = null;
+            if (p && p.focus && document.contains(p)) { try { p.focus(); } catch (e) {} }
+          }
+        }).observe(bg, { attributes: true, attributeFilter: ["hidden"] });
+        box.setAttribute("tabindex", "-1");
+        bg.addEventListener("keydown", function (e) {
+          if (e.key !== "Tab") return;
+          var f = Array.prototype.filter.call(box.querySelectorAll(FOCOS), function (x) { return x.offsetParent !== null; });
+          if (!f.length) { e.preventDefault(); box.focus(); return; }
+          var a = f[0], z = f[f.length - 1];
+          if (e.shiftKey && (document.activeElement === a || document.activeElement === box)) { e.preventDefault(); z.focus(); }
+          else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+        });
+      }
+      enganchar("uiModalBg", "uiModalBox"); enganchar("fichaBg", "fichaBox");
+    })();
+    // Reintento por área: cuando un panel falla al cargar queda un mensaje de error suelto; le agregamos "Reintentar",
+    // que vuelve a correr los cargadores del área (no hace falta recargar toda la página). Solo a los errores que ocupan
+    // un panel entero (único hijo), no a los de formularios.
+    (function () {
+      var main = document.querySelector("main") || document.body;
+      function areaDe(el) { var a = el.closest && el.closest("[id^='area-']"); return a ? a.id.replace("area-", "") : null; }
+      new MutationObserver(function (muts) {
+        muts.forEach(function (m) {
+          Array.prototype.forEach.call(m.addedNodes, function (n) {
+            var errs = n.nodeType === 1 ? (n.matches && n.matches("p.err") ? [n] : Array.prototype.slice.call(n.querySelectorAll ? n.querySelectorAll("p.err") : [])) : [];
+            errs.forEach(function (p) {
+              var area = areaDe(p);
+              if (!area || !p.parentElement || p.parentElement.children.length !== 1 || p.querySelector("[data-reintentar]")) return;
+              var b = document.createElement("button"); b.type = "button"; b.className = "btn btn-sm btn-ghost"; b.textContent = "Reintentar"; b.setAttribute("data-reintentar", area); b.style.marginLeft = "10px";
+              p.appendChild(b);
+            });
+          });
+        });
+      }).observe(main, { childList: true, subtree: true });
+      document.addEventListener("click", function (e) {
+        var b = e.target.closest && e.target.closest("[data-reintentar]"); if (!b) return;
+        var area = b.getAttribute("data-reintentar"); b.disabled = true; b.textContent = "Reintentando…";
+        (AREA_LOADERS[area] || []).forEach(function (f) { try { f(); } catch (e2) {} });
+        setTimeout(function () { if (b.isConnected) { b.disabled = false; b.textContent = "Reintentar"; } }, 4000);
+      });
+    })();
     // A11y: los <a> que actúan como botones deben ser accesibles por teclado.
     ["toggleKey", "toggleUser", "salir"].forEach(function (id) {
       var el = $(id); if (!el) return;
@@ -1844,7 +2117,19 @@
           var r = await confirmar("El comercio va a ver este motivo en su panel.", { titulo: "Rechazar oferta", ok: "Rechazar", danger: true, input: true, placeholder: "Motivo (ej. el 90% no es sostenible)" });
           if (!r.ok) return;
           await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofrec), { method: "PATCH", body: { estado: "rechazado", motivo: r.val } }); toast("Oferta rechazada");
+        } else if (b.dataset.ofdest) {
+          await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofdest) + "/destacar", { method: "POST", body: { destacado: b.dataset.on === "1" } });
+          toast(b.dataset.on === "1" ? "Destacada: sale de banner" : "Ya no es destacada");
         } else return;
+        cargarOfertasAdmin();
+      } catch (err) { toast(err.message, "err"); }
+    });
+    $("cargarMuestra").addEventListener("click", async function () {
+      var c = await confirmar("Se cargan los comercios y beneficios de la Matriz Unificada del club, todos exclusivos para socios y ya publicados. Si ya existen no se duplican ni se pisan.", { titulo: "Cargar beneficios de muestra", ok: "Cargar" });
+      if (!c.ok) return;
+      try {
+        var r = await api("/admin/beneficios/muestra", { method: "POST" });
+        toast(r.beneficios_creados + " beneficios nuevos · " + r.comercios_creados + " comercios nuevos" + (r.beneficios_existentes ? " (" + r.beneficios_existentes + " ya estaban)" : ""));
         cargarOfertasAdmin();
       } catch (err) { toast(err.message, "err"); }
     });
@@ -1881,6 +2166,40 @@
         cargarPuntosAdmin();
       } catch (err) { toast(err.message, "err"); }
     });
+    function cerrarUiModal() { $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; $("uiModalBg").onclick = null; }
+    function editarPena(id) {
+      api("/admin/penas").then(function (d) {
+        var p = d.items.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+        var campos = [["nombre", "Nombre", p.nombre], ["ciudad", "Ciudad", p.ciudad], ["pais_iso", "País (código, ej. PY)", p.pais_iso], ["presidente", "Quién preside", p.presidente], ["contacto", "Correo de contacto", p.contacto]];
+        $("uiModalBox").innerHTML = '<button class="close" data-no>×</button><h3>Datos de la peña</h3>' +
+          campos.map(function (c) { return '<label class="muted" style="display:block;font-size:13px;margin:10px 0 4px" for="pe_' + c[0] + '">' + c[1] + '</label><input id="pe_' + c[0] + '" value="' + esc(c[2] || "") + '" maxlength="120" />'; }).join("") +
+          '<div class="row-actions" style="justify-content:flex-end;margin-top:16px"><button class="btn btn-ghost" data-no>Cancelar</button><button class="btn" id="peGuardar">Guardar</button></div>';
+        $("uiModalBg").hidden = false;
+        $("uiModalBg").onclick = function (ev) { if (ev.target === $("uiModalBg") || ev.target.closest("[data-no]")) cerrarUiModal(); };
+        $("peGuardar").onclick = async function () {
+          var body = {}; campos.forEach(function (c) { body[c[0]] = $("pe_" + c[0]).value; });
+          try { await api("/admin/penas/" + encodeURIComponent(id), { method: "PATCH", body: body }); cerrarUiModal(); toast("Datos guardados"); cargarPenasAdmin(); }
+          catch (err) { toast(err.message, "err"); }
+        };
+      }).catch(function (err) { toast(err.message, "err"); });
+    }
+    var ESTADO_CUOTA = { al_dia: "Al día", en_mora: "En mora", sin_dato: "Sin dato" };
+    async function verPadronPena(id, nombre) {
+      var r = await api("/admin/penas/" + encodeURIComponent(id) + "/miembros");
+      var filas = r.items.slice(0, 300);
+      infoModal("Padrón · " + nombre, '<p class="muted" style="font-size:13px">' + r.items.length + ' personas en el listado del club. El estado de la cuota lo ves solo vos.' + (r.items.length > filas.length ? ' Se muestran las primeras ' + filas.length + ': el CSV trae todas.' : '') + '</p>' +
+        '<div style="max-height:52vh;overflow:auto"><table class="adm-tabla" style="font-size:13px"><thead><tr><th style="text-align:left">Nombre</th><th>Cédula</th><th>N° socio</th><th>Cuota</th><th>Cuenta</th></tr></thead><tbody>' +
+        filas.map(function (m) { return '<tr><td>' + esc(m.nombre) + '</td><td>' + esc(m.cedula || "—") + '</td><td>' + esc(m.nro_socio || "—") + '</td><td>' + esc(ESTADO_CUOTA[m.estado_cuota] || "") + '</td><td>' + (m.socio_id ? "sí" : "no") + '</td></tr>'; }).join("") + '</tbody></table></div>' +
+        '<div class="row-actions" style="margin-top:12px"><button class="btn btn-sm btn-ghost" id="padCsv">Descargar CSV</button></div>');
+      $("padCsv").onclick = async function () {
+        try {
+          var res = await fetch("/api/admin/penas/" + encodeURIComponent(id) + "/miembros?format=csv", { headers: { "x-admin-token": getToken(), "x-admin-key": getKey() } });
+          if (!res.ok) { var j = await res.json().catch(function () { return {}; }); throw new Error(j.error || "No se pudo descargar"); }
+          var blob = await res.blob(), a = document.createElement("a");
+          a.href = URL.createObjectURL(blob); a.download = "padron-" + nombre.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".csv"; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+        } catch (err) { toast(err.message, "err"); }
+      };
+    }
     $("penasWrap").addEventListener("click", async function (e) {
       var b = e.target.closest("button"); if (!b) return;
       try {
@@ -1889,6 +2208,10 @@
           var r = await api("/admin/penas/" + encodeURIComponent(b.dataset.penaver) + "/verificar", { method: "POST" });
           if (r.correo_enviado) toast("Peña verificada. Le mandamos el acceso por correo.");
           else infoModal("Peña verificada", '<p class="muted">No se pudo mandar el correo. Pasale este link a la comisión (sirve una vez, vence en 7 días):</p><p style="word-break:break-all"><b>' + esc(r.url_clave || "") + '</b></p>');
+        } else if (b.dataset.penaed) {
+          editarPena(b.dataset.penaed); return;
+        } else if (b.dataset.penapad) {
+          await verPadronPena(b.dataset.penapad, b.dataset.n); return;
         } else if (b.dataset.penaacc) {
           var r2 = await api("/admin/penas/" + encodeURIComponent(b.dataset.penaacc) + "/acceso", { method: "POST" });
           if (r2.correo_enviado) toast("Acceso reenviado por correo."); else infoModal("Nuevo acceso", '<p style="word-break:break-all"><b>' + esc(r2.url_clave || "") + '</b></p>');
@@ -1919,6 +2242,7 @@
       else if (b.dataset.segundo) pasarAlSegundo(b.dataset.segundo);
       else if (b.dataset.pujas) verPujasSubasta(b.dataset.pujas);
       else if (b.dataset.link) verLinkSubasta(b.dataset.link);
+      else if (b.dataset.comacc) accesoComercio(b.dataset.comacc);
       else if (b.dataset.encact) cambiarEstadoEncuesta(b.dataset.encact, "activa");
       else if (b.dataset.enccer) cambiarEstadoEncuesta(b.dataset.enccer, "cerrada");
       else if (b.dataset.encres) verResultadosEncuesta(b.dataset.encres);
@@ -1929,7 +2253,13 @@
       var pick = e.target.closest("[data-imgpick]"); if (pick) { var f = $("imgFile_" + pick.dataset.imgpick); if (f) f.click(); }
     });
     $("campLanzar").addEventListener("click", lanzarCampana);
-    $("campWrap").addEventListener("click", function (e) { var b = e.target.closest("button[data-recalc]"); if (b) recalcCampana(b.dataset.recalc); });
+    $("campWrap").addEventListener("click", function (e) { var b = e.target.closest("button[data-recalc]"); if (b) recalcCampana(b.dataset.recalc); var c = e.target.closest("button[data-cancelar]"); if (c) cancelarCampana(c.dataset.cancelar); });
+    $("cmpPlantillas").addEventListener("click", function (e) { var b = e.target.closest("button[data-p]"); if (b) cmpElegirPlantilla(b.dataset.p); });
+    $("cmpAud").addEventListener("change", cmpAudiencia);
+    $("cmpCanal").addEventListener("change", function () { cmpAudiencia(); if ($("cmpPrev").innerHTML) cmpVistaPrevia(); });
+    $("cmpPrevBtn").addEventListener("click", cmpVistaPrevia);
+    $("cmpPruebaBtn").addEventListener("click", cmpPrueba);
+    $("cmpEnviarBtn").addEventListener("click", cmpEnviar);
     $("ghlSync").addEventListener("click", ghlSync);
     $("padronBtn").addEventListener("click", cargarPadron);
     $("padronQ").addEventListener("keydown", function (e) { if (e.key === "Enter") cargarPadron(); });

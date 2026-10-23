@@ -10,7 +10,7 @@
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
   <script src="/js/tema.js"></script>
   <link rel="stylesheet" href="/assets/fonts/fonts.css" />
-  <link rel="stylesheet" href="/css/styles.css?v=89" />
+  <link rel="stylesheet" href="/css/styles.css?v=96" />
   <style>
     /* Panel de la peña · sobre styles.css (roles --surface-*, --text-*, --action-*) · prefijo .pen- */
     body { background: var(--surface-grouped); color: var(--text-primary); min-height: 100vh; }
@@ -38,6 +38,7 @@
     .pen-card .btn { margin-top: 16px; padding: 13px 18px; }
     .pen-card .btn:hover, .pen-salir:hover { transform: none; }
     .pen-msg { font-size: var(--t-13); margin-top: 10px; min-height: 16px; color: var(--text-error); }
+    .pen-lectura { margin-bottom: 12px; padding: 11px 16px; border-radius: var(--r-14); background: #0a0a0a; color: #fff; font-size: var(--t-13); font-weight: 600; }
     .pen-msg.ok { color: var(--text-success); }
 
     .pen-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0; }
@@ -68,7 +69,7 @@
         <h1 id="nombre">Peñas oficiales</h1>
         <p id="quien">Para la comisión de una peña oficial</p>
       </div>
-      <img class="pen-escudo" src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" />
+      <img class="pen-escudo escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" />
       <button type="button" class="pen-salir hide" id="salirBtn" aria-label="Salir"><svg class="ic" width="20" height="20"><use href="/assets/icons.svg#i-salir"/></svg></button>
     </div>
     <div class="pen-fr" aria-hidden="true"></div>
@@ -102,6 +103,7 @@
 
   <!-- Panel -->
   <div id="panel" class="hide">
+    <div class="pen-lectura hide" id="modoLectura" role="status">Modo lectura · estás viendo este panel como administrador del club. <a href="/admin" style="color:#fff;text-decoration:underline;margin-left:8px">Volver al panel del club</a></div>
     <div class="pen-kpis" id="kpis"></div>
     <div class="pen-cols">
       <div class="pen-card">
@@ -111,7 +113,7 @@
         <button class="btn btn-ghost" id="copiarBtn" style="margin-top:8px">Copiar link</button>
         <p class="pen-muted" id="linkNota" style="margin:12px 0 0"></p>
       </div>
-      <div class="pen-card">
+      <div class="pen-card" id="fondoCard" hidden>
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><h3 style="margin:0">Fondo de la peña</h3><span class="pen-saldo" id="saldo"></span></div>
         <p class="pen-muted" id="fondoNota" style="margin:6px 0 8px"></p>
         <div id="mov"></div>
@@ -159,13 +161,15 @@
     try {
       var d = await api("/pena/panel"), f = await api("/pena/fondo");
       mostrar("panel");
+      $("modoLectura").classList.toggle("hide", token().indexOf("adm_") !== 0);
       $("quien").textContent = d.pena.ciudad || "";
       $("kick").textContent = "Panel de la comisión · verificada" + (d.ranking ? " · #" + d.ranking + " del ranking" : "");
       $("nombre").textContent = d.pena.nombre;
-      $("kpis").innerHTML = [["Hinchas que se sumaron", d.kpis.altas], ["Socios del club", d.kpis.socios], ["Pagan Plus o Junior", d.kpis.plus], ["Saldo del fondo", gs(d.kpis.saldo)]]
+      $("kpis").innerHTML = [["Hinchada de la peña", d.kpis.hinchada], ["Se sumaron a la app", d.kpis.altas], ["Socios del club", d.kpis.socios], ["Pagan Plus", d.kpis.plus]]
         .map(function (k) { return '<div class="pen-kpi"><b>' + esc(k[1]) + '</b><span>' + esc(k[0]) + '</span></div>'; }).join("");
       $("link").textContent = d.link;
-      $("linkNota").textContent = "Cada alta por este link o su QR queda en la peña. El " + d.pct + "% de lo que esos hinchas pagan por Pagopar va al fondo.";
+      $("linkNota").textContent = "Cada alta por este link o su QR queda en la peña.";
+      $("fondoCard").hidden = !d.fondo_activo; // el fondo del 10 % está apagado: la peña va a tener una recompensa por puntos
       try { var qr = qrcode(0, "M"); qr.addData(d.link); qr.make(); $("qr").src = qr.createDataURL(5, 2); } catch (e) {}
       $("copiarBtn").onclick = function () { navigator.clipboard.writeText(d.link).then(function () { $("copiarBtn").textContent = "¡Copiado!"; setTimeout(function () { $("copiarBtn").textContent = "Copiar link"; }, 1500); }); };
       $("altas").innerHTML = d.ultimas_altas.length ? d.ultimas_altas.map(function (a) {
@@ -186,11 +190,30 @@
 
   $("loginBtn").onclick = async function () {
     $("loginErr").textContent = ""; $("loginBtn").disabled = true;
-    try { var r = await api("/pena/login", { method: "POST", body: { usuario: $("usuario").value, password: $("password").value } }); setToken(r.token); cargar(); }
+    try { var r = await api("/pena/login", { method: "POST", body: { usuario: $("usuario").value, password: $("password").value } }); if (r.admin) { elegirPena(r); return; } setToken(r.token); cargar(); }
     catch (e) { $("loginErr").textContent = e.message; }
     $("loginBtn").disabled = false;
   };
   $("password").addEventListener("keydown", function (e) { if (e.key === "Enter") $("loginBtn").click(); });
+  // Un owner del panel entra con su usuario del club y elige qué peña mirar (solo lectura, queda en la auditoría).
+  function elegirPena(r) {
+    var ops = r.opciones || [];
+    $("loginCard").innerHTML = '<h3>' + (ops.length ? 'Elegí una peña' : 'No hay peñas todavía') + '</h3><p class="pen-muted">Entraste como administrador del club. ' + (ops.length ? 'Vas a ver el panel de la peña en modo lectura.' : 'Cuando llegue una solicitud, aparece acá aunque todavía no esté verificada.') + '</p>' +
+      (ops.length ? '<label class="pen-lbl" for="comoSel">Peña</label><select id="comoSel">' +
+      ops.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.nombre) + (p.ciudad ? ' · ' + esc(p.ciudad) : '') + (p.estado !== "verificada" ? ' (' + esc(p.estado) + ')' : '') + '</option>'; }).join("") + '</select>' +
+      '<button class="btn btn-block" id="comoBtn">Ver esta peña</button>' : '') +
+      '<div class="pen-msg" id="comoErr" role="alert"></div><p class="pen-muted" style="margin:14px 0 0"><a href="/admin">Ir al panel del club</a> · <a href="/pena">Entrar con otro usuario</a></p>';
+    if (!ops.length) return;
+    $("comoBtn").onclick = async function () {
+      $("comoErr").textContent = "";
+      try {
+        var x = await fetch("/api/pena/entrar-como", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-token": r.token_admin }, body: JSON.stringify({ id: $("comoSel").value }) });
+        var k = await x.json().catch(function () { return {}; });
+        if (!x.ok) throw new Error(k.error || "Error");
+        setToken(k.token); location.reload();
+      } catch (e) { $("comoErr").textContent = e.message; }
+    };
+  }
   $("salirBtn").onclick = async function () { try { await api("/pena/logout", { method: "POST" }); } catch (e) {} setToken(""); mostrar("login"); };
 
   $("claveBtn").onclick = async function () {

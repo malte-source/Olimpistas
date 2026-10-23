@@ -70,6 +70,7 @@ const TIERS = [
   {
     slug: "kids",
     nombre: "Olimpista Junior",
+    oculto: true,              // YA NO SE OFRECE (decisión 2026-10-23): no aparece en la landing ni se puede contratar. Se conserva para quienes ya son Junior (ver, renovar, cancelar).
     subtitulo: "Para los más chicos",
     subtitulo_en: "For the little ones",
     nivel: 1,

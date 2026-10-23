@@ -1,0 +1,6 @@
+[
+  { "id": 3437809, "nombre": "Luque", "pais_iso": "PY", "lat": -25.26703, "lng": -57.49107, "poblacion": 90000 },
+  { "id": 3437883, "nombre": "J. Augusto Saldívar", "pais_iso": "PY", "lat": -25.44294, "lng": -57.44137, "poblacion": 40000 },
+  { "id": 3438001, "nombre": "Hernandarias", "pais_iso": "PY", "lat": -25.40165, "lng": -54.64119, "poblacion": 90000 },
+  { "id": 3438906, "nombre": "Minga Guazú", "pais_iso": "PY", "lat": -25.48201, "lng": -54.76213, "poblacion": 60000 }
+]

@@ -59,7 +59,14 @@
   const vacio = (txt) => `<div class="empty"><div class="empty-ic">${icon("calendar", { size: 36 })}</div><p>${txt}</p></div>`;
 
   async function init() {
-    SESSION = await yo();
+    const est = await OLI.yoEstado();
+    if (est.error) {
+      // Sin red o servidor caído: no es "no tenés sesión". Mostramos reintentar en vez de mandarte al inicio.
+      view().innerHTML = `<div class="empty" role="alert"><h3>${esc(T("err_cuenta_titulo"))}</h3><p class="muted">${esc(est.error.message)}</p><button class="btn" id="btnReintentarInit">${esc(T("err_reintentar"))}</button></div>`;
+      document.getElementById("btnReintentarInit").onclick = () => init();
+      return;
+    }
+    SESSION = est.sesion;
     if (!SESSION) { location.href = "/"; return; }
     CONFIG = await api("/config").catch(() => ({ paises: [] }));
     perfilPunto = { lat: SESSION.socio.lat ?? null, lng: SESSION.socio.lng ?? null };
@@ -101,7 +108,15 @@
         try { const r = await api("/pagos/estado?hash=" + encodeURIComponent(pagoHash)); confirmado = !!r.pagado; } catch (e) {}
         if (!confirmado) await new Promise((res) => setTimeout(res, 2500));
       }
-      toast(confirmado ? T("m_pago_ok") : T("m_pago_pendiente"));
+      if (confirmado) toast(T("m_pago_ok"));
+      else {
+        // Un toast de 2,6 s se pierde: el pago puede tardar minutos, así que el aviso queda hasta que lo cierres.
+        const av = document.createElement("div");
+        av.className = "aviso-pago"; av.setAttribute("role", "status");
+        av.innerHTML = `<span>${esc(T("m_pago_pendiente"))}</span><button type="button" class="aviso-pago-x" aria-label="${esc(T("m_cerrar"))}">×</button>`;
+        av.querySelector("button").onclick = () => av.remove();
+        document.body.appendChild(av);
+      }
       history.replaceState({}, "", "/miembro");
       SESSION = await yo();
     }
@@ -283,7 +298,7 @@
       w.push(`<button type="button" class="wg" data-goto="descubrir" data-seg="penas" aria-label="${T("m_wg_pena")}">
         <span class="wg-ic" style="background:#C2410C">${OLI.ic("pena", 22)}</span>
         <span class="wg-t wg-pie">${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</span>
-        <span class="wg-sub">${mia ? "#" + mia.ranking + " · " + mia.altas + " " + T(mia.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</span>
+        <span class="wg-sub">${mia ? "#" + mia.ranking + " · " + (mia.hinchada != null ? mia.hinchada : mia.altas) + " " + T((mia.hinchada != null ? mia.hinchada : mia.altas) === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</span>
       </button>`);
     }
     w.push(`<button type="button" class="wg wg-negro" data-goto="carnet" aria-label="${T("tab_carnet")}">
@@ -711,10 +726,10 @@
           <div class="perfil-casa">
             <h3 style="margin:0 0 4px">${T("m_casa_h")}</h3>
             <p class="lead" style="margin-bottom:12px">${T("m_casa_p")}</p>
-            <div class="grupo sin-ic"><div class="grupo-fila"><span class="grupo-tx"><b>${T("m_exacto_h")}</b><small>${T("m_exacto_p")}</small></span>
-              <button type="button" role="switch" class="interruptor" id="f_exacto" aria-checked="${!!s.mostrar_exacto}"></button></div></div>
             <div class="ubic" style="margin-top:12px">
               <button class="btn btn-ghost" id="btnGeo" type="button">${T("m_geo")}</button>
+              <button class="btn" id="btnCasa" type="button">${T("m_casa_boton")}</button>
+              <button class="btn btn-ghost" id="btnStoryMapa" type="button">${T("m_story_mapa")}</button>
               <span id="ubicEstado" class="muted">${tienePunto ? T("m_fijado") : T("m_sin_fijar")}</span>
             </div>
             <div id="perfilMapa" class="ob-mapa"><div class="ob-mapa-pin">${icon("map-pin", { size: 28 })}</div></div>
@@ -729,7 +744,18 @@
     campos.forEach((c) => { document.getElementById("f_" + c.key).onclick = () => entrarEdicionPerfil(c); });
     const cancelBtn = document.getElementById("btnCancelarMembresia");
     if (cancelBtn) cancelBtn.onclick = () => confirmarCancelarMembresia(cancelBtn);
-    document.getElementById("f_exacto").onclick = (e) => guardarCampoPerfil({ mostrar_exacto: e.currentTarget.getAttribute("aria-checked") !== "true" }, T("m_casa_ok"));
+    document.getElementById("btnCasa").onclick = abrirHojaCasa;
+    document.getElementById("btnStoryMapa").onclick = async (e) => {
+      const b = e.currentTarget; b.disabled = true;
+      try {
+        const m = await api("/perfil/mapa");
+        const n = m.ciudad_n || m.pais_n, lugar = m.ciudad_n ? m.ciudad : m.pais;
+        const caption = n ? T("m_story_mapa_cap").replace("{n}", Number(n).toLocaleString("es-PY")).replace("{lugar}", lugar) : T("m_story_mapa_cap0");
+        const r = await OLI.compartirStory({ tipo: "mapa", nombre: m.nombre, ciudad: m.ciudad, nCiudad: m.ciudad_n, pais: m.pais, nPais: m.pais_n, iso: m.iso, caption });
+        if (r && r.ok === false && !r.cancel) toast(T("m_error_generico"));
+      } catch (err) { toast(err.message); }
+      b.disabled = false;
+    };
     initPerfilMapa();
     if (!s.pais_iso) prefillPaisPorIP();
   }
@@ -743,6 +769,9 @@
       inputHtml = `<select id="pfInput">${opts}</select>`;
     } else if (c.type === "date") {
       inputHtml = `<input id="pfInput" type="date" max="${new Date().toISOString().slice(0, 10)}" value="${attr(c.value)}" />`;
+    } else if (c.key === "ciudad") {
+      // Ciudad con autocompletado (GeoNames): elegir de la lista da la ciudad oficial; escribir otra cosa también se guarda.
+      inputHtml = `<input id="pfInput" type="text" list="pfCiudades" autocomplete="off" value="${attr(c.value)}" placeholder="${attr(c.placeholder || "")}" /><datalist id="pfCiudades"></datalist>`;
     } else {
       inputHtml = `<input id="pfInput" type="text" value="${attr(c.value)}" placeholder="${attr(c.placeholder || "")}" />`;
     }
@@ -750,9 +779,26 @@
       <div class="pf-edit">${inputHtml}<button type="button" class="btn btn-sm" id="pfOk">${icon("check", { size: 14 })}</button></div>`;
     const input = document.getElementById("pfInput");
     input.focus();
+    const ciudadIds = {};
+    if (c.key === "ciudad") {
+      const dl = document.getElementById("pfCiudades"); let t = 0;
+      input.addEventListener("input", () => {
+        clearTimeout(t);
+        t = setTimeout(async () => {
+          const q = input.value.trim(); if (q.length < 2) return;
+          try {
+            const r = await api("/ciudades?q=" + encodeURIComponent(q) + "&pais=" + encodeURIComponent((SESSION.socio && SESSION.socio.pais_iso) || ""));
+            dl.innerHTML = (r.items || []).map((x) => `<option value="${attr(x.nombre)}"></option>`).join("");
+            (r.items || []).forEach((x) => { ciudadIds[String(x.nombre).toLowerCase()] = x.id; });
+          } catch (e) { /* sin sugerencias: se puede escribir igual */ }
+        }, 200);
+      });
+    }
     const commit = () => {
       const apiKey = c.key === "pais_iso" ? "pais" : c.key;
-      guardarCampoPerfil({ [apiKey]: input.value }, T("m_perfil_ok"));
+      const body = { [apiKey]: input.value };
+      if (c.key === "ciudad" && ciudadIds[input.value.trim().toLowerCase()]) body.ciudad_id = ciudadIds[input.value.trim().toLowerCase()];
+      guardarCampoPerfil(body, T("m_perfil_ok"));
     };
     document.getElementById("pfOk").onclick = commit;
     if (c.type === "select") input.addEventListener("change", commit);
@@ -810,7 +856,7 @@
   function initPerfilMapa() {
     const arranque = () => {
       const el = document.getElementById("perfilMapa");
-      if (!window.maplibregl || !el) return;
+      if (!window.maplibregl || !el || !el.isConnected) return;
       if (perfilGlobo) { try { perfilGlobo.remove(); } catch (e) {} perfilGlobo = null; }
       const tiene = perfilPunto.lat != null;
       perfilGlobo = new window.maplibregl.Map({
@@ -819,32 +865,49 @@
         zoom: tiene ? 15 : 11, attributionControl: false,
       });
       perfilGlobo.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), "top-right");
-      // El pin vive fijo al centro (CSS). Al soltar el mapa, el centro = tu punto —
-      // se guarda solo (edición inline: sin botón "Guardar" global que lo bundlee).
-      perfilGlobo.on("moveend", () => { const c = perfilGlobo.getCenter(); perfilPunto = { lat: c.lat, lng: c.lng }; marcarFijado(); guardarUbicacionExacta(); });
+      // El pin vive fijo al centro (CSS). Mover el mapa solo propone un punto: NO se guarda hasta
+      // tocar "Poner mi bandera acá" (un solo PATCH, con la confirmación de privacidad).
+      perfilGlobo.on("moveend", () => { const c = perfilGlobo.getCenter(); perfilPunto = { lat: c.lat, lng: c.lng }; marcarSinGuardar(); });
     };
-    if (window.maplibregl) arranque();
-    else { let n = 0; const t = setInterval(() => { if (window.maplibregl) { clearInterval(t); arranque(); } else if (++n > 80) clearInterval(t); }, 100); }
+    OLI.cargarMapa().then(arranque).catch(() => { const e = document.getElementById("ubicEstado"); if (e) e.textContent = T("m_geo_err"); });
   }
   function marcarFijado() { const e = document.getElementById("ubicEstado"); if (e) e.textContent = T("m_fijado"); }
+  function marcarSinGuardar() { const e = document.getElementById("ubicEstado"); if (e) e.textContent = T("m_sin_guardar"); }
+
+  // Hoja "Poner mi bandera acá": confirma la privacidad y guarda el punto de una sola vez.
+  function abrirHojaCasa() {
+    if (perfilPunto.lat == null && perfilGlobo) { const c = perfilGlobo.getCenter(); perfilPunto = { lat: c.lat, lng: c.lng }; }
+    if (perfilPunto.lat == null) return toast(T("m_sin_fijar"));
+    const s = SESSION.socio;
+    const { root, close } = OLI.modal(`<h3>${T("m_casa_boton")}</h3><p class="muted" style="margin:6px 0 14px">${T("m_casa_privacidad")}</p>
+      <div class="grupo sin-ic"><div class="grupo-fila"><span class="grupo-tx"><b>${T("m_casa_mostrar")}</b></span>
+        <button type="button" role="switch" class="interruptor" id="hcMostrar" aria-checked="${!!s.mostrar_exacto}"></button></div></div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+        <button type="button" class="btn btn-block" id="hcGuardar">${T("m_casa_guardar")}</button>
+        <button type="button" class="btn btn-ghost btn-block" id="hcVer">${T("m_casa_ver")}</button>
+      </div>`);
+    const sw = root.querySelector("#hcMostrar");
+    sw.onclick = () => sw.setAttribute("aria-checked", sw.getAttribute("aria-checked") === "true" ? "false" : "true");
+    const guardar = async () => {
+      const r = await api("/perfil", { method: "PATCH", body: { lat: perfilPunto.lat, lng: perfilPunto.lng, mostrar_exacto: sw.getAttribute("aria-checked") === "true" } });
+      SESSION.socio = r.socio; SESSION.progreso = r.progreso;
+    };
+    root.querySelector("#hcGuardar").onclick = async () => { try { await guardar(); marcarFijado(); toast(T("m_casa_ok")); close(); } catch (e) { toast(e.message); } };
+    root.querySelector("#hcVer").onclick = async () => {
+      try { await guardar(); try { sessionStorage.setItem("oli_nuevo", JSON.stringify({ lat: perfilPunto.lat, lng: perfilPunto.lng, iso: s.pais_iso || "" })); } catch (e) {} location.href = "/#mundo"; }
+      catch (e) { toast(e.message); }
+    };
+  }
 
   function usarUbicacion() {
     if (!navigator.geolocation) return toast(T("m_geo_no"));
     const e = document.getElementById("ubicEstado");
     if (e) e.textContent = T("m_buscando");
     navigator.geolocation.getCurrentPosition(
-      (pos) => { const { latitude, longitude } = pos.coords; perfilPunto = { lat: latitude, lng: longitude }; if (perfilGlobo) perfilGlobo.flyTo({ center: [longitude, latitude], zoom: 16 }); marcarFijado(); guardarUbicacionExacta(); },
+      (pos) => { const { latitude, longitude } = pos.coords; perfilPunto = { lat: latitude, lng: longitude }; if (perfilGlobo) perfilGlobo.flyTo({ center: [longitude, latitude], zoom: 16 }); marcarSinGuardar(); },
       () => { if (e) e.textContent = T("m_geo_err"); },
       { enableHighAccuracy: true, timeout: 8000 }
     );
-  }
-
-  async function guardarUbicacionExacta() {
-    if (perfilPunto.lat == null) return;
-    try {
-      const r = await api("/perfil", { method: "PATCH", body: { lat: perfilPunto.lat, lng: perfilPunto.lng } });
-      SESSION.socio = r.socio; SESSION.progreso = r.progreso;
-    } catch (e) { toast(e.message); }
   }
 
   async function subirFoto(dataUrl) {
@@ -998,25 +1061,34 @@
     }));
   }
 
-  // ─── Peñas: ranking, sumarse, compartir el link y pedir una peña nueva ───────────
+  // ─── Peñas: tu peña, elegir una (buscador, orden, las más cercanas), ranking, compartir y pedir una peña nueva ───────────
+  // Escritorio: dos columnas (la lista a la izquierda; a la derecha tu peña, las más grandes y el pedido de una nueva).
   async function vPenas() {
     cv().innerHTML = skeleton(3);
     let d;
     try { d = await api("/penas"); } catch (e) { cv().innerHTML = vacio(T("m_error_generico")); return; }
-    const items = Array.isArray(d.items) ? d.items : [];
-    const mia = items.find((p) => p.es_tuya);
+    const todas = Array.isArray(d.items) ? d.items : [];
+    const mia = todas.find((p) => p.es_tuya) || null;
     const link = (p) => location.origin + "/?pena=" + encodeURIComponent(p.slug);
-    cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      <p class="lead">${T("m_pena_p")}</p>
-      ${mia ? `<div class="pena-mia"><b>${esc(mia.nombre)}</b><span class="muted"> · ${T("m_pena_tuya")}</span>
-        <p class="muted" style="font-size:13px;margin:6px 0 10px">${T("m_pena_link_p")}</p>
-        <div class="pena-acc"><button class="btn btn-sm" id="penaCompartir">${T("m_pena_compartir")}</button><button class="btn btn-ghost btn-sm" id="penaDejar">${T("m_pena_dejar")}</button></div></div>` : ""}
-      <div class="pena-lista">${items.length ? items.map((p) => `<div class="pena-fila">
-          <span class="pena-rk">${p.ranking}</span>
-          <div class="pena-nm"><b>${esc(p.nombre)}</b><span class="muted">${esc(p.ciudad || "")} · ${p.altas} ${T(p.altas === 1 ? "m_pena_hincha" : "m_pena_hinchas")}</span></div>
-          ${p.es_tuya ? `<span class="chip on">${T("m_pena_tuya_chip")}</span>` : `<button class="btn btn-sm btn-ghost" data-pena="${esc(p.id)}">${T("m_pena_sumarme")}</button>`}
-        </div>`).join("") : vacio(T("m_pena_vacio"))}</div>
-      <details class="pena-sol"><summary>${T("m_pena_solicitar")}</summary>
+    const norm = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const ciudadSocio = norm(SESSION && SESSION.socio && SESSION.socio.ciudad);
+    const enMiCiudad = (p) => !!(ciudadSocio && norm(p.ciudad) === ciudadSocio);
+    const nHinchas = (p) => (p.hinchada != null ? p.hinchada : p.altas) || 0;
+    const hinchasTxt = (p) => nHinchas(p).toLocaleString(LOC) + " " + T(nHinchas(p) === 1 ? "m_pena_hincha" : "m_pena_hinchas");
+    const lugar = (p) => [p.ciudad, p.pais_iso && p.pais_iso !== "PY" ? p.pais_iso : ""].filter(Boolean).join(", ") || T("pn_sin_ciudad");
+    const inicial = (p) => esc(String(p.nombre || "?").replace(/^peña\s+/i, "").trim().charAt(0).toUpperCase());
+
+    const heroMia = mia ? `<section class="pn-hero" data-ini="${inicial(mia)}">
+        <span class="pn-hero-eb">${T("pn_tu")}</span>
+        <h3>${esc(mia.nombre)}</h3>
+        <p class="pn-hero-sub">${esc(lugar(mia))} · #${mia.ranking} · ${esc(hinchasTxt(mia))}</p>
+        <p class="pn-hero-p">${T("m_pena_link_p")}</p>
+        <div class="pn-hero-acc"><button type="button" class="btn" id="penaCompartir">${T("m_pena_compartir")}</button><button type="button" class="btn btn-ghost" id="penaDejar">${T("m_pena_dejar")}</button></div>
+      </section>` : `<section class="pn-elegi"><h3>${T("pn_elegi")}</h3><p>${T("pn_elegi_p")}</p><button type="button" class="btn btn-ghost" id="penaCerca">${T("pn_cerca_btn")}</button></section>`;
+
+    const top = todas.slice().sort((a, b) => nHinchas(b) - nHinchas(a)).slice(0, 5);
+    const rankingCard = top.length ? `<div class="pn-top"><h3>${T("pn_top")}</h3>${top.map((p, i) => `<button type="button" class="pn-top-fila" data-pena-det="${esc(p.id)}"><span class="pn-top-n">${i + 1}</span><span class="pn-top-t"><b>${esc(p.nombre)}</b><small>${esc(hinchasTxt(p))}</small></span></button>`).join("")}</div>` : "";
+    const solicitud = `<details class="pena-sol"><summary>${T("m_pena_solicitar")}</summary>
         <p class="muted" style="font-size:13px;margin:8px 0">${T("m_pena_sol_p")}</p>
         <form id="penaSolForm" class="pena-form">
           <input name="nombre" placeholder="${T("m_pena_f_nombre")}" maxlength="80" required />
@@ -1024,26 +1096,95 @@
           <input name="presidente" placeholder="${T("m_pena_f_presi")}" maxlength="80" required />
           <input name="contacto" type="email" placeholder="${T("m_pena_f_email")}" maxlength="120" required />
           <button class="btn btn-block" type="submit">${T("m_pena_enviar")}</button>
-        </form></details>
-    </div>`;
-    cv().querySelectorAll("[data-pena]").forEach((b) => b.addEventListener("click", async () => {
-      try {
-        const r = await api("/perfil", { method: "PATCH", body: { pena_id: b.dataset.pena } });
-        if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = r.socio.pena_id;
-        toast(T("m_pena_sumada"));
-        vPenas();
-      } catch (e) { toast(e.message); }
-    }));
+        </form></details>`;
+
+    cv().innerHTML = `<div class="section" style="border:none;padding-top:8px">
+      <p class="lead">${T("m_pena_p")}</p>
+      <div class="pn">
+        <div class="pn-main">
+          ${heroMia}
+          <div class="bx-bar pn-bar">
+            <label class="bx-busca">${OLI.ic("buscar", 18)}<input type="search" id="pnQ" autocomplete="off" placeholder="${esc(T("pn_buscar"))}" aria-label="${esc(T("pn_buscar"))}"></label>
+            <div class="bx-ctl"><select id="pnOrden" class="bx-orden" aria-label="${esc(T("bx_orden"))}" style="margin-left:0"><option value="grandes">${T("pn_o_grandes")}</option><option value="az">${T("bx_o_az")}</option></select>
+              <p class="bx-n" id="pnN" aria-live="polite" style="margin-left:auto"></p></div>
+          </div>
+          <div class="pn-lista" id="pnLista"></div>
+        </div>
+        <aside class="pn-side">${rankingCard}${solicitud}</aside>
+      </div></div>`;
+
+    // Lista: buscador y orden. "Las más cercanas" (con la distancia) reordena y reemplaza el orden por tamaño.
+    const st = { q: "", orden: "grandes", cerca: null };
+    const lista = cv().querySelector("#pnLista"), nEl = cv().querySelector("#pnN");
+    const card = (p) => `<button type="button" class="pn-card${p.es_tuya ? " mia" : ""}" data-pena-det="${esc(p.id)}">
+        <span class="pn-av" aria-hidden="true">${inicial(p)}</span>
+        <span class="pn-tx"><b>${esc(p.nombre)}</b><small>${esc(lugar(p))}${p.distancia_km != null ? " · " + T("pn_km").replace("{km}", p.distancia_km.toLocaleString(LOC)) : ""}</small>
+          <span class="pn-meta"><span class="bx-tag">${esc(hinchasTxt(p))}</span><span class="bx-tag">#${p.ranking}</span>${enMiCiudad(p) ? `<span class="ben-loc">${T("pn_en_ciudad")}</span>` : ""}</span></span>
+        ${p.es_tuya ? `<span class="chip on">${T("m_pena_tuya_chip")}</span>` : OLI.ic("chevron-derecha", 18).replace('class="ic"', 'class="ic grupo-chev"')}</button>`;
+    const pintar = () => {
+      const toks = norm(st.q).split(/\s+/).filter(Boolean);
+      let a = (st.cerca || todas).filter((p) => !toks.length || toks.every((t) => norm([p.nombre, p.ciudad, p.pais_iso].join(" ")).includes(t)));
+      if (!st.cerca) a = a.slice().sort((x, y) => st.orden === "az" ? String(x.nombre).localeCompare(String(y.nombre), "es") : (enMiCiudad(y) - enMiCiudad(x)) || nHinchas(y) - nHinchas(x));
+      nEl.textContent = a.length + " " + T(a.length === 1 ? "pn_una" : "pn_varias");
+      lista.innerHTML = a.length ? a.map(card).join("") : `<div class="bx-vacio"><p>${todas.length ? T("pn_sin_resultados") : T("m_pena_vacio")}</p></div>`;
+    };
+    let deb = null;
+    cv().querySelector("#pnQ").addEventListener("input", (e) => { clearTimeout(deb); deb = setTimeout(() => { st.q = e.target.value; pintar(); }, 120); });
+    cv().querySelector("#pnOrden").addEventListener("change", (e) => { st.orden = e.target.value; st.cerca = null; pintar(); });
+    pintar();
+
+    // Ficha de la peña: datos, y sumarse (o dejarla) con confirmación.
+    const abrirPena = (p) => {
+      if (!p) return;
+      const { root, close } = OLI.modal(`
+        <p class="ben-hoja-eb">${T("pn_tit")}</p>
+        <div class="bx-hoja-cab"><span class="pn-av grande" aria-hidden="true">${inicial(p)}</span><div><h3 class="ben-hoja-t">${esc(p.nombre)}</h3><p class="ben-hoja-p muted">${esc(lugar(p))}</p></div></div>
+        <dl class="bx-dl"><div><dt>${T("pn_hinchada")}</dt><dd>${esc(hinchasTxt(p))}</dd></div><div><dt>${T("pn_puesto")}</dt><dd>#${p.ranking} ${T("pn_de")} ${todas.length}</dd></div>${p.miembros ? `<div><dt>${T("pn_listado")}</dt><dd>${p.miembros.toLocaleString(LOC)}</dd></div>` : ""}</dl>
+        ${p.es_tuya ? `<p class="ben-hoja-p">${T("pn_ya_sos")}</p>` : `<p class="ben-hoja-p">${T("pn_sumarte_p")}</p>`}
+        ${p.es_tuya ? "" : `<button type="button" class="btn btn-block" id="pnSumar">${T("pn_confirmar")}</button>`}
+        <button type="button" class="btn btn-ghost btn-block" id="pnCerrar">${T("up_cerrar")}</button>`);
+      root.querySelector("#pnCerrar").onclick = close;
+      const sumar = root.querySelector("#pnSumar");
+      if (sumar) sumar.onclick = async () => {
+        sumar.disabled = true;
+        try {
+          const r = await api("/perfil", { method: "PATCH", body: { pena_id: p.id } });
+          if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = r.socio.pena_id;
+          close(); toast(T("m_pena_sumada")); vPenas();
+        } catch (e) { sumar.disabled = false; toast(e.message); }
+      };
+    };
+    cv().querySelectorAll(".pn-top [data-pena-det]").forEach((el) => el.addEventListener("click", () => abrirPena(todas.find((p) => p.id === el.dataset.penaDet))));
+    lista.addEventListener("click", (e) => { const el = e.target.closest("[data-pena-det]"); if (el) abrirPena(todas.find((p) => p.id === el.dataset.penaDet)); });
+
+    // Dejar la peña (con confirmación), compartir su link, y las más cercanas.
     const dejar = cv().querySelector("#penaDejar");
-    if (dejar) dejar.addEventListener("click", async () => {
-      try { const r = await api("/perfil", { method: "PATCH", body: { pena_id: null } }); if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = null; toast(T("m_pena_dejada")); vPenas(); }
-      catch (e) { toast(e.message); }
+    if (dejar && mia) dejar.addEventListener("click", () => {
+      const { root, close } = OLI.modal(`<h3 class="ben-hoja-t">${T("pn_dejar_t").replace("{nombre}", esc(mia.nombre))}</h3><p class="ben-hoja-p">${T("pn_dejar_p")}</p>
+        <button type="button" class="btn btn-block" id="pnSi">${T("m_pena_dejar")}</button><button type="button" class="btn btn-ghost btn-block" id="pnNo">${T("m_cancelar_no")}</button>`);
+      root.querySelector("#pnNo").onclick = close;
+      root.querySelector("#pnSi").onclick = async () => {
+        try { const r = await api("/perfil", { method: "PATCH", body: { pena_id: null } }); if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = null; close(); toast(T("m_pena_dejada")); vPenas(); }
+        catch (e) { toast(e.message); }
+      };
     });
     const comp = cv().querySelector("#penaCompartir");
     if (comp && mia) comp.addEventListener("click", async () => {
       const url = link(mia), txt = T("m_pena_compartir_txt") + " " + mia.nombre;
       try { if (navigator.share) { await navigator.share({ text: txt, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
       try { await navigator.clipboard.writeText(url); toast(T("m_pena_link_copiado")); } catch (e) { toast(url); }
+    });
+    const cerca = cv().querySelector("#penaCerca");
+    if (cerca) cerca.addEventListener("click", () => {
+      if (!navigator.geolocation) return toast(T("m_geo_no"));
+      toast(T("m_ben_ubicando"));
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+          const r = await api("/penas?cerca=" + pos.coords.latitude.toFixed(4) + "," + pos.coords.longitude.toFixed(4));
+          if (!(r.items || []).length) return toast(T("pn_sin_ubicacion"));
+          st.cerca = r.items; pintar();
+        } catch (e) { toast(e.message); }
+      }, () => toast(T("m_geo_err")), { timeout: 8000, maximumAge: 600000 });
     });
     const form = cv().querySelector("#penaSolForm");
     if (form) form.addEventListener("submit", async (e) => {
@@ -1138,6 +1279,8 @@
         <p class="lead" style="text-align:center;margin:0 auto">${T("m_ben_pronto_p")}</p>
       </div></div>`;
   }
+  // Red de Beneficios: billetera, destacados (banners), buscador, rubros, orden, disponibilidad y lista o mapa. En escritorio es de dos
+  // columnas (lo principal a la izquierda; billetera, guía de uso y subir de nivel a la derecha); en celular todo va en una columna.
   async function vBeneficios() {
     view().innerHTML = skeleton(3);
     let r = null;
@@ -1156,33 +1299,196 @@
       '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
       '<div class="ba-nota">' + notaMes + ' · ' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
     const cod = r.codigo ? '<div class="ben-codigo">' + T("m_ben_codigo") + ': <b>' + esc(String(r.codigo).toUpperCase()) + '</b></div>' : "";
-    const propios = items.filter((x) => x.desbloqueado), bloqueados = items.filter((x) => !x.desbloqueado);
-    // Local primero: el comercio de tu ciudad va arriba dentro de cada grupo.
-    const esLocal = (x) => (ciudad && String(x.comercio_ciudad || "").toLowerCase() === ciudad.toLowerCase()) ? 1 : 0;
-    propios.sort((x, y) => esLocal(y) - esLocal(x));
-    const fila = (x, bloqueado) => '<button type="button" class="grupo-fila ben-fila" data-ben="' + esc(x.id) + '">' +
-      '<span class="ben-val' + (bloqueado ? " lock" : "") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
-      '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + (esLocal(x) && !bloqueado ? ' <span class="ben-loc">' + T("m_ben_tu_ciudad") + '</span>' : "") + '</b><small>' + esc(x.titulo || "") + ' · ' +
-      esc(bloqueado ? (T("m_ben_subi") + " " + (TL[x.nivel_min] || "Plus")) : (x.comercio_ciudad || x.comercio_rubro || "")) + '</small></span>' +
-      (bloqueado ? OLI.ic("candado", 20) : OLI.ic("chevron-derecha", 18)).replace('class="ic"', 'class="ic grupo-chev"') + '</button>';
+
+    const norm = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const pctDe = (x) => Number(x.pct) || 0;
+    const esLocal = (x) => (ciudad && norm(x.comercio_ciudad) === norm(ciudad)) ? 1 : 0;
+    const bloqueados = items.filter((x) => !x.desbloqueado);
+
+    // Destacados: los que marca el admin; si no marcó ninguno, los de mayor descuento (primero los de tu ciudad).
+    let dest = items.filter((x) => x.destacado);
+    if (!dest.length) dest = items.slice().sort((x, y) => pctDe(y) - pctDe(x) || esLocal(y) - esLocal(x)).slice(0, 4);
+    dest = dest.slice(0, 6);
+    const inicialDe = (x) => esc(String(x.comercio_nombre || "?").trim().charAt(0).toUpperCase());
+    // Los logos vienen en blanco: van sobre un recuadro negro. Sin logo, el recuadro muestra la inicial del comercio.
+    const logoDe = (x, cls) => x.comercio_logo ? '<span class="bx-logo' + (cls ? " " + cls : "") + '"><img src="' + esc(x.comercio_logo) + '" alt="" loading="lazy"></span>' : '<span class="bx-logo ini' + (cls ? " " + cls : "") + '" aria-hidden="true">' + inicialDe(x) + '</span>';
+    const estadoDe = (x) => x.desbloqueado ? T("bx_disponible") : OLI.ic("candado", 13) + " " + T("bx_solo") + " " + (TL[x.nivel_min] || "Plus");
+    const banner = (x) => '<button type="button" class="bx-ban' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '" data-ini="' + esc(String(x.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '">' +
+      (x.comercio_logo ? '<img class="bx-ban-logo" src="' + esc(x.comercio_logo) + '" alt="" loading="lazy">' : "") +
+      '<span class="bx-ban-eb">' + T("bx_destacado") + '</span>' +
+      '<span class="bx-ban-val' + (String(x.valor || "").length > 6 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
+      '<span class="bx-ban-marca">' + esc(x.comercio_nombre || "") + '</span>' +
+      '<span class="bx-ban-sub">' + esc(x.titulo || "") + (x.comercio_ciudad ? " · " + esc(x.comercio_ciudad) : "") + '</span>' +
+      '<span class="bx-ban-pie">' + estadoDe(x) + '</span></button>';
+    const hero = '<section class="bx-hero" aria-label="' + esc(T("bx_destacados")) + '"><h3 class="bx-h">' + T("bx_destacados") + '</h3>' +
+      '<div class="bx-rail' + (dest.length === 1 ? " uno" : "") + '">' + dest.map(banner).join("") + '</div></section>';
+
+    // Rubros con su cantidad, de mayor a menor.
+    const porRubro = {};
+    items.forEach((x) => { const k = x.comercio_rubro || ""; if (k) porRubro[k] = (porRubro[k] || 0) + 1; });
+    const rubros = Object.keys(porRubro).sort((a, b) => porRubro[b] - porRubro[a] || a.localeCompare(b, "es"));
+    const chip = (cat, txt, n) => '<button type="button" class="bx-chip" data-cat="' + esc(cat) + '" aria-pressed="' + (cat === "" ? "true" : "false") + '">' + esc(txt) + ' <i>' + n + '</i></button>';
+    const barra = '<div class="bx-bar">' +
+      '<label class="bx-busca">' + OLI.ic("buscar", 18) + '<input type="search" id="bxQ" autocomplete="off" placeholder="' + esc(T("bx_buscar")) + '" aria-label="' + esc(T("bx_buscar")) + '"></label>' +
+      '<div class="bx-chips" id="bxChips" role="group" aria-label="' + esc(T("bx_rubro")) + '">' + chip("", T("bx_todos"), items.length) + rubros.map((k) => chip(k, k, porRubro[k])).join("") + '</div>' +
+      '<div class="bx-ctl">' +
+        '<div class="ctl-seg" id="bxDisp" role="radiogroup" aria-label="' + esc(T("bx_disp")) + '">' +
+          '<button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-d="todos">' + T("bx_d_todos") + '</button>' +
+          '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="mios">' + T("bx_d_mios") + '</button>' +
+          (bloqueados.length ? '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="bloq">' + T("bx_d_bloq") + '</button>' : "") + '</div>' +
+        '<select id="bxOrden" class="bx-orden" aria-label="' + esc(T("bx_orden")) + '"><option value="local">' + T("bx_o_rec") + '</option><option value="desc">' + T("bx_o_desc") + '</option><option value="az">' + T("bx_o_az") + '</option></select>' +
+        '<span id="bxVista"></span>' +
+      '</div>' +
+      '<p class="bx-n" id="bxN" aria-live="polite"></p></div>';
+
+    // Lo que falta para completar la columna derecha: cómo usarlos y subir de nivel.
+    const guia = '<div class="bx-guia"><h3>' + T("bx_guia_h") + '</h3><ol><li>' + T("bx_g1") + '</li><li>' + T("bx_g2") + '</li><li>' + T("bx_g3") + '</li></ol>' +
+      '<button type="button" class="btn btn-ghost btn-block" id="bxCarnet">' + T("bx_abrir_carnet") + '</button></div>';
+    const nivelUp = bloqueados.length ? (bloqueados.some((x) => x.nivel_min === "socio") ? "socio" : (bloqueados[0].nivel_min || "premium")) : "";
+    const up = bloqueados.length ? '<div class="bx-up"><b>' + T("bx_up_h").replace("{n}", bloqueados.length) + '</b><p>' + (nivelUp === "socio" ? T("bx_up_socio") : T("bx_up_p").replace("{nivel}", TL[nivelUp] || "Plus")) + '</p>' +
+      '<button type="button" class="btn" id="bxUp">' + (nivelUp === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")) + '</button></div>' : "";
+
+    const fila = (x) => '<button type="button" class="bx-card' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '">' +
+      '<span class="bx-card-top">' + logoDe(x) +
+      '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + (esLocal(x) && x.desbloqueado ? ' <span class="ben-loc">' + T("m_ben_tu_ciudad") + '</span>' : "") + '</b><small>' + esc(x.titulo || "") + '</small></span>' +
+      '<span class="bx-val' + (x.desbloqueado ? "" : " lock") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span></span>' +
+      '<span class="bx-card-meta">' + (x.comercio_rubro ? '<span class="bx-tag">' + esc(x.comercio_rubro) + '</span>' : "") + (x.comercio_ciudad ? '<span class="bx-tag">' + esc(x.comercio_ciudad) + '</span>' : "") +
+      '<span class="bx-estado' + (x.desbloqueado ? " ok" : "") + '">' + estadoDe(x) + '</span></span></button>';
+
     view().innerHTML = '<div class="section" style="border:none;padding-top:8px">' +
       '<h2>' + T("m_ben_h") + '</h2><p class="lead">' + (ciudad ? T("m_ben_p_local").replace("{ciudad}", esc(ciudad)) : T("m_ben_p")) + '</p>' +
-      ahorroCard + cod +
-      '<div class="ben-cols">' +
-        '<div><div class="grupo-h">' + T("m_ben_para_vos") + '</div>' + (propios.length ? '<div class="grupo">' + propios.map((x) => fila(x, false)).join("") + '</div>' : '<p class="pt-nota">' + T("m_ben_vacio") + '</p>') + '</div>' +
-        (bloqueados.length ? '<div><div class="grupo-h">' + T("m_ben_subi_h") + '</div><div class="grupo">' + bloqueados.map((x) => fila(x, true)).join("") + '</div></div>' : "") +
+      '<div class="bx">' +
+        '<div class="bx-main">' + hero + barra + '<div class="bx-lista" id="bxLista"></div></div>' +
+        '<aside class="bx-side">' + ahorroCard + cod + guia + up + '</aside>' +
       '</div></div>';
-    view().querySelectorAll("[data-ben]").forEach((el) => el.addEventListener("click", () => abrirBeneficio(items.find((x) => x.id === el.dataset.ben), TL)));
+
+    // Estado de los filtros y pintado de la lista.
+    const st = { q: "", cat: "", disp: "todos", orden: "local" };
+    const lista = view().querySelector("#bxLista"), nEl = view().querySelector("#bxN");
+    const visibles = () => {
+      const toks = norm(st.q).split(/\s+/).filter(Boolean);
+      const a = items.filter((x) => {
+        if (st.cat && (x.comercio_rubro || "") !== st.cat) return false;
+        if (st.disp === "mios" && !x.desbloqueado) return false;
+        if (st.disp === "bloq" && x.desbloqueado) return false;
+        if (toks.length) { const h = norm([x.comercio_nombre, x.comercio_rubro, x.comercio_ciudad, x.titulo, x.valor].join(" ")); if (!toks.every((t) => h.includes(t))) return false; }
+        return true;
+      });
+      if (st.orden === "az") a.sort((x, y) => String(x.comercio_nombre).localeCompare(String(y.comercio_nombre), "es"));
+      else if (st.orden === "desc") a.sort((x, y) => pctDe(y) - pctDe(x) || esLocal(y) - esLocal(x));
+      else a.sort((x, y) => esLocal(y) - esLocal(x) || pctDe(y) - pctDe(x));
+      return a;
+    };
+    const pintar = () => {
+      const a = visibles();
+      nEl.textContent = a.length + " " + (a.length === 1 ? T("bx_uno") : T("bx_varios"));
+      if (!a.length) {
+        lista.innerHTML = '<div class="bx-vacio"><p>' + T("bx_vacio") + '</p><button type="button" class="btn btn-ghost" id="bxLimpiar">' + T("bx_limpiar") + '</button></div>';
+        return;
+      }
+      const grupo = (tit, xs) => xs.length ? '<h3 class="bx-gh">' + tit + ' <i>' + xs.length + '</i></h3><div class="bx-grid">' + xs.map(fila).join("") + '</div>' : "";
+      lista.innerHTML = st.disp === "todos"
+        ? grupo(T("m_ben_para_vos"), a.filter((x) => x.desbloqueado)) + grupo(T("m_ben_subi_h"), a.filter((x) => !x.desbloqueado))
+        : '<div class="bx-grid">' + a.map(fila).join("") + '</div>';
+    };
+    const limpiar = () => {
+      st.q = ""; st.cat = ""; st.disp = "todos";
+      view().querySelector("#bxQ").value = "";
+      view().querySelectorAll("#bxChips .bx-chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.cat === "")));
+      view().querySelectorAll("#bxDisp button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.d === "todos")));
+      pintar();
+    };
+    let debounce = null;
+    view().querySelector("#bxQ").addEventListener("input", (e) => { clearTimeout(debounce); debounce = setTimeout(() => { st.q = e.target.value; pintar(); }, 120); });
+    view().querySelector("#bxChips").addEventListener("click", (e) => {
+      const c = e.target.closest(".bx-chip"); if (!c) return;
+      st.cat = c.dataset.cat;
+      view().querySelectorAll("#bxChips .bx-chip").forEach((x) => x.setAttribute("aria-pressed", String(x === c)));
+      pintar();
+    });
+    view().querySelector("#bxDisp").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-d]"); if (!b) return;
+      st.disp = b.dataset.d;
+      view().querySelectorAll("#bxDisp button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+      pintar();
+    });
+    view().querySelector("#bxOrden").addEventListener("change", (e) => { st.orden = e.target.value; pintar(); });
+    view().querySelector(".bx").addEventListener("click", (e) => {
+      if (e.target.closest("#bxLimpiar")) { limpiar(); return; }
+      const el = e.target.closest("[data-ben]");
+      if (el) abrirBeneficio(items.find((x) => x.id === el.dataset.ben), TL);
+    });
+    view().querySelector("#bxCarnet").onclick = () => activar("carnet");
+    const upBtn = view().querySelector("#bxUp");
+    if (upBtn) upBtn.onclick = () => { if (nivelUp === "socio") validarSocioModal(); else mostrarUpsell(nivelUp || "premium", T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")); };
+    pintar();
+    iniciarBeneficiosMapa(items, TL);
   }
-  // Hoja con el detalle del beneficio: usarlo (mostrar el QR en caja) o subir de nivel.
+  // Beneficios cerca tuyo: el segmentado Lista / Mapa solo aparece si hay comercios con ubicación. El valor ("15%") va en una píldora negra;
+  // los que tu nivel todavía no alcanza llevan candado y abren la invitación a subir de nivel.
+  function iniciarBeneficiosMapa(items, TL) {
+    const conUbic = items.filter((x) => x.comercio_lat != null && x.comercio_lng != null);
+    const cols = view().querySelector("#bxLista"), slot = view().querySelector("#bxVista");
+    if (!conUbic.length || !cols || !slot) return;
+    const barra = document.createElement("div");
+    barra.className = "ctl-seg ben-vista"; barra.setAttribute("role", "radiogroup");
+    barra.innerHTML = `<button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-v="lista">${T("m_ben_lista")}</button><button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-v="mapa">${T("m_ben_mapa")}</button>`;
+    const caja = document.createElement("div"); caja.className = "ben-mapa-wrap"; caja.hidden = true;
+    caja.innerHTML = `<div class="ben-mapa" id="benMapa"></div><button type="button" class="btn btn-ghost ben-cerca" id="benCerca">${T("m_ben_cerca")}</button>`;
+    slot.appendChild(barra); cols.parentNode.insertBefore(caja, cols);
+    let mapa = null, marcadores = [];
+    const armar = async () => {
+      if (mapa) { mapa.resize(); return; }
+      try { await OLI.cargarMapa(); } catch (e) { return; }
+      const ML = window.maplibregl; if (!ML) return;
+      mapa = new ML.Map({ container: "benMapa", style: ESTILO_CALLE, center: [Number(conUbic[0].comercio_lng), Number(conUbic[0].comercio_lat)], zoom: 12, attributionControl: { compact: true }, cooperativeGestures: true });
+      mapa.addControl(new ML.NavigationControl({ showCompass: false }), "top-right");
+      const bounds = new ML.LngLatBounds();
+      conUbic.forEach((b) => {
+        const el = document.createElement("button"); el.type = "button";
+        el.className = "ben-pin" + (b.desbloqueado ? "" : " lock");
+        el.innerHTML = (b.desbloqueado ? "" : OLI.ic("candado", 12) + " ") + esc(b.valor || "");
+        el.setAttribute("aria-label", (b.comercio_nombre || "") + " · " + (b.valor || ""));
+        el.addEventListener("click", (ev) => { ev.stopPropagation(); abrirBeneficio(b, TL); });
+        const lngLat = [Number(b.comercio_lng), Number(b.comercio_lat)];
+        marcadores.push(new ML.Marker({ element: el, anchor: "bottom" }).setLngLat(lngLat).addTo(mapa));
+        bounds.extend(lngLat);
+      });
+      if (conUbic.length > 1) mapa.fitBounds(bounds, { padding: 50, maxZoom: 14, duration: 0 });
+      document.getElementById("benCerca").onclick = () => {
+        if (!navigator.geolocation) return toast(T("m_geo_no"));
+        toast(T("m_ben_ubicando"));
+        navigator.geolocation.getCurrentPosition((pos) => mapa.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 14 }), () => toast(T("m_geo_err")), { timeout: 8000, maximumAge: 600000 });
+      };
+    };
+    barra.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-v]"); if (!b) return;
+      barra.querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+      const mapaVista = b.dataset.v === "mapa";
+      cols.hidden = mapaVista; caja.hidden = !mapaVista;
+      if (mapaVista) armar();
+    });
+  }
+  // Hoja con el detalle del beneficio. Los datos vienen en líneas "Etiqueta: texto" (Dónde / Incluye / Cómo acceder / Importante) y se
+  // muestran ordenados; un texto libre (de un beneficio cargado a mano) se muestra tal cual. El canje es siempre con el carnet.
   function abrirBeneficio(b, TL) {
     if (!b) return;
+    const ETQ = { "Dónde": "bx_l_donde", "Incluye": "bx_l_incluye", "Cómo acceder": "bx_l_acceso", "Importante": "bx_l_importante" };
+    const lineas = String(b.descripcion || "").split("\n").map((l) => l.trim()).filter(Boolean);
+    const datos = lineas.map((l) => { const i = l.indexOf(": "); return i > 0 && ETQ[l.slice(0, i)] ? { k: ETQ[l.slice(0, i)], v: l.slice(i + 2) } : null; });
+    const estructurado = lineas.length > 0 && datos.every(Boolean);
+    const cuerpo = estructurado
+      ? '<dl class="bx-dl">' + datos.map((d) => '<div><dt>' + T(d.k) + '</dt><dd>' + esc(d.v) + '</dd></div>').join("") + '</dl>'
+      : '<p class="ben-hoja-p">' + (esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))) + '</p>';
+    const estado = b.desbloqueado ? '<span class="bx-estado ok">' + T("bx_disponible") + '</span>' : '<span class="bx-estado">' + OLI.ic("candado", 13) + " " + T("bx_solo") + " " + esc(TL[b.nivel_min] || "Plus") + '</span>';
     const { root, close } = OLI.modal(`
       <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
-      <h3 class="ben-hoja-t">${esc(b.valor || "")} · ${esc(b.titulo || "")}</h3>
-      <p class="ben-hoja-p">${esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))}</p>
-      <p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>
-      <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")}</button>
+      <div class="bx-hoja-cab">${b.comercio_logo ? '<span class="bx-logo grande"><img src="' + esc(b.comercio_logo) + '" alt=""></span>' : '<span class="bx-logo ini grande" aria-hidden="true">' + esc(String(b.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '</span>'}
+        <div style="flex:1;min-width:0"><h3 class="ben-hoja-t">${esc(b.titulo || "")}</h3><p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>${estado}</div>
+        <span class="bx-val grande${b.desbloqueado ? "" : " lock"}${String(b.valor || "").length > 5 ? " chico" : ""}">${esc(b.valor || "")}</span></div>
+      ${b.desbloqueado ? "" : '<p class="ben-hoja-p">' + T("m_ben_hoja_subi").replace("{nivel}", esc(TL[b.nivel_min] || "Plus")) + '</p>'}
+      ${cuerpo}
+      <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : (b.nivel_min === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus"))}</button>
       <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`);
     root.querySelector("#benCerrar").onclick = close;
     root.querySelector("#benCta").onclick = () => { close(); if (b.desbloqueado) activar("carnet"); else if (b.nivel_min === "socio") validarSocioModal(); else mostrarUpsell(b.nivel_min || "premium", T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")); };
@@ -1277,7 +1583,7 @@
     if (!feed || !feed.length) return `<p class="muted">${T("m_sub_primero")}</p>`;
     return feed.map((f) => {
       const iso = String(f.pais_iso || "").toLowerCase().trim();
-      const flag = /^[a-z]{2}$/.test(iso) ? `<img class="sub-fflag" src="https://flagcdn.com/${iso}.svg" alt="" loading="lazy" />` : "";
+      const flag = /^[a-z]{2}$/.test(iso) ? `<img class="sub-fflag" src="/assets/flags/4x3/${iso}.svg" alt="" loading="lazy" />` : "";
       return `<div class="sub-fitem${f.yo ? " yo" : ""}">
       <span class="sub-fav-wrap"><span class="sub-fav">${(f.nombre || "?").charAt(0).toUpperCase()}</span>${flag}</span>
       <span class="sub-fnm">${f.yo ? "Vos" : esc(f.nombre)}</span>
@@ -1347,6 +1653,14 @@
         const monto = Math.round(Number(input.value) || 0);
         const min = Number(customBtn.dataset.montoMin) || 0;
         if (monto < min) { toast(T("m_sub_monto_bajo") + " " + gs(min)); return; }
+        // Una puja no se retira: si la cifra es mucho mayor al mínimo (típico "un cero de más"), pedimos confirmar.
+        if (min > 0 && monto >= min * 3) {
+          const { root, close } = OLI.modal(`<h3>${esc(T("m_sub_confirmar_t"))}</h3><p class="muted">${esc(T("m_sub_confirmar").replace("{monto}", gs(monto)))}</p>
+            <div class="pf-cancel-acts"><button type="button" class="btn btn-ghost" data-no>${esc(T("m_cancelar_no"))}</button><button type="button" class="btn" data-si>${esc(T("m_sub_confirmar_si"))}</button></div>`);
+          root.querySelector("[data-no]").onclick = close;
+          root.querySelector("[data-si]").onclick = () => { close(); pujar(id, monto); };
+          return;
+        }
         pujar(id, monto);
       });
     }
@@ -1375,8 +1689,15 @@
     document.getElementById("subPuj").textContent = r.pujadores;
     document.getElementById("subMia").textContent = r.miPuja ? gs(r.miPuja) : "—";
     document.getElementById("subFeed").innerHTML = feedHtml(r.feed);
+    // El detalle se refresca solo cada pocos segundos: si estás tipeando un monto propio, no se lo borramos.
+    const inp = document.getElementById("subCustomInput");
+    const tipeo = inp && !document.getElementById("subCustomForm").hidden ? { v: inp.value, foco: document.activeElement === inp } : null;
     document.getElementById("subAcciones").innerHTML = accionesHtml(r, cerrada);
     bindPujas(s.id);
+    if (tipeo) {
+      const f2 = document.getElementById("subCustomForm"), t2 = document.getElementById("subCustomToggle"), i2 = document.getElementById("subCustomInput");
+      if (f2 && i2) { f2.hidden = false; if (t2) t2.hidden = true; i2.value = tipeo.v; if (tipeo.foco) i2.focus(); }
+    }
     const clock = document.getElementById("subClock"); if (clock) clock.classList.toggle("urg", cd.urg);
     const antisnipe = document.getElementById("subAntisnipe"); if (antisnipe) antisnipe.style.display = cerrada ? "none" : "";
     if (cerrada) {
@@ -1391,14 +1712,20 @@
     el.textContent = cd.fin ? T("m_sub_cerrada") : cd.txt;
     const clock = document.getElementById("subClock"); if (clock) clock.classList.toggle("urg", cd.urg);
   }
+  let pujando = false; // un toque doble no debe mandar dos pujas
   async function pujar(id, monto) {
+    if (pujando) return;
+    pujando = true;
+    cv().querySelectorAll(".sub-puja, #subCustomBtn").forEach((b) => { b.disabled = true; });
     try {
       const r = await api("/subastas/" + id + "/pujar", { method: "POST", body: { monto } });
       hap();
       toast(r.extendida ? T("m_sub_extendido") : T("m_sub_vas_ganando"));
       try { window.OLI.track && window.OLI.track("Puja", null, { value: monto }); } catch (e) {}
     } catch (e) { toast(e.message); }
+    pujando = false;
     try { const d = await api("/subastas/" + id + "?liviano=1"); actualizarDetalle(d); } catch (e) {}
+    cv().querySelectorAll(".sub-puja, #subCustomBtn").forEach((b) => { b.disabled = false; });
   }
 
   // ─── Carnet digital (mismo componente que la landing, color por nivel) ───────
@@ -1453,7 +1780,7 @@
       const carnet = carnetR.carnet;
       const membresia = memR.membresia, tier = memR.tier;
       try { localStorage.setItem("oli_carnet_offline", JSON.stringify({ carnet, ref: (SESSION.socio && SESSION.socio.ref_codigo) || "", guardado: Date.now() })); } catch (e) {}
-      const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0 && t.comprable !== false);
+      const pagos = (cfgR.tiers || []).filter((t) => t.nivel > 0 && t.comprable !== false && !t.oculto);
       const esGratis = !membresia || (tier && tier.nivel === 0);
       const s = SESSION.socio;
       await qrListo(); // la librería del QR carga diferida: sin esperarla el carnet salía con "Tu QR" vacío
@@ -1474,7 +1801,7 @@
           <p class="lead">${T("m_carnet_p")}</p>
           <div class="cn2-grid">
             <div class="cn2" id="qrBen">
-              <div class="cn2-top"><img src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[carnet.tierSlug] || "#d9b65a"}">${esc(String(carnet.tier || "Olimpista").toUpperCase())}</span></div>
+              <div class="cn2-top"><img class="escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[carnet.tierSlug] || "#d9b65a"}">${esc(String(carnet.tier || "Olimpista").toUpperCase())}</span></div>
               <div class="cn2-fr" aria-hidden="true"></div>
               <div class="cn2-body">
                 <div class="cn2-id"><span class="cn2-nom">${esc(carnet.nombre)}</span><span class="cn2-lin">${T("m_cn_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}${ubic ? " · " + esc(ubic) : ""}</span></div>
@@ -1493,20 +1820,20 @@
                 <button class="btn" id="compartir">${icon("share-2", { size: 16 })} ${T("m_compartir")}</button>
                 <button class="btn btn-ig" id="compartirIG">${icon("camera", { size: 16 })} ${T("ig_compartir")}</button>
               </div>
+              <div class="card cn2-hinchada"><div class="body">
+                <h3>${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
+                <p class="muted">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
+                <button class="btn" id="copiarRef">${T("m_copiar_ref")}</button>
+              </div></div>
+              <div class="cn2-resumen">
+                <h3>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h3>
+                <p class="muted">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}.</p>
+                ${ubicHtml}
+                ${social}
+                <ul class="benefits">${(tier?.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
+              </div>
             </div>
           </div>
-          <div class="card" style="max-width:520px;margin:18px auto 0;text-align:center"><div class="body">
-            <h3 style="margin:0 0 6px">${icon("users", { size: 16 })} ${T("m_hinchada_h")}</h3>
-            <p class="muted" style="margin:0 0 12px">${(SESSION.referidos || 0) > 0 ? `${T("m_hinchada_1")} <strong style="color:var(--oro)">${SESSION.referidos}</strong> ${T("m_hinchada_2")}` : T("m_hinchada_0")}</p>
-            <button class="btn" id="copiarRef">${T("m_copiar_ref")}</button>
-          </div></div>
-          <div style="text-align:center;margin-top:24px">
-            <h3 style="margin:0">${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h3>
-            <p class="muted" style="margin:4px 0 0">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}.</p>
-            ${ubicHtml}
-            ${social}
-          </div>
-          <ul class="benefits" style="max-width:520px;margin:18px auto 0">${(tier?.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
           ${socioCard}
           ${upsell}
         </div>`;
@@ -1569,7 +1896,7 @@
       if (g && g.carnet && (!navigator.onLine || /fetch|network|load failed/i.test(String(e && e.message)))) {
         const c = g.carnet;
         view().innerHTML = `<div class="section" style="border:none;padding-top:8px"><h2>${T("m_carnet_h")}</h2><p class="lead">${T("m_carnet_p")}</p>
-          <div class="cn2-grid"><div class="cn2"><div class="cn2-top"><img src="/assets/escudo-olimpia-blanco.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[c.tierSlug] || "#d9b65a"}">${esc(String(c.tier || "Olimpista").toUpperCase())}</span></div>
+          <div class="cn2-grid"><div class="cn2"><div class="cn2-top"><img class="escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[c.tierSlug] || "#d9b65a"}">${esc(String(c.tier || "Olimpista").toUpperCase())}</span></div>
             <div class="cn2-fr" aria-hidden="true"></div>
             <div class="cn2-body"><div class="cn2-id"><span class="cn2-nom">${esc(c.nombre)}</span><span class="cn2-lin">${esc(c.numero)}</span></div>
               <span class="cn2-offline">${OLI.ic("reloj", 16)} ${T("m_cn_offline")}</span>
