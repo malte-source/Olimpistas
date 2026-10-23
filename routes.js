@@ -3300,10 +3300,22 @@ function buildRouter() {
   function ejecutoresAtencion({ socio, conv }) {
     return {
       consultar_cuenta: async () => ({ resultado: await cuentaParaAtencion(socio) }),
+      // Beneficios para vender: primero los destacados y los de su ciudad; los que ya puede usar antes que los bloqueados.
       listar_beneficios: async () => {
-        const m = await store.getMembresia(socio.id);
+        const [m, full] = await Promise.all([store.getMembresia(socio.id), store.getSocioById(socio.id).catch(() => null)]);
         const items = store.beneficiosParaNivel ? await store.beneficiosParaNivel((m && m.tier_slug) || "olimpista") : [];
-        return { resultado: items.slice(0, 15).map((b) => ({ titulo: b.titulo, comercio: b.comercio_nombre || "", valor: b.valor || "", puede_usarlo: !!b.desbloqueado })) };
+        const norm = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        const ciudad = norm(full && full.ciudad);
+        const TL = { olimpista: "Olimpista", kids: "Junior", premium: "Plus", socio: "Socio" };
+        const lista = items.map((b) => ({ b, local: !!(ciudad && norm(b.comercio_ciudad) === ciudad) }))
+          .sort((x, y) => ((y.b.destacado ? 1 : 0) - (x.b.destacado ? 1 : 0)) || ((y.b.desbloqueado ? 1 : 0) - (x.b.desbloqueado ? 1 : 0)) || ((y.local ? 1 : 0) - (x.local ? 1 : 0)) || ((Number(y.b.pct) || 0) - (Number(x.b.pct) || 0)));
+        const resultado = lista.slice(0, 12).map(({ b, local }) => ({
+          comercio: b.comercio_nombre || "", valor: b.valor || "", titulo: b.titulo || "", rubro: b.comercio_rubro || "", ciudad: b.comercio_ciudad || "",
+          destacado: !!b.destacado, en_tu_ciudad: local, puede_usarlo: !!b.desbloqueado, ...(b.desbloqueado ? {} : { requiere: TL[b.nivel_min] || "Plus" }),
+        }));
+        // Tarjeta con los 3 mejores para mirar de un vistazo (logo, comercio, descuento).
+        const top = lista.slice(0, 3).map(({ b }) => ({ comercio: b.comercio_nombre || "", valor: b.valor || "", dias: b.titulo || "", logo: /^\/assets\//.test(b.comercio_logo || "") ? b.comercio_logo : "", bloqueado: !b.desbloqueado }));
+        return { resultado, ...(top.length ? { tarjeta: { tipo: "beneficios", titulo: lista.some(({ b }) => b.destacado) ? "Beneficios destacados" : "Beneficios para vos", url: baseUrl() + "/miembro/beneficios", items: top } } : {}) };
       },
       abrir_pago_subasta: async () => {
         const pujas = store.pujasDeSocio ? await store.pujasDeSocio(socio.id, 30) : [];
@@ -3334,11 +3346,12 @@ function buildRouter() {
     const [historial, config] = await Promise.all([store.listMensajesAtencion(conv.id, { limit: 30 }), store.getAtencionConfig()]);
     const out = await atencionLib.responder({
       historial, config, ejecutores: ejecutoresAtencion({ socio, conv }), llamar: llamarIA(),
+      contexto: { nombre: socio.nombre, saludar: canal !== "app", hora: Number(new Date().toLocaleString("en-GB", { hour: "2-digit", hour12: false, timeZone: "America/Asuncion" })) },
       log: (...a) => log.warn({ detalle: a.map(String).join(" ") }, "atención"),
     });
     nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "ia", texto: out.texto, meta: out.proveedor ? { via: out.via, proveedor: out.proveedor } : { via: out.via } }));
     for (const tj of out.tarjetas) nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "tarjeta", texto: tj.titulo, meta: tj }));
-    return { conversacion: await store.getConversacionAtencion(conv.id), nuevos, via: out.via };
+    return { conversacion: await store.getConversacionAtencion(conv.id), nuevos, via: out.via, derivado: !!out.derivado };
   }
 
   r.get("/atencion/chat", auth.requireSocio, wrap(async (req, res) => {
@@ -3347,7 +3360,7 @@ function buildRouter() {
     const m = await store.getMembresia(req.socio.id);
     const sugerencias = atencionLib.sugerenciasPara({ tier: (m && m.tier_slug) || "olimpista", esSocio: !!req.socio.es_socio_olimpia });
     const mensajes = reciente ? (await store.listMensajesAtencion(ultima.id, { limit: 60 })).map(msgPublico) : [];
-    res.json({ conversacion: reciente ? { id: ultima.id, estado: ultima.estado, canal: ultima.canal } : null, mensajes, sugerencias, ia: iaConectada() });
+    res.json({ conversacion: reciente ? { id: ultima.id, estado: ultima.estado, canal: ultima.canal } : null, mensajes, sugerencias, ia: iaConectada(), nombre: atencionLib.primerNombre(req.socio.nombre) });
   }));
   r.post("/atencion/chat", auth.requireSocio, wrap(async (req, res) => {
     const texto = String((req.body && req.body.texto) || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim();
@@ -3357,7 +3370,9 @@ function buildRouter() {
     const tope = Number(process.env.ATENCION_TOPE_DIARIO) || 40;
     if ((await store.incrementarUsoAtencion(req.socio.id, diaPy())) > tope) throw httpError(429, "Llegaste al máximo de mensajes de hoy. Escribinos mañana.");
     const out = await procesarMensajeAtencion({ socio: req.socio, texto, canal: "app" });
-    res.json({ estado: out.conversacion.estado, conversacion_id: out.conversacion.id, mensajes: out.nuevos.map(msgPublico) });
+    const m = await store.getMembresia(req.socio.id);
+    const sugerencias = out.conversacion.estado === "humano" ? [] : atencionLib.seguimientoPara({ texto, tier: (m && m.tier_slug) || "olimpista", esSocio: !!req.socio.es_socio_olimpia, derivado: out.derivado });
+    res.json({ estado: out.conversacion.estado, conversacion_id: out.conversacion.id, mensajes: out.nuevos.map(msgPublico), sugerencias });
   }));
 
   // Admin · Atención

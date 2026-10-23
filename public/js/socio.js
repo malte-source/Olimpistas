@@ -186,11 +186,14 @@
 
   // ─── Inicio (home): orden fijo — saludo → urgente → mis cosas → contenido del
   // club → próximo escalón. Bloques vacíos desaparecen, el orden nunca cambia. ──
+  // Detalle de beneficio que se abre al llegar a Beneficios desde un banner del Inicio.
+  let _benAbrir = null;
+  // ─── Inicio: carnet a mano, beneficios destacados, lo que está en vivo y tu resumen. Escritorio: dos columnas. ───
   async function vInicio() {
     const s = SESSION.socio;
     const nombre = esc((String(s.nombre || s.email || "").trim().split(" ")[0]) || "Olimpista");
     view().innerHTML = skeleton(2);
-    const [subsR, sorteosR, preventasR, encsR, ahorroR, puntosR, penasR] = await Promise.all([
+    const [subsR, sorteosR, preventasR, encsR, ahorroR, puntosR, penasR, benR, statsR] = await Promise.all([
       api("/subastas").catch(() => ({ items: [] })),
       api("/sorteos").catch(() => ({ items: [] })),
       api("/preventas").catch(() => ({ items: [] })),
@@ -198,57 +201,88 @@
       api("/beneficios/ahorro").catch(() => null),
       api("/puntos").catch(() => null),
       api("/penas").catch(() => null),
+      api("/beneficios").catch(() => null),
+      api("/stats").catch(() => null),
     ]);
     const subaViva = (subsR.items || []).find((x) => x.estado === "activa");
     const nivelTxt = "Olimpista " + (TIER_LBL[(SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista"] || "").replace(/^Olimpista$/, "").trim();
     const sorteosActivos = (sorteosR.items || []).filter((sor) => sor.estado === "activa");
 
-    // ── Urgente: subasta o sorteo activo, el que cierre antes (hoy solo se miraba
-    // la subasta — un sorteo activo se promueve acá si su cierre es más próximo). ──
+    // ── Lo más urgente: la subasta o el sorteo que cierra antes. ──
     const candidatos = [];
     if (subaViva) candidatos.push({ tipo: "subasta", data: subaViva, cierre: new Date(subaViva.termina).getTime() });
     sorteosActivos.forEach((sor) => { if (sor.cierra) candidatos.push({ tipo: "sorteo", data: sor, cierre: new Date(sor.cierra + "T23:59:59").getTime() }); });
     candidatos.sort((a, b) => a.cierre - b.cierre);
     const urgente = candidatos[0] || null;
     const urgenteSorteo = urgente && urgente.tipo === "sorteo" ? urgente.data : null;
-    const destacado = !urgente || urgente.tipo === "subasta" ? "" : destacadoSorteo(urgente.data);
+    const vivo = !urgente ? "" : urgente.tipo === "subasta" ? destacadoSubasta(subaViva) : destacadoSorteo(urgente.data);
 
-    // ── Mis cosas: filas, no grid de íconos — sorteos en los que ya participo,
-    // el estado de mi perfil, mi carnet, invitar a un amigo. ──
+    // ── Beneficios destacados de la Red: los que marca el club; si no marcó ninguno, los de mayor descuento (primero los de tu ciudad). ──
+    const items = (benR && benR.items) || [];
+    const ciudadN = String((benR && benR.ciudad) || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const pctDe = (x) => Number(x.pct) || 0;
+    const local = (x) => (ciudadN && String(x.comercio_ciudad || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase() === ciudadN) ? 1 : 0;
+    let dest = items.filter((x) => x.destacado);
+    if (!dest.length) dest = items.slice().sort((a, b) => ((b.desbloqueado ? 1 : 0) - (a.desbloqueado ? 1 : 0)) || pctDe(b) - pctDe(a) || local(b) - local(a));
+    dest = dest.slice(0, 6);
+    const TL = { olimpista: "Olimpista", kids: "Junior", premium: "Plus", socio: "Socio" };
+    const bannerIni = (x) => '<button type="button" class="bx-ban' + (x.desbloqueado ? "" : " lock") + '" data-ben-ini="' + esc(x.id) + '" data-ini="' + esc(String(x.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '">' +
+      (x.comercio_logo ? '<img class="bx-ban-logo" src="' + esc(x.comercio_logo) + '" alt="" loading="lazy">' : "") +
+      '<span class="bx-ban-eb">' + T("bx_destacado") + '</span>' +
+      '<span class="bx-ban-val' + (String(x.valor || "").length > 6 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
+      '<span class="bx-ban-marca">' + esc(x.comercio_nombre || "") + '</span>' +
+      '<span class="bx-ban-sub">' + esc(x.titulo || "") + (x.comercio_ciudad ? " · " + esc(x.comercio_ciudad) : "") + '</span>' +
+      '<span class="bx-ban-pie">' + (x.desbloqueado ? T("bx_disponible") : OLI.ic("candado", 13) + " " + T("bx_solo") + " " + (TL[x.nivel_min] || "Plus")) + '</span></button>';
+    const hayAbiertos = dest.some((x) => x.desbloqueado);
+    const rail = dest.length ? `<section class="ih-b ih-rail"><div class="ih-h"><h3>${T(hayAbiertos ? "ih_dest_h" : "ih_dest_h2")}</h3><button type="button" class="ih-ver" data-goto="beneficios">${T("ih_ver_todos")} ›</button></div>
+      <div class="bx-rail">${dest.map(bannerIni).join("")}</div></section>` : "";
+
+    // ── Novedades del club: tus sorteos, encuesta, preventa y media. ──
     const misSorteos = sorteosActivos.filter((sor) => sor.participando && sor !== urgenteSorteo);
-    const cosas = [];
-    cosas.push(...misSorteos.map((sor) => iniNov(icon("gift", { size: 22 }), T("tab_sorteos"), sor.titulo, "sorteos")));
-    cosas.push(iniNov(icon("credit-card", { size: 22 }), T("tab_carnet"), T("why_carnet_d"), "", "carnet"));
-    cosas.push(iniNovAccion(icon("share-2", { size: 22 }), T("m_ini_invitar_h"), T("m_ini_invitar_p"), "iniInvitar"));
-
-    // ── Contenido del club: encuesta abierta + novedades (sorteo/preventa que no
-    // estén ya cubiertos arriba) + media, siempre. ──
     const enc = (encsR.items || []).find((x) => !x.respondida) || null;
     const sorteoNovedad = sorteosActivos.find((sor) => !sor.participando && sor !== urgenteSorteo) || null;
     const hoyIso = new Date().toISOString().slice(0, 10);
     const preventa = (preventasR.items || []).find((p) => !p.fecha || p.fecha >= hoyIso) || null;
     const club = [];
+    club.push(...misSorteos.map((sor) => iniNov(icon("gift", { size: 22 }), T("tab_sorteos"), sor.titulo, "sorteos")));
     if (sorteoNovedad) club.push(iniNov(icon("gift", { size: 22 }), T("tab_sorteos"), sorteoNovedad.titulo, "sorteos"));
     if (preventa) club.push(iniNov(icon("ticket", { size: 22 }), T("tab_preventas"), preventa.evento, "preventas"));
     club.push(iniNov(icon("play", { size: 22 }), T("tab_media"), T("m_media_h"), "media"));
+    club.push(iniNovAccion(icon("share-2", { size: 22 }), T("m_ini_invitar_h"), T("m_ini_invitar_p"), "iniInvitar"));
 
-    // ── Próximo escalón: solo para quien todavía no validó su condición de socio
-    // (nunca a un Socio ya validado) — invita a ver lo que se suma al subir. ──
-    const escalon = escalonCard();
+    // ── Hero: saludo, carnet a un toque y cuántos somos. ──
+    const somos = statsR && statsR.total > 0 ? T(statsR.paises > 1 ? "ih_somos" : "ih_somos0").replace("{n}", Number(statsR.total).toLocaleString(LOC)).replace("{p}", statsR.paises || "") : "";
+    const hero = `<section class="ih-hero">
+      <span class="ih-eb">${T("ih_eb")}</span>
+      <h2 class="ih-hi">${T("m_hola")}, ${nombre}</h2>
+      <p class="ih-lead">${T("m_ini_p")}</p>
+      ${somos ? `<span class="ih-somos">${esc(somos)}</span>` : ""}
+      <button type="button" class="ih-carnet" data-goto="carnet" aria-label="${esc(T("ih_mostrar_qr"))}">
+        <img class="ih-c-esc escudo-ok" src="/assets/escudo.png" alt="" width="44" height="44">
+        <span class="ih-c-tx"><b>${esc([s.nombre, s.apellido].filter(Boolean).join(" ") || s.email || "")}</b><small>${esc(nivelTxt)} · ${T("ih_desde")} ${esc(new Date(s.creado).toLocaleDateString(LOC, { month: "short", year: "numeric" }))}</small></span>
+        <span class="ih-c-qr">${OLI.ic("qr", 26)}<i>${T("ih_mostrar_qr")}</i></span>
+      </button>
+    </section>`;
 
-    view().innerHTML = `<div class="section" style="border:none;padding-top:8px">
-      <h2 class="ini-hi">${T("m_hola")}, ${nombre}</h2>
-      <p class="lead">${T("m_ini_p")}</p>
-      ${destacado}
-      <p class="eyebrow-ini">${T("m_ini_mis_cosas")}</p>
-      <div class="wg-grid">${widgetsInicio(ahorroR, puntosR, penasR, subaViva, nivelTxt)}</div>
-      <div class="ini-feed" style="margin-top:14px"><div id="progreso"></div>${cosas.join("")}</div>
-      <p class="eyebrow-ini">${T("m_ini_club")}</p>
-      ${enc ? encuestaCard(enc) : ""}
-      <div class="ini-feed">${club.join("")}</div>
-      ${escalon}
-    </div>`;
+    view().innerHTML = `<div class="section ih-sec" style="border:none;padding-top:8px">
+      <div class="ih">
+        <div class="ih-main">
+          ${hero}
+          ${rail}
+          ${vivo ? `<section class="ih-b ih-vivo"><div class="ih-h"><h3>${T("ih_vivo_h")}</h3></div>${vivo}</section>` : ""}
+          <section class="ih-b ih-nov"><div class="ih-h"><h3>${T("m_ini_club")}</h3></div>
+            ${enc ? encuestaCard(enc) : ""}
+            <div class="ini-feed">${club.join("")}</div></section>
+        </div>
+        <aside class="ih-side">
+          <section class="ih-b ih-res"><div class="wg-grid ih-res-g">${wAhorro(ahorroR)}${wPuntos(puntosR)}${wPenaIni(penasR)}</div></section>
+          ${wMision(puntosR)}
+          <section class="ih-b ih-pf"><div id="progreso"></div></section>
+          ${escalonCard()}
+        </aside>
+      </div></div>`;
     view().querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => { if (el.dataset.seg) descSeg = el.dataset.seg; activar(el.dataset.goto); }));
+    view().querySelectorAll("[data-ben-ini]").forEach((el) => el.addEventListener("click", () => { _benAbrir = el.dataset.benIni; activar("beneficios"); }));
     renderProgreso();
     const inv = view().querySelector("#iniInvitar");
     if (inv) inv.onclick = async () => {
@@ -260,54 +294,49 @@
     const card = view().querySelector(".enc-card");
     if (card && enc) bindEncuesta(card, enc);
   }
-  // ─── Widgets de Inicio (04-pantallas): grilla auto-fill de 160 px, radio 26. Cada uno aparece solo si su dato cargó. ───
-  function widgetsInicio(ahorro, puntos, penas, subViva, nivel) {
-    const w = [];
+  // ─── Piezas del Inicio (cada una aparece solo si su dato cargó) ───
+  function wAhorro(ahorro) {
+    if (!ahorro) return "";
     const anio = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
-    if (ahorro) {
-      w.push(`<button type="button" class="wg wg-2" data-goto="beneficios" aria-label="${T("m_wg_ahorro")}">
+    return `<button type="button" class="wg wg-2" data-goto="beneficios" aria-label="${T("m_wg_ahorro")}">
         <span class="wg-cab">${OLI.ic("ahorro", 18)}${T("m_wg_ahorro")}</span>
         <span class="wg-fila"><span class="wg-izq"><span class="wg-num">${gs(ahorro.mes || 0)}</span><span class="wg-sub">${T("m_wg_ahorro_mes")}</span></span>
           <span class="wg-der"><b>${gs(ahorro.anio != null ? ahorro.anio : ahorro.total || 0)}</b><small>${T("m_wg_ahorro_en")} ${anio}</small></span></span>
         <span class="wg-nota">${ahorro.canjes_mes ? (ahorro.canjes_mes + " " + T(ahorro.canjes_mes === 1 ? "m_wg_canje" : "m_wg_canjes")) : T("m_wg_ahorro_vacio")}</span>
-      </button>`);
-    }
-    if (puntos) {
-      const pct = Math.max(0, Math.min(100, Number(puntos.escalon && puntos.escalon.pct) || 0));
-      w.push(`<button type="button" class="wg wg-pts" data-goto="puntos" aria-label="${T("tab_puntos")}">
+      </button>`;
+  }
+  function wPuntos(puntos) {
+    if (!puntos) return "";
+    const pct = Math.max(0, Math.min(100, Number(puntos.escalon && puntos.escalon.pct) || 0));
+    return `<button type="button" class="wg wg-pts" data-goto="puntos" aria-label="${T("tab_puntos")}">
         <span class="wg-cab">${T("tab_puntos")}</span>
         <span class="wg-ring" style="--p:${pct}"><b>${Number(puntos.saldo || 0).toLocaleString(LOC)}</b></span>
         <span class="wg-esc">${T("m_wg_escalon")} ${esc((puntos.escalon && puntos.escalon.nombre) || "")}</span>
-      </button>`);
-    }
-    w.push(`<button type="button" class="wg" data-goto="partidos" aria-label="${T("tab_partidos")}">
-      <span class="wg-eb wg-eb-partido">${T("m_wg_partido")}</span>
-      <span class="wg-t">${T("m_wg_partido_t")}</span>
-      <span class="wg-sub wg-pie">${T("m_wg_partido_p")}</span>
-    </button>`);
-    if (subViva) {
-      w.push(`<button type="button" class="wg wg-2 wg-sub-viva" data-goto="descubrir" data-seg="subastas" aria-label="${esc(subViva.titulo)}">
-        <span class="wg-thumb">${subastaMedia(subViva)}</span>
-        <span class="wg-sv"><span class="wg-vivo">${T("m_sub_envivo")} · ${subViva.pujadores || 0} ${T("m_sub_pujando")}</span><span class="wg-t">${esc(subViva.titulo)}</span><span class="wg-sub">${gs(subViva.puja_actual)} · ${cdTexto(subViva.termina).txt}</span></span>
-        ${OLI.ic("chevron-derecha", 18)}
-      </button>`);
-    }
+      </button>`;
+  }
+  // Tu peña: si ya estás, el puesto y la hinchada; si no, la invitación a elegir una.
+  function wPenaIni(penas) {
     const items = penas && Array.isArray(penas.items) ? penas.items : null;
-    if (items) {
-      const mia = items.find((p) => p.es_tuya);
-      w.push(`<button type="button" class="wg" data-goto="descubrir" data-seg="penas" aria-label="${T("m_wg_pena")}">
-        <span class="wg-ic" style="background:#C2410C">${OLI.ic("pena", 22)}</span>
-        <span class="wg-t wg-pie">${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</span>
-        <span class="wg-sub">${mia ? "#" + mia.ranking + " · " + (mia.hinchada != null ? mia.hinchada : mia.altas) + " " + T((mia.hinchada != null ? mia.hinchada : mia.altas) === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</span>
-      </button>`);
-    }
-    w.push(`<button type="button" class="wg wg-negro" data-goto="carnet" aria-label="${T("tab_carnet")}">
-      ${OLI.ic("qr", 34)}
-      <span class="wg-t wg-pie" style="color:#fff">${T("tab_carnet")}</span>
-      <span class="wg-sub" style="color:#a8a6a1">${esc(nivel || "")}</span>
-      <span class="wg-fr" aria-hidden="true"></span>
-    </button>`);
-    return w.join("");
+    if (!items) return "";
+    const mia = items.find((p) => p.es_tuya);
+    const hinchada = mia ? (mia.hinchada != null ? mia.hinchada : mia.altas) : 0;
+    const ini = mia ? esc(String(mia.nombre || "P").replace(/^peña\s+/i, "").trim().charAt(0).toUpperCase()) : "";
+    return `<button type="button" class="ih-pena${mia ? " mia" : ""}" data-goto="descubrir" data-seg="penas" data-ini="${ini}" aria-label="${T("m_wg_pena")}">
+        <span class="ih-pena-eb">${mia ? T("pn_tu") : T("m_wg_pena")}</span>
+        <b>${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</b>
+        <small>${mia ? "#" + mia.ranking + " · " + hinchada.toLocaleString(LOC) + " " + T(hinchada === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</small>
+        <span class="ih-pena-go">${mia ? T("ih_ver_pena") : T("pn_elegi")} ›</span>
+      </button>`;
+  }
+  // Reto de la semana (la pregunta de la misión de Puntos).
+  function wMision(puntos) {
+    const m = puntos && puntos.mision;
+    if (!m || !m.pregunta) return "";
+    return `<button type="button" class="ih-reto" data-goto="puntos" aria-label="${T("ih_reto")}">
+        <span class="ih-reto-eb">${T("ih_reto")}</span>
+        <b>${esc(m.pregunta)}</b>
+        <span class="ih-reto-cta">${m.respondida ? T("ih_reto_ok") : (m.puntos ? T("ih_reto_cta").replace("{n}", m.puntos) : T("ih_reto_cta0"))} ›</span>
+      </button>`;
   }
   // Misma tarjeta de producto que el banner de la landing (mismas clases .destacado*).
   function destacadoSubasta(subaViva) {
@@ -1428,6 +1457,7 @@
     if (upBtn) upBtn.onclick = () => { if (nivelUp === "socio") validarSocioModal(); else mostrarUpsell(nivelUp || "premium", T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")); };
     pintar();
     iniciarBeneficiosMapa(items, TL);
+    if (_benAbrir) { const b = items.find((x) => x.id === _benAbrir); _benAbrir = null; if (b) abrirBeneficio(b, TL); } // viene de un banner del Inicio
   }
   // Beneficios cerca tuyo: el segmentado Lista / Mapa solo aparece si hay comercios con ubicación. El valor ("15%") va en una píldora negra;
   // los que tu nivel todavía no alcanza llevan candado y abren la invitación a subir de nivel.
