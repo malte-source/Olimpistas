@@ -1335,7 +1335,7 @@ function buildRouter() {
         { id: "pagopar", nombre: "Pagopar (cobros)", detalle: "Tarjetas, transferencias y billeteras.", estado: estado(hay("PAGOPAR_PUBLIC_TOKEN", "PAGOPAR_PRIVATE_TOKEN"), true) },
         { id: "email", nombre: "Correo (Resend)", detalle: "Verificación, avisos y recibos.", estado: estado(hay("RESEND_API_KEY"), true) },
         { id: "ghl", nombre: "GoHighLevel", detalle: "Sincronía de contactos y campañas.", estado: estado(hay("GHL_WEBHOOK_URL")) },
-        { id: "ia", nombre: "Atención con IA", detalle: "Asistente de atención a hinchas.", estado: estado(hay("ANTHROPIC_API_KEY")) },
+        { id: "ia", nombre: "Atención con IA", detalle: "Asistente de atención a hinchas (Gemini; Anthropic como respaldo).", estado: estado(atencionLib.proveedores().length > 0) },
         { id: "alertas", nombre: "Alertas operativas", detalle: "Avisos cuando algo falla.", estado: estado(hay("ALERT_WEBHOOK_URL") || hay("ALERT_EMAIL")) },
         { id: "cron", nombre: "Tareas programadas", detalle: "Plazos de subastas, conciliación y puntos.", estado: estado(hay("CRON_SECRET")) },
       ],
@@ -3249,9 +3249,8 @@ function buildRouter() {
     if (_atRafaga.size > 5000) for (const [k, a] of _atRafaga) if (!a.length || n - a[a.length - 1] > 60000) _atRafaga.delete(k);
     return true;
   }
-  const llamarIA = () => (process.env.ANTHROPIC_API_KEY
-    ? (p) => atencionLib.llamarAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY, modelo: atencionLib.MODELO(), system: p.system, messages: p.messages, tools: p.tools, maxTokens: p.max_tokens })
-    : null);
+  const llamarIA = () => atencionLib.crearLlamador();
+  const iaConectada = () => atencionLib.proveedores().length > 0;
   const msgPublico = (m) => { let meta = null; try { meta = m.meta ? JSON.parse(m.meta) : null; } catch (e) { meta = null; } return { id: m.id, de: m.de, texto: m.texto, meta, creado: m.creado }; };
 
   // Lo que el asistente sabe del hincha que escribe (nunca de otro).
@@ -3317,7 +3316,7 @@ function buildRouter() {
       historial, config, ejecutores: ejecutoresAtencion({ socio, conv }), llamar: llamarIA(),
       log: (...a) => log.warn({ detalle: a.map(String).join(" ") }, "atención"),
     });
-    nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "ia", texto: out.texto, meta: { via: out.via } }));
+    nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "ia", texto: out.texto, meta: out.proveedor ? { via: out.via, proveedor: out.proveedor } : { via: out.via } }));
     for (const tj of out.tarjetas) nuevos.push(await store.addMensajeAtencion({ conversacionId: conv.id, de: "tarjeta", texto: tj.titulo, meta: tj }));
     return { conversacion: await store.getConversacionAtencion(conv.id), nuevos, via: out.via };
   }
@@ -3328,7 +3327,7 @@ function buildRouter() {
     const m = await store.getMembresia(req.socio.id);
     const sugerencias = atencionLib.sugerenciasPara({ tier: (m && m.tier_slug) || "olimpista", esSocio: !!req.socio.es_socio_olimpia });
     const mensajes = reciente ? (await store.listMensajesAtencion(ultima.id, { limit: 60 })).map(msgPublico) : [];
-    res.json({ conversacion: reciente ? { id: ultima.id, estado: ultima.estado, canal: ultima.canal } : null, mensajes, sugerencias, ia: !!process.env.ANTHROPIC_API_KEY });
+    res.json({ conversacion: reciente ? { id: ultima.id, estado: ultima.estado, canal: ultima.canal } : null, mensajes, sugerencias, ia: iaConectada() });
   }));
   r.post("/atencion/chat", auth.requireSocio, wrap(async (req, res) => {
     const texto = String((req.body && req.body.texto) || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim();
@@ -3359,7 +3358,7 @@ function buildRouter() {
     const cfg = await store.getAtencionConfig();
     return {
       items: atencionLib.CLAVES.map((k) => ({ clave: k, nombre: atencionLib.HERRAMIENTAS[k].nombre, descripcion: atencionLib.HERRAMIENTAS[k].descripcion, activo: !!cfg[k], disponible: atencionLib.HERRAMIENTAS[k].disponible, motivo_no_disponible: atencionLib.HERRAMIENTAS[k].motivo_no_disponible || null })),
-      reglas_fijas: atencionLib.REGLAS_FIJAS, modelo: atencionLib.MODELO(), ia_conectada: !!process.env.ANTHROPIC_API_KEY,
+      reglas_fijas: atencionLib.REGLAS_FIJAS, modelo: (atencionLib.proveedores()[0] || { modelo: atencionLib.MODELO_GEMINI() }).modelo, proveedor: (atencionLib.proveedores()[0] || {}).nombre || null, ia_conectada: iaConectada(),
     };
   };
   r.get("/admin/atencion/config", requireAdmin, wrap(async (_req, res) => { res.json(await configAtencion()); }));
