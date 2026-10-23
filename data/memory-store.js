@@ -640,8 +640,55 @@ function createMemoryStore({ filePath = null } = {}) {
       return (db.penas || []).filter((p) => (!estado || p.estado === estado) && (!id || p.id === id)).map((p) => {
         const mios = (db.socios || []).filter((s) => s.pena_id === p.id);
         const pend = (db.pena_movimientos || []).filter((m) => m.pena_id === p.id && m.motivo === "canje" && m.estado === "pendiente").reduce((a, m) => a - m.monto, 0);
-        return { ...p, altas: mios.length, socios: mios.filter((s) => s.es_socio_olimpia).length, plus: mios.filter((s) => ["premium", "kids"].includes(tier(s.id))).length, canje_pendiente: pend };
-      }).sort((a, b) => (b.altas - a.altas) || String(a.creado).localeCompare(String(b.creado)));
+        const padron = (db.pena_miembros || []).filter((m) => m.pena_id === p.id);
+        const vinculados = padron.filter((m) => mios.some((s) => s.id === m.socio_id)).length;
+        return { ...p, miembros: padron.length, vinculados, hinchada: padron.length + mios.length - vinculados, altas: mios.length, socios: mios.filter((s) => s.es_socio_olimpia).length, plus: mios.filter((s) => ["premium", "kids"].includes(tier(s.id))).length, canje_pendiente: pend };
+      }).sort((a, b) => (b.hinchada - a.hinchada) || String(a.creado).localeCompare(String(b.creado)));
+    },
+    // ── Padrón de las peñas: el listado oficial de miembros, aparte de las cuentas (mismo contrato que pg-store) ──
+    async importarMiembrosPena(penaId, filas, fuente = "") {
+      db.pena_miembros = db.pena_miembros || [];
+      let nuevos = 0, actualizados = 0;
+      filas.forEach((f, i) => {
+        const cedula = String(f.cedula || ""), nombre = String(f.nombre || "").trim();
+        const previo = db.pena_miembros.find((m) => m.pena_id === penaId && (cedula ? m.cedula === cedula : (!m.cedula && m.nombre === nombre)));
+        const datos = { nombre, nro_socio: String(f.nro_socio || ""), estado_cuota: ["al_dia", "en_mora", "sin_dato"].includes(f.estado_cuota) ? f.estado_cuota : "sin_dato", orden: Number.isFinite(f.orden) ? f.orden : i, fuente };
+        if (previo) { Object.assign(previo, datos, { actualizado: nowIso() }); actualizados++; }
+        else { db.pena_miembros.push({ id: uid("pmb"), pena_id: penaId, cedula, ...datos, socio_id: null, creado: nowIso(), actualizado: nowIso() }); nuevos++; }
+      });
+      persist();
+      return { nuevos, actualizados };
+    },
+    async sincronizarMiembrosPena({ socioId } = {}) {
+      const digitos = (v) => String(v || "").replace(/\D/g, "");
+      let vinculados = 0, asignados = 0;
+      for (const m of (db.pena_miembros || [])) {
+        if (m.socio_id || !m.cedula) continue;
+        const s = (db.socios || []).find((x) => digitos(x.cedula) === m.cedula && (!socioId || x.id === socioId));
+        if (s) { m.socio_id = s.id; vinculados++; }
+      }
+      const orden = (db.pena_miembros || []).filter((m) => m.socio_id && (db.penas || []).some((p) => p.id === m.pena_id && p.estado === "verificada"))
+        .sort((a, b) => (a.orden - b.orden) || String(a.creado).localeCompare(String(b.creado)));
+      const visto = new Set();
+      for (const m of orden) {
+        if (visto.has(m.socio_id)) continue; visto.add(m.socio_id);
+        const s = (db.socios || []).find((x) => x.id === m.socio_id);
+        if (s && !s.pena_id && (!socioId || s.id === socioId)) { s.pena_id = m.pena_id; asignados++; }
+      }
+      persist();
+      return { vinculados, asignados };
+    },
+    async resumenMiembrosPena() {
+      const por = new Map();
+      for (const m of (db.pena_miembros || [])) {
+        const r = por.get(m.pena_id) || { pena_id: m.pena_id, miembros: 0, con_cuenta: 0, al_dia: 0, en_mora: 0, sin_dato: 0 };
+        r.miembros++; if (m.socio_id) r.con_cuenta++; r[m.estado_cuota] = (r[m.estado_cuota] || 0) + 1; por.set(m.pena_id, r);
+      }
+      return [...por.values()];
+    },
+    async listarMiembrosPena(penaId) {
+      return (db.pena_miembros || []).filter((m) => m.pena_id === penaId).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)))
+        .map((m) => { const s = (db.socios || []).find((x) => x.id === m.socio_id); return { id: m.id, cedula: m.cedula, nombre: m.nombre, nro_socio: m.nro_socio, estado_cuota: m.estado_cuota, orden: m.orden, fuente: m.fuente, socio_id: m.socio_id, actualizado: m.actualizado, es_su_pena: !!(s && s.pena_id === penaId) }; });
     },
     async ultimasAltasPena(penaId, limit = 8) {
       const tier = (sid) => { const m = (db.membresias || []).filter((x) => x.socio_id === sid && x.estado === "activa").slice(-1)[0]; return m ? m.tier_slug : "olimpista"; };

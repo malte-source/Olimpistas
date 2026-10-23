@@ -1122,8 +1122,8 @@
     "pena"
    ],
    "cat": "pagos",
-   "q": "¿Cuánto suma el fondo de la peña?",
-   "a": "Un porcentaje de lo que pagan por Pagopar los hinchas que llegaron por tu peña (la propuesta es 10%). Sobre las cuotas de socio, cuando el Portal de Socios mande el reporte de cobros.",
+   "q": "¿La peña tiene un fondo?",
+   "a": "Por ahora la peña no tiene fondo: el club está definiendo una recompensa por puntos para las peñas. Cuando esté lista la anunciamos acá.",
    "d": "Olimpistas · a confirmar"
   },
   {

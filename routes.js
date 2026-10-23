@@ -611,6 +611,7 @@ function buildRouter() {
     // Guardamos la cédula en la cuenta (el índice único de la DB es el backstop).
     try { await store.updateSocio(req.socio.id, { cedula }); }
     catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta de Olimpistas"); }
+    unirPenaPorCedula(req.socio.id);
 
     // Estado EN VIVO en el club (API de socios, ITI/Tuti) + padrón estático como respaldo.
     //  · 200 = autoritativo (sólo trae titulares): al día → socio; mora/baja → NO, aunque
@@ -724,7 +725,7 @@ function buildRouter() {
         const otra = await store.getSocioByCedula(cedulaBody);
         if (otra && otra.id !== req.socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
       }
-      try { await store.updateSocio(req.socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
+      try { await store.updateSocio(req.socio.id, { cedula: cedulaBody }); documento = cedulaBody; unirPenaPorCedula(req.socio.id); }
       catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta"); }
     }
     if (!documento) return res.json({ falta_cedula: true }); // el front pide la cédula y reintenta
@@ -1254,6 +1255,7 @@ function buildRouter() {
     }
     if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
     const actualizado = await store.updateSocio(socio.id, patch);
+    if (patch.cedula) unirPenaPorCedula(socio.id);
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "editar_socio", targetId: socio.id, detalle: Object.keys(patch).join(", "), por: req.adminUser });
     const safe = { ...actualizado }; delete safe.password_hash; delete safe.password; delete safe.verif_token; delete safe.reset_token; delete safe.reset_token_exp; delete safe.carnet_secreto;
     res.json({ ok: true, socio: safe });
@@ -2288,7 +2290,7 @@ function buildRouter() {
         const otra = await store.getSocioByCedula(cedulaBody);
         if (otra && otra.id !== socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta");
       }
-      try { await store.updateSocio(socio.id, { cedula: cedulaBody }); documento = cedulaBody; }
+      try { await store.updateSocio(socio.id, { cedula: cedulaBody }); documento = cedulaBody; unirPenaPorCedula(socio.id); }
       catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta"); }
     }
     if (!documento) return { falta_cedula: true };
@@ -2673,7 +2675,7 @@ function buildRouter() {
   async function penasVerificadas() {
     if (_penasPub && Date.now() - _penasPub.t < 30000) return _penasPub.v;
     const filas = store.listPenas ? await store.listPenas({ estado: "verificada" }) : [];
-    const v = filas.map((p, i) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, lat: p.lat != null ? Number(p.lat) : null, lng: p.lng != null ? Number(p.lng) : null, altas: p.altas, socios: p.socios, plus: p.plus, ranking: i + 1 }));
+    const v = filas.map((p, i) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, lat: p.lat != null ? Number(p.lat) : null, lng: p.lng != null ? Number(p.lng) : null, altas: p.altas, miembros: p.miembros || 0, hinchada: p.hinchada != null ? p.hinchada : p.altas, socios: p.socios, plus: p.plus, ranking: i + 1 }));
     _penasPub = { t: Date.now(), v };
     return v;
   }
@@ -2682,7 +2684,7 @@ function buildRouter() {
     // ?cerca=lat,lng → las peñas con ubicación, de la más cercana a la más lejana (con la distancia en km). "Encontrá tu peña".
     const cerca = String(req.query.cerca || "").split(",").map(Number);
     const conUbic = cerca.length === 2 && cerca.every(Number.isFinite) && Math.abs(cerca[0]) <= 90 && Math.abs(cerca[1]) <= 180;
-    let items = (await penasVerificadas()).map((p) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, lat: p.lat, lng: p.lng, altas: p.altas, ranking: p.ranking, es_tuya: p.id === mia }));
+    let items = (await penasVerificadas()).map((p) => ({ id: p.id, slug: p.slug, nombre: p.nombre, ciudad: p.ciudad, pais_iso: p.pais_iso, lat: p.lat, lng: p.lng, altas: p.altas, miembros: p.miembros, hinchada: p.hinchada, ranking: p.ranking, es_tuya: p.id === mia }));
     if (conUbic) {
       items = items.filter((p) => p.lat != null && p.lng != null).map((p) => ({ ...p, distancia_km: Math.round(ciudadesLib.distanciaKm(cerca[0], cerca[1], p.lat, p.lng) * 10) / 10 })).sort((a, b) => a.distancia_km - b.distancia_km).slice(0, 5);
     }
@@ -2787,8 +2789,8 @@ function buildRouter() {
     res.json({
       pena: { nombre: f.pena.nombre, slug: f.pena.slug, ciudad: f.pena.ciudad, pais_iso: f.pena.pais_iso, estado: f.pena.estado },
       ranking: mia ? mia.ranking : null, total_penas: ranking.length,
-      kpis: { altas: f.pena.altas, socios: f.pena.socios, plus: f.pena.plus, saldo: f.saldo },
-      link: linkPena(f.pena), pct: Number(pct) || 10,
+      kpis: { altas: f.pena.altas, socios: f.pena.socios, plus: f.pena.plus, saldo: f.saldo, miembros: f.pena.miembros || 0, hinchada: f.pena.hinchada != null ? f.pena.hinchada : f.pena.altas },
+      link: linkPena(f.pena), pct: Number(pct) || 10, fondo_activo: process.env.PENA_FONDO_ACTIVO === "1",
       ultimas_altas: altas.map((s) => ({ nombre: nombreCorto(s), ciudad: s.ciudad || "", nivel: (tierBySlug(s.tier_slug) || {}).nombre || "Olimpista", creado: s.creado })),
     });
   }));
@@ -2808,9 +2810,12 @@ function buildRouter() {
   }));
 
   // ── Admin (club): verificar, pausar, aprobar canjes ──
-  r.get("/admin/penas", requireAdmin, wrap(async (_req, res) => {
-    const [items, canjes, pct] = await Promise.all([store.listPenas(), store.canjesPendientesPena(), decision("pct")]);
-    res.json({ items, canjes, pct: Number(pct) || 10 });
+  r.get("/admin/penas", requireAdmin, wrap(async (req, res) => {
+    const [items, canjes, pct, padron] = await Promise.all([store.listPenas(), store.canjesPendientesPena(), decision("pct"), store.resumenMiembrosPena ? store.resumenMiembrosPena() : []]);
+    const porPena = new Map(padron.map((x) => [x.pena_id, x]));
+    const esOwner = req.adminRole === "owner";
+    // El estado de la cuota (al día / en mora) solo lo ve el owner; el resto ve cuántos miembros hay.
+    res.json({ items: items.map((p) => { const x = porPena.get(p.id) || {}; return { ...p, padron: { miembros: x.miembros || 0, con_cuenta: x.con_cuenta || 0, ...(esOwner ? { al_dia: x.al_dia || 0, en_mora: x.en_mora || 0, sin_dato: x.sin_dato || 0 } : {}) } }; }), canjes, pct: Number(pct) || 10, owner: esOwner });
   }));
   async function enviarAccesoPena(pena, { renovar = false } = {}) {
     let u = await store.getPenaUsuarioDePena(pena.id);
@@ -2875,8 +2880,11 @@ function buildRouter() {
 
   // Aporte al fondo: el % que decide el club (10 por defecto) de lo que paga cada hincha de la peña.
   // Un pedido acredita UNA vez (pedido_id único en el libro). Una falla acá nunca frena la entrega del pago.
+  // APAGADO por decisión del club (2026-10-23): ya no se acredita el 10 % al fondo de la peña; se va a reemplazar por puntos u otra
+  // recompensa. Se puede volver a encender con PENA_FONDO_ACTIVO=1 sin tocar código.
   async function acreditarFondoPena(pedido) {
     try {
+      if (process.env.PENA_FONDO_ACTIVO !== "1") return;
       if (!store.acreditarPena || !pedido.socio_id) return;
       const socio = await store.getSocioById(pedido.socio_id);
       if (!socio || !socio.pena_id) return;
@@ -2892,6 +2900,37 @@ function buildRouter() {
       alertar("pena:fondo-fallo:" + pedido.id, "Falló el aporte al fondo de una peña", `Pedido ${pedido.id}: ${e.message}. El pago se entregó igual; hay que acreditar el fondo a mano.`);
     }
   }
+  // Cuando alguien carga o valida su cédula: si figura en el padrón de una peña se vincula con su cuenta y, si no tenía peña, se suma a la primera
+  // según el informe del club. Nunca frena el flujo que la dispara.
+  function unirPenaPorCedula(socioId) {
+    if (!store.sincronizarMiembrosPena) return;
+    store.sincronizarMiembrosPena({ socioId }).then((r) => { if (r && r.asignados) { _penasPub = null; log.info({ socioId }, "peña: asignada por el padrón del club"); } }).catch((e) => log.warn({ err: e.message }, "peña: no se pudo vincular con el padrón"));
+  }
+  // Padrón de una peña (solo el owner del panel): incluye el estado de la cuota, que es dato del club y no se comparte con la comisión.
+  r.get("/admin/penas/:id/miembros", requireAdmin, exigirOwner, wrap(async (req, res) => {
+    const pena = await store.getPena(req.params.id);
+    if (!pena) throw httpError(404, "Peña no encontrada");
+    const items = store.listarMiembrosPena ? await store.listarMiembrosPena(pena.id) : [];
+    if (req.query.format === "csv") {
+      const ETQ = { al_dia: "Al día", en_mora: "En mora", sin_dato: "Sin dato" };
+      return enviarCsv(res, "padron-" + pena.slug + ".csv", ["nombre", "cedula", "n_socio", "estado_cuota", "tiene_cuenta", "peña_asignada"],
+        items.map((m) => [m.nombre, m.cedula, m.nro_socio, ETQ[m.estado_cuota] || "", m.socio_id ? "sí" : "no", m.es_su_pena ? "sí" : "no"]));
+    }
+    res.json({ pena: { id: pena.id, nombre: pena.nombre }, items });
+  }));
+  // Completar o corregir los datos de una peña (ciudad, país, presidente, contacto, nombre).
+  r.patch("/admin/penas/:id", requireAdmin, requirePerm("penas.write"), wrap(async (req, res) => {
+    const b = req.body || {}, patch = {};
+    for (const [k, max] of [["nombre", 80], ["ciudad", 60], ["presidente", 80], ["contacto", 120]]) if (b[k] !== undefined) patch[k] = limpioTxt(b[k], max);
+    if (b.pais_iso !== undefined) patch.pais_iso = String(b.pais_iso || "PY").toUpperCase().slice(0, 2);
+    if (patch.nombre === "") throw httpError(400, "El nombre no puede quedar vacío");
+    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
+    const p = await store.updatePena(req.params.id, patch);
+    if (!p) throw httpError(404, "Peña no encontrada");
+    _penasPub = null;
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:editar", targetId: p.id, detalle: Object.keys(patch).join(","), por: req.adminUser });
+    res.json({ ok: true, pena: p });
+  }));
   // Aviso a la comisión de que se sumó un hincha: como máximo uno por día y peña.
   async function avisarPenaSumo(pena, socio) {
     if (!emailOk(pena.contacto) || !mailer.enviarPenaSumoSocio) return;
