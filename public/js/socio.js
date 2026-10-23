@@ -1231,8 +1231,12 @@
     let dest = items.filter((x) => x.destacado);
     if (!dest.length) dest = items.slice().sort((x, y) => pctDe(y) - pctDe(x) || esLocal(y) - esLocal(x)).slice(0, 4);
     dest = dest.slice(0, 6);
+    const inicialDe = (x) => esc(String(x.comercio_nombre || "?").trim().charAt(0).toUpperCase());
+    // Los logos vienen en blanco: van sobre un recuadro negro. Sin logo, el recuadro muestra la inicial del comercio.
+    const logoDe = (x, cls) => x.comercio_logo ? '<span class="bx-logo' + (cls ? " " + cls : "") + '"><img src="' + esc(x.comercio_logo) + '" alt="" loading="lazy"></span>' : '<span class="bx-logo ini' + (cls ? " " + cls : "") + '" aria-hidden="true">' + inicialDe(x) + '</span>';
     const estadoDe = (x) => x.desbloqueado ? T("bx_disponible") : OLI.ic("candado", 13) + " " + T("bx_solo") + " " + (TL[x.nivel_min] || "Plus");
     const banner = (x) => '<button type="button" class="bx-ban' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '" data-ini="' + esc(String(x.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '">' +
+      (x.comercio_logo ? '<img class="bx-ban-logo" src="' + esc(x.comercio_logo) + '" alt="" loading="lazy">' : "") +
       '<span class="bx-ban-eb">' + T("bx_destacado") + '</span>' +
       '<span class="bx-ban-val' + (String(x.valor || "").length > 6 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
       '<span class="bx-ban-marca">' + esc(x.comercio_nombre || "") + '</span>' +
@@ -1267,9 +1271,9 @@
       '<button type="button" class="btn" id="bxUp">' + (nivelUp === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")) + '</button></div>' : "";
 
     const fila = (x) => '<button type="button" class="bx-card' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '">' +
-      '<span class="bx-card-top"><span class="bx-val' + (x.desbloqueado ? "" : " lock") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
+      '<span class="bx-card-top">' + logoDe(x) +
       '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + (esLocal(x) && x.desbloqueado ? ' <span class="ben-loc">' + T("m_ben_tu_ciudad") + '</span>' : "") + '</b><small>' + esc(x.titulo || "") + '</small></span>' +
-      (x.desbloqueado ? OLI.ic("chevron-derecha", 18) : OLI.ic("candado", 20)).replace('class="ic"', 'class="ic grupo-chev"') + '</span>' +
+      '<span class="bx-val' + (x.desbloqueado ? "" : " lock") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span></span>' +
       '<span class="bx-card-meta">' + (x.comercio_rubro ? '<span class="bx-tag">' + esc(x.comercio_rubro) + '</span>' : "") + (x.comercio_ciudad ? '<span class="bx-tag">' + esc(x.comercio_ciudad) + '</span>' : "") +
       '<span class="bx-estado' + (x.desbloqueado ? " ok" : "") + '">' + estadoDe(x) + '</span></span></button>';
 
@@ -1401,8 +1405,9 @@
     const estado = b.desbloqueado ? '<span class="bx-estado ok">' + T("bx_disponible") + '</span>' : '<span class="bx-estado">' + OLI.ic("candado", 13) + " " + T("bx_solo") + " " + esc(TL[b.nivel_min] || "Plus") + '</span>';
     const { root, close } = OLI.modal(`
       <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
-      <div class="bx-hoja-cab"><span class="bx-val grande${b.desbloqueado ? "" : " lock"}${String(b.valor || "").length > 5 ? " chico" : ""}">${esc(b.valor || "")}</span>
-        <div><h3 class="ben-hoja-t">${esc(b.titulo || "")}</h3><p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>${estado}</div></div>
+      <div class="bx-hoja-cab">${b.comercio_logo ? '<span class="bx-logo grande"><img src="' + esc(b.comercio_logo) + '" alt=""></span>' : '<span class="bx-logo ini grande" aria-hidden="true">' + esc(String(b.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '</span>'}
+        <div style="flex:1;min-width:0"><h3 class="ben-hoja-t">${esc(b.titulo || "")}</h3><p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>${estado}</div>
+        <span class="bx-val grande${b.desbloqueado ? "" : " lock"}${String(b.valor || "").length > 5 ? " chico" : ""}">${esc(b.valor || "")}</span></div>
       ${b.desbloqueado ? "" : '<p class="ben-hoja-p">' + T("m_ben_hoja_subi").replace("{nivel}", esc(TL[b.nivel_min] || "Plus")) + '</p>'}
       ${cuerpo}
       <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : (b.nivel_min === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus"))}</button>
