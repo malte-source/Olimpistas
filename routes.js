@@ -1593,9 +1593,17 @@ function buildRouter() {
       }
       if ((d.lat != null && Math.abs(d.lat) > 90) || (d.lng != null && Math.abs(d.lng) > 180)) throw httpError(400, "Coordenadas inválidas");
     } });
+  // Destacar / quitar de destacados: los destacados van de banner arriba de la Red de Beneficios.
+  r.post("/admin/beneficios/:id/destacar", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
+    const destacado = req.body && req.body.destacado === true;
+    const item = await store.updateBeneficio(req.params.id, { destacado });
+    if (!item) throw httpError(404, "Beneficio no encontrado");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: destacado ? "beneficios:destacar" : "beneficios:quitar_destacado", targetId: req.params.id, por: req.adminUser });
+    res.json({ ok: true, item });
+  }));
   // Beneficios de muestra del club (exclusivos para socios): comercios + ofertas ya aprobadas. Idempotente: no duplica ni pisa ediciones.
   r.post("/admin/beneficios/muestra", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
-    const out = await require("./lib/beneficios-muestra").cargarMuestra(store);
+    const out = await require("./lib/beneficios-muestra").cargarMuestra(store, { actualizar: req.query.actualizar === "1" });
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "beneficios:cargar_muestra", targetId: "muestra", detalle: JSON.stringify(out), por: req.adminUser });
     res.json({ ok: true, ...out });
   }));

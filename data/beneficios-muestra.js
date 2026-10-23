@@ -1,8 +1,9 @@
 "use strict";
 // Beneficios de muestra de la Red de Beneficios, tomados de la "Matriz Unificada - Red de Beneficios" del club.
 // Todos son EXCLUSIVOS PARA SOCIOS (niveles = "socio"): un hincha que no valida su carnet de socio los ve bloqueados.
-// Varios se validan con el perfil "Activo" del titular en el Portal de Socios del club (socios.clubolimpia.com.py): nuestra app convive
-// con ese portal, no lo reemplaza; el estado de socio sale del mismo padrón.
+// Todos se canjean con el carnet de Olimpistas (QR que cambia cada minuto): los comercios validan desde el panel de Olimpistas.
+// Excepciones con canal propio: Petrosur (app de Petrosur) y G5 PRO (ticketeras). El estado de socio sale del padrón del club
+// (Portal de Socios / Tuti): la app convive con ese portal, no lo reemplaza.
 // A propósito NO se copian los datos de las empresas (RUC, representantes legales, cédulas, correos): no son para el público.
 // Se cargan con lib/beneficios-muestra.js (idempotente: no duplica si se corre dos veces).
 
@@ -40,6 +41,9 @@ const FILAS = [
   ["Lumino Estética", "Belleza y bienestar", "Asunción", "25% + 5%", 25, "Lunes a miércoles", "América c/ Mcal. López, Asunción", "Todos los servicios disponibles, sin excepción. 25% de descuento, más 5% adicional para socios con débito automático, y 50% el día del cumpleaños del socio", "Presentá el perfil \"Activo\" del socio titular en el Portal de Socios del club (socios.clubolimpia.com.py)", "Exclusivo para socios al día. No acumulable con otras promociones o descuentos."],
 ];
 
+const CANJE_CON_CARNET = "Mostrá tu carnet de Olimpistas (el QR cambia cada minuto): el comercio lo escanea y te aplica el descuento";
+const CANAL_PROPIO = ["Petrosur", "G5 PRO"]; // conservan la mecánica acordada (app / ticketera)
+
 const BENEFICIOS_MUESTRA = FILAS.map(([marca, rubro, ciudad, valor, pct, dias, sucursales, incluye, acceso, notas]) => ({
   comercio: { nombre: marca, rubro, ciudad, direccion: sucursales },
   beneficio: {
@@ -47,7 +51,11 @@ const BENEFICIOS_MUESTRA = FILAS.map(([marca, rubro, ciudad, valor, pct, dias, s
     valor,
     pct,
     niveles: NIVEL,
-    descripcion: `Dónde: ${sucursales}. Incluye: ${incluye}. Cómo acceder: ${acceso}. ${notas}`,
+    // Una línea por dato ("Etiqueta: texto"): la hoja del beneficio las muestra ordenadas.
+    descripcion: `Dónde: ${sucursales}
+Incluye: ${incluye}
+Cómo acceder: ${CANAL_PROPIO.includes(marca) ? acceso : CANJE_CON_CARNET}
+Importante: ${notas}`,
   },
 }));
 

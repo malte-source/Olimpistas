@@ -1201,6 +1201,8 @@
         <p class="lead" style="text-align:center;margin:0 auto">${T("m_ben_pronto_p")}</p>
       </div></div>`;
   }
+  // Red de Beneficios: billetera, destacados (banners), buscador, rubros, orden, disponibilidad y lista o mapa. En escritorio es de dos
+  // columnas (lo principal a la izquierda; billetera, guía de uso y subir de nivel a la derecha); en celular todo va en una columna.
   async function vBeneficios() {
     view().innerHTML = skeleton(3);
     let r = null;
@@ -1219,37 +1221,139 @@
       '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
       '<div class="ba-nota">' + notaMes + ' · ' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
     const cod = r.codigo ? '<div class="ben-codigo">' + T("m_ben_codigo") + ': <b>' + esc(String(r.codigo).toUpperCase()) + '</b></div>' : "";
-    const propios = items.filter((x) => x.desbloqueado), bloqueados = items.filter((x) => !x.desbloqueado);
-    // Local primero: el comercio de tu ciudad va arriba dentro de cada grupo.
-    const esLocal = (x) => (ciudad && String(x.comercio_ciudad || "").toLowerCase() === ciudad.toLowerCase()) ? 1 : 0;
-    propios.sort((x, y) => esLocal(y) - esLocal(x));
-    const fila = (x, bloqueado) => '<button type="button" class="grupo-fila ben-fila" data-ben="' + esc(x.id) + '">' +
-      '<span class="ben-val' + (bloqueado ? " lock" : "") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
-      '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + (esLocal(x) && !bloqueado ? ' <span class="ben-loc">' + T("m_ben_tu_ciudad") + '</span>' : "") + '</b><small>' + esc(x.titulo || "") + ' · ' +
-      esc(bloqueado ? (T("m_ben_subi") + " " + (TL[x.nivel_min] || "Plus")) : (x.comercio_ciudad || x.comercio_rubro || "")) + '</small></span>' +
-      (bloqueado ? OLI.ic("candado", 20) : OLI.ic("chevron-derecha", 18)).replace('class="ic"', 'class="ic grupo-chev"') + '</button>';
+
+    const norm = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const pctDe = (x) => Number(x.pct) || 0;
+    const esLocal = (x) => (ciudad && norm(x.comercio_ciudad) === norm(ciudad)) ? 1 : 0;
+    const bloqueados = items.filter((x) => !x.desbloqueado);
+
+    // Destacados: los que marca el admin; si no marcó ninguno, los de mayor descuento (primero los de tu ciudad).
+    let dest = items.filter((x) => x.destacado);
+    if (!dest.length) dest = items.slice().sort((x, y) => pctDe(y) - pctDe(x) || esLocal(y) - esLocal(x)).slice(0, 4);
+    dest = dest.slice(0, 6);
+    const estadoDe = (x) => x.desbloqueado ? T("bx_disponible") : OLI.ic("candado", 13) + " " + T("bx_solo") + " " + (TL[x.nivel_min] || "Plus");
+    const banner = (x) => '<button type="button" class="bx-ban' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '" data-ini="' + esc(String(x.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '">' +
+      '<span class="bx-ban-eb">' + T("bx_destacado") + '</span>' +
+      '<span class="bx-ban-val' + (String(x.valor || "").length > 6 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
+      '<span class="bx-ban-marca">' + esc(x.comercio_nombre || "") + '</span>' +
+      '<span class="bx-ban-sub">' + esc(x.titulo || "") + (x.comercio_ciudad ? " · " + esc(x.comercio_ciudad) : "") + '</span>' +
+      '<span class="bx-ban-pie">' + estadoDe(x) + '</span></button>';
+    const hero = '<section class="bx-hero" aria-label="' + esc(T("bx_destacados")) + '"><h3 class="bx-h">' + T("bx_destacados") + '</h3>' +
+      '<div class="bx-rail' + (dest.length === 1 ? " uno" : "") + '">' + dest.map(banner).join("") + '</div></section>';
+
+    // Rubros con su cantidad, de mayor a menor.
+    const porRubro = {};
+    items.forEach((x) => { const k = x.comercio_rubro || ""; if (k) porRubro[k] = (porRubro[k] || 0) + 1; });
+    const rubros = Object.keys(porRubro).sort((a, b) => porRubro[b] - porRubro[a] || a.localeCompare(b, "es"));
+    const chip = (cat, txt, n) => '<button type="button" class="bx-chip" data-cat="' + esc(cat) + '" aria-pressed="' + (cat === "" ? "true" : "false") + '">' + esc(txt) + ' <i>' + n + '</i></button>';
+    const barra = '<div class="bx-bar">' +
+      '<label class="bx-busca">' + OLI.ic("buscar", 18) + '<input type="search" id="bxQ" autocomplete="off" placeholder="' + esc(T("bx_buscar")) + '" aria-label="' + esc(T("bx_buscar")) + '"></label>' +
+      '<div class="bx-chips" id="bxChips" role="group" aria-label="' + esc(T("bx_rubro")) + '">' + chip("", T("bx_todos"), items.length) + rubros.map((k) => chip(k, k, porRubro[k])).join("") + '</div>' +
+      '<div class="bx-ctl">' +
+        '<div class="ctl-seg" id="bxDisp" role="radiogroup" aria-label="' + esc(T("bx_disp")) + '">' +
+          '<button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-d="todos">' + T("bx_d_todos") + '</button>' +
+          '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="mios">' + T("bx_d_mios") + '</button>' +
+          (bloqueados.length ? '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="bloq">' + T("bx_d_bloq") + '</button>' : "") + '</div>' +
+        '<select id="bxOrden" class="bx-orden" aria-label="' + esc(T("bx_orden")) + '"><option value="local">' + T("bx_o_rec") + '</option><option value="desc">' + T("bx_o_desc") + '</option><option value="az">' + T("bx_o_az") + '</option></select>' +
+        '<span id="bxVista"></span>' +
+      '</div>' +
+      '<p class="bx-n" id="bxN" aria-live="polite"></p></div>';
+
+    // Lo que falta para completar la columna derecha: cómo usarlos y subir de nivel.
+    const guia = '<div class="bx-guia"><h3>' + T("bx_guia_h") + '</h3><ol><li>' + T("bx_g1") + '</li><li>' + T("bx_g2") + '</li><li>' + T("bx_g3") + '</li></ol>' +
+      '<button type="button" class="btn btn-ghost btn-block" id="bxCarnet">' + T("bx_abrir_carnet") + '</button></div>';
+    const nivelUp = bloqueados.length ? (bloqueados.some((x) => x.nivel_min === "socio") ? "socio" : (bloqueados[0].nivel_min || "premium")) : "";
+    const up = bloqueados.length ? '<div class="bx-up"><b>' + T("bx_up_h").replace("{n}", bloqueados.length) + '</b><p>' + (nivelUp === "socio" ? T("bx_up_socio") : T("bx_up_p").replace("{nivel}", TL[nivelUp] || "Plus")) + '</p>' +
+      '<button type="button" class="btn" id="bxUp">' + (nivelUp === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")) + '</button></div>' : "";
+
+    const fila = (x) => '<button type="button" class="bx-card' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '">' +
+      '<span class="bx-card-top"><span class="bx-val' + (x.desbloqueado ? "" : " lock") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span>' +
+      '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + (esLocal(x) && x.desbloqueado ? ' <span class="ben-loc">' + T("m_ben_tu_ciudad") + '</span>' : "") + '</b><small>' + esc(x.titulo || "") + '</small></span>' +
+      (x.desbloqueado ? OLI.ic("chevron-derecha", 18) : OLI.ic("candado", 20)).replace('class="ic"', 'class="ic grupo-chev"') + '</span>' +
+      '<span class="bx-card-meta">' + (x.comercio_rubro ? '<span class="bx-tag">' + esc(x.comercio_rubro) + '</span>' : "") + (x.comercio_ciudad ? '<span class="bx-tag">' + esc(x.comercio_ciudad) + '</span>' : "") +
+      '<span class="bx-estado' + (x.desbloqueado ? " ok" : "") + '">' + estadoDe(x) + '</span></span></button>';
+
     view().innerHTML = '<div class="section" style="border:none;padding-top:8px">' +
       '<h2>' + T("m_ben_h") + '</h2><p class="lead">' + (ciudad ? T("m_ben_p_local").replace("{ciudad}", esc(ciudad)) : T("m_ben_p")) + '</p>' +
-      ahorroCard + cod +
-      '<div class="ben-cols">' +
-        '<div><div class="grupo-h">' + T("m_ben_para_vos") + '</div>' + (propios.length ? '<div class="grupo">' + propios.map((x) => fila(x, false)).join("") + '</div>' : '<p class="pt-nota">' + T("m_ben_vacio") + '</p>') + '</div>' +
-        (bloqueados.length ? '<div><div class="grupo-h">' + T("m_ben_subi_h") + '</div><div class="grupo">' + bloqueados.map((x) => fila(x, true)).join("") + '</div></div>' : "") +
+      '<div class="bx">' +
+        '<div class="bx-main">' + hero + barra + '<div class="bx-lista" id="bxLista"></div></div>' +
+        '<aside class="bx-side">' + ahorroCard + cod + guia + up + '</aside>' +
       '</div></div>';
-    view().querySelectorAll("[data-ben]").forEach((el) => el.addEventListener("click", () => abrirBeneficio(items.find((x) => x.id === el.dataset.ben), TL)));
+
+    // Estado de los filtros y pintado de la lista.
+    const st = { q: "", cat: "", disp: "todos", orden: "local" };
+    const lista = view().querySelector("#bxLista"), nEl = view().querySelector("#bxN");
+    const visibles = () => {
+      const toks = norm(st.q).split(/\s+/).filter(Boolean);
+      const a = items.filter((x) => {
+        if (st.cat && (x.comercio_rubro || "") !== st.cat) return false;
+        if (st.disp === "mios" && !x.desbloqueado) return false;
+        if (st.disp === "bloq" && x.desbloqueado) return false;
+        if (toks.length) { const h = norm([x.comercio_nombre, x.comercio_rubro, x.comercio_ciudad, x.titulo, x.valor].join(" ")); if (!toks.every((t) => h.includes(t))) return false; }
+        return true;
+      });
+      if (st.orden === "az") a.sort((x, y) => String(x.comercio_nombre).localeCompare(String(y.comercio_nombre), "es"));
+      else if (st.orden === "desc") a.sort((x, y) => pctDe(y) - pctDe(x) || esLocal(y) - esLocal(x));
+      else a.sort((x, y) => esLocal(y) - esLocal(x) || pctDe(y) - pctDe(x));
+      return a;
+    };
+    const pintar = () => {
+      const a = visibles();
+      nEl.textContent = a.length + " " + (a.length === 1 ? T("bx_uno") : T("bx_varios"));
+      if (!a.length) {
+        lista.innerHTML = '<div class="bx-vacio"><p>' + T("bx_vacio") + '</p><button type="button" class="btn btn-ghost" id="bxLimpiar">' + T("bx_limpiar") + '</button></div>';
+        return;
+      }
+      const grupo = (tit, xs) => xs.length ? '<h3 class="bx-gh">' + tit + ' <i>' + xs.length + '</i></h3><div class="bx-grid">' + xs.map(fila).join("") + '</div>' : "";
+      lista.innerHTML = st.disp === "todos"
+        ? grupo(T("m_ben_para_vos"), a.filter((x) => x.desbloqueado)) + grupo(T("m_ben_subi_h"), a.filter((x) => !x.desbloqueado))
+        : '<div class="bx-grid">' + a.map(fila).join("") + '</div>';
+    };
+    const limpiar = () => {
+      st.q = ""; st.cat = ""; st.disp = "todos";
+      view().querySelector("#bxQ").value = "";
+      view().querySelectorAll("#bxChips .bx-chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.cat === "")));
+      view().querySelectorAll("#bxDisp button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.d === "todos")));
+      pintar();
+    };
+    let debounce = null;
+    view().querySelector("#bxQ").addEventListener("input", (e) => { clearTimeout(debounce); debounce = setTimeout(() => { st.q = e.target.value; pintar(); }, 120); });
+    view().querySelector("#bxChips").addEventListener("click", (e) => {
+      const c = e.target.closest(".bx-chip"); if (!c) return;
+      st.cat = c.dataset.cat;
+      view().querySelectorAll("#bxChips .bx-chip").forEach((x) => x.setAttribute("aria-pressed", String(x === c)));
+      pintar();
+    });
+    view().querySelector("#bxDisp").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-d]"); if (!b) return;
+      st.disp = b.dataset.d;
+      view().querySelectorAll("#bxDisp button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+      pintar();
+    });
+    view().querySelector("#bxOrden").addEventListener("change", (e) => { st.orden = e.target.value; pintar(); });
+    view().querySelector(".bx").addEventListener("click", (e) => {
+      if (e.target.closest("#bxLimpiar")) { limpiar(); return; }
+      const el = e.target.closest("[data-ben]");
+      if (el) abrirBeneficio(items.find((x) => x.id === el.dataset.ben), TL);
+    });
+    view().querySelector("#bxCarnet").onclick = () => activar("carnet");
+    const upBtn = view().querySelector("#bxUp");
+    if (upBtn) upBtn.onclick = () => { if (nivelUp === "socio") validarSocioModal(); else mostrarUpsell(nivelUp || "premium", T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")); };
+    pintar();
     iniciarBeneficiosMapa(items, TL);
   }
   // Beneficios cerca tuyo: el segmentado Lista / Mapa solo aparece si hay comercios con ubicación. El valor ("15%") va en una píldora negra;
   // los que tu nivel todavía no alcanza llevan candado y abren la invitación a subir de nivel.
   function iniciarBeneficiosMapa(items, TL) {
     const conUbic = items.filter((x) => x.comercio_lat != null && x.comercio_lng != null);
-    const cols = view().querySelector(".ben-cols");
-    if (!conUbic.length || !cols) return;
+    const cols = view().querySelector("#bxLista"), slot = view().querySelector("#bxVista");
+    if (!conUbic.length || !cols || !slot) return;
     const barra = document.createElement("div");
     barra.className = "ctl-seg ben-vista"; barra.setAttribute("role", "radiogroup");
     barra.innerHTML = `<button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-v="lista">${T("m_ben_lista")}</button><button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-v="mapa">${T("m_ben_mapa")}</button>`;
     const caja = document.createElement("div"); caja.className = "ben-mapa-wrap"; caja.hidden = true;
     caja.innerHTML = `<div class="ben-mapa" id="benMapa"></div><button type="button" class="btn btn-ghost ben-cerca" id="benCerca">${T("m_ben_cerca")}</button>`;
-    cols.parentNode.insertBefore(barra, cols); cols.parentNode.insertBefore(caja, cols);
+    slot.appendChild(barra); cols.parentNode.insertBefore(caja, cols);
     let mapa = null, marcadores = [];
     const armar = async () => {
       if (mapa) { mapa.resize(); return; }
@@ -1283,15 +1387,25 @@
       if (mapaVista) armar();
     });
   }
-  // Hoja con el detalle del beneficio: usarlo (mostrar el QR en caja) o subir de nivel.
+  // Hoja con el detalle del beneficio. Los datos vienen en líneas "Etiqueta: texto" (Dónde / Incluye / Cómo acceder / Importante) y se
+  // muestran ordenados; un texto libre (de un beneficio cargado a mano) se muestra tal cual. El canje es siempre con el carnet.
   function abrirBeneficio(b, TL) {
     if (!b) return;
+    const ETQ = { "Dónde": "bx_l_donde", "Incluye": "bx_l_incluye", "Cómo acceder": "bx_l_acceso", "Importante": "bx_l_importante" };
+    const lineas = String(b.descripcion || "").split("\n").map((l) => l.trim()).filter(Boolean);
+    const datos = lineas.map((l) => { const i = l.indexOf(": "); return i > 0 && ETQ[l.slice(0, i)] ? { k: ETQ[l.slice(0, i)], v: l.slice(i + 2) } : null; });
+    const estructurado = lineas.length > 0 && datos.every(Boolean);
+    const cuerpo = estructurado
+      ? '<dl class="bx-dl">' + datos.map((d) => '<div><dt>' + T(d.k) + '</dt><dd>' + esc(d.v) + '</dd></div>').join("") + '</dl>'
+      : '<p class="ben-hoja-p">' + (esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))) + '</p>';
+    const estado = b.desbloqueado ? '<span class="bx-estado ok">' + T("bx_disponible") + '</span>' : '<span class="bx-estado">' + OLI.ic("candado", 13) + " " + T("bx_solo") + " " + esc(TL[b.nivel_min] || "Plus") + '</span>';
     const { root, close } = OLI.modal(`
       <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
-      <h3 class="ben-hoja-t">${esc(b.valor || "")} · ${esc(b.titulo || "")}</h3>
-      <p class="ben-hoja-p">${esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))}</p>
-      <p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>
-      <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")}</button>
+      <div class="bx-hoja-cab"><span class="bx-val grande${b.desbloqueado ? "" : " lock"}${String(b.valor || "").length > 5 ? " chico" : ""}">${esc(b.valor || "")}</span>
+        <div><h3 class="ben-hoja-t">${esc(b.titulo || "")}</h3><p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>${estado}</div></div>
+      ${b.desbloqueado ? "" : '<p class="ben-hoja-p">' + T("m_ben_hoja_subi").replace("{nivel}", esc(TL[b.nivel_min] || "Plus")) + '</p>'}
+      ${cuerpo}
+      <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : (b.nivel_min === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus"))}</button>
       <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`);
     root.querySelector("#benCerrar").onclick = close;
     root.querySelector("#benCta").onclick = () => { close(); if (b.desbloqueado) activar("carnet"); else if (b.nivel_min === "socio") validarSocioModal(); else mostrarUpsell(b.nivel_min || "premium", T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")); };

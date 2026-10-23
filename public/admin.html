@@ -1833,6 +1833,7 @@
         var d = await api("/admin/beneficios"), w = puede("beneficios.write");
         var pend = d.items.filter(function (b) { return b.estado === "borrador"; });
         var rech = d.items.filter(function (b) { return b.estado === "rechazado"; }).slice(0, 5);
+        var pub = d.items.filter(function (b) { return b.estado === "aprobado" && b.activo !== false; }).sort(function (a, b) { return (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0); }).slice(0, 60);
         var PARA = { todos: "Todos", "premium,socio": "Plus y Socio", socio: "Solo socios" };
         var fila = function (b, acciones) {
           return '<div class="card-row" style="border:1px solid var(--border-default);border-radius:10px;padding:10px;margin:8px 0"><b>' + esc(b.comercio_nombre || "") + '</b> — ' + esc(b.titulo) +
@@ -1842,6 +1843,9 @@
         box.innerHTML = (pend.length ? pend.map(function (b) {
           return fila(b, '<button class="btn btn-sm" data-ofapr="' + esc(b.id) + '">Aprobar y publicar</button><button class="btn btn-sm btn-ghost adm-neg" data-ofrec="' + esc(b.id) + '">Rechazar</button>');
         }).join("") : '<p class="empty">No hay ofertas esperando aprobación.</p>') +
+          (pub.length ? '<div class="mini" style="margin-top:14px">Publicadas · tocá "Destacar" para que salgan de banner arriba de la Red de Beneficios (' + pub.filter(function (b) { return b.destacado; }).length + ' destacadas)</div>' + pub.map(function (b) {
+            return fila(b, '<button class="btn btn-sm ' + (b.destacado ? "" : "btn-ghost") + '" data-ofdest="' + esc(b.id) + '" data-on="' + (b.destacado ? "0" : "1") + '">' + (b.destacado ? "Destacada · quitar" : "Destacar") + '</button>');
+          }).join("") : "") +
           (rech.length ? '<div class="mini">Rechazadas recientes</div>' + rech.map(function (b) { return fila(b, '<button class="btn btn-sm btn-ghost" data-ofapr="' + esc(b.id) + '">Aprobar igual</button>'); }).join("") : "");
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
@@ -2110,6 +2114,9 @@
           var r = await confirmar("El comercio va a ver este motivo en su panel.", { titulo: "Rechazar oferta", ok: "Rechazar", danger: true, input: true, placeholder: "Motivo (ej. el 90% no es sostenible)" });
           if (!r.ok) return;
           await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofrec), { method: "PATCH", body: { estado: "rechazado", motivo: r.val } }); toast("Oferta rechazada");
+        } else if (b.dataset.ofdest) {
+          await api("/admin/beneficios/" + encodeURIComponent(b.dataset.ofdest) + "/destacar", { method: "POST", body: { destacado: b.dataset.on === "1" } });
+          toast(b.dataset.on === "1" ? "Destacada: sale de banner" : "Ya no es destacada");
         } else return;
         cargarOfertasAdmin();
       } catch (err) { toast(err.message, "err"); }
