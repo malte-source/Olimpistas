@@ -1830,3 +1830,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 
 /* La invitación a subir de nivel, más baja en el celular (antes empujaba la lista una pantalla entera). */
 @media (max-width: 899px) { .bx-up { padding: 14px 16px; } .bx-up p { margin: 4px 0 10px; } }
+
+/* Correo sin confirmar: el aviso es el mismo formato que los otros, con un acento propio y sin botón de cerrar. */
+.socio-banner-correo { border-color: var(--oro, var(--border-default)); }
+.socio-banner-correo .sb-txt b { word-break: break-all; }

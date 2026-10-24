@@ -386,7 +386,8 @@ function buildRouter() {
     if (process.env.EMAIL_VERIF !== "off") {
       try {
         const vtoken = crypto.randomBytes(24).toString("base64url");
-        await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false });
+        // Pendiente de validar: solo se exige confirmar si de verdad podemos mandar el correo.
+        await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false, verif_exigida: mailer.habilitado === true });
         const link = `${baseUrl()}/api/auth/verificar?token=${vtoken}`;
         mailer.enviarVerificacion(socio, link).catch(() => {});
       } catch (e) { log.error({ err: e.message }, "verificación de email no disponible"); }
@@ -476,6 +477,20 @@ function buildRouter() {
   }));
 
   // Verificación de email (link del correo). Tolerante: nunca tira error feo.
+  // Reenviar el enlace para confirmar el correo (una vez por minuto por cuenta).
+  const _reenvioVerif = new Map();
+  r.post("/auth/reenviar-verificacion", auth.requireSocio, wrap(async (req, res) => {
+    const s = req.socio;
+    if (s.email_verificado) return res.json({ ok: true, ya: true });
+    const ult = _reenvioVerif.get(s.id) || 0;
+    if (Date.now() - ult < 60000) throw httpError(429, "Ya te enviamos el correo hace un momento. Revisá tu bandeja (y el correo no deseado) y probá de nuevo en un minuto.");
+    _reenvioVerif.set(s.id, Date.now());
+    if (_reenvioVerif.size > 20000) _reenvioVerif.clear();
+    const vtoken = crypto.randomBytes(24).toString("base64url");
+    await store.updateSocio(s.id, { verif_token: vtoken });
+    const out = await mailer.enviarVerificacion(s, `${baseUrl()}/api/auth/verificar?token=${vtoken}`);
+    res.json({ ok: true, enviado: !!(out && out.ok) });
+  }));
   r.get("/auth/verificar", wrap(async (req, res) => {
     let ok = false;
     try {
@@ -590,6 +605,12 @@ function buildRouter() {
     res.json({ ok: true, foto: socio.foto, progreso });
   }));
 
+  // Cuenta nueva con el correo sin confirmar: no puede pujar, pagar ni validar su cédula hasta confirmarlo.
+  // (Las cuentas anteriores a esta regla tienen verif_exigida = false: ven el aviso, pero no se les bloquea nada.)
+  const correoPendiente = (s) => !!(s && s.verif_exigida && !s.email_verificado);
+  const exigirCorreo = (req, paraQue) => {
+    if (correoPendiente(req.socio)) throw httpError(403, `Confirmá tu correo para ${paraQue}. Te enviamos un enlace al registrarte; si no lo ves, pedí otro desde el aviso de arriba.`);
+  };
   // ─── Instancia 3 — Validación de socio (cédula → nivel SOCIO otorgado) ──
   // Reglas: cédula ÚNICA (1 cédula = 1 cuenta); el socio del club obtiene el nivel
   // "Socio" (superior a Plus, otorgado, no comprable), a cualquier edad;
@@ -600,8 +621,9 @@ function buildRouter() {
   // así quien se puso al día en el club sube de nivel solo, sin volver a escribir nada.
   const _revalidacion = new Map();   // socio → última consulta silenciosa (cuida el límite de la API del club)
   r.post("/perfil/validar-socio", auth.requireSocio, wrap(async (req, res) => {
-    const socioFull = await store.getSocioById(req.socio.id);
     const silencioso = req.body?.silencioso === true;
+    if (correoPendiente(req.socio)) { if (silencioso) return res.json({ validado: false, omitido: true }); exigirCorreo(req, "validar tu cédula de socio"); }
+    const socioFull = await store.getSocioById(req.socio.id);
     const cedula = soloDigitos(req.body?.cedula || (silencioso ? socioFull.cedula : ""));
     if (silencioso) {
       if (socioFull.es_socio_olimpia || !cedula) return res.json({ validado: false, omitido: true });
@@ -695,6 +717,7 @@ function buildRouter() {
   // usuario (Junior → Junior, Plus → Plus). La edad solo define el carnet gratis
   // incluido para socios (en /perfil/validar-socio). Cobro anual único.
   r.post("/membresia/unirse", auth.requireSocio, wrap(async (req, res) => {
+    exigirCorreo(req, "comprar una membresía");
     const tier = tierBySlug(req.body?.tier);
     if (!tier) throw httpError(400, "Nivel inválido");
 
@@ -2263,6 +2286,7 @@ function buildRouter() {
     });
   }));
   r.post("/subastas/:id/pujar", auth.requireSocio, wrap(async (req, res) => {
+    exigirCorreo(req, "pujar");
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     const membresia = await store.getMembresia(req.socio.id);
@@ -2333,6 +2357,7 @@ function buildRouter() {
     return { pago };
   }
   r.post("/subastas/:id/pagar", auth.requireSocio, wrap(async (req, res) => {
+    exigirCorreo(req, "pagar un lote");
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado !== "cerrada" || (s.adjudicado_a || s.ganador_id) !== req.socio.id) throw httpError(403, "Este lote no está adjudicado a vos");
