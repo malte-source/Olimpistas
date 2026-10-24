@@ -2013,7 +2013,8 @@
       // La librería del QR se carga diferida: si todavía no está, se reintenta enseguida en vez de dejar el cuadro en blanco.
       if (!src) { _qrVence = Date.now() + 700; return; }
       img.src = src;
-      document.getElementById("qrBenCod").textContent = d.codigo;
+      // Para dictar en caja si falla la cámara: código de socio + los 6 dígitos que cambian cada minuto.
+      document.getElementById("qrBenCod").textContent = (d.ref ? String(d.ref).toUpperCase() + " " : "") + String(d.codigo).slice(0, 3) + " " + String(d.codigo).slice(3);
       _qrVence = Date.now() + d.vence_en * 1000;
       const v = document.getElementById("qrBenVel"); if (v) v.hidden = true;
     } catch (e) {

@@ -121,8 +121,9 @@ test("comercio en caja: usa el mismo criterio escalonado que ve el hincha (un So
   const hc = { "x-comercio-token": login.token };
   const ben = await store.crearBeneficio({ comercio_id: c.id, titulo: "10% Plus", valor: "10%", pct: 10, niveles: "premium", activo: true, estado: "aprobado" });
   const socio = await hincha("socio"), plus = await hincha("premium"), libre = await hincha();
-  const codigo = async (s) => (await store.getSocioById(s.id)).ref_codigo;
-  const validar = async (s) => (await api("/comercio/validar", { metodo: "POST", h: hc, cuerpo: { codigo: await codigo(s), beneficioId: ben.id, monto: 50000 } })).json();
+  const carnetLib = require("../lib/carnet");
+  const qrDe = async (s) => carnetLib.generarToken(s.id, await store.asegurarCarnetSecreto(s.id)).token;
+  const validar = async (s) => (await api("/comercio/validar", { metodo: "POST", h: hc, cuerpo: { token: await qrDe(s), beneficioId: ben.id, monto: 50000 } })).json();
   assert.strictEqual((await validar(libre)).motivo, "nivel_no_aplica");
   assert.strictEqual((await validar(plus)).ok, true);
   const rs = await validar(socio);
