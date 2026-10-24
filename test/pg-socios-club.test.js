@@ -120,6 +120,28 @@ test("agregados de los tableros (ingresos, altas, canjes, nivel Socio, peñas): 
   assert.deepStrictEqual(await caso(mem, "mem"), esperado, "memoria");
 });
 
+test("anular un canje: se borra, vuelve el cupo y queda el registro; el plazo y el dueño se respetan (Postgres = memoria)", opts, async () => {
+  async function caso(store, tag) {
+    const s = await store.createSocio({ email: `an-${tag}@ejemplo.com`, passwordHash: "x", nombre: "A" });
+    const co = await store.crearComercio({ nombre: "An " + tag, ciudad: "Asunción", contacto: "a@ejemplo.com" }), otro = await store.crearComercio({ nombre: "Otro " + tag, ciudad: "Asunción", contacto: "o@ejemplo.com" });
+    const b = await store.crearBeneficio({ comercio_id: co.id, titulo: "An", valor: "10%", pct: 10, niveles: "todos", estado: "aprobado", activo: true });
+    await store.updateBeneficio(b.id, { stock: 3 });
+    const r = await store.canjearBeneficio({ beneficioId: b.id, socioId: s.id, comercioId: co.id, validadoPor: "t", monto: 100000, ahorro: 10000, tierSlug: "olimpista" });
+    const stock1 = (await store.getBeneficio(b.id)).stock;
+    const desde = new Date(Date.now() - 60000).toISOString(), hasta = new Date(Date.now() + 60000).toISOString();
+    const antesAnulados = await store.contarCanjesAnulados({ desde, hasta });
+    const ajeno = await store.anularCanje({ canjeId: r.canje.id, comercioId: otro.id, motivo: "x", por: "t" });
+    await new Promise((x) => setTimeout(x, 30));
+    const tarde = await store.anularCanje({ canjeId: r.canje.id, comercioId: co.id, motivo: "x", por: "t", ventanaMin: 0.0001 });
+    const ok = await store.anularCanje({ canjeId: r.canje.id, comercioId: co.id, motivo: "monto mal", por: "t", ventanaMin: 30 });
+    const otraVez = await store.anularCanje({ canjeId: r.canje.id, comercioId: co.id, motivo: "x", por: "t" });
+    return { stock1, ajeno: ajeno.motivo, tarde: tarde.motivo, ok: ok.ok, otraVez: otraVez.motivo, stock2: (await store.getBeneficio(b.id)).stock, ahorro: (await store.resumenAhorroSocio(s.id)).total, anulados: (await store.contarCanjesAnulados({ desde, hasta })) - antesAnulados };
+  }
+  const esperado = { stock1: 2, ajeno: "no_existe", tarde: "fuera_de_plazo", ok: true, otraVez: "no_existe", stock2: 3, ahorro: 0, anulados: 1 };
+  assert.deepStrictEqual(await caso(pg, "pg"), esperado, "Postgres");
+  assert.deepStrictEqual(await caso(mem, "mem"), esperado, "memoria");
+});
+
 test("las cédulas con puntos o guiones también cruzan con la base del club (Postgres = memoria)", opts, async () => {
   async function caso(store) {
     const s = await store.createSocio({ email: "ced-puntos@ejemplo.com", passwordHash: "x", nombre: "P", cedula: "7.000.001" });

@@ -40,7 +40,7 @@ test("/comercio/hoy: totales del día y últimos canjes con el nombre y la inici
   assert.strictEqual(hoy.ultimos.length, 2);
   assert.strictEqual(hoy.ultimos[0].socio, "Marta G.");
   assert.match(hoy.ultimos[0].hora, /^\d{2}:\d{2}$/);
-  assert.deepStrictEqual(Object.keys(hoy.ultimos[0]).sort(), ["ahorro", "beneficio", "hora", "monto", "socio"]);
+  assert.deepStrictEqual(Object.keys(hoy.ultimos[0]).sort(), ["ahorro", "anulable", "beneficio", "hora", "id", "monto", "socio"], "solo datos del canje: el 'id' es del canje (para anularlo) y 'anulable' dice si está dentro del plazo");
   assert.ok(!JSON.stringify(hoy).includes("ejemplo.com") && !JSON.stringify(hoy).includes("Pérez"), "ni correo ni apellido completo");
   assert.strictEqual((await api("/comercio/hoy")).status, 401);
   // lo de otro comercio no se mezcla
@@ -54,7 +54,7 @@ test("la página del comercio: caja grande, pestañas, resultado a pantalla comp
   const c = leer("comercio.html");
   for (const id of ['id="vValidar"', 'id="vMi"', 'id="vAyuda"', 'id="tabs"', 'id="resOv"', 'id="hoyKpis"', 'id="ultimos"', 'id="pasoMonto"', 'class="com-mas"', "com-escanear"]) assert.ok(c.includes(id), id);
   assert.match(c, /function mostrarResultado\(ok, d\)/);
-  assert.match(c, /function cargarHoy\(\)|async function cargarHoy\(\)/);
+  assert.match(c, /async function cargarHoy\(fecha\)/);
   assert.match(c, /\/comercio\/hoy/);
   assert.match(c, /grid-template-columns: minmax\(380px, 460px\) minmax\(0, 1fr\)/);
   assert.match(c, /\.com-tabs \{ display: none !important; \}/);

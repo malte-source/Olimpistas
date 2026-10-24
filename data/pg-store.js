@@ -563,6 +563,24 @@ function createPgStore({ databaseUrl, debug }) {
         return { ok: true, canje: c, stock: b.stock === null ? null : b.stock - 1 };
       });
     },
+    // Anular un canje mal cargado: queda el registro (canjes_anulados) y se borra el canje, así el ahorro, los rankings y los reportes salen bien sin tocar cada consulta;
+    // el cupo vuelve. `ventanaMin` limita cuánto después puede anularlo el comercio (el club anula sin límite).
+    async anularCanje({ canjeId, comercioId, motivo, por, ventanaMin }) {
+      return sql.begin(async (tx) => {
+        const [c] = await tx`SELECT * FROM canjes WHERE id = ${canjeId} FOR UPDATE`;
+        if (!c || (comercioId && c.comercio_id !== comercioId)) return { ok: false, motivo: "no_existe" };
+        if (ventanaMin && Date.now() - new Date(c.creado).getTime() > ventanaMin * 60000) return { ok: false, motivo: "fuera_de_plazo" };
+        await tx`INSERT INTO canjes_anulados (canje_id, beneficio_id, socio_id, comercio_id, monto, ahorro, tier_slug, creado_canje, motivo, por)
+          VALUES (${c.id}, ${c.beneficio_id}, ${c.socio_id}, ${c.comercio_id}, ${c.monto}, ${c.ahorro}, ${c.tier_slug || null}, ${c.creado}, ${String(motivo || "").slice(0, 200)}, ${String(por || "").slice(0, 80)})`;
+        await tx`DELETE FROM canjes WHERE id = ${canjeId}`;
+        if (c.beneficio_id) await tx`UPDATE beneficios SET stock = stock + 1 WHERE id = ${c.beneficio_id} AND stock IS NOT NULL`;
+        return { ok: true, canje: c };
+      });
+    },
+    async contarCanjesAnulados({ desde, hasta }) {
+      const [r] = await sql`SELECT COUNT(*)::int AS n FROM canjes_anulados WHERE anulado_en >= ${desde} AND anulado_en < ${hasta}`;
+      return r.n;
+    },
     // Ofertas que carga el comercio: nacen en BORRADOR (esperan al club) y con origen "comercio".
     async crearBeneficioComercio({ comercioId, titulo, descripcion, valor, niveles, pct, ahorro_estimado, stock, vigencia_hasta }) {
       const [b] = await sql`INSERT INTO beneficios (id, comercio_id, titulo, descripcion, valor, niveles, pct, ahorro_estimado, stock, vigencia_hasta, activo, estado, origen)
@@ -592,7 +610,7 @@ function createPgStore({ databaseUrl, debug }) {
       return { canjes: t.canjes, ahorro: Number(t.ahorro), ventas: Number(t.ventas), ticket_promedio: t.con_monto ? Math.round(Number(t.ventas) / t.con_monto) : 0, mix: mix.map((m) => ({ nivel: m.nivel, canjes: m.canjes })) };
     },
     async canjesDeComercio({ comercioId, desde, hasta, limit = 5000 }) {
-      return sql`SELECT c.creado, b.titulo AS beneficio, COALESCE(c.tier_slug, '') AS nivel, c.monto, c.ahorro, s.nombre AS socio_nombre, s.apellido AS socio_apellido
+      return sql`SELECT c.id, c.creado, b.titulo AS beneficio, COALESCE(c.tier_slug, '') AS nivel, c.monto, c.ahorro, s.nombre AS socio_nombre, s.apellido AS socio_apellido
         FROM canjes c LEFT JOIN beneficios b ON b.id = c.beneficio_id LEFT JOIN socios s ON s.id = c.socio_id
         WHERE c.comercio_id = ${comercioId} AND c.creado >= ${desde} AND c.creado < ${hasta} ORDER BY c.creado DESC LIMIT ${limit}`;
     },
