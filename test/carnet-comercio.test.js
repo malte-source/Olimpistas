@@ -199,12 +199,29 @@ test("un QR no sirve para la oferta de OTRO comercio ni para una pausada", async
   assert.strictEqual((await validar(c1, { token: t.token, beneficioId: pausada.id })).motivo, "beneficio_invalido");
 });
 
-test("el código fijo del socio sigue funcionando (y registra su nivel)", async () => {
+test("sin cámara: código de socio + los 6 dígitos que rotan funciona (y registra su nivel); el código de socio solo ya no alcanza", async () => {
   const c = await comercio(), A = await socio("Fijo"), b = await beneficio(c);
-  const codigo = (await store.getSocioById(A.id)).ref_codigo;
-  const r = await validar(c, { codigo, beneficioId: b.id, monto: 20000 });
+  const ref = (await store.getSocioById(A.id)).ref_codigo, t = await qr(A);
+  const r = await validar(c, { codigo: `${ref.toUpperCase()} ${t.codigo.slice(0, 3)} ${t.codigo.slice(3)}`, beneficioId: b.id, monto: 20000 });
   assert.deepStrictEqual({ ok: r.ok, via: r.via, ahorro: r.ahorro }, { ok: true, via: "codigo", ahorro: 2000 });
-  assert.strictEqual((await validar(c, { codigo: "no-existe", beneficioId: b.id })).motivo, "socio_no_encontrado");
+  const solo = await validar(c, { codigo: ref, beneficioId: b.id, monto: 20000 });
+  assert.deepStrictEqual({ ok: solo.ok, motivo: solo.motivo }, { ok: false, motivo: "codigo_incompleto" });
+});
+
+test("el código de caja rota: uno ajeno, equivocado, vencido o ya usado se rechaza, sin revelar si el socio existe", async () => {
+  const c = await comercio(), A = await socio("Rota"), B = await socio("Rota2"), b = await beneficio(c);
+  const refA = (await store.getSocioById(A.id)).ref_codigo, tA = await qr(A), tB = await qr(B);
+  const motivo = async (codigo) => (await validar(c, { codigo, beneficioId: b.id, monto: 1000 })).motivo;
+  assert.strictEqual(await motivo(`${refA} ${tB.codigo}`), "codigo_invalido", "los 6 dígitos de otro socio no valen");
+  assert.strictEqual(await motivo(`${refA} 000000`), "codigo_invalido", "dígitos al azar");
+  assert.strictEqual(await motivo(`noexiste ${tA.codigo}`), "codigo_invalido", "socio inexistente: mismo motivo que un código malo");
+  const viejo = carnet.generarToken(A.id, await store.getCarnetSecreto(A.id), Date.now() - 5 * 60000);
+  assert.strictEqual(await motivo(`${refA} ${viejo.codigo}`), "codigo_invalido", "el de hace 5 minutos ya no sirve");
+  const ok = await validar(c, { codigo: `${refA} ${tA.codigo}`, beneficioId: b.id, monto: 1000 });
+  assert.strictEqual(ok.ok, true);
+  assert.strictEqual(await motivo(`${refA} ${tA.codigo}`), "qr_usado", "el mismo código no se usa dos veces en la misma ventana");
+  assert.strictEqual(await motivo(`${refA}${tA.codigo}`), "codigo_incompleto", "sin separador no es un formato válido");
+  assert.deepStrictEqual(carnet.verificarCodigo(A.id, null, tA.codigo), { ok: false }, "sin secreto no hay código válido");
 });
 
 test("validar exige sesión de comercio", async () => {
@@ -374,4 +391,14 @@ test("reporte para sponsors (admin): por comercio, ciudad y nivel; exige permiso
   const premium = filas.find((l) => l.includes("premium"));
   assert.ok(premium.includes("\"2\",\"15000\",\"150000\""), premium);
   assert.strictEqual((await admin("/comercios/estadisticas.csv?desde=2026-02-31")).status, 400);
+});
+
+test("el carnet muestra en vivo 'código de socio + 6 dígitos' para dictar en caja, y sin conexión avisa que hace falta conectarse", async () => {
+  const A = await socio("Pie");
+  const d = await (await api("/carnet/token", { h: A.h })).json();
+  assert.strictEqual(d.ref, (await store.getSocioById(A.id)).ref_codigo, "el carnet recibe el código de socio junto con el token");
+  const fs = require("fs"), path = require("path");
+  const j = fs.readFileSync(path.join(__dirname, "..", "public", "js", "socio.js"), "utf8"), i = fs.readFileSync(path.join(__dirname, "..", "public", "js", "i18n.js"), "utf8");
+  assert.ok(/qrBenCod"\)\.textContent = \(d\.ref/.test(j));
+  assert.ok(!/dictá este código\./.test(i) && /necesitás conexión/.test(i), "el aviso sin conexión ya no promete que alcanza con dictar el código fijo");
 });

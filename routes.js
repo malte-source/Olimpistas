@@ -3649,8 +3649,15 @@ function buildRouter() {
       if (!v.ok) return res.json({ ok: false, motivo: v.motivo === "vencido" ? "qr_vencido" : "qr_invalido" });
       socio = await store.getSocioById(v.socioId); ventana = v.ventana; via = "qr";
     } else {
-      const codigo = String(req.body?.codigo || "").trim().toLowerCase();
-      socio = codigo && store.getSocioByRefCodigo ? await store.getSocioByRefCodigo(codigo) : null;
+      // Sin cámara: "<código de socio> <6 dígitos>" (los 6 dígitos rotan cada minuto y se ven junto al QR). El código de socio solo no alcanza:
+      // es el de su link de invitación y lo conoce cualquiera que lo haya recibido.
+      const m = /^([a-z0-9]{4,32})[\s\-._:]+(\d{3}[\s\-]?\d{3})$/i.exec(String(req.body?.codigo || "").trim());
+      if (!m) return res.json({ ok: false, motivo: "codigo_incompleto" });
+      const cand = store.getSocioByRefCodigo ? await store.getSocioByRefCodigo(m[1].toLowerCase()) : null;
+      const secreto = cand ? await store.getCarnetSecreto(cand.id) : null;
+      const v = cand ? carnetLib.verificarCodigo(cand.id, secreto, m[2].replace(/[\s\-]/g, "")) : { ok: false };
+      if (!v.ok) return res.json({ ok: false, motivo: "codigo_invalido" });   // mismo motivo si el socio no existe o el código está mal: no se puede adivinar socios
+      socio = cand; ventana = v.ventana;
     }
     if (!socio) return res.json({ ok: false, motivo: "socio_no_encontrado" });
     const ben = store.getBeneficio ? await store.getBeneficio(req.body?.beneficioId) : null;
@@ -3674,7 +3681,7 @@ function buildRouter() {
     if (!secreto) throw httpError(404, "Cuenta no encontrada");
     const t = carnetLib.generarToken(req.socio.id, secreto);
     res.setHeader("Cache-Control", "no-store");
-    res.json({ token: t.token, codigo: t.codigo, vence_en: t.vence_en, ventana_s: carnetLib.VENTANA_S });
+    res.json({ token: t.token, codigo: t.codigo, ref: req.socio.ref_codigo || "", vence_en: t.vence_en, ventana_s: carnetLib.VENTANA_S });
   }));
 
 

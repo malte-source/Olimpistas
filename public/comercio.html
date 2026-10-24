@@ -300,8 +300,8 @@
 
             <details class="com-mas">
               <summary>¿No se puede escanear? Ingresá el código</summary>
-              <label class="com-lbl" for="codigo">Código del socio o texto del QR</label>
-              <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5" autocapitalize="characters" autocomplete="off" />
+              <label class="com-lbl" for="codigo">Texto del QR, o código del socio + 6 dígitos</label>
+              <input id="codigo" class="cod" placeholder="Ej. A1B2C3D4E5 482 913" autocapitalize="characters" autocomplete="off" />
               <label class="com-lbl" for="monto">Monto de la compra (opcional)</label>
               <input id="monto" type="number" inputmode="numeric" placeholder="₲ 0" />
               <button class="btn btn-ghost btn-block" id="validarBtn">Validar canje</button>
@@ -573,7 +573,9 @@
     var MOTIVOS = {socio_no_encontrado:"No encontramos ese código de socio.", beneficio_invalido:"Beneficio inválido o no publicado.",
       limite:"Ya usó este beneficio hace poco (límite).", nivel_no_aplica:"Su nivel no incluye este beneficio.", agotado:"Se agotó el cupo de este beneficio.",
       qr_vencido:"El QR venció. Pedile que espere a que cambie y lo muestre de nuevo.", qr_invalido:"QR no válido. Pedile que abra el carnet en la app.",
-      qr_usado:"Ese QR ya se usó. Pedile que espere al siguiente (cambia cada minuto)."};
+      qr_usado:"Ese QR o código ya se usó. Pedile que espere al siguiente (cambia cada minuto).",
+      codigo_incompleto:"Falta el código de 6 dígitos que se ve junto al QR en su carnet. Dictá el código de socio y esos 6 dígitos (ej. A1B2C3D4E5 482 913).",
+      codigo_invalido:"Código incorrecto o vencido. Pedile que mire su carnet: el de 6 dígitos cambia cada minuto."};
     function quien(s){ var n = String(s.nombre||"?"); return '<div class="com-who"><span class="com-av">'+esc(n.trim().charAt(0).toUpperCase())+'</span><b>'+esc(n)+'</b><span class="com-badge">'+(LBL[s.tier]||esc(s.tier))+'</span></div>'; }
     async function validar(valor){
       $("valErr").textContent = ""; $("res").innerHTML = "";
