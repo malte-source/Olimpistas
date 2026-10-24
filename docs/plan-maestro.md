@@ -61,7 +61,7 @@ Cruces que hoy **no se pueden hacer**, y qué los habilita:
 - **Un socio pausado por mora se ve como un no socio:** le dice "Asociate en el portal", el mismo texto que al visitante. Falta que la pantalla le hable como a alguien que **ya es socio y debe regularizar**. Tampoco hay aviso al volver al nivel.
 - **Una pieza única de "estado de tu cuenta" no existe:** hoy son banners excluyentes (correo, subasta por pagar, mora) y no hay una página "Mi membresía".
 - **Carnet sin red:** abrir la app en frío sin conexión corta con "No pudimos abrir tu cuenta"; el respaldo existe pero nunca se alcanza, y el service worker devuelve la landing.
-- **Visitante:** no ve ni un comercio real hasta registrarse; el aspiracional vive adentro de la app.
+- **Visitante:** la landing es la puerta de la **comunidad**, no un lugar para vender socios (decisión del usuario, 2026-10-24): no muestra comercios ni ofertas. Lo aspiracional vive adentro de la app, con sesión.
 - **Junior y padres:** no existe ninguna pantalla para ellos (tutor, consentimiento, regalo de cumpleaños, migración al cumplir años).
 - **Léxico:** hincha, olimpista, miembro y socio se mezclan; los nombres de nivel están duplicados tres veces en el código; "Member since" aparece dos veces en inglés; el banner de invitación dice "Plus" donde la tarjeta dice "Socio".
 - **Accesibilidad:** elementos clicables que no son botones ni enlaces, etiquetas de formulario sin asociar, estado de la puja sin anuncio para lectores de pantalla, el detalle de la subasta se redibuja cada 3,5 s y pierde el foco.
@@ -140,7 +140,7 @@ Cada ola es entregable por sí sola, se prueba en staging y pasa a producción c
 | # | Qué |
 |---|---|
 | E1 | **Carnet sin red de verdad:** si falla la sesión abrir el carnet guardado, el service worker sirve `/miembro`, con fecha de guardado y el código que acepta el comercio |
-| E2 | **Visitante:** seis comercios reales con logo y descuento en la landing; ver beneficios sin sesión |
+| E2 | ~~Visitante: comercios reales en la landing~~ **Descartado** (la landing no vende socios; lo aspiracional va adentro, con sesión) |
 | E3 | **Socio al día:** mostrar el valor del estatus ("ahorraste ₲ X siendo socio"); **"Mis canjes"** y estado de entrega de premios |
 | E4 | **Navegación:** reemplazar "Partidos" (vacío) por Descubrir o Mi peña; subir Perfil a un lugar visible |
 | E5 | **Cuenta Junior y de padres:** tutor, consentimiento, regalo de cumpleaños, migración al cumplir años |
