@@ -3731,8 +3731,9 @@ function buildRouter() {
   }));
 
   // Lo de hoy en la caja (día calendario de Paraguay): totales y los últimos canjes. Del hincha solo se ve el nombre y la inicial del apellido.
-  r.get("/comercio/hoy", requireComercio, wrap(async (req, res) => {
-    const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  // Un día de canjes del comercio (hoy o el que pida): resumen y lista, con lo necesario para anular uno mal cargado dentro de los 30 minutos.
+  const VENTANA_ANULAR_MIN = 30;
+  async function diaDeComercio(req, res, hoy) {
     const p = periodo({ desde: hoy, hasta: hoy });
     const filas = await store.canjesDeComercio({ comercioId: req.comercio.id, desde: p.desde, hasta: p.hasta, limit: 500 });
     const quien = (f) => {
@@ -3742,8 +3743,38 @@ function buildRouter() {
     const suma = (k) => filas.reduce((t, f) => t + (Number(f[k]) || 0), 0);
     res.json({
       fecha: hoy, canjes: filas.length, ahorro: suma("ahorro"), ventas: suma("monto"),
-      ultimos: filas.slice(0, 15).map((f) => ({ hora: new Date(f.creado).toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Asuncion" }), socio: quien(f), beneficio: f.beneficio || "", monto: f.monto != null ? Number(f.monto) : null, ahorro: f.ahorro != null ? Number(f.ahorro) : null })),
+      ultimos: filas.slice(0, hoy === hoyPy2() ? 15 : 200).map((f) => ({ id: f.id, hora: new Date(f.creado).toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Asuncion" }), socio: quien(f), beneficio: f.beneficio || "", monto: f.monto != null ? Number(f.monto) : null, ahorro: f.ahorro != null ? Number(f.ahorro) : null,
+        anulable: !req.soloLectura && Date.now() - new Date(f.creado).getTime() <= VENTANA_ANULAR_MIN * 60000 })),
+      ventana_anular_min: VENTANA_ANULAR_MIN,
     });
+  }
+  const hoyPy2 = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  r.get("/comercio/hoy", requireComercio, wrap((req, res) => diaDeComercio(req, res, hoyPy2())));
+  // Otro día (AAAA-MM-DD, hasta 90 días atrás): para revisar y para el cierre de caja.
+  r.get("/comercio/dia", requireComercio, wrap(async (req, res) => {
+    const f = String(req.query.fecha || "");
+    const t = /^\d{4}-\d{2}-\d{2}$/.test(f) ? Date.parse(f + "T12:00:00Z") : NaN;
+    if (!Number.isFinite(t) || new Date(t).toISOString().slice(0, 10) !== f || f > hoyPy2() || Date.now() - t > 90 * 86400000) throw httpError(400, "Elegí una fecha de los últimos 90 días (AAAA-MM-DD)");
+    return diaDeComercio(req, res, f);
+  }));
+  // Anular un canje mal cargado (monto equivocado, beneficio que no era): el comercio puede hasta 30 minutos después y con un motivo; pasado ese plazo lo resuelve el club.
+  // El canje se borra del ahorro y de los reportes (queda el registro con quién y por qué) y el cupo vuelve.
+  r.post("/comercio/canjes/:id/anular", requireComercio, noLectura, wrap(async (req, res) => {
+    const motivo = String(req.body?.motivo || "").replace(/[<>]/g, "").trim().slice(0, 200);
+    if (motivo.length < 3) throw httpError(400, "Contanos por qué se anula (mínimo 3 caracteres)");
+    const out = await store.anularCanje({ canjeId: String(req.params.id), comercioId: req.comercio.id, motivo, por: req.comercio.nombre, ventanaMin: VENTANA_ANULAR_MIN });
+    if (!out.ok) throw httpError(out.motivo === "fuera_de_plazo" ? 409 : 404, out.motivo === "fuera_de_plazo" ? "Pasaron más de " + VENTANA_ANULAR_MIN + " minutos: escribile al club para anularlo." : "No encontramos ese canje.");
+    alertar("canje:anulado:" + out.canje.id, "Un comercio anuló un canje", [req.comercio.nombre, motivo].join(" · "));
+    res.json({ ok: true });
+  }));
+  // El club anula un canje sin límite de tiempo (corrección posterior, reclamo del socio o del comercio).
+  r.post("/admin/canjes/:id/anular", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
+    const motivo = String(req.body?.motivo || "").replace(/[<>]/g, "").trim().slice(0, 200);
+    if (motivo.length < 3) throw httpError(400, "Escribí el motivo (mínimo 3 caracteres)");
+    const out = await store.anularCanje({ canjeId: String(req.params.id), motivo, por: "club:" + (req.adminUser || "admin") });
+    if (!out.ok) throw httpError(404, "Canje no encontrado");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "anular_canje", targetId: out.canje.id, detalle: motivo, por: req.adminUser });
+    res.json({ ok: true });
   }));
 
   // Validar un canje en caja: QR del carnet (rota cada 60 s) o código fijo del socio, + beneficio + monto.

@@ -400,6 +400,18 @@ function createMemoryStore({ filePath = null } = {}) {
       (db.canjes = db.canjes || []).push(c); persist();
       return { ok: true, canje: c, stock: stock === null ? null : stock - 1 };
     },
+    async anularCanje({ canjeId, comercioId, motivo, por, ventanaMin }) {
+      const i = (db.canjes || []).findIndex((c) => c.id === canjeId);
+      if (i < 0) return { ok: false, motivo: "no_existe" };
+      const c = db.canjes[i];
+      if (comercioId && c.comercio_id !== comercioId) return { ok: false, motivo: "no_existe" };
+      if (ventanaMin && Date.now() - new Date(c.creado).getTime() > ventanaMin * 60000) return { ok: false, motivo: "fuera_de_plazo" };
+      (db.canjes_anulados = db.canjes_anulados || []).push({ canje_id: c.id, beneficio_id: c.beneficio_id, socio_id: c.socio_id, comercio_id: c.comercio_id, monto: c.monto, ahorro: c.ahorro, tier_slug: c.tier_slug || null, creado_canje: c.creado, anulado_en: nowIso(), motivo: String(motivo || "").slice(0, 200), por: String(por || "").slice(0, 80) });
+      db.canjes.splice(i, 1);
+      const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id); if (b && b.stock != null) b.stock += 1;
+      persist(); return { ok: true, canje: c };
+    },
+    async contarCanjesAnulados({ desde, hasta }) { return (db.canjes_anulados || []).filter((a) => a.anulado_en >= desde && a.anulado_en < hasta).length; },
     async crearBeneficioComercio({ comercioId, titulo, descripcion, valor, niveles, pct, ahorro_estimado, stock, vigencia_hasta }) {
       const b = { id: uid("ben"), comercio_id: comercioId, titulo, descripcion: descripcion || "", tipo: "descuento", valor: valor || "", niveles: niveles || "todos",
         pct: pct == null ? null : pct, ahorro_estimado: ahorro_estimado == null ? null : ahorro_estimado, vigencia_desde: null, vigencia_hasta: vigencia_hasta || null,
@@ -432,7 +444,7 @@ function createMemoryStore({ filePath = null } = {}) {
       const d = new Date(desde).getTime(), h = new Date(hasta).getTime();
       return (db.canjes || []).filter((c) => c.comercio_id === comercioId && new Date(c.creado).getTime() >= d && new Date(c.creado).getTime() < h)
         .sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)
-        .map((c) => { const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}, s = (db.socios || []).find((x) => x.id === c.socio_id) || {}; return { creado: c.creado, beneficio: b.titulo || null, nivel: c.tier_slug || "", monto: c.monto, ahorro: c.ahorro, socio_nombre: s.nombre || "", socio_apellido: s.apellido || "" }; });
+        .map((c) => { const b = (db.beneficios || []).find((x) => x.id === c.beneficio_id) || {}, s = (db.socios || []).find((x) => x.id === c.socio_id) || {}; return { id: c.id, creado: c.creado, beneficio: b.titulo || null, nivel: c.tier_slug || "", monto: c.monto, ahorro: c.ahorro, socio_nombre: s.nombre || "", socio_apellido: s.apellido || "" }; });
     },
     async estadisticasPorComercio({ desde, hasta }) {
       const d = new Date(desde).getTime(), h = new Date(hasta).getTime(), por = new Map();

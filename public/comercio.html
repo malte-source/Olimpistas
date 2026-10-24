@@ -119,6 +119,9 @@
     .com-ult-h { font-size: var(--t-13); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
     .com-ult-tx b { display: block; font-size: var(--t-15); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .com-ult-tx small { font-size: var(--t-13); color: var(--text-secondary); }
+    .com-anular { margin-top: 4px; min-height: 32px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--t-12); font-weight: 600; cursor: pointer; }
+    .com-anular:hover { color: var(--text-error); border-color: var(--text-error); }
+    .com-anular:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
     .com-ult-ah { font-size: var(--t-13); font-weight: 700; font-variant-numeric: tabular-nums; }
 
     /* Resultado del canje: se lee de un vistazo desde la caja. */
@@ -309,7 +312,12 @@
             <div id="res" class="sr-solo" aria-live="polite"></div>
           </div>
 
-          <div class="com-h">Hoy</div>
+          <div class="com-h" id="diaTit">Hoy</div>
+          <div class="row-actions" style="gap:8px;align-items:center;margin:0 0 8px;flex-wrap:wrap">
+            <label class="com-lbl" for="diaSel" style="margin:0">Ver otro día</label>
+            <input id="diaSel" type="date" style="width:auto" />
+            <button type="button" class="btn btn-sm btn-ghost" id="diaHoy">Volver a hoy</button>
+          </div>
           <div class="com-hoy" id="hoyKpis"></div>
           <div class="com-card com-ult"><div id="ultimos"><p class="com-muted">Cargando…</p></div></div>
         </section>
@@ -535,14 +543,45 @@
     document.addEventListener("keydown", function(e){ if(e.key === "Escape" && !$("resOv").classList.contains("hide")) cerrarResultado(); });
 
     // Lo de hoy: totales y últimos canjes (así el cajero comprueba que quedó registrado).
-    async function cargarHoy(){
+    // Anular un canje mal cargado: pide el motivo en una hoja (no un diálogo del sistema) y lo anula si pasaron menos de 30 minutos.
+    function pedirMotivoAnular(desc){
+      return new Promise(function(resolve){
+        var prev = document.activeElement, bg = document.createElement("div");
+        bg.className = "oli-modal-bg";
+        bg.innerHTML = '<div class="oli-modal" role="dialog" aria-modal="true" aria-labelledby="anTit"><h3 id="anTit">Anular este canje</h3><p class="muted" style="margin:6px 0 10px">'+esc(desc)+'. Se saca del ahorro del socio y de tus reportes, y el cupo vuelve. Solo se puede hasta 30 minutos después.</p><label class="com-lbl" for="anMotivo">¿Por qué se anula?</label><input id="anMotivo" maxlength="200" autocomplete="off" placeholder="Ej. el monto estaba mal" /><div class="com-msg" id="anErr" role="alert"></div><button class="btn btn-block" id="anOk">Anular el canje</button><button class="btn btn-ghost btn-block" id="anNo" style="margin-top:8px">No anular</button></div>';
+        function cerrar(v){ document.removeEventListener("keydown", tecla, true); bg.remove(); if(prev && prev.focus) prev.focus(); resolve(v); }
+        function tecla(e){ if(e.key === "Escape"){ e.preventDefault(); cerrar(null); } }
+        bg.addEventListener("click", function(e){ if(e.target === bg) cerrar(null); });
+        bg.querySelector("#anNo").addEventListener("click", function(){ cerrar(null); });
+        bg.querySelector("#anOk").addEventListener("click", function(){
+          var m = bg.querySelector("#anMotivo").value.trim();
+          if(m.length < 3){ bg.querySelector("#anErr").textContent = "Contanos por qué en pocas palabras."; return; }
+          cerrar(m);
+        });
+        document.addEventListener("keydown", tecla, true);
+        document.body.appendChild(bg); bg.querySelector("#anMotivo").focus();
+      });
+    }
+    document.addEventListener("click", async function(e){
+      var b = e.target.closest && e.target.closest("[data-anular]"); if(!b) return;
+      var motivo = await pedirMotivoAnular(b.dataset.desc || "");
+      if(!motivo) return;
+      b.disabled = true;
+      try{ await api("/comercio/canjes/" + encodeURIComponent(b.dataset.anular) + "/anular", { method: "POST", body: { motivo: motivo } }); aviso("Canje anulado", "Lo sacamos del ahorro del socio y de tus reportes."); cargarHoy(); }
+      catch(err){ b.disabled = false; aviso("No se pudo anular", err.message); }
+    });
+    var diaActual = "";   // vacío = hoy; si no, la fecha (AAAA-MM-DD) que el comercio eligió mirar
+    async function cargarHoy(fecha){
+      if(typeof fecha === "string") diaActual = fecha;
       try{
-        var h = await api("/comercio/hoy");
+        var h = await api(diaActual ? "/comercio/dia?fecha=" + encodeURIComponent(diaActual) : "/comercio/hoy");
+        $("diaTit").textContent = diaActual ? "Canjes del " + diaActual.split("-").reverse().join("/") : "Hoy";
+        var sel = $("diaSel"); if(sel){ sel.max = h.fecha; sel.min = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10); }
         $("hoyKpis").innerHTML = [["Canjes", h.canjes], ["Ahorro entregado", gs(h.ahorro)], ["Ventas", gs(h.ventas)]]
           .map(function(k){ return '<div class="com-kpi"><b>'+esc(k[1])+'</b><span>'+esc(k[0])+'</span></div>'; }).join("");
         $("ultimos").innerHTML = (h.ultimos || []).length ? h.ultimos.map(function(u){
-          return '<div class="com-ult-fila"><span class="com-ult-h">'+esc(u.hora)+'</span><span class="com-ult-tx"><b>'+esc(u.socio)+'</b><small>'+esc(u.beneficio)+(u.monto ? ' · '+gs(u.monto) : '')+'</small></span><span class="com-ult-ah">'+(u.ahorro ? gs(u.ahorro) : '')+'</span></div>';
-        }).join("") : '<p class="com-muted" style="margin:12px 0">Todavía no hay canjes hoy. Cuando registres el primero, aparece acá.</p>';
+          return '<div class="com-ult-fila"><span class="com-ult-h">'+esc(u.hora)+'</span><span class="com-ult-tx"><b>'+esc(u.socio)+'</b><small>'+esc(u.beneficio)+(u.monto ? ' · '+gs(u.monto) : '')+'</small></span><span class="com-ult-ah">'+(u.ahorro ? gs(u.ahorro) : '')+(u.anulable ? '<br><button type="button" class="com-anular" data-anular="'+esc(u.id)+'" data-desc="'+esc(u.socio+' · '+u.beneficio)+'">Anular</button>' : '')+'</span></div>';
+        }).join("") : '<p class="com-muted" style="margin:12px 0">' + (diaActual ? 'No hubo canjes ese día.' : 'Todavía no hay canjes hoy. Cuando registres el primero, aparece acá.') + '</p>';
       }catch(err){ $("ultimos").innerHTML = '<p class="com-muted" style="margin:12px 0">No se pudo cargar lo de hoy.</p>'; }
     }
 
@@ -868,6 +907,8 @@
       }catch(err){ aviso("No se pudo descargar", err.message); }
     });
 
+    $("diaSel").addEventListener("change", function(){ if(this.value) cargarHoy(this.value); });
+    $("diaHoy").addEventListener("click", function(){ $("diaSel").value = ""; cargarHoy(""); });
     // Recuperar la contraseña: con el usuario (o el correo del comercio) llega un link de un solo uso que vence en 1 hora.
     $("olvide").addEventListener("click", async function(e){
       e.preventDefault();

@@ -403,3 +403,71 @@ test("el carnet muestra en vivo 'código de socio + 6 dígitos' para dictar en c
   assert.ok(/qrBenCod"\)\.textContent = \(d\.ref/.test(j));
   assert.ok(!/dictá este código\./.test(i) && /necesitás conexión/.test(i), "el aviso sin conexión ya no promete que alcanza con dictar el código fijo");
 });
+
+// ── Anular un canje mal cargado ──────────────────────────────────────────────
+const hoyDe = async (c) => (await api("/comercio/hoy", { h: c.h })).json();
+const anular = (c, id, cuerpo) => api(`/comercio/canjes/${id}/anular`, { metodo: "POST", h: c.h, cuerpo });
+const ADM = { "x-admin-key": "clave-admin-de-prueba" };
+
+test("anular un canje: sale del ahorro y de los reportes, el cupo vuelve y queda el rastro (quién y por qué)", async () => {
+  const c = await comercio(), A = await socio("Anula"), b = await beneficio(c);
+  await store.updateBeneficio(b.id, { stock: 5 });
+  const t = await qr(A);
+  assert.strictEqual((await validar(c, { token: t.token, beneficioId: b.id, monto: 100000 })).ok, true);
+  const antes = await hoyDe(c);
+  assert.deepStrictEqual([antes.canjes, antes.ahorro, antes.ventas], [1, 10000, 100000]);
+  assert.ok(antes.ultimos[0].id && antes.ultimos[0].anulable === true, "la fila trae su id y se puede anular");
+  assert.strictEqual((await store.getBeneficio(b.id)).stock, 4);
+  assert.strictEqual((await store.resumenAhorroSocio(A.id)).total, 10000);
+  assert.strictEqual((await anular(c, antes.ultimos[0].id, { motivo: "" })).status, 400, "sin motivo no");
+  assert.strictEqual((await anular(c, antes.ultimos[0].id, { motivo: "El monto estaba mal" })).status, 200);
+  const desp = await hoyDe(c);
+  assert.deepStrictEqual([desp.canjes, desp.ahorro, desp.ventas], [0, 0, 0]);
+  assert.strictEqual((await store.getBeneficio(b.id)).stock, 5, "el cupo vuelve");
+  assert.strictEqual((await store.resumenAhorroSocio(A.id)).total, 0, "el ahorro del socio también");
+  assert.strictEqual(await store.contarCanjesAnulados({ desde: new Date(Date.now() - 60000).toISOString(), hasta: new Date(Date.now() + 60000).toISOString() }) >= 1, true, "queda el registro");
+  assert.strictEqual((await anular(c, antes.ultimos[0].id, { motivo: "otra vez" })).status, 404, "ya no existe: no se anula dos veces");
+});
+
+test("anular: solo el comercio dueño del canje, y solo dentro del plazo; el club anula sin límite", async () => {
+  const c = await comercio(), otro = await comercio("Otro"), A = await socio("Plazo"), b = await beneficio(c);
+  await validar(c, { token: (await qr(A)).token, beneficioId: b.id, monto: 50000 });
+  const id = (await hoyDe(c)).ultimos[0].id;
+  assert.strictEqual((await anular(otro, id, { motivo: "no es mío" })).status, 404, "otro comercio no puede anularlo");
+  assert.strictEqual((await api(`/comercio/canjes/${id}/anular`, { metodo: "POST", cuerpo: { motivo: "sin sesión" } })).status, 401);
+  await new Promise((x) => setTimeout(x, 40));
+  const tarde = await store.anularCanje({ canjeId: id, comercioId: c.id, motivo: "tarde", por: "t", ventanaMin: 0.0001 });
+  assert.deepStrictEqual(tarde, { ok: false, motivo: "fuera_de_plazo" }, "pasado el plazo el comercio no puede");
+  assert.strictEqual((await api(`/admin/canjes/${id}/anular`, { metodo: "POST", h: await comoCd(), cuerpo: { motivo: "la CD solo mira" } })).status, 403, "la CD no puede (solo lectura)");
+  assert.strictEqual((await api(`/admin/canjes/${id}/anular`, { metodo: "POST", h: ADM, cuerpo: { motivo: "x" } })).status, 400, "el motivo es obligatorio");
+  assert.strictEqual((await api(`/admin/canjes/${id}/anular`, { metodo: "POST", h: ADM, cuerpo: { motivo: "Reclamo del socio, el monto era otro" } })).status, 200, "el club anula sin límite de tiempo");
+  assert.strictEqual((await hoyDe(c)).canjes, 0);
+  assert.strictEqual((await api(`/admin/canjes/canje_inventado/anular`, { metodo: "POST", h: ADM, cuerpo: { motivo: "no existe" } })).status, 404);
+});
+async function comoCd() {
+  const adminAuth = require("../lib/admin-auth");
+  try { await adminAuth.crearAdminUsuario({ usuario: "anular-cd", nombre: "cd", password: "clave-de-prueba-1", rol: "cd" }); } catch (e) { /* ya existe */ }
+  return { "x-admin-token": (await adminAuth.loginAdmin({ usuario: "anular-cd", password: "clave-de-prueba-1" })).token };
+}
+
+test("historial por día: pide una fecha de los últimos 90 días y devuelve el mismo formato que 'hoy'", async () => {
+  const c = await comercio();
+  const d = (f) => api("/comercio/dia?fecha=" + f, { h: c.h });
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  assert.strictEqual((await d(hoy)).status, 200);
+  const r = await (await d(hoy)).json();
+  for (const k of ["fecha", "canjes", "ahorro", "ventas", "ultimos", "ventana_anular_min"]) assert.ok(k in r, k);
+  assert.strictEqual(r.fecha, hoy);
+  const ayer = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  assert.strictEqual((await d(ayer)).status, 200);
+  for (const mala of ["2026-02-31", "ayer", "", "2099-01-01", "2001-01-01"]) assert.strictEqual((await d(mala)).status, 400, mala);
+  assert.strictEqual((await api("/comercio/dia?fecha=" + hoy)).status, 401, "sin sesión no");
+});
+
+test("el portal ofrece 'Anular' solo en canjes recientes y pide el motivo en una hoja, no en un diálogo del sistema", () => {
+  const fs = require("fs"), path = require("path");
+  const h = fs.readFileSync(path.join(__dirname, "..", "public", "comercio.html"), "utf8");
+  assert.ok(/data-anular=/.test(h) && /u\.anulable \?/.test(h) && /function pedirMotivoAnular/.test(h) && /\/comercio\/canjes\/" \+ encodeURIComponent\(b\.dataset\.anular\) \+ "\/anular/.test(h));
+  assert.ok(!/\bprompt\(|\bconfirm\(/.test(h), "sin diálogos del sistema");
+  assert.ok(/\.com-anular:focus-visible/.test(h), "con foco visible");
+});
