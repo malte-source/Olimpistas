@@ -59,7 +59,7 @@ test("buscador global: Ctrl/Cmd+K, combobox accesible con foco atrapado, pantall
 test("beneficios en escritorio: el detalle abre en el panel lateral (maestro y detalle) y en el celular sigue la hoja", () => {
   const s = leer("public", "js", "socio.js");
   assert.match(s, /id="bxDetalle"/);
-  assert.match(s, /window\.matchMedia\("\(min-width: 1180px\)"\)\.matches \? view\(\)\.querySelector\("#bxDetalle"\) : null/);
+  assert.match(s, /window\.matchMedia\("\((min-width: 1200px)\)"\)\.matches \? view\(\)\.querySelector\("#bxDetalle"\) : null/);
   assert.match(s, /\(\{ root, close \} = OLI\.modal\(html\)\)/);
   assert.match(s, /setAttribute\("aria-current", "true"\)/);
 });

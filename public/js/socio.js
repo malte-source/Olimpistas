@@ -616,7 +616,7 @@
     const head = document.getElementById("mHead");
     if (!head) return;
     let raf = 0;
-    const quieto = window.matchMedia("(prefers-reduced-motion: reduce)"), escritorio = window.matchMedia("(min-width: 901px)");
+    const quieto = window.matchMedia("(prefers-reduced-motion: reduce)"), escritorio = window.matchMedia("(min-width: 900px)");
     const onScroll = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0;
       // Escritorio: encabezado fijo, sin colapso. Con movimiento reducido: sin interpolación, compacto al pasar de 60 px.
       const c = escritorio.matches ? 0 : quieto.matches ? (window.scrollY > 60 ? 1 : 0) : Math.min(1, Math.max(0, window.scrollY / 120));
@@ -1647,7 +1647,7 @@
       ? '<dl class="bx-dl">' + datos.map((d) => '<div><dt>' + T(d.k) + '</dt><dd>' + esc(d.v) + '</dd></div>').join("") + '</dl>'
       : '<p class="ben-hoja-p">' + (esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))) + '</p>';
     const estado = b.desbloqueado ? '<span class="bx-estado ok">' + T("bx_disponible") + '</span>' : '<span class="bx-estado">' + OLI.ic("candado", 13) + " " + T("bx_solo") + " " + esc(TL[b.nivel_min] || "Plus") + '</span>';
-    const desktopPanel = window.matchMedia("(min-width: 1180px)").matches ? view().querySelector("#bxDetalle") : null;
+    const desktopPanel = window.matchMedia("(min-width: 1200px)").matches ? view().querySelector("#bxDetalle") : null;
     const html = `
       <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
       <div class="bx-hoja-cab">${b.comercio_logo ? '<span class="bx-logo grande"><img src="' + esc(b.comercio_logo) + '" alt=""></span>' : '<span class="bx-logo ini grande" aria-hidden="true">' + esc(String(b.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '</span>'}
