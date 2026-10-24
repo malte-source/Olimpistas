@@ -918,8 +918,8 @@
       var box = $("gerenciaBox"); if (!box) return;
       try {
         var d = await api("/admin/gerencia"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); }, g = function (n) { return "₲ " + nf(n); };
-        var delta = function (p) { if (p.delta_pct == null) return '<span class="muted" style="font-size:12px">sin dato previo</span>'; var up = p.delta_pct >= 0; return '<span class="pill ' + (up ? "pill-ok" : "pill-warn") + '" style="font-size:12px">' + (up ? "▲ " : "▼ ") + Math.abs(p.delta_pct) + " %</span>"; };
-        var card = function (n, l, p) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + (p ? '<br>' + delta(p) + ' <span class="muted" style="font-size:12px">vs. período previo</span>' : '') + '</div></div>'; };
+        var delta = function (p) { if (p.delta_pct == null) return '<span class="muted" style="font-size:12px">todavía sin período previo para comparar</span>'; var up = p.delta_pct >= 0; return '<span class="pill ' + (up ? "pill-ok" : "pill-warn") + '" style="font-size:12px">' + (up ? "▲ " : "▼ ") + Math.abs(p.delta_pct) + ' %</span> <span class="muted" style="font-size:12px">vs. período previo</span>'; };
+        var card = function (n, l, p) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + (p ? '<br>' + delta(p) : '') + '</div></div>'; };
         var c = d.club || {}, mov = c.movimientos_30 || {}, pn = d.penas || {};
         box.innerHTML = '<h2>Gerencia</h2><p class="hint">Los últimos 30 días contra los 30 anteriores (7 contra 7 para lo semanal). Números agregados, sin datos personales.</p>' +
           '<div class="cards">' + card(g(d.ingresos.d30.actual), "Ingresos, 30 días", d.ingresos.d30) + card(g(d.ingresos.d7.actual), "Ingresos, 7 días", d.ingresos.d7) + card(nf(d.altas.d30.actual), "Altas, 30 días", d.altas.d30) + card(nf(d.altas.d7.actual), "Altas, 7 días", d.altas.d7) +
