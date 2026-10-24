@@ -80,7 +80,7 @@ window.OLI_ONB = (function () {
     const btn = document.getElementById("obCrear"); btn.disabled = true;
     try {
       const cedula = (val("obCedula") || "").replace(/\D/g, "");
-      await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena(), idioma: window.OLI_I18N ? window.OLI_I18N.lang() : undefined, ...(cedula.length >= 5 ? { cedula } : {}) } });
+      await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena(), origen: window.OLI.origen(), idioma: window.OLI_I18N ? window.OLI_I18N.lang() : undefined, ...(cedula.length >= 5 ? { cedula } : {}) } });
       window.OLI.track("Registro", "CompleteRegistration");
       irPaso(2);
     } catch (e) { err.textContent = e.message; btn.disabled = false; }

@@ -1,7 +1,7 @@
 "use strict";
 // Validación automática: al día → se activa solo; en mora → se le pide pagar en el portal y se revisa de nuevo (a mano y solo); baja; API caída;
 // el detalle solo se muestra si la cuenta coincide con la persona del club; "Socio desde" siempre definido; perfiles de la campaña.
-const PUERTO_TUTI = 39883;
+const PUERTO_TUTI = 29883;   // fuera del rango de puertos efímeros (32768+): en CI los servidores de prueba toman puertos de ahí y chocaban con este
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";

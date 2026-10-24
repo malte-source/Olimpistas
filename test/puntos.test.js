@@ -1,6 +1,6 @@
 "use strict";
 // Sprint 3 — motor de puntos: reglas, escalones, misión semanal, catálogo de canje, cuota, vencimiento.
-const PUERTO_TUTI = 39874;
+const PUERTO_TUTI = 29874;   // fuera del rango de puertos efímeros (32768+): en CI los servidores de prueba toman puertos de ahí y chocaban con este
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";

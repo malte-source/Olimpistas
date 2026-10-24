@@ -218,7 +218,10 @@
       <!-- HINCHADA -->
       <section id="vHinchada" class="hide" aria-label="Hinchada">
         <div class="pen-card"><h3>Últimas altas por tu link</h3><div id="altas"></div>
-          <p class="pen-muted" style="margin:10px 0 0">Ves el nombre y la inicial del apellido. Los datos personales del listado del club no se comparten con la comisión.</p></div>
+          <p class="pen-muted" style="margin:10px 0 0">Ves el nombre y la inicial del apellido. Los datos personales del listado del club no se comparten con la comisión.</p>
+          <div class="row-actions" style="margin-top:12px"><button type="button" class="btn btn-sm btn-ghost" id="altasCsv">Descargar todas las altas (CSV)</button></div><div class="pen-msg" id="altasCsvErr" role="alert"></div></div>
+        <div class="pen-card"><h3>Altas por mes</h3><div id="altasMes"></div>
+          <p class="pen-muted" style="margin:10px 0 0">Los últimos 12 meses, de quienes se sumaron por el link de la peña.</p></div>
       </section>
 
       <!-- MI PEÑA -->
@@ -346,6 +349,11 @@
       $("altas").innerHTML = d.ultimas_altas.length ? d.ultimas_altas.map(function (a) {
         return '<div class="pen-row"><div>' + esc(a.nombre) + '<small>' + esc(a.ciudad || "") + ' · ' + esc(a.nivel) + '</small></div><span class="pen-muted">' + esc(fecha(a.creado)) + '</span></div>';
       }).join("") : '<p class="pen-muted" style="padding:6px 0;margin:0">Todavía no se sumó nadie por el link. Compartilo para empezar.</p>';
+      var mm = d.altas_por_mes || [], mx = Math.max.apply(null, mm.map(function (x) { return x.n; }).concat([1])), MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+      $("altasMes").innerHTML = mm.some(function (x) { return x.n; }) ? mm.map(function (x) {
+        var p = x.mes.split("-");
+        return '<div class="pen-row" style="align-items:center;gap:10px"><span style="width:62px;flex:none">' + MES[Number(p[1]) - 1] + ' ' + p[0].slice(2) + '</span><span style="flex:1;height:10px;border-radius:6px;background:var(--border-default);overflow:hidden"><span style="display:block;height:100%;width:' + Math.round(100 * x.n / mx) + '%;background:var(--text-primary)"></span></span><b style="width:34px;text-align:right;flex:none">' + x.n + '</b></div>';
+      }).join("") : '<p class="pen-muted" style="padding:6px 0;margin:0">Cuando se sume gente por el link, ves acá cuántos por mes.</p>';
       // Mi peña
       $("pfCiudad").value = datos.ciudad || ""; $("pfPais").value = datos.pais_iso || "PY"; $("pfPresi").value = datos.presidente || ""; $("pfContacto").value = datos.contacto || "";
       // Fondo (apagado por decisión del club)
@@ -396,6 +404,17 @@
     $("loginBtn").disabled = false;
   };
   $("password").addEventListener("keydown", function (e) { if (e.key === "Enter") $("loginBtn").click(); });
+  // Todas las altas en una planilla (fecha, nombre, inicial del apellido, ciudad y nivel).
+  $("altasCsv").onclick = async function () {
+    var b = $("altasCsv"); b.disabled = true; $("altasCsvErr").textContent = "";
+    try {
+      var r = await fetch("/api/pena/altas.csv", { headers: { "x-pena-token": token() } });
+      if (!r.ok) throw new Error("No se pudo descargar");
+      var blob = await r.blob(), a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "altas-de-la-pena.csv"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+    } catch (e) { $("altasCsvErr").textContent = e.message; }
+    b.disabled = false;
+  };
   // Recuperar la contraseña: con el usuario (o el correo de la peña) llega un link de un solo uso que vence en 1 hora.
   $("olvide").onclick = async function (e) {
     e.preventDefault();
