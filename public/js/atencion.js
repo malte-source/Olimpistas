@@ -43,6 +43,15 @@
     fab.innerHTML = ICO.chat + '<span class="atc-fab-dot" aria-hidden="true"></span>';
     fab.addEventListener("click", abrir);
     document.body.appendChild(fab);
+    let yAnt = 0, tFab = null;
+    document.addEventListener("scroll", (e) => {
+      const t = e.target;
+      if (t && t.closest && t.closest("#atcPanel")) return;
+      const y = (t === document || t === document.documentElement || t === document.body) ? window.scrollY : t.scrollTop;
+      const d = y - yAnt; yAnt = y;
+      if (d > 6 && y > 120) fab.classList.add("atc-baja"); else if (d < -6) fab.classList.remove("atc-baja");
+      clearTimeout(tFab); tFab = setTimeout(() => fab.classList.remove("atc-baja"), 900);
+    }, { capture: true, passive: true });
 
     panel = document.createElement("aside");
     panel.id = "atcPanel"; panel.className = "atc-panel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", S.titulo); panel.hidden = true;

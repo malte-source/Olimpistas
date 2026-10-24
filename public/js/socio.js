@@ -1353,7 +1353,8 @@
     // Billetera de Ahorro: lo del mes grande, lo del año a la derecha y una nota de uso.
     const anioNum = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
     const notaMes = ah.canjes_mes ? ah.canjes_mes + " " + (ah.canjes_mes === 1 ? T("m_ben_canje_uno") : T("m_ben_canje_n")) : T("m_ben_canje_ninguno");
-    const ahorroCard = '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
+    const sinAhorro = !ah.mes && !ah.total && !ah.anio;
+    const ahorroCard = sinAhorro ? '<div class="ben-ahorro cero"><div class="ba-lbl">' + T("m_ben_billetera") + '</div><div class="ba-nota">' + T("bx_ahorro_cero") + '</div></div>' : '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
       '<div class="ba-fila"><div><div class="ba-sub">' + T("m_ben_ahorro_mes") + '</div><div class="ba-monto">' + gs(ah.mes) + '</div></div>' +
       '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
       '<div class="ba-nota">' + notaMes + ' · ' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
@@ -1363,6 +1364,10 @@
     const pctDe = (x) => Number(x.pct) || 0;
     const esLocal = (x) => (ciudad && norm(x.comercio_ciudad) === norm(ciudad)) ? 1 : 0;
     const bloqueados = items.filter((x) => !x.desbloqueado);
+    // Subtítulo: la ciudad como la escribe el comercio ("Asunción"); si no hay, la del perfil con mayúscula inicial.
+    const ciudadTxt = ((items.find((x) => esLocal(x)) || {}).comercio_ciudad) || (ciudad === ciudad.toUpperCase() ? ciudad.charAt(0) + ciudad.slice(1).toLowerCase() : ciudad);
+    // "tu ciudad" solo se marca cuando hay comercios de otras ciudades; si todo es de tu ciudad, marcarlo en todos es ruido.
+    const hayMezcla = items.some((x) => !esLocal(x)) && items.some((x) => esLocal(x));
 
     // Destacados: los que marca el admin; si no marcó ninguno, los de mayor descuento (primero los de tu ciudad).
     let dest = items.filter((x) => x.destacado);
@@ -1388,17 +1393,16 @@
     const rubros = Object.keys(porRubro).sort((a, b) => porRubro[b] - porRubro[a] || a.localeCompare(b, "es"));
     const chip = (cat, txt, n) => '<button type="button" class="bx-chip" data-cat="' + esc(cat) + '" aria-pressed="' + (cat === "" ? "true" : "false") + '">' + esc(txt) + ' <i>' + n + '</i></button>';
     const barra = '<div class="bx-bar">' +
-      '<label class="bx-busca">' + OLI.ic("buscar", 18) + '<input type="search" id="bxQ" autocomplete="off" placeholder="' + esc(T("bx_buscar")) + '" aria-label="' + esc(T("bx_buscar")) + '"></label>' +
+      '<div class="bx-r1"><label class="bx-busca">' + OLI.ic("buscar", 18) + '<input type="search" id="bxQ" autocomplete="off" placeholder="' + esc(T("bx_buscar")) + '" aria-label="' + esc(T("bx_buscar")) + '"></label><span id="bxVista"></span></div>' +
       '<div class="bx-chips" id="bxChips" role="group" aria-label="' + esc(T("bx_rubro")) + '">' + chip("", T("bx_todos"), items.length) + rubros.map((k) => chip(k, k, porRubro[k])).join("") + '</div>' +
       '<div class="bx-ctl">' +
-        '<div class="ctl-seg" id="bxDisp" role="radiogroup" aria-label="' + esc(T("bx_disp")) + '">' +
+        (bloqueados.length ? '<div class="ctl-seg" id="bxDisp" role="radiogroup" aria-label="' + esc(T("bx_disp")) + '">' +
           '<button type="button" role="radio" class="ctl-seg-b" aria-checked="true" data-d="todos">' + T("bx_d_todos") + '</button>' +
           '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="mios">' + T("bx_d_mios") + '</button>' +
-          (bloqueados.length ? '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="bloq">' + T("bx_d_bloq") + '</button>' : "") + '</div>' +
+          '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="bloq">' + T("bx_d_bloq") + '</button></div>' : "") +
+        '<p class="bx-n" id="bxN" aria-live="polite"></p>' +
         '<select id="bxOrden" class="bx-orden" aria-label="' + esc(T("bx_orden")) + '"><option value="local">' + T("bx_o_rec") + '</option><option value="desc">' + T("bx_o_desc") + '</option><option value="az">' + T("bx_o_az") + '</option></select>' +
-        '<span id="bxVista"></span>' +
-      '</div>' +
-      '<p class="bx-n" id="bxN" aria-live="polite"></p></div>';
+      '</div></div>';
 
     // Lo que falta para completar la columna derecha: cómo usarlos y subir de nivel.
     const guia = '<div class="bx-guia"><h3>' + T("bx_guia_h") + '</h3><ol><li>' + T("bx_g1") + '</li><li>' + T("bx_g2") + '</li><li>' + T("bx_g3") + '</li></ol>' +
@@ -1409,13 +1413,13 @@
 
     const fila = (x) => '<button type="button" class="bx-card' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '">' +
       '<span class="bx-card-top">' + logoDe(x) +
-      '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + (esLocal(x) && x.desbloqueado ? ' <span class="ben-loc">' + T("m_ben_tu_ciudad") + '</span>' : "") + '</b><small>' + esc(x.titulo || "") + '</small></span>' +
+      '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + '</b><small>' + esc(x.titulo || "") + '</small></span>' +
       '<span class="bx-val' + (x.desbloqueado ? "" : " lock") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span></span>' +
-      '<span class="bx-card-meta">' + (x.comercio_rubro ? '<span class="bx-tag">' + esc(x.comercio_rubro) + '</span>' : "") + (x.comercio_ciudad ? '<span class="bx-tag">' + esc(x.comercio_ciudad) + '</span>' : "") +
-      '<span class="bx-estado' + (x.desbloqueado ? " ok" : "") + '">' + estadoDe(x) + '</span></span></button>';
+      '<span class="bx-card-meta">' + (x.comercio_rubro ? '<span class="bx-tag">' + esc(x.comercio_rubro) + '</span>' : "") + (x.comercio_ciudad ? '<span class="bx-tag' + (hayMezcla && esLocal(x) ? " loc" : "") + '">' + (hayMezcla && esLocal(x) ? icon("map-pin", { size: 12 }) + " " : "") + esc(x.comercio_ciudad) + '</span>' : "") +
+      (x.desbloqueado ? "" : '<span class="bx-estado">' + estadoDe(x) + '</span>') + '</span></button>';
 
     view().innerHTML = '<div class="section" style="border:none;padding-top:8px">' +
-      '<h2>' + T("m_ben_h") + '</h2><p class="lead">' + (ciudad ? T("m_ben_p_local").replace("{ciudad}", esc(ciudad)) : T("m_ben_p")) + '</p>' +
+      '<h2>' + T("m_ben_h") + '</h2><p class="lead">' + (ciudad ? T("m_ben_p_local").replace("{ciudad}", esc(ciudadTxt)) : T("m_ben_p")) + '</p>' +
       '<div class="bx">' +
         '<div class="bx-main">' + hero + barra + '<div class="bx-lista" id="bxLista"></div></div>' +
         '<aside class="bx-side">' + ahorroCard + cod + guia + up + '</aside>' +
@@ -1446,8 +1450,9 @@
         return;
       }
       const grupo = (tit, xs) => xs.length ? '<h3 class="bx-gh">' + tit + ' <i>' + xs.length + '</i></h3><div class="bx-grid">' + xs.map(fila).join("") + '</div>' : "";
-      lista.innerHTML = st.disp === "todos"
-        ? grupo(T("m_ben_para_vos"), a.filter((x) => x.desbloqueado)) + grupo(T("m_ben_subi_h"), a.filter((x) => !x.desbloqueado))
+      const libres = a.filter((x) => x.desbloqueado), cerrados = a.filter((x) => !x.desbloqueado);
+      lista.innerHTML = st.disp === "todos" && libres.length && cerrados.length
+        ? grupo(T("m_ben_para_vos"), libres) + grupo(T("m_ben_subi_h"), cerrados)
         : '<div class="bx-grid">' + a.map(fila).join("") + '</div>';
     };
     const limpiar = () => {
@@ -1465,7 +1470,7 @@
       view().querySelectorAll("#bxChips .bx-chip").forEach((x) => x.setAttribute("aria-pressed", String(x === c)));
       pintar();
     });
-    view().querySelector("#bxDisp").addEventListener("click", (e) => {
+    if (view().querySelector("#bxDisp")) view().querySelector("#bxDisp").addEventListener("click", (e) => {
       const b = e.target.closest("button[data-d]"); if (!b) return;
       st.disp = b.dataset.d;
       view().querySelectorAll("#bxDisp button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
