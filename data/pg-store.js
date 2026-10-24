@@ -856,8 +856,15 @@ function createPgStore({ databaseUrl, debug }) {
       return { desde_club: a.count || 0, desde_membresia: b.count || 0, dudosas_quitadas: c.count || 0 };
     },
     // Cuentas en mora que se revisan de nuevo solas (para activarlas apenas el club vuelva a decir "al día").
-    async cuentasEnMora({ limite = 30, desdeMin = 60 } = {}) {
-      return sql`SELECT s.id, s.cedula FROM socios s WHERE s.club_estado = 'mora' AND NOT s.es_socio_olimpia AND coalesce(s.cedula, '') <> '' AND (NOT s.verif_exigida OR s.email_verificado)
+    // Socios con nivel Socio y lo último que dijo la API del club de ellos (lo guardado, sin consultar de nuevo): base de la sincronización del nivel.
+    async sociosConEstadoClub() {
+      return sql`SELECT s.id, s.email, s.nombre, s.apellido, s.idioma, s.pais_iso, s.club_estado, s.club_consulta, k.tuti_estado, k.tuti_al_dia, k.tuti_deuda, k.tuti_consultado, m.pago_ref
+        FROM socios s JOIN socios_club k ON k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0')
+        JOIN membresias m ON m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio'
+        WHERE s.es_socio_olimpia AND k.tuti_estado <> '' AND k.tuti_consultado IS NOT NULL`;
+    },
+    async cuentasEnMora({ limite = 30, desdeMin = 60, estado = 'mora' } = {}) {
+      return sql`SELECT s.id, s.cedula FROM socios s WHERE s.club_estado = ${estado} AND NOT s.es_socio_olimpia AND coalesce(s.cedula, '') <> '' AND (NOT s.verif_exigida OR s.email_verificado)
         AND (s.club_consulta IS NULL OR s.club_consulta < now() - make_interval(mins => ${desdeMin})) ORDER BY s.club_consulta NULLS FIRST LIMIT ${limite}`;
     },
     // ── Push ──

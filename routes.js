@@ -781,10 +781,54 @@ function buildRouter() {
   }
 
   // Cuentas en mora: se revisan de nuevo solas (cada hora, un lote chico) y, apenas el club dice "al día", se les activa el nivel Socio.
+  // Sincroniza el nivel Socio con lo último que dijo el club de cada persona (lo guardado por el barrido y las revisiones; no consulta de nuevo).
+  //  · al día → mantiene nivel y beneficios; · mora o baja → el nivel queda en pausa (pasa a Olimpista), se avisa UNA vez con el camino para volver, y la
+  //  revisión automática (revisarMoras) lo devuelve solo apenas el club vuelva a decir "al día".
+  //  · lo que un admin dio a mano (pago_ref "admin…") no se toca, y las respuestas no concluyentes (404 de adherentes) no figuran acá.
+  // SOCIO_SINCRONIZAR=on enciende la bajada; apagada solo cuenta a quién bajaría (se ve en el panel). SOCIO_SINC_LOTE limita las bajadas (y avisos) por hora.
+  const estadoGuardado = (f) => clasificar({ status: f.tuti_estado, deuda: f.tuti_deuda, alDia: f.tuti_al_dia });
+  const elegibleSync = (f) => String(f.pago_ref || "").startsWith("socio:");
+  async function resumenSincronizacion() {
+    const out = { activada: process.env.SOCIO_SINCRONIZAR === "on", socios_con_estado: 0, al_dia: 0, por_pausar_mora: 0, por_pausar_baja: 0 };
+    if (!store.sociosConEstadoClub) return out;
+    for (const f of await store.sociosConEstadoClub()) {
+      if (!elegibleSync(f)) continue;
+      out.socios_con_estado++;
+      const e = estadoGuardado(f).estado;
+      if (e === "al_dia") out.al_dia++; else if (e === "mora") out.por_pausar_mora++; else out.por_pausar_baja++;
+    }
+    return out;
+  }
+  async function sincronizarSocios() {
+    const out = { al_dia: 0, pausados_mora: 0, pausados_baja: 0, pendientes: 0 };
+    if (!store.sociosConEstadoClub) return out;
+    const aplicar = process.env.SOCIO_SINCRONIZAR === "on", tope = Math.min(Number(process.env.SOCIO_SINC_LOTE) || 50, 500), ahora = new Date().toISOString();
+    for (const f of await store.sociosConEstadoClub()) {
+      if (!elegibleSync(f)) continue;
+      const cls = estadoGuardado(f);
+      if (cls.estado === "al_dia") {
+        if (!f.club_consulta || new Date(f.club_consulta) < new Date(f.tuti_consultado)) { await store.updateSocio(f.id, { club_estado: "al_dia", club_deuda: null, club_consulta: ahora }); out.al_dia++; }
+        continue;
+      }
+      out.pendientes++;
+      if (!aplicar || out.pausados_mora + out.pausados_baja >= tope) continue;
+      const mora = cls.estado === "mora";
+      await store.setMembresia(f.id, { tierSlug: "olimpista", ciclo: "anio", pagoRef: "club:" + cls.estado });
+      await store.updateSocio(f.id, { es_socio_olimpia: false, club_estado: cls.estado, club_deuda: mora && cls.deuda ? Math.round(cls.deuda) : null, club_consulta: ahora });
+      if (store.logAccionAdmin) store.logAccionAdmin({ accion: "pausar_socio_club", targetId: f.id, detalle: cls.estado, por: "sistema" });
+      if (mora) { out.pausados_mora++; mailer.enviarCuotaPendiente && mailer.enviarCuotaPendiente(f, { deuda: cls.deuda, portal: PORTAL_URL() }).catch(() => {}); }
+      else { out.pausados_baja++; mailer.enviarSocioBaja && mailer.enviarSocioBaja(f, { portal: PORTAL_URL() }).catch(() => {}); }
+    }
+    return out;
+  }
   async function revisarMoras() {
     const out = { revisadas: 0, activadas: 0 };
     if (!store.cuentasEnMora || !tutiApi.habilitado() || process.env.TUTI_BARRIDO === "off") return out;
-    const cuentas = await store.cuentasEnMora({ limite: Math.min(Number(process.env.TUTI_LOTE_MORA) || 30, 100), desdeMin: 60 });
+    // mora: cada hora (apenas paga vuelve el nivel); baja: una vez al día (no hay apuro y son muchas más)
+    const cuentas = [
+      ...(await store.cuentasEnMora({ limite: Math.min(Number(process.env.TUTI_LOTE_MORA) || 30, 100), desdeMin: 60 })),
+      ...(await store.cuentasEnMora({ limite: Math.min(Number(process.env.TUTI_LOTE_BAJA) || 10, 100), desdeMin: 1440, estado: "baja" })),
+    ];
     for (const c of cuentas) {
       const ced = soloDigitos(c.cedula);
       const v = await tutiApi.consultarSocio(ced);
@@ -1111,6 +1155,7 @@ function buildRouter() {
     try { out.moras = await revisarMoras(); } catch (e) { out.moras = { error: true }; log.error({ err: e.message }, "cron horario: moras"); }
     try { if (store.completarSociosDesdeClub) out.sociosCompletados = await store.completarSociosDesdeClub(); } catch (e) { log.error({ err: e.message }, "cron horario: completar socios"); }
     try { out.clubSync = await clubSync.procesarLote({ store, tuti: tutiApi }); } catch (e) { out.clubSync = { error: true }; log.error({ err: e.message }, "cron horario: club-sync"); }
+    try { out.sincronizacionSocios = await sincronizarSocios(); } catch (e) { out.sincronizacionSocios = { error: true }; log.error({ err: e.message }, "cron horario: sincronizar socios"); }
     try { out.reservasLiberadas = await liberarReservas(); } catch (e) { out.reservasLiberadas = { error: true }; log.error({ err: e.message }, "cron horario: reservas"); }
     res.json(out);
   }));
@@ -1391,7 +1436,7 @@ function buildRouter() {
     const r0 = store.resumenSociosClub ? await store.resumenSociosClub() : { total: 0, en_base: 0, consultados: 0, pendientes: 0, estados: [], cuentas_para_reconocer: 0 };
     const perfiles = [];
     for (const p of PERFILES_CAMPANA) perfiles.push({ nombre: p.nombre, total: await totalPerfil(p) });
-    res.json({ ...r0, perfiles, api_habilitada: tutiApi.habilitado(), barrido: process.env.TUTI_BARRIDO !== "off", lote: Number(process.env.TUTI_LOTE) || 120 });
+    res.json({ ...r0, perfiles, sincronizacion: await resumenSincronizacion().catch(() => null), api_habilitada: tutiApi.habilitado(), barrido: process.env.TUTI_BARRIDO !== "off", lote: Number(process.env.TUTI_LOTE) || 120 });
   }));
   r.post("/admin/club/perfiles", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
     if (!store.crearSegmento || !store.listSegmentos) throw httpError(503, "No disponible");
