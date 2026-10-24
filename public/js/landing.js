@@ -372,6 +372,7 @@
     const ol = document.getElementById("mapaLista"), sum = document.getElementById("mapaListaSum"), wrap = document.getElementById("mapaListaWrap");
     if (ol && sum) {
       sum.textContent = T("mapa_ver_los").replace("{n}", String(list.length));
+      wrap.hidden = false;   // el resumen estaba vacío hasta que llegan los datos: un control sin nombre no sirve a un lector de pantalla
       ol.innerHTML = list.map((p) => `<li><span>${OLI.esc(p.nombre)}</span><strong>${Number(p.count).toLocaleString(loc)}</strong></li>`).join("");
       const todos = document.getElementById("tpTodos");
       if (todos) todos.onclick = () => { wrap.open = true; wrap.scrollIntoView({ behavior: "smooth", block: "center" }); };
