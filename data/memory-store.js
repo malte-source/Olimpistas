@@ -1125,6 +1125,46 @@ function createMemoryStore({ filePath = null } = {}) {
       const p = t[String(cedula)] || { cedula: String(cedula), en_base: false, grupo: "", nro_socio: "", correo: "", tuti_intentos: 0 };
       t[String(cedula)] = { ...p, tuti_estado: e.estado || "", tuti_plan: e.plan || "", tuti_numero: e.numero || "", tuti_al_dia: e.alDia == null ? null : !!e.alDia, tuti_deuda: e.deuda == null ? null : Math.round(e.deuda), tuti_correo: String(e.correo || "").toLowerCase(), tuti_nombre: String(e.nombre || ""), tuti_consultado: nowIso(), tuti_intentos: (p.tuti_intentos || 0) + 1 };
       persist();
+      // historial del estado del club (misma regla que Postgres)
+      const estado = String((e && e.estado) || "").slice(0, 30);
+      if (estado) {
+        const clase = require("../lib/club-estado").claseClub({ estado, deuda: e.deuda, alDia: e.alDia }), deuda = e.deuda == null ? null : Math.round(e.deuda), h = (db.club_hist = db.club_hist || []);
+        const abierta = h.find((x) => x.cedula === String(cedula) && !x.hasta);
+        if (abierta && abierta.clase === clase) { abierta.estado = estado; abierta.deuda = deuda; }
+        else { const ts = nowIso(); if (abierta) abierta.hasta = ts; h.push({ cedula: String(cedula), clase, estado, deuda, desde: ts, hasta: null, inicial: false }); }   // misma marca: el tramo que cierra y el que abre empalman
+        persist();
+      }
+    },
+    async registrarEvento(socioId, tipo, meta) {
+      const ev = (db.socio_eventos = db.socio_eventos || []);
+      if (!(db.socios || []).some((s) => s.id === socioId)) throw new Error("socio inexistente");
+      if (require("../lib/eventos").UNICOS.has(tipo) && ev.some((x) => x.socio_id === socioId && x.tipo === tipo)) return true;
+      ev.push({ socio_id: socioId, tipo: String(tipo).slice(0, 40), ts: nowIso(), meta: meta == null ? null : JSON.stringify(meta) }); persist(); return true;
+    },
+    async eventosDeSocio(socioId, limit = 100) { return (db.socio_eventos || []).filter((x) => x.socio_id === socioId).sort((a, b) => String(b.ts).localeCompare(String(a.ts))).slice(0, Math.min(Number(limit) || 100, 500)); },
+    async historialClubDeCedula(cedula) { return (db.club_hist || []).map((x, i) => ({ x, i })).filter(({ x }) => x.cedula === String(cedula)).sort((a, b) => String(b.x.desde).localeCompare(String(a.x.desde)) || b.i - a.i).map(({ x }) => x).slice(0, 50); },
+    async resumenHistorialClub({ desde }) {
+      const h = db.club_hist || [], d = String(desde);
+      const durs = h.filter((x) => x.clase === "mora" && !x.inicial && x.hasta && x.hasta >= d).map((x) => (new Date(x.hasta) - new Date(x.desde)) / 86400000);
+      return {
+        entraron_mora: h.filter((x) => x.clase === "mora" && !x.inicial && x.desde >= d).length,
+        entraron_baja: h.filter((x) => x.clase === "baja" && !x.inicial && x.desde >= d).length,
+        volvieron_al_dia: h.filter((x, xi) => x.clase === "al_dia" && x.desde >= d && h.some((p, pi) => pi < xi && p.cedula === x.cedula && (p.clase === "mora" || p.clase === "baja") && p.hasta === x.desde)).length,
+        dias_medios_en_mora: durs.length ? Math.round((durs.reduce((a, v) => a + v, 0) / durs.length) * 10) / 10 : null,
+      };
+    },
+    async cohortesDeAlta({ semanas = 8 } = {}) {
+      const n = Math.min(Math.max(Number(semanas) || 8, 1), 52), corte = new Date(Date.now() - n * 7 * 86400000).toISOString(), ev = db.socio_eventos || [];
+      const lunes = (iso) => { const d = new Date(new Date(iso).getTime() - 3 * 3600000); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
+      const por = {};
+      for (const s of (db.socios || [])) {
+        if (s.creado < corte || /@demo\.olimpistas\.test$/.test(s.email || "")) continue;
+        const k = lunes(s.creado), c = (por[k] = por[k] || { semana: k, registrados: 0, verificaron: 0, socios: 0, canjearon: 0, pagaron: 0, dias: [] });
+        const mios = ev.filter((x) => x.socio_id === s.id), tiene = (t) => mios.some((x) => x.tipo === t), canje = mios.find((x) => x.tipo === "primer_canje");
+        c.registrados++; if (s.email_verificado) c.verificaron++; if (tiene("nivel_socio_activado")) c.socios++; if (canje) { c.canjearon++; c.dias.push((new Date(canje.ts) - new Date(s.creado)) / 86400000); } if (tiene("primer_pago")) c.pagaron++;
+      }
+      const mediana = (a) => { if (!a.length) return null; const o = a.slice().sort((x, y) => x - y), m = Math.floor(o.length / 2); return Math.round((o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2) * 10) / 10; };
+      return Object.values(por).sort((a, b) => b.semana.localeCompare(a.semana)).map(({ dias, ...c }) => ({ ...c, mediana_dias_primer_canje: mediana(dias) }));
     },
     async siguientesParaConsultar({ limite = 100, staleDias = 7 } = {}) {
       const t = db.socios_club || {}, out = [], vistos = new Set(), clave = (c) => String(c || "").replace(/\D/g, "").replace(/^0+/, "");

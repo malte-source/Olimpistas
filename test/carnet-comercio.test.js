@@ -152,6 +152,7 @@ test("validar con QR: aprueba, registra el canje con el nivel del hincha y avisa
   const canjes = await store.canjesDeComercio({ comercioId: c.id, desde: new Date(Date.now() - 3600000).toISOString(), hasta: new Date(Date.now() + 3600000).toISOString() });
   assert.deepStrictEqual({ n: canjes.length, nivel: canjes[0].nivel, monto: canjes[0].monto }, { n: 1, nivel: "premium", monto: 50000 });
   await new Promise((x) => setTimeout(x, 30));
+  assert.ok((await store.eventosDeSocio(A.id)).some((e) => e.tipo === "primer_canje"), "queda el hito del primer canje con su fecha");
   assert.strictEqual(canjesAviso.length, 1, "el socio recibe el aviso de lo que ahorró");
   assert.deepStrictEqual({ comercio: canjesAviso[0].comercio, ahorro: canjesAviso[0].ahorro, a: /^caja\d+-\d+@ejemplo\.com$/.test(canjesAviso[0].a) }, { comercio: c.nombre, ahorro: 5000, a: true });
   const rechazado = await validar(c, { token: "OLI1.basura", beneficioId: b.id, monto: 1000 });
