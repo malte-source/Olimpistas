@@ -1101,6 +1101,43 @@ function createMemoryStore({ filePath = null } = {}) {
       db.sesiones = db.sesiones.filter(s => s.token !== token); persist();
     },
     async borrarSesionesDeSocio(socioId) { const n = db.sesiones.length; db.sesiones = db.sesiones.filter((s) => s.socio_id !== socioId); if (db.sesiones.length !== n) persist(); return true; },
+    // ── Base de socios del club (referencia) + estado consultado a la API de socios ──
+    async upsertSociosClub(registros) {
+      const t = (db.socios_club = db.socios_club || {});
+      for (const r of registros) {
+        const previo = t[r.cedula] || {};
+        t[r.cedula] = { tuti_estado: "", tuti_plan: "", tuti_numero: "", tuti_al_dia: null, tuti_deuda: null, tuti_consultado: null, tuti_intentos: 0, ...previo, ...r, en_base: true, importado: nowIso() };
+      }
+      persist(); return registros.length;
+    },
+    async getSocioClub(cedula) { const r = (db.socios_club || {})[String(cedula)]; return r ? { ...r } : null; },
+    async guardarEstadoTuti(cedula, e) {
+      const t = (db.socios_club = db.socios_club || {});
+      const p = t[String(cedula)] || { cedula: String(cedula), en_base: false, grupo: "", nro_socio: "", correo: "", tuti_intentos: 0 };
+      t[String(cedula)] = { ...p, tuti_estado: e.estado || "", tuti_plan: e.plan || "", tuti_numero: e.numero || "", tuti_al_dia: e.alDia == null ? null : !!e.alDia, tuti_deuda: e.deuda == null ? null : Math.round(e.deuda), tuti_consultado: nowIso(), tuti_intentos: (p.tuti_intentos || 0) + 1 };
+      persist();
+    },
+    async siguientesParaConsultar({ limite = 100, staleDias = 7 } = {}) {
+      const t = db.socios_club || {}, out = [], vistos = new Set(), clave = (c) => String(c || "").replace(/\D/g, "").replace(/^0+/, "");
+      const tomar = (xs) => { for (const c of xs) if (out.length < limite && !vistos.has(c)) { vistos.add(c); out.push(c); } };
+      const corte = Date.now() - staleDias * 86400000;
+      const ctas = [...new Set((db.socios || []).filter((s) => !/@demo\.olimpistas\.test$/.test(s.email)).map((s) => clave(s.cedula)).filter((c) => c.length >= 5 && c.length <= 12))];
+      tomar(ctas.filter((c) => !t[c] || !t[c].tuti_consultado || new Date(t[c].tuti_consultado).getTime() < corte).sort((a, b) => String((t[a] || {}).tuti_consultado || "").localeCompare(String((t[b] || {}).tuti_consultado || ""))));
+      const correos = new Set((db.socios || []).map((s) => String(s.email || "").toLowerCase()));
+      const pend = Object.values(t).filter((r) => r.en_base && !r.tuti_consultado);
+      tomar(pend.filter((r) => r.correo && correos.has(r.correo)).sort((a, b) => (a.tuti_intentos || 0) - (b.tuti_intentos || 0) || a.cedula.localeCompare(b.cedula)).map((r) => r.cedula));
+      tomar(pend.slice().sort((a, b) => (a.grupo === "FAMILIAR") - (b.grupo === "FAMILIAR") || (a.tuti_intentos || 0) - (b.tuti_intentos || 0) || a.cedula.localeCompare(b.cedula)).map((r) => r.cedula));
+      return out;
+    },
+    async resumenSociosClub() {
+      const t = Object.values(db.socios_club || {}), clave = (c) => String(c || "").replace(/\D/g, "").replace(/^0+/, "");
+      const estados = {}; t.filter((r) => r.tuti_estado).forEach((r) => { estados[r.tuti_estado] = (estados[r.tuti_estado] || 0) + 1; });
+      const alDia = new Set(t.filter((r) => r.tuti_al_dia === true).map((r) => r.cedula));
+      return { total: t.length, en_base: t.filter((r) => r.en_base).length, consultados: t.filter((r) => r.tuti_consultado).length, pendientes: t.filter((r) => r.en_base && !r.tuti_consultado).length,
+        con_socio_desde: t.filter((r) => r.socio_desde).length, ultima_consulta: t.map((r) => r.tuti_consultado).filter(Boolean).sort().slice(-1)[0] || null,
+        estados: Object.entries(estados).sort((a, b) => b[1] - a[1]).map(([estado, n]) => ({ estado, n })),
+        cuentas_para_reconocer: (db.socios || []).filter((s) => !s.es_socio_olimpia && alDia.has(clave(s.cedula))).length };
+    },
     // ── Push ──
     async guardarPushSuscripcion({ socioId, endpoint, p256dh, auth, ua }) {
       const t = (db.push = db.push || []);

@@ -1149,6 +1149,16 @@
           var e = E[i.estado] || E.sin_conectar;
           return '<div class="grupo-fila"><span class="grupo-ic">' + IC("integraciones") + '</span><span class="grupo-tx"><b>' + esc(i.nombre) + '</b><small>' + esc(i.detalle) + '</small></span><span class="pill ' + e.c + '">' + e.l + '</span></div>';
         }).join("") + '</div>';
+        // Base del club: cuántas cédulas hay, cuántas ya se consultaron a la API de socios y qué estados devolvió (sin datos personales).
+        try {
+          var c = await api("/admin/club/resumen"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
+          var pct = c.en_base ? Math.round(100 * (c.consultados || 0) / c.en_base) : 0;
+          box.innerHTML += '<div class="grupo adm-grupo" style="width:100%;margin-top:14px"><div class="grupo-fila"><span class="grupo-ic">' + IC("integraciones") + '</span><span class="grupo-tx"><b>Base de socios del club</b><small>' +
+            nf(c.en_base) + ' cédulas cargadas · ' + nf(c.consultados) + ' ya consultadas a la API (' + pct + ' %) · ' + nf(c.pendientes) + ' pendientes · ' + nf(c.con_socio_desde) + ' con "Socio desde" · ' + nf(c.cuentas_para_reconocer) + ' cuentas de Olimpistas listas para reconocer' +
+            (c.estados && c.estados.length ? '<br>Estados: ' + c.estados.map(function (e) { return esc(e.estado) + ' ' + nf(e.n); }).join(' · ') : '') +
+            '<br>Consulta de fondo: ' + (c.api_habilitada ? (c.barrido ? 'activa (' + nf(c.lote) + ' por hora)' : 'apagada') : 'sin conexión a la API') + (c.ultima_consulta ? ' · última: ' + esc(new Date(c.ultima_consulta).toLocaleString("es-PY")) : '') +
+            '</small></span><span class="pill ' + (c.api_habilitada && c.barrido ? "pill-ok" : "pill-warn") + '">' + (c.api_habilitada && c.barrido ? "Consultando" : "Pausada") + '</span></div></div>';
+        } catch (e2) { /* sin permiso o sin base: no se muestra */ }
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
     async function cargarMatrizRoles() {

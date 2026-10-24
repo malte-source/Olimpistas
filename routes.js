@@ -16,6 +16,8 @@ const { getStore } = require("./data/store");
 const auth = require("./lib/auth");
 const adminAuth = require("./lib/admin-auth");
 const pushLib = require("./lib/push");
+const clubSync = require("./lib/club-sync");
+const { claveCedula } = require("./lib/club-import");
 const mailer = require("./lib/email");
 const access = require("./lib/access");
 const log = require("./lib/log");
@@ -374,6 +376,15 @@ function buildRouter() {
     const idioma = (req.body || {}).idioma === "en" ? "en" : "es"; // idioma del socio para correos
     const { socio, token } = await auth.registrar({ email, password, nombre, apellido, ref, idioma });
     setSessionCookie(res, token);
+    // Cédula opcional en la inscripción ("¿sos socio del club?"): se guarda y se consulta ya su estado en el club (queda guardado). El nivel Socio
+    // se activa cuando confirme su correo (ver /auth/verificar); acá no se le dice nada del resultado para no revelar el estado de nadie.
+    try {
+      const ced = soloDigitos((req.body || {}).cedula);
+      if (ced.length >= 5 && ced.length <= 12) {
+        const otra = store.getSocioByCedula ? await store.getSocioByCedula(ced) : null;
+        if (!otra) { await store.updateSocio(socio.id, { cedula: ced }); estadoTuti(ced, { maxHoras: 24 }).catch(() => {}); }
+      }
+    } catch (e) { log.warn({ err: e.message }, "registro: no se pudo guardar la cédula"); }
     // El registro = alta automática como Olimpista gratis (el embudo).
     await store.setMembresia(socio.id, { tierSlug: "olimpista", ciclo: "anio" });
     // Staging: registramos el alta en la base de Actualización.
@@ -496,7 +507,12 @@ function buildRouter() {
     let ok = false;
     try {
       const socio = req.query.token ? await store.getSocioByVerifToken(String(req.query.token)) : null;
-      if (socio) { await store.updateSocio(socio.id, { email_verificado: true, verif_token: null }); ok = true; }
+      if (socio) {
+        await store.updateSocio(socio.id, { email_verificado: true, verif_token: null }); ok = true;
+        // Si se inscribió con su cédula, el nivel Socio se activa ahora que el correo está confirmado (en segundo plano).
+        const ced = soloDigitos(socio.cedula);
+        if (ced.length >= 5 && !socio.es_socio_olimpia) validarSocioCore(socio.id, ced, { silencioso: true }).catch((e) => log.warn({ err: e.message }, "verificar: validación de socio"));
+      }
     } catch (e) { log.error({ err: e.message }, "verificar email"); }
     res.redirect("/miembro?verificado=" + (ok ? "1" : "0"));
   }));
@@ -612,6 +628,22 @@ function buildRouter() {
   const exigirCorreo = (req, paraQue) => {
     if (correoPendiente(req.socio)) throw httpError(403, `Confirmá tu correo para ${paraQue}. Te enviamos un enlace al registrarte; si no lo ves, pedí otro desde el aviso de arriba.`);
   };
+  // Estado de una cédula en el club. Si ya lo consultamos hace poco (cron de fondo o una validación anterior) se usa lo guardado y no se vuelve
+  // a molestar a la API; si no, se consulta en vivo y se deja guardado. Devuelve la misma forma que tutiApi.consultarSocio (o null sin API).
+  async function estadoTuti(cedula, { maxHoras = 24 } = {}) {
+    const clave = claveCedula(cedula);
+    const ref = clave && store.getSocioClub ? await store.getSocioClub(clave).catch(() => null) : null;
+    if (ref && ref.tuti_consultado && ref.tuti_estado && Date.now() - new Date(ref.tuti_consultado).getTime() < maxHoras * 3600000) {
+      if (ref.tuti_estado === "NO_ENCONTRADO") return { ok: true, encontrado: false, guardado: true };
+      const deuda = Number(ref.tuti_deuda) || 0;
+      return { ok: true, encontrado: true, guardado: true, socio: { status: ref.tuti_estado, plan: ref.tuti_plan || "", numeroSocio: ref.tuti_numero || "", alDia: !!ref.tuti_al_dia, deuda, deudor: deuda > 0 } };
+    }
+    if (!tutiApi.habilitado()) return null;
+    const v = await tutiApi.consultarSocio(cedula);
+    if (v && v.ok && clave && store.guardarEstadoTuti) store.guardarEstadoTuti(clave, clubSync.aEstado(v)).catch(() => {});
+    return v;
+  }
+
   // ─── Instancia 3 — Validación de socio (cédula → nivel SOCIO otorgado) ──
   // Reglas: cédula ÚNICA (1 cédula = 1 cuenta); el socio del club obtiene el nivel
   // "Socio" (superior a Plus, otorgado, no comprable), a cualquier edad;
@@ -635,6 +667,13 @@ function buildRouter() {
     }
     if (cedula.length < 5 || cedula.length > 12) throw httpError(400, "Número de cédula inválido");
 
+    res.json(await validarSocioCore(req.socio.id, cedula, { silencioso }));
+  }));
+
+  // Valida la cédula de una cuenta contra el club y, si corresponde, le da el nivel Socio. La usan la pantalla de validación,
+  // el reintento silencioso al abrir la app y la confirmación del correo.
+  async function validarSocioCore(socioId, cedula, { silencioso } = {}) {
+    const socioFull = await store.getSocioById(socioId);
     // El socio real del club recibe SIEMPRE el nivel "Socio" (la cima institucional),
     // sin importar la edad — es superior a Plus y no se compra, se otorga.
     const tier = "socio";
@@ -642,22 +681,23 @@ function buildRouter() {
     // Cédula ÚNICA: no puede estar en otra cuenta.
     if (store.getSocioByCedula) {
       const otra = await store.getSocioByCedula(cedula);
-      if (otra && otra.id !== req.socio.id) throw httpError(409, "Esa cédula ya está registrada en otra cuenta de Olimpistas");
+      if (otra && otra.id !== socioId) throw httpError(409, "Esa cédula ya está registrada en otra cuenta de Olimpistas");
     }
     // Guardamos la cédula en la cuenta (el índice único de la DB es el backstop).
-    try { await store.updateSocio(req.socio.id, { cedula }); }
+    try { await store.updateSocio(socioId, { cedula }); }
     catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta de Olimpistas"); }
-    unirPenaPorCedula(req.socio.id);
+    unirPenaPorCedula(socioId);
 
     // Estado EN VIVO en el club (API de socios, ITI/Tuti) + padrón estático como respaldo.
     //  · 200 = autoritativo (sólo trae titulares): al día → socio; mora/baja → NO, aunque
     //    el padrón viejo lo tenga (ej. quien se dio de baja después del export de agosto).
     //  · 404 / timeout / error = no concluyente: la API no conoce a los ADHERENTES de un
     //    plan familiar (probado 2026-10-05) — caer al padrón, donde sí están.
-    const vivo = tutiApi.habilitado() ? await tutiApi.consultarSocio(cedula) : null;
+    const vivo = await estadoTuti(cedula, { maxHoras: silencioso ? 24 : 1 });   // lo guardado si es reciente; si no, la API en vivo
     const enClub = vivo && vivo.ok && vivo.encontrado ? vivo.socio : null;
     const noAlDia = !!(enClub && !enClub.alDia);
-    if (enClub && enClub.plan) store.updateSocio(req.socio.id, { plan_club: enClub.plan }).catch(() => {}); // copia de lectura del plan
+    const ref = store.getSocioClub ? await store.getSocioClub(claveCedula(cedula)).catch(() => null) : null;   // base de referencia: antigüedad, grupo, número
+    if (enClub && enClub.plan) store.updateSocio(socioId, { plan_club: enClub.plan }).catch(() => {}); // copia de lectura del plan
 
     // Match contra el padrón (foto de agosto: todo el padrón se tomó como AL DÍA).
     let fila = null, validado = false;
@@ -666,28 +706,29 @@ function buildRouter() {
       // Reclamo atómico de la fila del padrón (si matcheó por padrón).
       let gano = true;
       if (fila && store.marcarPadronReclamado) {
-        gano = await store.marcarPadronReclamado(fila.id, req.socio.id);
-        if (!gano && fila.socio_id && fila.socio_id !== req.socio.id)
+        gano = await store.marcarPadronReclamado(fila.id, socioId);
+        if (!gano && fila.socio_id && fila.socio_id !== socioId)
           throw httpError(409, "Ese socio ya fue validado en otra cuenta");
       }
       // Entrega AUTOMÁTICA del nivel Socio (otorgado, no comprable). pagoRef "socio:" = marcador
       // de socio del club (id de padrón, o "tuti-<nº de socio>" si vino sólo de la API en vivo).
       const marca = fila ? fila.id : "tuti-" + (enClub.numeroSocio || cedula);
-      await store.setMembresia(req.socio.id, { tierSlug: tier, ciclo: "anio", pagoRef: "socio:" + marca });
+      await store.setMembresia(socioId, { tierSlug: tier, ciclo: "anio", pagoRef: "socio:" + marca });
       // Antigüedad real y número de socio del club (padrón o API en vivo); si el club no la tiene, queda vacía y el carnet no inventa una.
       const antig = {};
-      const desde = (fila && fila.socio_desde) || (enClub && enClub.desde) || null;
+      const desde = (fila && fila.socio_desde) || (ref && ref.socio_desde) || (enClub && enClub.desde) || null;
       if (desde) antig.socio_desde = String(desde).slice(0, 10);
-      const nro = (fila && fila.nro_socio) || (enClub && enClub.numeroSocio) || "";
+      const nro = (fila && fila.nro_socio) || (ref && ref.nro_socio) || (enClub && enClub.numeroSocio) || "";
+      if (ref && ref.grupo) antig.grupo_club = String(ref.grupo).slice(0, 40);
       if (nro) antig.nro_socio = String(nro).slice(0, 40);
-      await store.updateSocio(req.socio.id, { es_socio_olimpia: true, ...antig });
+      await store.updateSocio(socioId, { es_socio_olimpia: true, ...antig });
       validado = true;
       mailer.enviarReconocido && mailer.enviarReconocido({ ...socioFull, cedula }, tier).catch(() => {});
     }
     // Staging: registramos el claim para verificar/unificar después.
     if (store.crearActualizacion && (validado || !silencioso)) {
       store.crearActualizacion({
-        socioId: req.socio.id, tipo: "socio_claim",
+        socioId: socioId, tipo: "socio_claim",
         nombre: socioFull.nombre, apellido: socioFull.apellido, email: socioFull.email,
         cedula, pais: socioFull.pais, ciudad: socioFull.ciudad, fechaNacimiento: socioFull.fecha_nacimiento,
         tieneSelfie: !!socioFull.foto, tierPretendido: tier, matchPadronId: fila ? fila.id : null,
@@ -705,8 +746,8 @@ function buildRouter() {
     // Misma respuesta para "no encontrado" y "no está al día": el motivo queda solo en la
     // actualización interna (para revisión). Si no, cualquiera podía averiguar el estado de
     // pago de un socio probando su cédula.
-    res.json({ validado, tier, estado: validado ? "validado_auto" : "a_revisar" });
-  }));
+    return { validado, tier, estado: validado ? "validado_auto" : "a_revisar" };
+  }
 
   // ─── Membresía ──────────────────────────────────────────────────────────────
   r.get("/membresia", auth.requireSocio, wrap(async (req, res) => {
@@ -1019,6 +1060,7 @@ function buildRouter() {
     try { out.subastas = await procesarPlazosSubastas(); } catch (e) { out.subastas = { error: true }; log.error({ err: e.message }, "cron horario: plazos"); }
     try { out.pagos = await conciliarPagos(); } catch (e) { out.pagos = { error: true }; log.error({ err: e.message }, "cron horario: pagos"); }
     try { out.campanas = await campanasLib.procesarLote({ store, log: () => {} }); } catch (e) { out.campanas = { error: true }; log.error({ err: e.message }, "cron horario: campañas"); }
+    try { out.clubSync = await clubSync.procesarLote({ store, tuti: tutiApi }); } catch (e) { out.clubSync = { error: true }; log.error({ err: e.message }, "cron horario: club-sync"); }
     try { out.reservasLiberadas = await liberarReservas(); } catch (e) { out.reservasLiberadas = { error: true }; log.error({ err: e.message }, "cron horario: reservas"); }
     res.json(out);
   }));
@@ -1285,6 +1327,11 @@ function buildRouter() {
   }));
   r.get("/admin/push/resumen", requireAdmin, wrap(async (_req, res) => {
     res.json({ habilitado: pushLib.habilitado(), ...(store.contarPush ? await store.contarPush() : { dispositivos: 0, personas: 0 }) });
+  }));
+  // Base del club: cuántas cédulas tenemos, cuántas ya se consultaron a la API y qué estados devolvió. Sin datos personales.
+  r.get("/admin/club/resumen", requireAdmin, wrap(async (_req, res) => {
+    const r0 = store.resumenSociosClub ? await store.resumenSociosClub() : { total: 0, en_base: 0, consultados: 0, pendientes: 0, estados: [], cuentas_para_reconocer: 0 };
+    res.json({ ...r0, api_habilitada: tutiApi.habilitado(), barrido: process.env.TUTI_BARRIDO !== "off", lote: Number(process.env.TUTI_LOTE) || 120 });
   }));
   // Rendimiento real: p75 de LCP / INP / CLS / TTFB por pantalla y tipo de dispositivo (últimos N días).
   r.get("/admin/vitales", requireAdmin, wrap(async (req, res) => {
