@@ -3291,6 +3291,23 @@ function buildRouter() {
     const a = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id) : { mes: 0, anio: 0, total: 0, canjes_mes: 0 };
     res.json({ mes: a.mes, anio: a.anio, total: a.total, canjes_mes: a.canjes_mes });
   }));
+  // Lo que ahorraría una persona siendo socia: se toman los beneficios que se desbloquean con el nivel Socio, se calcula cuánto se ahorra en cada uno
+  // (el ahorro estimado que cargó el comercio o, si no, su porcentaje sobre una compra promedio supuesta) y se suman los 4 de mayor ahorro, como
+  // si usara uno por semana. Es una estimación y se dice así en pantalla. Es igual para todos: se calcula una vez cada 2 minutos.
+  const TICKET_PROMEDIO = () => Number(process.env.TICKET_PROMEDIO) || 100000;
+  const USOS_AL_MES = 4;
+  let _potencial = { t: 0, v: null };
+  async function potencialAhorro() {
+    if (_potencial.v && Date.now() - _potencial.t < 120000) return _potencial.v;
+    const todos = store.beneficiosParaNivel ? await store.beneficiosParaNivel("socio") : [];
+    const ticket = TICKET_PROMEDIO();
+    const ahorroDe = (b) => { const e = Number(b.ahorro_estimado) || 0; if (e > 0) return e; const p = Number(b.pct) || 0; return p > 0 ? Math.round((ticket * p) / 100) : 0; };
+    const mejores = todos.map((b) => ({ comercio: b.comercio_nombre || "", valor: b.valor || "", ahorro: ahorroDe(b) })).filter((x) => x.ahorro > 0).sort((a, b) => b.ahorro - a.ahorro).slice(0, USOS_AL_MES);
+    const mensual = mejores.reduce((a, x) => a + x.ahorro, 0);
+    const v = { mensual, anual: mensual * 12, usos: Math.max(mejores.length, 0), ticket, beneficios: todos.length, ejemplos: mejores.slice(0, 3).map((x) => ({ comercio: x.comercio, valor: x.valor })) };
+    _potencial = { t: Date.now(), v };
+    return v;
+  }
   r.get("/beneficios", auth.requireSocio, wrap(async (req, res) => {
     const [m, sFull] = await Promise.all([store.getMembresia(req.socio.id), store.getSocioById(req.socio.id).catch(() => null)]);
     const tier = (m && m.tier_slug) || "olimpista";
@@ -3302,7 +3319,41 @@ function buildRouter() {
     const ahorro = store.resumenAhorroSocio ? await store.resumenAhorroSocio(req.socio.id).catch(() => ({ mes: 0, anio: 0, total: 0 })) : { mes: 0, anio: 0, total: 0 };
     const codigo = (sFull && sFull.ref_codigo) || "";
     items = items.map((b) => ({ ...b, agotado: b.stock != null && Number(b.stock) <= 0 }));
-    res.json({ tier, ciudad: (sFull && sFull.ciudad) || "", codigo, items, ahorro });
+    // Para quien todavía no es socio: cuánto ahorraría siéndolo (los beneficios se muestran bloqueados y la pantalla lo invita a asociarse).
+    const esSocio = !!(sFull && sFull.es_socio_olimpia) || tier === "socio";
+    const potencial = esSocio ? null : await potencialAhorro().catch(() => null);
+    res.json({ tier, ciudad: (sFull && sFull.ciudad) || "", codigo, items, ahorro, potencial: potencial && potencial.mensual > 0 ? potencial : null });
+  }));
+
+  // ─── Tu historia: el recorrido de la persona con el club y con Olimpistas ─────────────────────────────
+  // Todo sale de lo que ya tenemos de ella (registro, nivel, canjes, subastas, puntos, referidos, peña); nada se inventa: sin dato, no hay hito.
+  r.get("/historia", auth.requireSocio, wrap(async (req, res) => {
+    const id = req.socio.id;
+    const [s, m, ahorro, canjes, pujas, puntos, referidos] = await Promise.all([
+      store.getSocioById(id), store.getMembresia(id), store.resumenAhorroSocio ? store.resumenAhorroSocio(id).catch(() => ({ total: 0 })) : { total: 0 },
+      store.canjesDeSocio ? store.canjesDeSocio(id, 500).catch(() => []) : [], store.pujasDeSocio ? store.pujasDeSocio(id, 200).catch(() => []) : [],
+      store.saldoPuntos ? store.saldoPuntos(id).catch(() => 0) : 0, store.contarReferidos ? store.contarReferidos(id).catch(() => 0) : 0,
+    ]);
+    const pena = s.pena_id && store.getPena ? await store.getPena(s.pena_id).catch(() => null) : null;
+    const esSocio = !!s.es_socio_olimpia || (m && m.tier_slug === "socio");
+    const dia = (v) => (v ? new Date(v).toISOString().slice(0, 10) : "");
+    const socioDesde = esSocio && s.socio_desde ? String(s.socio_desde).slice(0, 10) : "";
+    const hitos = [];
+    if (socioDesde) hitos.push({ tipo: "socio", fecha: socioDesde });
+    hitos.push({ tipo: "miembro", fecha: dia(s.creado) });
+    if (esSocio && m && m.tier_slug === "socio" && dia(m.inicio) && Math.abs(new Date(dia(m.inicio)) - new Date(dia(s.creado))) > 86400000) hitos.push({ tipo: "nivel", fecha: dia(m.inicio) });
+    const primero = (canjes || []).length ? canjes[canjes.length - 1] : null;
+    if (primero) hitos.push({ tipo: "canje", fecha: dia(primero.creado), detalle: [primero.comercio, primero.beneficio].filter(Boolean).join(" · ") });
+    const ganadas = (pujas || []).filter((x) => x.adjudicado_a === id);
+    if (ganadas.length) hitos.push({ tipo: "subasta", fecha: dia(ganadas[ganadas.length - 1].ultima), detalle: ganadas[ganadas.length - 1].titulo });
+    hitos.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+    const anios = socioDesde ? Math.max(0, Math.floor((Date.now() - new Date(socioDesde + "T12:00:00").getTime()) / 31557600000)) : null;
+    res.json({
+      es_socio: esSocio, nivel: (m && m.tier_slug) || "olimpista", miembro_desde: dia(s.creado), socio_desde: socioDesde, anios_socio: anios,
+      grupo_club: esSocio ? s.grupo_club || "" : "", nro_socio: esSocio ? s.nro_socio || "" : "",
+      stats: { canjes: (canjes || []).length, ahorro_total: Number(ahorro.total) || 0, puntos, pujas: (pujas || []).length, subastas_ganadas: ganadas.length, referidos, pena: pena ? pena.nombre : "" },
+      hitos, potencial: esSocio ? null : await potencialAhorro().catch(() => null),
+    });
   }));
 
   // ─── Panel de validación del COMERCIO (Red de Beneficios) ─────────────────────

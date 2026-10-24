@@ -12,7 +12,7 @@
   // deben reflejar la vista actual. Esquema: /miembro, /miembro/carnet,
   // /miembro/beneficios, /miembro/perfil, /miembro/descubrir(/<segmento>)(/subastas/<id>).
   let curTab = "inicio", curSubId = null;
-  const TABS_RUTA = ["inicio", "partidos", "carnet", "beneficios", "puntos", "perfil", "descubrir"];
+  const TABS_RUTA = ["inicio", "partidos", "carnet", "beneficios", "puntos", "perfil", "descubrir", "historia"];
   const PESTANAS = ["inicio", "partidos", "carnet", "beneficios", "puntos"]; // las 5 de la barra; perfil y descubrir abren con "‹ Inicio"
   const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media", "penas"];
   function parseRuta(pathname) {
@@ -168,7 +168,7 @@
     const back = document.getElementById("mBack"); if (back) back.hidden = PESTANAS.includes(tab);
     moveTabInd();
     const conVista = (fn) => (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? document.startViewTransition(() => { fn(); }) /* sin devolver la promesa: la transición no espera a los datos de la vista */ : fn());
-    conVista(({ inicio: vInicio, partidos: vPartidos, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio));
+    conVista(({ inicio: vInicio, partidos: vPartidos, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil, historia: vHistoria }[tab] || vInicio));
   }
 
   // Pulido PRO: pill deslizante bajo el tab activo (solo mobile) + borde glass al hacer scroll.
@@ -303,7 +303,7 @@
             <div class="ini-feed">${club.join("")}</div></section>
         </div>
         <aside class="ih-side">
-          <section class="ih-b ih-res"><div class="wg-grid ih-res-g">${wAhorro(ahorroR)}${wPuntos(puntosR)}${wPenaIni(penasR)}</div></section>
+          <section class="ih-b ih-res"><div class="wg-grid ih-res-g">${wAhorro(ahorroR, benR && benR.potencial)}${wPuntos(puntosR)}${wPenaIni(penasR)}${wHistoria()}</div></section>
           ${wMision(puntosR)}
           <section class="ih-b ih-pf"><div id="progreso"></div></section>
           ${escalonCard()}
@@ -323,7 +323,22 @@
     if (card && enc) bindEncuesta(card, enc);
   }
   // ─── Piezas del Inicio (cada una aparece solo si su dato cargó) ───
-  function wAhorro(ahorro) {
+  // Para quien todavía no es socio: en vez de la billetera vacía, lo que ahorraría siéndolo (estimado).
+  function wHistoria() {
+    const s = SESSION.socio, socio = esSocioValidado(), desde = socio && s.socio_desde ? String(s.socio_desde).slice(0, 10) : "";
+    const a = desde ? aniosDeSocio(desde) : null;
+    const num = desde ? (a >= 1 ? (a === 1 ? T("cn_anio_uno") : T("cn_anios").replace("{n}", a)) : T("hi_nuevo")) : fechaMes(new Date(s.creado).toISOString().slice(0, 10));
+    const sub = desde ? T("cn_socio_desde") + " " + fechaMes(desde) : T("m_cn_desde");
+    return `<button type="button" class="wg" data-goto="historia" aria-label="${esc(T("hi_h"))}">
+        <span class="wg-cab">${esc(T("hi_h"))}</span><span class="wg-num wg-num-s">${esc(num)}</span><span class="wg-sub">${esc(sub)}</span><span class="wg-nota">${esc(T("hi_tile_nota"))}</span></button>`;
+  }
+  function wAhorro(ahorro, potencial) {
+    if (potencial && potencial.mensual > 0 && !esSocioValidado()) {
+      return `<button type="button" class="wg wg-2 wg-asp" data-goto="beneficios" aria-label="${esc(T("asp_lbl"))}">
+        <span class="wg-cab">${OLI.ic("ahorro", 18)}${esc(T("asp_lbl"))}</span>
+        <span class="wg-num">${esc(T("asp_tile_n").replace("{monto}", gs(potencial.mensual)))}</span><span class="wg-sub">${esc(T("asp_tile_sub"))}</span>
+        <span class="wg-nota">${esc(T("asp_tile_nota"))}</span></button>`;
+    }
     if (!ahorro) return "";
     const anio = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
     return `<button type="button" class="wg wg-2" data-goto="beneficios" aria-label="${T("m_wg_ahorro")}">
@@ -1490,7 +1505,13 @@
     const anioNum = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
     const notaMes = ah.canjes_mes ? ah.canjes_mes + " " + (ah.canjes_mes === 1 ? T("m_ben_canje_uno") : T("m_ben_canje_n")) : T("m_ben_canje_ninguno");
     const sinAhorro = !ah.mes && !ah.total && !ah.anio;
-    const ahorroCard = sinAhorro ? '<div class="ben-ahorro cero"><div class="ba-lbl">' + T("m_ben_billetera") + '</div><div class="ba-nota">' + T("bx_ahorro_cero") + '</div></div>' : '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
+    _potencialBen = r.potencial || null;
+    const asp = !esSocioValidado() && r.potencial && r.potencial.mensual > 0;
+    const aspCard = asp ? '<div class="ben-ahorro asp"><div class="ba-lbl">' + T("asp_lbl") + '</div><div class="ba-monto">' + esc(T("asp_hasta").replace("{monto}", gs(r.potencial.mensual))) + '</div>' +
+      '<div class="ba-nota">' + esc(T("asp_nota").replace("{anual}", gs(r.potencial.anual)).replace("{n}", r.potencial.usos).replace("{ticket}", gs(r.potencial.ticket))) + '</div>' +
+      '<a class="btn btn-block" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + T("asp_asociate") + '</a>' +
+      '<button type="button" class="btn btn-ghost btn-block" id="bxYaSoy">' + T("asp_ya_soy") + '</button></div>' : "";
+    const ahorroCard = asp ? aspCard : sinAhorro ? '<div class="ben-ahorro cero"><div class="ba-lbl">' + T("m_ben_billetera") + '</div><div class="ba-nota">' + T("bx_ahorro_cero") + '</div></div>' : '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
       '<div class="ba-fila"><div><div class="ba-sub">' + T("m_ben_ahorro_mes") + '</div><div class="ba-monto">' + gs(ah.mes) + '</div></div>' +
       '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
       '<div class="ba-nota">' + notaMes + ' · ' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
@@ -1545,7 +1566,8 @@
       '<button type="button" class="btn btn-ghost btn-block" id="bxCarnet">' + T("bx_abrir_carnet") + '</button></div>';
     const nivelUp = bloqueados.length ? (bloqueados.some((x) => x.nivel_min === "socio") ? "socio" : (bloqueados[0].nivel_min || "premium")) : "";
     const up = bloqueados.length ? '<div class="bx-up"><b>' + T("bx_up_h").replace("{n}", bloqueados.length) + '</b><p>' + (nivelUp === "socio" ? T("bx_up_socio") : T("bx_up_p").replace("{nivel}", TL[nivelUp] || "Plus")) + '</p>' +
-      '<button type="button" class="btn" id="bxUp">' + (nivelUp === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")) + '</button></div>' : "";
+      (nivelUp === "socio" ? '<a class="btn" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + T("asp_asociate") + '</a><button type="button" class="btn btn-ghost" id="bxUp" style="margin-top:8px">' + T("asp_ya_soy") + '</button>'
+        : '<button type="button" class="btn" id="bxUp">' + T("m_ben_subi") + " " + (TL[nivelUp] || "Plus") + '</button>') + '</div>' : "";
 
     const fila = (x) => '<button type="button" class="bx-card' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '">' +
       '<span class="bx-card-top">' + logoDe(x) +
@@ -1619,6 +1641,7 @@
       if (el) abrirBeneficio(items.find((x) => x.id === el.dataset.ben), TL);
     });
     view().querySelector("#bxCarnet").onclick = () => activar("carnet");
+    { const ya = view().querySelector("#bxYaSoy"); if (ya) ya.onclick = validarSocioModal; }
     const upBtn = view().querySelector("#bxUp");
     if (upBtn) upBtn.onclick = () => { if (nivelUp === "socio") validarSocioModal(); else mostrarUpsell(nivelUp || "premium", T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")); };
     pintar();
@@ -1672,6 +1695,7 @@
   }
   // Hoja con el detalle del beneficio. Los datos vienen en líneas "Etiqueta: texto" (Dónde / Incluye / Cómo acceder / Importante) y se
   // muestran ordenados; un texto libre (de un beneficio cargado a mano) se muestra tal cual. El canje es siempre con el carnet.
+  let _potencialBen = null;
   function abrirBeneficio(b, TL) {
     if (!b) return;
     const ETQ = { "Dónde": "bx_l_donde", "Incluye": "bx_l_incluye", "Cómo acceder": "bx_l_acceso", "Importante": "bx_l_importante" };
@@ -1682,6 +1706,9 @@
       ? '<dl class="bx-dl">' + datos.map((d) => '<div><dt>' + T(d.k) + '</dt><dd>' + esc(d.v) + '</dd></div>').join("") + '</dl>'
       : '<p class="ben-hoja-p">' + (esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))) + '</p>';
     const estado = b.desbloqueado ? '<span class="bx-estado ok">' + T("bx_disponible") + '</span>' : '<span class="bx-estado">' + OLI.ic("candado", 13) + " " + T("bx_solo") + " " + esc(TL[b.nivel_min] || "Plus") + '</span>';
+    // Lo que ahorraría con ESTE beneficio siendo socio (estimado con la misma compra promedio de la tarjeta).
+    const ticketB = (_potencialBen && _potencialBen.ticket) || 0, ahB = Number(b.ahorro_estimado) || (Number(b.pct) > 0 && ticketB ? Math.round((ticketB * Number(b.pct)) / 100) : 0);
+    const aspEste = !b.desbloqueado && b.nivel_min === "socio" && ahB > 0 && ticketB ? '<p class="ben-hoja-p"><b>' + esc(T("asp_este").replace("{monto}", gs(ahB)).replace("{ticket}", gs(ticketB))) + '</b></p>' : "";
     const desktopPanel = window.matchMedia("(min-width: 1200px)").matches ? view().querySelector("#bxDetalle") : null;
     const html = `
       <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
@@ -1689,8 +1716,11 @@
         <div style="flex:1;min-width:0"><h3 class="ben-hoja-t">${esc(b.titulo || "")}</h3><p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>${estado}</div>
         <span class="bx-val grande${b.desbloqueado ? "" : " lock"}${String(b.valor || "").length > 5 ? " chico" : ""}">${esc(b.valor || "")}</span></div>
       ${b.desbloqueado ? "" : '<p class="ben-hoja-p">' + T("m_ben_hoja_subi").replace("{nivel}", esc(TL[b.nivel_min] || "Plus")) + '</p>'}
+      ${aspEste}
       ${cuerpo}
-      <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : (b.nivel_min === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus"))}</button>
+      ${!b.desbloqueado && b.nivel_min === "socio"
+        ? `<a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${T("asp_asociate")}</a><button type="button" class="btn btn-ghost btn-block" id="benCta" style="margin-top:8px">${T("asp_ya_soy")}</button>`
+        : `<button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")}</button>`}
       <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`;
     let root, close;
     if (desktopPanel) {
@@ -2020,6 +2050,35 @@
           <div class="cn2-sello">${bandera}${socio ? `<span class="cn2-socio">${OLI.ic("verificado", 14, true)} ${T("cn_socio")}</span>` : ""}</div>
         </div>
       </div>`;
+  }
+  async function vHistoria() {
+    view().innerHTML = skeleton(2);
+    let h;
+    try { h = await api("/historia"); } catch (e) { view().innerHTML = vacio(T("m_error_generico")); return; }
+    const mes = (d) => fechaMes(d), dia = (d) => fecha(d + "T12:00:00");
+    const aniosTxt = (a) => (a >= 1 ? (a === 1 ? T("cn_anio_uno") : T("cn_anios").replace("{n}", a)) : T("hi_nuevo"));
+    const chips = h.es_socio ? [h.grupo_club ? T("hi_grupo").replace("{g}", esc(h.grupo_club.charAt(0) + h.grupo_club.slice(1).toLowerCase())) : "", h.nro_socio ? T("hi_nro").replace("{n}", esc(h.nro_socio)) : ""].filter(Boolean) : [];
+    const hero = h.es_socio
+      ? `<section class="hi-hero"><span class="hi-eb">${esc(T("hi_socio"))}</span>
+          <div class="hi-grande">${esc(h.socio_desde ? aniosTxt(h.anios_socio) : T("hi_socio"))}</div>
+          <p class="hi-sub">${h.socio_desde ? esc(T("cn_socio_desde")) + " <b>" + esc(mes(h.socio_desde)) + "</b>" : ""}</p>
+          ${chips.length ? `<div class="hi-chips">${chips.map((c) => `<span>${c}</span>`).join("")}</div>` : ""}
+          <p class="hi-peq">${esc(T("m_cn_desde"))} ${esc(dia(h.miembro_desde))}</p></section>`
+      : `<section class="hi-hero"><span class="hi-eb">${esc(T("hi_miembro"))}</span>
+          <div class="hi-grande">${esc(mes(h.miembro_desde))}</div><p class="hi-sub">${esc(T("hi_asoc"))}</p>
+          ${h.potencial && h.potencial.mensual > 0 ? `<div class="ben-ahorro asp" style="margin-top:14px"><div class="ba-lbl">${esc(T("asp_lbl"))}</div><div class="ba-monto">${esc(T("asp_hasta").replace("{monto}", gs(h.potencial.mensual)))}</div>
+            <div class="ba-nota">${esc(T("asp_nota").replace("{anual}", gs(h.potencial.anual)).replace("{n}", h.potencial.usos).replace("{ticket}", gs(h.potencial.ticket)))}</div>
+            <a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${esc(T("asp_asociate"))}</a>
+            <button type="button" class="btn btn-ghost btn-block" id="hiYaSoy">${esc(T("asp_ya_soy"))}</button></div>` : ""}</section>`;
+    const st = h.stats, tile = (n, l) => `<div class="hi-tile"><b>${n}</b><span>${esc(l)}</span></div>`;
+    const tiles = [tile(String(st.canjes), T("hi_s_canjes")), tile(esc(gs(st.ahorro_total)), T("hi_s_ahorro")), tile(String(st.puntos), T("hi_s_puntos")),
+      tile(String(st.subastas_ganadas), T("hi_s_subastas") + (st.pujas ? " · " + T("hi_s_pujas").replace("{n}", st.pujas) : "")), tile(String(st.referidos), T("hi_s_referidos")), st.pena ? tile(esc(st.pena), T("hi_s_pena")) : ""].join("");
+    const TIT = { socio: "hi_t_socio", miembro: "hi_t_miembro", nivel: "hi_t_nivel", canje: "hi_t_canje", subasta: "hi_t_subasta" };
+    const linea = (h.hitos || []).filter((x) => x.fecha).map((x) => `<li class="hi-it hi-${esc(x.tipo)}"><time datetime="${esc(x.fecha)}">${esc(dia(x.fecha))}</time><b>${esc(T(TIT[x.tipo] || "hi_t_miembro"))}</b>${x.detalle ? `<small>${esc(x.detalle)}</small>` : ""}</li>`).join("");
+    view().innerHTML = `<div class="section" style="border:none;padding-top:8px"><h2>${esc(T("hi_h"))}</h2><p class="lead">${esc(T("hi_p"))}</p>
+      <div class="hi-grid"><div class="hi-main">${hero}<div class="hi-tiles">${tiles}</div></div>
+      <div class="hi-lado"><h3 class="hi-h3">${esc(T("hi_linea"))}</h3><ol class="hi-linea">${linea}</ol>${st.canjes ? "" : `<p class="muted hi-vacio">${esc(T("hi_vacio"))}</p>`}</div></div></div>`;
+    const ya = view().querySelector("#hiYaSoy"); if (ya) ya.onclick = validarSocioModal;
   }
   async function vCarnet() {
     view().innerHTML = skeleton(0);

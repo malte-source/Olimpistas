@@ -18,6 +18,7 @@
       { g: "ir", t: T("tab_carnet"), run: ir("carnet") },
       { g: "ir", t: T("tab_beneficios"), run: ir("beneficios") },
       { g: "ir", t: T("tab_puntos"), run: ir("puntos") },
+      { g: "ir", t: T("hi_h"), run: ir("historia") },
       { g: "ir", t: T("pal_perfil"), run: ir("perfil") },
       { g: "ir", t: T("pal_subastas"), run: ir("descubrir", "subastas") },
       { g: "ir", t: T("pal_sorteos"), run: ir("descubrir", "sorteos") },
