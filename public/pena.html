@@ -155,6 +155,7 @@
     <input id="password" type="password" autocomplete="current-password" />
     <button class="btn btn-block" id="loginBtn">Entrar</button>
     <div class="pen-msg" id="loginErr" role="alert"></div>
+    <p class="pen-muted" style="margin:12px 0 0"><a href="#" id="olvide" style="text-decoration:underline;text-underline-offset:3px">¿Olvidaste tu contraseña?</a></p>
   </div>
 
   <!-- Panel -->
@@ -395,6 +396,15 @@
     $("loginBtn").disabled = false;
   };
   $("password").addEventListener("keydown", function (e) { if (e.key === "Enter") $("loginBtn").click(); });
+  // Recuperar la contraseña: con el usuario (o el correo de la peña) llega un link de un solo uso que vence en 1 hora.
+  $("olvide").onclick = async function (e) {
+    e.preventDefault();
+    var m = $("loginErr"), dato = $("usuario").value.trim();
+    m.className = "pen-msg";
+    if (!dato) { m.textContent = "Escribí arriba tu usuario (o el correo de la peña) y tocá de nuevo."; $("usuario").focus(); return; }
+    try { var r = await api("/pena/olvide", { method: "POST", body: { usuario: dato } }); m.className = "pen-msg ok"; m.textContent = r.mensaje; }
+    catch (err) { m.textContent = err.message; }
+  };
   // Un owner del panel entra con su usuario del club y elige qué peña mirar (solo lectura, queda en la auditoría).
   function elegirPena(r) {
     var ops = r.opciones || [];

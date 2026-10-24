@@ -253,6 +253,19 @@
       <input id="password" type="password" autocomplete="current-password" />
       <button class="btn btn-block" id="loginBtn">Entrar</button>
       <div class="com-msg" id="loginErr" role="alert"></div>
+      <p class="com-muted" style="margin:12px 0 0"><a href="#" id="olvide" style="text-decoration:underline;text-underline-offset:3px">¿Olvidaste tu contraseña?</a></p>
+    </div>
+
+    <!-- ELEGIR CONTRASEÑA NUEVA (link de un solo uso del correo) -->
+    <div class="com-card com-login hide" id="claveCard">
+      <h3>Elegí tu contraseña nueva</h3>
+      <p class="com-muted">Es para entrar al panel de tu comercio.</p>
+      <label class="com-lbl" for="clave1">Contraseña (mínimo 8 caracteres)</label>
+      <input id="clave1" type="password" autocomplete="new-password" />
+      <label class="com-lbl" for="clave2">Repetila</label>
+      <input id="clave2" type="password" autocomplete="new-password" />
+      <button class="btn btn-block" id="claveBtn">Guardar y entrar</button>
+      <div class="com-msg" id="claveErr" role="alert"></div>
     </div>
 
     <!-- PANEL -->
@@ -853,8 +866,33 @@
       }catch(err){ aviso("No se pudo descargar", err.message); }
     });
 
-    // Arranque: si ya hay token, ir directo al panel.
-    if(tok()) entrarPanel();
+    // Recuperar la contraseña: con el usuario (o el correo del comercio) llega un link de un solo uso que vence en 1 hora.
+    $("olvide").addEventListener("click", async function(e){
+      e.preventDefault();
+      var m = $("loginErr"), dato = $("usuario").value.trim();
+      m.className = "com-msg";
+      if(!dato){ m.textContent = "Escribí arriba tu usuario (o el correo del comercio) y tocá de nuevo."; $("usuario").focus(); return; }
+      try{ var r = await api("/comercio/olvide", { method: "POST", body: { usuario: dato } }); m.className = "com-msg ok"; m.textContent = r.mensaje; }
+      catch(err){ m.textContent = err.message; }
+    });
+    var tokenClave = new URLSearchParams(location.search).get("clave") || "";
+    $("claveBtn").addEventListener("click", async function(){
+      var e = $("claveErr"); e.textContent = "";
+      if($("clave1").value !== $("clave2").value){ e.textContent = "Las dos contraseñas tienen que ser iguales."; return; }
+      $("claveBtn").disabled = true;
+      try{
+        var j = await api("/comercio/clave", { method: "POST", body: { token: tokenClave, password: $("clave1").value } });
+        try{ localStorage.setItem(TK, j.token); }catch(x){}
+        history.replaceState(null, "", "/comercio");
+        $("claveCard").classList.add("hide");
+        entrarPanel();
+      }catch(err){ e.textContent = err.message; }
+      $("claveBtn").disabled = false;
+    });
+
+    // Arranque: con el link del correo, elegir la contraseña nueva; si ya hay token, ir directo al panel.
+    if(tokenClave){ $("loginCard").classList.add("hide"); $("claveCard").classList.remove("hide"); }
+    else if(tok()) entrarPanel();
   })();
   </script>
 </body>

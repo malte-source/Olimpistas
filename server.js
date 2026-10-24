@@ -80,6 +80,9 @@ const limitePenaAcceso = rateLimit({ windowMs: 15 * 60_000, max: 12, skip: sinLi
 app.use("/api/pena/login", limitePenaAcceso);
 app.use("/api/pena/clave", limitePenaAcceso);
 app.use("/api/comercio/login", limitePenaAcceso);
+app.use("/api/pena/olvide", limitePenaAcceso);
+app.use("/api/comercio/olvide", limitePenaAcceso);
+app.use("/api/comercio/clave", limitePenaAcceso);
 app.use("/api/ciudades", rateLimit({ windowMs: 60_000, max: 90, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiadas búsquedas. Esperá un momento." } })); // mismo tope que el login del panel: acepta también las credenciales de un owner
 app.use("/api/vitales", rateLimit({ windowMs: 60_000, max: 30, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiadas mediciones." } }));
 app.use("/api/auth/reenviar-verificacion", rateLimit({ windowMs: 10 * 60_000, max: 20, skip: sinLimitarEnTest, standardHeaders: true, legacyHeaders: false, message: { error: "Demasiados pedidos. Esperá unos minutos." } }));
