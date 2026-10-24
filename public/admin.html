@@ -2039,13 +2039,13 @@
         var rech = d.items.filter(function (b) { return b.estado === "rechazado"; }).slice(0, 5);
         var pub = d.items.filter(function (b) { return b.estado === "aprobado" && b.activo !== false; }).sort(function (a, b) { return (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0); }).slice(0, 60);
         var PARA = { todos: "Todos", "premium,socio": "Plus y Socio", socio: "Solo socios" };
-        var fila = function (b, acciones) {
-          return '<div class="card-row" style="border:1px solid var(--border-default);border-radius:10px;padding:10px;margin:8px 0"><b>' + esc(b.comercio_nombre || "") + '</b> — ' + esc(b.titulo) +
+        var fila = function (b, acciones, sel) {
+          return '<div class="card-row" style="border:1px solid var(--border-default);border-radius:10px;padding:10px;margin:8px 0">' + (sel && w ? '<input type="checkbox" class="of-sel" data-ofsel="' + esc(b.id) + '" aria-label="Seleccionar ' + esc(b.titulo) + '" style="margin-right:8px;width:auto" />' : '') + '<b>' + esc(b.comercio_nombre || "") + '</b> — ' + esc(b.titulo) +
             ' <span class="pill">' + esc(b.valor || "") + '</span><div class="muted" style="font-size:13px">Para: ' + esc(PARA[b.niveles] || b.niveles) + (b.stock != null ? ' · cupo ' + b.stock : '') + (b.descripcion ? ' · ' + esc(b.descripcion) : '') +
             (b.motivo_rechazo ? ' · <span class="err">Rechazada: ' + esc(b.motivo_rechazo) + '</span>' : '') + '</div>' + (w && acciones ? '<div class="row-actions" style="margin-top:8px">' + acciones + '</div>' : '') + '</div>';
         };
-        box.innerHTML = (pend.length ? pend.map(function (b) {
-          return fila(b, '<button class="btn btn-sm" data-ofapr="' + esc(b.id) + '">Aprobar y publicar</button><button class="btn btn-sm btn-ghost adm-neg" data-ofrec="' + esc(b.id) + '">Rechazar</button>');
+        box.innerHTML = (pend.length > 1 && w ? '<div class="row-actions" id="ofLote" style="margin:6px 0;align-items:center;gap:12px"><label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="ofTodas" style="width:auto" /> Seleccionar todas</label><button type="button" class="btn btn-sm" id="ofAprobarSel" disabled>Aprobar las seleccionadas</button><span class="muted" id="ofLoteMsg" role="status" style="font-size:13px"></span></div>' : '') + (pend.length ? pend.map(function (b) {
+          return fila(b, '<button class="btn btn-sm" data-ofapr="' + esc(b.id) + '">Aprobar y publicar</button><button class="btn btn-sm btn-ghost adm-neg" data-ofrec="' + esc(b.id) + '">Rechazar</button>', true);
         }).join("") : '<p class="empty">No hay ofertas esperando aprobación.</p>') +
           (pub.length ? '<div class="mini" style="margin-top:14px">Publicadas · tocá "Destacar" para que salgan de banner arriba de la Red de Beneficios (' + pub.filter(function (b) { return b.destacado; }).length + ' destacadas)</div>' + pub.map(function (b) {
             return fila(b, '<button class="btn btn-sm ' + (b.destacado ? "" : "btn-ghost") + '" data-ofdest="' + esc(b.id) + '" data-on="' + (b.destacado ? "0" : "1") + '">' + (b.destacado ? "Destacada · quitar" : "Destacar") + '</button>');
@@ -2568,6 +2568,30 @@
         } else return;
         cargarOfertasAdmin();
       } catch (err) { toast(err.message, "err"); }
+    });
+    // Aprobar varias ofertas de una vez: se marcan, se confirma una sola vez y se publican de a una (cada comercio recibe su correo). Rechazar sigue siendo una por una: pide un motivo.
+    function ofSeleccionadas() { return Array.prototype.map.call($("ofertasWrap").querySelectorAll(".of-sel:checked"), function (c) { return c.dataset.ofsel; }); }
+    function ofActualizarLote() {
+      var n = ofSeleccionadas().length, b = $("ofAprobarSel"), todas = $("ofTodas"), total = $("ofertasWrap").querySelectorAll(".of-sel").length;
+      if (b) { b.disabled = !n; b.textContent = n ? "Aprobar las " + n + " seleccionadas" : "Aprobar las seleccionadas"; }
+      if (todas) { todas.checked = n > 0 && n === total; todas.indeterminate = n > 0 && n < total; }
+    }
+    $("ofertasWrap").addEventListener("change", function (e) {
+      if (e.target.id === "ofTodas") { Array.prototype.forEach.call($("ofertasWrap").querySelectorAll(".of-sel"), function (c) { c.checked = e.target.checked; }); ofActualizarLote(); }
+      else if (e.target.classList && e.target.classList.contains("of-sel")) ofActualizarLote();
+    });
+    $("ofertasWrap").addEventListener("click", async function (e) {
+      if (!e.target.closest("#ofAprobarSel")) return;
+      var ids = ofSeleccionadas().slice(0, 50), msg = $("ofLoteMsg"), btn = $("ofAprobarSel");
+      if (!ids.length) return;
+      if (!(await confirmar("Se publican " + ids.length + " ofertas en la app de los hinchas y cada comercio recibe su correo. Si alguna necesita corrección, rechazala por separado.", { titulo: "Aprobar " + ids.length + " ofertas", ok: "Aprobar y publicar" })).ok) return;
+      btn.disabled = true; var ok = 0, fallo = 0;
+      for (var i = 0; i < ids.length; i++) {
+        msg.textContent = "Publicando " + (i + 1) + " de " + ids.length + "…";
+        try { await api("/admin/beneficios/" + encodeURIComponent(ids[i]), { method: "PATCH", body: { estado: "aprobado" } }); ok++; } catch (err) { fallo++; }
+      }
+      toast(ok + (ok === 1 ? " oferta publicada" : " ofertas publicadas") + (fallo ? " · " + fallo + " no se pudieron publicar" : ""), fallo ? "err" : undefined);
+      cargarOfertasAdmin();
     });
     $("cargarMuestra").addEventListener("click", async function () {
       var c = await confirmar("Se cargan los comercios y beneficios de la Matriz Unificada del club, todos exclusivos para socios y ya publicados. Si ya existen no se duplican ni se pisan.", { titulo: "Cargar beneficios de muestra", ok: "Cargar" });
