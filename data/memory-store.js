@@ -1076,6 +1076,14 @@ function createMemoryStore({ filePath = null } = {}) {
       db.sesiones = db.sesiones.filter(s => s.token !== token); persist();
     },
     async borrarSesionesDeSocio(socioId) { const n = db.sesiones.length; db.sesiones = db.sesiones.filter((s) => s.socio_id !== socioId); if (db.sesiones.length !== n) persist(); return true; },
+    async registrarVitales(v) { (db.vitales = db.vitales || []).push({ ...v, creado: new Date().toISOString() }); if (db.vitales.length > 5000) db.vitales.splice(0, 1000); },
+    async resumenVitales(dias) {
+      const desde = Date.now() - dias * 86400000, g = new Map();
+      for (const v of (db.vitales || [])) { if (new Date(v.creado).getTime() < desde) continue; const k = v.pagina + "|" + v.dispositivo; (g.get(k) || g.set(k, []).get(k)).push(v); }
+      const p75 = (xs, c) => { const a = xs.map((x) => x[c]).filter((x) => x != null).sort((x, y) => x - y); if (!a.length) return null; const i = 0.75 * (a.length - 1), lo = Math.floor(i); return a[lo] + (a[Math.min(lo + 1, a.length - 1)] - a[lo]) * (i - lo); };
+      return [...g.values()].map((xs) => ({ pagina: xs[0].pagina, dispositivo: xs[0].dispositivo, n: xs.length, lcp_p75: p75(xs, "lcp"), inp_p75: p75(xs, "inp"), cls_p75: p75(xs, "cls"), ttfb_p75: p75(xs, "ttfb") })).sort((a, b) => b.n - a.n);
+    },
+    async purgarVitales() { const n = (db.vitales || []).length; db.vitales = (db.vitales || []).filter((v) => Date.now() - new Date(v.creado).getTime() < 45 * 86400000); return n - db.vitales.length; },
     async purgarSesionesVencidas() { const n = db.sesiones.length; db.sesiones = db.sesiones.filter((s) => new Date(s.expira).getTime() > Date.now()); if (db.sesiones.length !== n) persist(); return n - db.sesiones.length; },
     async reservarNotificacion(clave) { db.notificaciones_log = db.notificaciones_log || {}; if (db.notificaciones_log[clave]) return false; db.notificaciones_log[clave] = nowIso(); persist(); return true; },
 

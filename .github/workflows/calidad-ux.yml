@@ -1,0 +1,25 @@
+name: Calidad UX (Lighthouse)
+
+# Informativo: no bloquea PRs. Corre a mano o una vez por semana y reporta rendimiento y accesibilidad
+# de las páginas públicas (landing, inglés, ayuda, legal). Los umbrales son "warn" hasta tener la línea base.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 11 * * 1"
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    env:
+      PORT: "3000"
+      OLIMPISTAS_PERSIST: "0"
+      NODE_ENV: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lighthouse
+        run: npx --yes @lhci/cli@0.14.x autorun --config=lighthouserc.json

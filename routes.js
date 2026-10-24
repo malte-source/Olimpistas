@@ -973,6 +973,20 @@ function buildRouter() {
     if (n) log.info({ liberadas: n }, "reservas de preventa liberadas por falta de pago");
     return n;
   }
+  // Medición real de velocidad (anónima, muestreada en el navegador). Sin cédula, correo ni IP: solo pantalla y números.
+  const PAGINAS_VITALES = new Set(["landing", "inicio", "partidos", "carnet", "beneficios", "puntos", "perfil", "descubrir", "otra"]);
+  r.post("/vitales", wrap(async (req, res) => {
+    const b = req.body || {};
+    const num = (x, max) => { const n = Number(x); return Number.isFinite(n) && n >= 0 && n <= max ? Math.round(n * 1000) / 1000 : null; };
+    const v = {
+      pagina: PAGINAS_VITALES.has(b.p) ? b.p : "otra",
+      lcp: num(b.lcp, 60000), inp: num(b.inp, 60000), cls: num(b.cls, 10), fcp: num(b.fcp, 60000), ttfb: num(b.ttfb, 60000),
+      dispositivo: ["movil", "tablet", "escritorio"].includes(b.d) ? b.d : "",
+      conexion: ["slow-2g", "2g", "3g", "4g"].includes(b.c) ? b.c : "",
+    };
+    if (store.registrarVitales && [v.lcp, v.inp, v.cls, v.fcp, v.ttfb].some((x) => x != null)) store.registrarVitales(v).catch(() => {});
+    res.status(204).end();
+  }));
   r.post("/cron/horario", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
     if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
@@ -1017,6 +1031,7 @@ function buildRouter() {
         if (mailer.enviarRenovacion) await mailer.enviarRenovacion(s, { tier: s.tier_slug, dias: Number(s.dias_rest) }).catch(() => {}); out.renovaciones++; await new Promise((done) => setTimeout(done, 300));
       }
     } catch (e) { log.error({ err: e.message }, "cron renov"); }
+    try { if (store.purgarVitales) out.vitalesPurgados = await store.purgarVitales(); } catch (e) { log.error({ err: e.message }, "cron purga vitales"); }
     try { if (store.purgarSesionesVencidas) out.sesionesPurgadas = await store.purgarSesionesVencidas(); } catch (e) { log.error({ err: e.message }, "cron purga sesiones"); }
     log.info(out, "cron diario");
     res.json({ ok: true, ...out });
@@ -1204,6 +1219,12 @@ function buildRouter() {
     const subastasSinPagar = (subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && s.pago_estado !== "pagado").length;
     const subastasPausadas = (subastas || []).filter((s) => s.estado === "pausada").length;
     res.json({ totalReal, pendientes: enrich, subastasSinPagar, subastasPausadas });
+  }));
+  // Rendimiento real: p75 de LCP / INP / CLS / TTFB por pantalla y tipo de dispositivo (últimos N días).
+  r.get("/admin/vitales", requireAdmin, wrap(async (req, res) => {
+    const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 7, 1), 45);
+    const filas = store.resumenVitales ? await store.resumenVitales(dias) : [];
+    res.json({ dias, filas: filas.map((f) => ({ ...f, lcp_p75: f.lcp_p75 == null ? null : Math.round(f.lcp_p75), inp_p75: f.inp_p75 == null ? null : Math.round(f.inp_p75), ttfb_p75: f.ttfb_p75 == null ? null : Math.round(f.ttfb_p75), cls_p75: f.cls_p75 == null ? null : Math.round(f.cls_p75 * 1000) / 1000 })) });
   }));
   // Reportes de negocio: embudo, membresías (pagas vs gratis), top países, altas/día.
   r.get("/admin/reportes", requireAdmin, wrap(async (_req, res) => {

@@ -143,6 +143,7 @@
     });
   }
 
+  let _enfocarTitulo = false;
   function activar(tab, opts) {
     opts = opts || {};
     window.scrollTo(0, 0); // si venías scrolleado, el título de la pestaña nueva no debe quedar tapado por el header fijo
@@ -150,6 +151,7 @@
     detenerQrBeneficios();                          // y el QR rotativo del carnet
     _contentHost = null;                            // fuera de Descubrir el contenido ocupa todo #view
     curTab = tab; curSubId = null;
+    _enfocarTitulo = !opts.fromRoute;                // el foco pasa al título de la pantalla nueva (no en la primera carga)
     // fromRoute (init/popstate): normaliza con replace si hiciera falta, sin nueva entrada.
     // Navegación desde la UI (click): agrega una entrada de historial nueva.
     syncUrl(!!opts.fromRoute);
@@ -182,6 +184,14 @@
     });
   }
 
+  // Lo que usa el buscador global (paleta.js) para llevarte a una pantalla o abrir un beneficio.
+  window.OLI.nav = {
+    ir: (tab, seg) => { if (tab === "descubrir" && seg) descSeg = seg; activar(tab); },
+    verBeneficio: (id) => { _benAbrir = id; activar("beneficios"); },
+    validarSocio: () => validarSocioModal(),
+    esSocio: () => esSocioValidado(),
+    logout: () => logout(),
+  };
   async function logout() { try { await api("/auth/logout", { method: "POST" }); } finally { location.href = "/"; } }
   async function refrescar() { SESSION = await yo(); renderProgreso(); renderHeader(); renderBannerSocio(); }
 
@@ -518,12 +528,13 @@
     const { root, close: cerrar } = OLI.modal(`
       <h3>${T("up_modal_h")}</h3>
       <p class="muted">${T("up_modal_p")}</p>
-      <input id="upCedula" type="text" inputmode="numeric" autocomplete="off" placeholder="${T("ob_cedula_ph")}" />
+      <input id="upCedula" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="go" autocomplete="off" placeholder="${T("ob_cedula_ph")}" />
       ${faltaFecha ? `<label style="display:block;color:var(--gris);font-size:13px;margin-top:10px">${T("ob_fechanac")}</label><input id="upFecha" type="date" max="${hoy}" />` : ""}
       <p class="err" id="upErr"></p>
       <button class="btn btn-block" id="upValidar">${T("ob_validar")}</button>
       <button class="btn btn-ghost btn-block" id="upCerrar" style="margin-top:8px">${T("up_cerrar")}</button>`);
     root.querySelector("#upCerrar").onclick = cerrar;
+    root.querySelector("#upCedula").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); root.querySelector("#upValidar").click(); } });
     root.querySelector("#upValidar").onclick = async () => {
       const cedula = (root.querySelector("#upCedula").value || "").trim();
       const err = root.querySelector("#upErr"); err.textContent = "";
@@ -579,6 +590,8 @@
     const lead = h && h.nextElementSibling && h.nextElementSibling.classList.contains("lead") ? h.nextElementSibling : null;
     const txt = (h && h.textContent.trim()) || T("tab_" + curTab);
     if (t.textContent !== txt) t.textContent = txt;
+    document.title = txt + " — Olimpistas";
+    if (_enfocarTitulo && h) { _enfocarTitulo = false; t.tabIndex = -1; try { t.focus({ preventScroll: true }); } catch (e) {} }
     const st = lead ? lead.textContent.trim() : "";
     if (sub.textContent !== st) sub.textContent = st;
   }
@@ -1422,7 +1435,7 @@
       '<h2>' + T("m_ben_h") + '</h2><p class="lead">' + (ciudad ? T("m_ben_p_local").replace("{ciudad}", esc(ciudadTxt)) : T("m_ben_p")) + '</p>' +
       '<div class="bx">' +
         '<div class="bx-main">' + hero + barra + '<div class="bx-lista" id="bxLista"></div></div>' +
-        '<aside class="bx-side">' + ahorroCard + cod + guia + up + '</aside>' +
+        '<aside class="bx-side"><section class="bx-detalle" id="bxDetalle" aria-label="' + esc(T("bx_detalle")) + '" tabindex="-1" hidden></section>' + ahorroCard + cod + guia + up + '</aside>' +
       '</div></div>';
 
     // Estado de los filtros y pintado de la lista.
@@ -1546,7 +1559,8 @@
       ? '<dl class="bx-dl">' + datos.map((d) => '<div><dt>' + T(d.k) + '</dt><dd>' + esc(d.v) + '</dd></div>').join("") + '</dl>'
       : '<p class="ben-hoja-p">' + (esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))) + '</p>';
     const estado = b.desbloqueado ? '<span class="bx-estado ok">' + T("bx_disponible") + '</span>' : '<span class="bx-estado">' + OLI.ic("candado", 13) + " " + T("bx_solo") + " " + esc(TL[b.nivel_min] || "Plus") + '</span>';
-    const { root, close } = OLI.modal(`
+    const desktopPanel = window.matchMedia("(min-width: 1180px)").matches ? view().querySelector("#bxDetalle") : null;
+    const html = `
       <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
       <div class="bx-hoja-cab">${b.comercio_logo ? '<span class="bx-logo grande"><img src="' + esc(b.comercio_logo) + '" alt=""></span>' : '<span class="bx-logo ini grande" aria-hidden="true">' + esc(String(b.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '</span>'}
         <div style="flex:1;min-width:0"><h3 class="ben-hoja-t">${esc(b.titulo || "")}</h3><p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>${estado}</div>
@@ -1554,7 +1568,19 @@
       ${b.desbloqueado ? "" : '<p class="ben-hoja-p">' + T("m_ben_hoja_subi").replace("{nivel}", esc(TL[b.nivel_min] || "Plus")) + '</p>'}
       ${cuerpo}
       <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : (b.nivel_min === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus"))}</button>
-      <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`);
+      <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`;
+    let root, close;
+    if (desktopPanel) {
+      // Maestro–detalle: la lista queda a la vista y el detalle cambia al elegir otro beneficio.
+      root = desktopPanel; root.innerHTML = html; root.hidden = false;
+      const marcar = (id) => view().querySelectorAll(".bx-card[data-ben]").forEach((c) => { if (c.dataset.ben === id) c.setAttribute("aria-current", "true"); else c.removeAttribute("aria-current"); });
+      marcar(b.id);
+      close = () => { root.hidden = true; root.innerHTML = ""; marcar(null); };
+      try { root.focus({ preventScroll: true }); } catch (e) {}
+      root.onkeydown = (e) => { if (e.key === "Escape") { close(); } };
+    } else {
+      ({ root, close } = OLI.modal(html));
+    }
     root.querySelector("#benCerrar").onclick = close;
     root.querySelector("#benCta").onclick = () => { close(); if (b.desbloqueado) activar("carnet"); else if (b.nivel_min === "socio") validarSocioModal(); else mostrarUpsell(b.nivel_min || "premium", T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")); };
   }
@@ -1564,7 +1590,7 @@
   // _subGen invalida a un pollTick que ya salió a la red: sin esto, si el usuario salía del lote
   // mientras la respuesta estaba en vuelo, ese tick se reprogramaba solo y quedaba un poller
   // "zombie" golpeando la API para siempre (uno más por cada lote que se abría y cerraba).
-  function stopSub() { _subGen++; if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
+  function stopSub() { document.body.classList.remove("en-puja"); _subGen++; if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
   const gsK = (n) => "₲" + Math.round((Number(n) || 0) / 1000) + "k";
   function cdTexto(termina) {
     const ms = new Date(termina).getTime() - Date.now();
@@ -1699,6 +1725,7 @@
     </div>`;
     cv().querySelector(".sub-back").onclick = () => { window.scrollTo(0, 0); stopSub(); descSeg = "subastas"; curSubId = null; syncUrl(); vSubastas(); };
     bindPujas(s.id);
+    document.body.classList.add("en-puja");   // en el celular la barra de acciones queda fija abajo y el chat se corre
   }
   function bindPujas(id) {
     cv().querySelectorAll(".sub-puja").forEach((b) => b.addEventListener("click", () => pujar(id, Number(b.dataset.monto))));

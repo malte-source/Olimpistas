@@ -747,6 +747,21 @@ function createPgStore({ databaseUrl, debug }) {
     // Cierra TODAS las sesiones de un socio (p. ej. al resetear la contraseña).
     async borrarSesionesDeSocio(socioId) { await sql`DELETE FROM sesiones WHERE socio_id = ${socioId}`; return true; },
     // Purga sesiones vencidas (se llama desde el cron; evita bloat de la tabla).
+    // Medición real de velocidad (Core Web Vitals): una fila por visita muestreada, sin datos personales.
+    async registrarVitales(v) {
+      await sql`INSERT INTO vitales_ux (pagina, lcp, inp, cls, fcp, ttfb, dispositivo, conexion)
+        VALUES (${v.pagina}, ${v.lcp}, ${v.inp}, ${v.cls}, ${v.fcp}, ${v.ttfb}, ${v.dispositivo}, ${v.conexion})`;
+    },
+    async resumenVitales(dias) {
+      return sql`SELECT pagina, dispositivo, COUNT(*)::int AS n,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY lcp)  AS lcp_p75,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY inp)  AS inp_p75,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY cls)  AS cls_p75,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY ttfb) AS ttfb_p75
+        FROM vitales_ux WHERE creado > now() - make_interval(days => ${dias})
+        GROUP BY pagina, dispositivo ORDER BY n DESC`;
+    },
+    async purgarVitales() { const r = await sql`DELETE FROM vitales_ux WHERE creado < now() - interval '45 days'`; return r.count || 0; },
     async purgarSesionesVencidas() { const r = await sql`DELETE FROM sesiones WHERE expira < now()`; return r.count || 0; },
     // Idempotencia de notificaciones: true = primera vez (reservado) / false = ya enviada.
     // Atómico e inmune a doble corrida del cron y a concurrencia entre instancias.
