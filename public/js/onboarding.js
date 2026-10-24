@@ -80,7 +80,7 @@ window.OLI_ONB = (function () {
     const btn = document.getElementById("obCrear"); btn.disabled = true;
     try {
       const cedula = (val("obCedula") || "").replace(/\D/g, "");
-      await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena(), ...(cedula.length >= 5 ? { cedula } : {}) } });
+      await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena(), idioma: window.OLI_I18N ? window.OLI_I18N.lang() : undefined, ...(cedula.length >= 5 ? { cedula } : {}) } });
       window.OLI.track("Registro", "CompleteRegistration");
       irPaso(2);
     } catch (e) { err.textContent = e.message; btn.disabled = false; }
@@ -128,6 +128,9 @@ window.OLI_ONB = (function () {
     const b = document.getElementById("obBody");
     let c = null;
     try { c = (await api("/carnet")).carnet; } catch (e) {}
+    let yo = null;
+    try { yo = (await api("/auth/yo")).socio; } catch (e) {}
+    const falta = !!(yo && yo.email && !yo.email_verificado);   // el correo sin confirmar es lo primero que el hincha tiene que saber, no un detalle escondido
     const qr = c ? makeQR(location.origin + "/c/" + encodeURIComponent(c.numero)) : "";
     const carnetHtml = c ? carnet({ tierSlug: c.tierSlug, tierNombre: c.tier, nombre: c.nombre, numero: c.numero, foto: c.foto || fotoData, qr, iso: c.iso }) : "";
     const hayMundo = !!document.getElementById("mundo");
@@ -135,6 +138,7 @@ window.OLI_ONB = (function () {
       <div class="ob-step ob-listo">
         <h2>${T("ob_listo_h")}</h2>
         <p class="ob-sub">${T("ob_listo_p")}</p>
+        ${falta ? `<div class="ob-confirma" role="status"><b>${T("ob_conf_t")}</b><span>${T("ob_conf_p").replace("{email}", OLI.esc(yo.email))}</span><button type="button" class="btn btn-sm btn-ghost" id="obReenviar">${T("ob_conf_re")}</button></div>` : ""}
         ${carnetHtml}
         ${(c && !c.foto && !fotoData) ? `<p class="ob-switch"><a id="obAgregarFoto">${OLI.icon("camera", { size: 14 })} ${T("ob_agregar_foto")}</a></p>` : ""}
         <p class="ob-ig-cta">${T("ig_cta")}</p>
@@ -160,6 +164,13 @@ window.OLI_ONB = (function () {
         });
         if (r && r.downloaded && window.OLI.toast) OLI.toast(T("m_ig_descargado"));
       } catch (e) {} finally { bt.disabled = false; bt.innerHTML = o0; }
+    };
+    const reenviar = b.querySelector("#obReenviar");
+    if (reenviar) reenviar.onclick = async () => {
+      reenviar.disabled = true;
+      try { await api("/auth/reenviar-verificacion", { method: "POST", body: {} }); if (window.OLI.toast) OLI.toast(T("vf_enviado")); }
+      catch (e) { if (window.OLI.toast) OLI.toast(e.message); }
+      setTimeout(() => { reenviar.disabled = false; }, 8000);
     };
     b.querySelector("#obIr").onclick = () => { cerrar(); location.href = "/miembro"; };
     const mapa = b.querySelector("#obMapa");

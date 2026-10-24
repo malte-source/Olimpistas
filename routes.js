@@ -1926,6 +1926,10 @@ function buildRouter() {
       const co = await store.getComercio(b.comercio_id).catch(() => null);
       if (co && emailOk(co.contacto)) mailer.enviarOfertaAprobada({ email: co.contacto }, { comercio: co.nombre, titulo: b.titulo }).catch(() => {});
     }
+    if (estado === "rechazado" && mailer.enviarOfertaRechazada && store.getComercio) {
+      const co = await store.getComercio(b.comercio_id).catch(() => null);
+      if (co && emailOk(co.contacto)) mailer.enviarOfertaRechazada({ email: co.contacto }, { comercio: co.nombre, titulo: b.titulo, motivo }).catch(() => {});
+    }
     res.json({ ok: true, oferta: ofertaOut(b) });
   }));
   // Resumen de la red de comercios (qué le falta a cada uno + canjes del mes, mes calendario de Paraguay). Sin contraseñas ni datos de hinchas.
@@ -3026,6 +3030,7 @@ function buildRouter() {
     // Ubicación de la peña = su ciudad (GeoNames): así aparece en "la peña más cercana" apenas se verifica.
     try { const c = store.ciudadPorNombre ? await store.ciudadPorNombre({ nombre: ciudad, pais: iso }) : null; if (c) p = (await store.updatePena(p.id, { lat: c.lat, lng: c.lng })) || p; } catch (e) { /* sin ubicación: se carga después */ }
     alertar("pena:solicitud:" + p.id, "Peña nueva para verificar", `${nombre} · ${ciudad} · preside ${presidente} · ${contacto}`);
+    if (mailer.enviarPenaSolicitudRecibida) mailer.enviarPenaSolicitudRecibida({ email: contacto }, { pena: p }).catch(() => {});
     res.status(201).json({ ok: true, id: p.id });
   }));
 
@@ -3191,10 +3196,12 @@ function buildRouter() {
     if (!["verificada", "pausada"].includes(estado)) throw httpError(400, "Estado inválido (verificada | pausada)");
     const pena = await store.getPena(req.params.id);
     if (!pena || pena.estado === "pendiente") throw httpError(409, "Una peña pendiente se verifica, no se pausa");
+    const previo = pena.estado;   // el almacén en memoria devuelve el mismo objeto: hay que guardar el estado antes de actualizar
     const p = await store.updatePena(pena.id, { estado });
     if (estado === "pausada" && store.borrarSesionesDePena) await store.borrarSesionesDePena(pena.id);
     _penasPub = null;
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:" + estado, targetId: pena.id, detalle: pena.nombre, por: req.adminUser });
+    if (previo !== estado && mailer.enviarPenaEstado && emailOk(pena.contacto)) mailer.enviarPenaEstado({ email: pena.contacto }, { pena, estado }).catch(() => {});
     res.json({ ok: true, pena: { id: p.id, estado: p.estado } });
   }));
   // Aprobar (resta del saldo) o rechazar un canje pedido por una peña.
@@ -3600,6 +3607,8 @@ function buildRouter() {
     const ahorro = ben.pct ? Math.round(monto * Number(ben.pct) / 100) : (Number(ben.ahorro_estimado) || 0);
     const out = await store.canjearBeneficio({ beneficioId: ben.id, socioId: socio.id, comercioId: req.comercio.id, validadoPor: req.comercio.nombre, monto: monto || null, ahorro: ahorro || null, tierSlug: tier, ventana });
     if (!out.ok) return res.json({ ok: false, motivo: out.motivo, socio: socioOut });
+    // Aviso al socio con lo que ahorró (la prueba de valor del producto); no demora la respuesta de la caja.
+    if (mailer.enviarCanjeExitoso && store.getSocioById) store.getSocioById(socio.id).then((s) => { if (s && s.email) return mailer.enviarCanjeExitoso(s, { comercio: req.comercio.nombre, beneficio: ben.titulo, ahorro }); }).catch(() => {});
     res.json({ ok: true, socio: socioOut, beneficio: ben.titulo, ahorro, via, stock: out.stock });
   }));
 
