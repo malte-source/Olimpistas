@@ -697,7 +697,7 @@
       var slice = rows.slice(st.page * st.pageSize, st.page * st.pageSize + st.pageSize);
       var body = cont.querySelector(".tbl-body"), cc = cont.querySelector(".tbl-count");
       if (!total) { body.innerHTML = '<p class="empty">' + esc(opts.empty || "Sin resultados.") + '</p>'; if (cc) cc.textContent = ""; return; }
-      var thead = '<thead><tr>' + cols.map(function (c) { var arr = st.sortKey === c.key ? (st.sortDir > 0 ? " ▲" : " ▼") : ""; return '<th' + (c.sortable !== false && c.text ? ' data-sort="' + c.key + '"' : '') + '>' + esc(c.label || "") + arr + '</th>'; }).join("") + '</tr></thead>';
+      var thead = '<thead><tr>' + cols.map(function (c) { var arr = st.sortKey === c.key ? (st.sortDir > 0 ? " ▲" : " ▼") : ""; var ord = c.sortable !== false && c.text, on = st.sortKey === c.key; return '<th scope="col"' + (ord ? ' aria-sort="' + (on ? (st.sortDir > 0 ? "ascending" : "descending") : "none") + '"' : '') + '>' + (ord ? '<button type="button" class="soc-th" data-sort="' + c.key + '">' + esc(c.label || "") + '<span aria-hidden="true">' + arr + '</span></button>' : esc(c.label || "")) + '</th>'; }).join("") + '</tr></thead>';
       var trs = slice.map(function (r) { return '<tr' + (opts.rowId ? ' data-id="' + esc(opts.rowId(r)) + '"' : '') + '>' + cols.map(function (c) { return '<td data-l="' + esc(c.label || "") + '">' + (c.cell ? c.cell(r) : "") + '</td>'; }).join("") + '</tr>'; }).join("");
       var pager = pages > 1 ? '<div class="tbl-pager"><button class="btn btn-sm btn-ghost" data-pg="prev"' + (st.page === 0 ? " disabled" : "") + '>‹ Anterior</button><span class="muted">' + (st.page + 1) + ' / ' + pages + '</span><button class="btn btn-sm btn-ghost" data-pg="next"' + (st.page >= pages - 1 ? " disabled" : "") + '>Siguiente ›</button></div>' : '';
       body.innerHTML = '<table class="adm-tabla">' + thead + '<tbody>' + trs + '</tbody></table>' + pager;
@@ -1974,16 +1974,30 @@
             '<div class="muted" style="font-size:13px">Saldo del fondo: ' + gsA(c.saldo) + ' · ' + esc(fmtFecha(c.creado)) + '</div>' +
             (wp ? '<div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" data-penacj="' + esc(c.id) + '">Aprobar</button><button class="btn btn-sm btn-ghost adm-neg" data-penacjno="' + esc(c.id) + '">Rechazar</button></div>' : '') + '</div>';
         }).join("");
-        html += ok.length ? '<table class="adm-tabla" style="font-size:13px"><thead><tr><th style="text-align:left">#</th><th style="text-align:left">Peña</th><th>Hinchada</th><th>Padrón del club</th>' + (d.owner ? '<th>Al día / en mora</th>' : '') + '<th>Socios</th><th>Plus</th><th></th></tr></thead><tbody>' +
-          ok.map(function (p, i) {
-            return '<tr><td>' + (i + 1) + '</td><td><b>' + esc(p.nombre) + '</b><br><span class="muted">' + esc(p.ciudad) + (p.estado === "pausada" ? ' · en pausa' : '') + '</span></td>' +
-              '<td style="text-align:center"><b>' + (p.hinchada != null ? p.hinchada : p.altas) + '</b><br><span class="muted">' + p.altas + ' en la app</span></td>' +
-              '<td style="text-align:center">' + ((p.padron && p.padron.miembros) || 0) + '<br><span class="muted">' + ((p.padron && p.padron.con_cuenta) || 0) + ' con cuenta</span></td>' +
-              (d.owner ? '<td style="text-align:center">' + (p.padron && p.padron.al_dia != null ? p.padron.al_dia + ' / ' + p.padron.en_mora : '—') + '</td>' : '') +
-              '<td style="text-align:center">' + p.socios + '</td><td style="text-align:center">' + p.plus + '</td>' +
-              '<td style="text-align:right">' + (w ? '<button class="btn btn-sm btn-ghost" data-penaed="' + esc(p.id) + '">Datos</button> ' : '') + (d.owner ? '<button class="btn btn-sm btn-ghost" data-penapad="' + esc(p.id) + '" data-n="' + esc(p.nombre) + '">Padrón</button> ' : '') + (w ? '<button class="btn btn-sm btn-ghost" data-penaacc="' + esc(p.id) + '">Reenviar acceso</button> <button class="btn btn-sm btn-ghost" data-penaest="' + esc(p.id) + '" data-a="' + (p.estado === "pausada" ? "verificada" : "pausada") + '">' + (p.estado === "pausada" ? "Reactivar" : "Pausar") + '</button>' : '') + '</td></tr>';
-          }).join("") + '</tbody></table>' : '';
+        html += ok.length ? '<div id="penasTabla"></div><div class="row-actions" style="margin-top:8px"><button class="btn btn-sm btn-ghost" id="penasCsv">Exportar CSV</button></div>' : '';
         box.innerHTML = html || '<p class="empty">Todavía no hay peñas. Las solicitudes llegan desde la app de los hinchas.</p>';
+        if (ok.length) {
+          var pad = function (p, k) { return Number((p.padron && p.padron[k]) || 0); };
+          var colsP = [
+            { key: "nombre", label: "Peña", text: function (p) { return p.nombre + " " + (p.ciudad || ""); }, cell: function (p) { return '<b>' + esc(p.nombre) + '</b><br><span class="muted">' + esc(p.ciudad || "") + (p.estado === "pausada" ? ' · en pausa' : '') + '</span>'; } },
+            { key: "hinchada", label: "Hinchada", text: function (p) { return String(p.hinchada != null ? p.hinchada : p.altas).padStart(8, "0"); }, cell: function (p) { return '<b>' + (p.hinchada != null ? p.hinchada : p.altas) + '</b><br><span class="muted">' + p.altas + ' en la app</span>'; } },
+            { key: "padron", label: "Padrón del club", text: function (p) { return String(pad(p, "miembros")).padStart(8, "0"); }, cell: function (p) { return pad(p, "miembros") + '<br><span class="muted">' + pad(p, "con_cuenta") + ' con cuenta</span>'; } }
+          ];
+          if (d.owner) colsP.push({ key: "mora", label: "Al día / en mora", text: function (p) { return String(pad(p, "en_mora")).padStart(8, "0"); }, cell: function (p) { return p.padron && p.padron.al_dia != null ? p.padron.al_dia + ' / ' + p.padron.en_mora : '—'; } });
+          colsP.push(
+            { key: "socios", label: "Socios", text: function (p) { return String(p.socios || 0).padStart(8, "0"); }, cell: function (p) { return String(p.socios || 0); } },
+            { key: "plus", label: "Plus", text: function (p) { return String(p.plus || 0).padStart(8, "0"); }, cell: function (p) { return String(p.plus || 0); } },
+            { key: "acc", label: "", sortable: false, cell: function (p) { return (w ? '<button class="btn btn-sm btn-ghost" data-penaed="' + esc(p.id) + '">Datos</button> ' : '') + (d.owner ? '<button class="btn btn-sm btn-ghost" data-penapad="' + esc(p.id) + '" data-n="' + esc(p.nombre) + '">Padrón</button> ' : '') + (w ? '<button class="btn btn-sm btn-ghost" data-penaacc="' + esc(p.id) + '">Reenviar acceso</button> <button class="btn btn-sm btn-ghost" data-penaest="' + esc(p.id) + '" data-a="' + (p.estado === "pausada" ? "verificada" : "pausada") + '">' + (p.estado === "pausada" ? "Reactivar" : "Pausar") + '</button>' : ''); } }
+          );
+          tabla($("penasTabla"), colsP, ok, { rowId: function (p) { return p.id; }, filtro: true, filterPh: "Filtrar peñas…", empty: "Ninguna peña coincide.", pageSize: 25, sortKey: "hinchada", sortDir: -1 });
+          $("penasCsv").onclick = function () {
+            var q = function (v) { v = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+            var head = ["pena", "ciudad", "pais", "estado", "hinchada", "altas_en_la_app", "padron_miembros", "padron_con_cuenta"].concat(d.owner ? ["padron_al_dia", "padron_en_mora"] : []).concat(["socios", "plus"]);
+            var lines = ok.map(function (p) { return [p.nombre, p.ciudad, p.pais_iso, p.estado, p.hinchada != null ? p.hinchada : p.altas, p.altas, pad(p, "miembros"), pad(p, "con_cuenta")].concat(d.owner ? [pad(p, "al_dia"), pad(p, "en_mora")] : []).concat([p.socios, p.plus]).map(q).join(","); });
+            var blob = new Blob(["\ufeff" + head.join(",") + "\n" + lines.join("\n")], { type: "text/csv;charset=utf-8" }), u = URL.createObjectURL(blob), a = document.createElement("a");
+            a.href = u; a.download = "penas.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
+          };
+        }
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
     // Ficha 360: cinco indicadores, estado en el club (en vivo o "sin confirmar") y línea de tiempo.

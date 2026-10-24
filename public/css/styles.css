@@ -1967,3 +1967,4 @@ body.pal-abierta { overflow: hidden; }
 .atc-pulgar.on { color: var(--text-primary); background: var(--card2, rgba(127, 127, 127, .18)); }
 .atc-pulgar:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
 .atc-gracias { font-size: var(--t-12); color: var(--text-secondary); margin-left: 4px; }
+.mapa-lista-wrap[hidden] { display: none; }
