@@ -1884,3 +1884,7 @@ body.pal-abierta { overflow: hidden; }
 /* Correo sin confirmar: el aviso es el mismo formato que los otros, con un acento propio y sin botón de cerrar. */
 .socio-banner-correo { border-color: var(--oro, var(--border-default)); }
 .socio-banner-correo .sb-txt b { word-break: break-all; }
+
+.socio-banner-correo .sb-txt { font-weight: 500; font-size: var(--t-13); line-height: 1.4; }
+.socio-banner-correo .sb-txt svg { display: inline-block; vertical-align: -3px; margin-right: 6px; }
+.socio-banner-correo .sb-txt b { font-weight: 700; }

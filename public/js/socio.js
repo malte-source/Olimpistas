@@ -643,6 +643,40 @@
   const sw = (id, on) => `<button type="button" role="switch" class="interruptor" id="${id}" aria-checked="${on}"></button>`;
   const cuadro = (color, ic) => `<span class="grupo-ic" style="background:${color}"><svg class="ic" width="18" height="18"><use href="/assets/icons.svg#i-${ic}"/></svg></span>`;
   const chev = '<svg class="ic grupo-chev"><use href="/assets/icons.svg#i-chevron-derecha"/></svg>';
+  // ─── Avisos push ───
+  const pushSoporta = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const b64aU8 = (b64) => { const p = "=".repeat((4 - (b64.length % 4)) % 4), r = atob((b64 + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
+  async function pushEstado() {
+    const out = { soporta: pushSoporta(), permiso: pushSoporta() ? Notification.permission : "denied", suscrito: false, cfg: null };
+    try { out.cfg = await api("/push/config"); } catch (e) { return out; }
+    if (out.soporta && out.permiso === "granted") { try { const reg = await navigator.serviceWorker.ready; out.suscrito = !!(await reg.pushManager.getSubscription()) && out.cfg.dispositivos > 0; } catch (e) {} }
+    return out;
+  }
+  async function pushActivar(cfg) {
+    const permiso = await Notification.requestPermission();
+    if (permiso !== "granted") return { ok: false, motivo: permiso };
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aU8(cfg.clave) });
+    await api("/push/suscribir", { method: "POST", body: { subscription: sub.toJSON() } });
+    return { ok: true };
+  }
+  async function pushDesactivar() {
+    try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) { const ep = sub.endpoint; await sub.unsubscribe(); await api("/push/baja", { method: "POST", body: { endpoint: ep } }); } } catch (e) {}
+  }
+  // Después de la primera puja se ofrece, una sola vez, que le avisemos si lo superan.
+  async function ofrecerAvisoSubasta() {
+    try {
+      if (!pushSoporta() || Notification.permission !== "default" || localStorage.getItem("oli_push_oferta")) return;
+      const est = await pushEstado(); if (!est.cfg || !est.cfg.habilitado) return;
+      localStorage.setItem("oli_push_oferta", "1");
+      const { root, close } = OLI.modal(`<h3>${esc(T("push_of_h"))}</h3><p class="muted">${esc(T("push_of_p"))}</p>
+        <button type="button" class="btn btn-block" id="pofSi">${esc(T("push_of_si"))}</button>
+        <button type="button" class="btn btn-ghost btn-block" id="pofNo" style="margin-top:8px">${esc(T("push_of_no"))}</button>`);
+      root.querySelector("#pofNo").onclick = close;
+      root.querySelector("#pofSi").onclick = async () => { close(); try { const r = await pushActivar(est.cfg); toast(r.ok ? T("push_ok") : T("push_bloq")); } catch (e) { toast(e.message); } };
+    } catch (e) { /* ofrecer avisos nunca rompe una puja */ }
+  }
   function abrirMenuCuenta() {
     const s = SESSION.socio, slug = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
     const inicial = (s.nombre || s.email || "?").trim().charAt(0).toUpperCase();
@@ -658,9 +692,12 @@
       </div>
       <div class="grupo-h">${T("m_tema_h")}</div>
       <div class="ctl-seg ctl-seg-full" role="radiogroup" aria-label="${T("m_tema_h")}" id="ajTema">${segTema(prefActual())}</div>
+      <div class="grupo-h">${T("push_h")}</div>
+      <div class="grupo" id="ajPushBox"><div class="grupo-fila"><span class="grupo-tx"><small>${T("push_cargando")}</small></span></div></div>
       <div class="grupo-h">${T("m_aj_pref")}</div>
       <div class="grupo">
-        <button type="button" class="grupo-fila" id="ajLang">${cuadro("#0E7C86", "idioma")}<span class="grupo-tx"><b>${T("m_idioma")}</b></span><span class="grupo-val">${lang === "en" ? "English" : "Español"}</span></button>
+        <div class="grupo-fila">${cuadro("#0E7C86", "idioma")}<span class="grupo-tx"><b>${T("m_idioma")}</b></span></div>
+        <div class="ctl-seg ctl-seg-full" role="radiogroup" aria-label="${T("m_idioma")}" id="ajLang">${[["es", "Español"], ["en", "English"], ["gn", "Avañe'ẽ (beta)"]].map(([v, l]) => `<button type="button" role="radio" class="ctl-seg-b" data-lang="${v}" lang="${v}" aria-checked="${lang === v}">${l}</button>`).join("")}</div>
         ${avisos.map(([k, l]) => `<div class="grupo-fila">${cuadro("#D0612F", "avisos")}<span class="grupo-tx"><b>${l}</b></span>${sw("aj_" + k, s[k] !== false)}</div>`).join("")}
       </div>
       <div class="grupo-h">${T("m_aj_ayuda")}</div>
@@ -671,7 +708,7 @@
     root.classList.add("aj");
     root.querySelector("#ajPerfil").onclick = () => { close(); activar("perfil"); };
     root.querySelector("#ajPena").onclick = () => { close(); descSeg = "penas"; activar("descubrir"); };
-    root.querySelector("#ajLang").onclick = () => { OLI_I18N.setLang(lang === "en" ? "es" : "en"); location.reload(); };
+    root.querySelectorAll("#ajLang [data-lang]").forEach((b) => b.onclick = () => { if (b.dataset.lang === lang) return; OLI_I18N.setLang(b.dataset.lang); location.reload(); });
     root.querySelectorAll("#ajTema [data-tema]").forEach((b) => b.onclick = () => {
       OLI.setThemePref(b.dataset.tema, true);
       root.querySelectorAll("#ajTema [data-tema]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
@@ -682,6 +719,40 @@
       catch (e) { el.setAttribute("aria-checked", String(!on)); toast(e.message); }
     }; });
     root.querySelector("#ajSalir").onclick = () => { close(); logout(); };
+    pintarPushAjustes(root);
+  }
+  // Avisos en el celular: estado del permiso, activar o apagar este dispositivo y elegir qué avisos llegan.
+  async function pintarPushAjustes(root) {
+    const box = root.querySelector("#ajPushBox"); if (!box) return;
+    const est = await pushEstado();
+    if (!box.isConnected) return;
+    const nota = (t) => { box.innerHTML = `<div class="grupo-fila"><span class="grupo-tx"><small>${esc(t)}</small></span></div>`; };
+    if (!est.cfg || !est.cfg.habilitado) return nota(T("push_no_disp"));
+    if (!est.soporta) return nota(T("push_no_soporta"));
+    if (est.permiso === "denied") return nota(T("push_bloq"));
+    const tipos = [["subasta", T("push_t_subasta")], ["pago", T("push_t_pago")], ["beneficio", T("push_t_beneficio")], ["partido", T("push_t_partido")]];
+    box.innerHTML = `<div class="grupo-fila">${cuadro("#D0612F", "avisos")}<span class="grupo-tx"><b>${T("push_este")}</b><small>${T("push_este_p")}</small></span>${sw("ajp_on", est.suscrito)}</div>` +
+      tipos.map(([k, l]) => `<div class="grupo-fila"${est.suscrito ? "" : " hidden"} data-ajp><span class="grupo-tx"><b>${esc(l)}</b></span>${sw("ajp_" + k, est.cfg.prefs[k] !== false)}</div>`).join("");
+    const mostrar = (on) => box.querySelectorAll("[data-ajp]").forEach((f) => { f.hidden = !on; });
+    const master = box.querySelector("#ajp_on");
+    master.onclick = async () => {
+      const quiere = master.getAttribute("aria-checked") !== "true";
+      master.disabled = true;
+      try {
+        if (quiere) { const r = await pushActivar(est.cfg); if (!r.ok) { toast(T("push_bloq")); return pintarPushAjustes(root); } toast(T("push_ok")); }
+        else await pushDesactivar();
+        master.setAttribute("aria-checked", String(quiere)); mostrar(quiere);
+      } catch (e) { toast(e.message); }
+      master.disabled = false;
+    };
+    tipos.forEach(([k]) => {
+      const el = box.querySelector("#ajp_" + k);
+      el.onclick = async () => {
+        const on = el.getAttribute("aria-checked") !== "true"; el.setAttribute("aria-checked", String(on));
+        try { await api("/push/preferencias", { method: "PATCH", body: { [k]: on } }); }
+        catch (e) { el.setAttribute("aria-checked", String(!on)); toast(e.message); }
+      };
+    });
   }
 
   const hap = () => { try { navigator.vibrate && navigator.vibrate(10); } catch (e) {} };
@@ -1830,6 +1901,7 @@
       const r = await api("/subastas/" + id + "/pujar", { method: "POST", body: { monto } });
       hap();
       toast(r.extendida ? T("m_sub_extendido") : T("m_sub_vas_ganando"));
+      setTimeout(ofrecerAvisoSubasta, 1800);
       try { window.OLI.track && window.OLI.track("Puja", null, { value: monto }); } catch (e) {}
     } catch (e) { toast(e.message); }
     pujando = false;

@@ -80,5 +80,5 @@ test("pantalla: destacados, buscador, rubros, orden, disponibilidad, hoja estruc
   assert.match(c, /@media \(min-width: 1180px\) \{\s*\.bx \{ display: grid; grid-template-columns: minmax\(0, 1fr\) 320px/);
   assert.match(c, /\.bx-main, \.bx-side \{ display: contents; \}/);
   const i = leer("js/i18n.js");
-  for (const k of ["bx_destacados", "bx_buscar", "bx_o_desc", "bx_g2", "bx_up_h", "bx_l_acceso", "bx_vacio", "bx_limpiar"]) assert.strictEqual(i.split(" " + k + ": ").length - 1, 2, k);
+  for (const k of ["bx_destacados", "bx_buscar", "bx_o_desc", "bx_g2", "bx_up_h", "bx_l_acceso", "bx_vacio", "bx_limpiar"]) assert.ok(i.split(" " + k + ": ").length - 1 >= 2, k);
 });

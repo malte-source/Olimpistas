@@ -53,7 +53,7 @@ test("buscador global: Ctrl/Cmd+K, combobox accesible con foco atrapado, pantall
   const s = leer("public", "js", "socio.js");
   assert.match(s, /window\.OLI\.nav = \{[\s\S]*ir:[\s\S]*verBeneficio:[\s\S]*validarSocio:[\s\S]*esSocio:[\s\S]*logout:/);
   const i = leer("public", "js", "i18n.js");
-  for (const k of ["pal_ph", "pal_sin", "pal_qr", "pal_persona", "pal_salir", "pal_perfil", "skip_main", "bx_detalle"]) assert.strictEqual(i.split(" " + k + ":").length - 1, 2, k);
+  for (const k of ["pal_ph", "pal_sin", "pal_qr", "pal_persona", "pal_salir", "pal_perfil", "skip_main", "bx_detalle"]) assert.ok(i.split(" " + k + ":").length - 1 >= 2, k);
 });
 
 test("beneficios en escritorio: el detalle abre en el panel lateral (maestro y detalle) y en el celular sigue la hoja", () => {

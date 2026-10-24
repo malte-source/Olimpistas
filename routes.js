@@ -15,6 +15,7 @@ const crypto = require("crypto");
 const { getStore } = require("./data/store");
 const auth = require("./lib/auth");
 const adminAuth = require("./lib/admin-auth");
+const pushLib = require("./lib/push");
 const mailer = require("./lib/email");
 const access = require("./lib/access");
 const log = require("./lib/log");
@@ -1243,6 +1244,48 @@ function buildRouter() {
     const subastasPausadas = (subastas || []).filter((s) => s.estado === "pausada").length;
     res.json({ totalReal, pendientes: enrich, subastasSinPagar, subastasPausadas });
   }));
+  // ─── Notificaciones push ──────────────────────────────────────────────────────
+  // El navegador pide permiso en la pantalla (nunca al entrar). Cuatro tipos de aviso; cada persona elige cuáles.
+  r.get("/push/config", auth.requireSocio, wrap(async (req, res) => {
+    const subs = store.listarPushDeSocio ? await store.listarPushDeSocio(req.socio.id) : [];
+    res.json({ habilitado: pushLib.habilitado(), clave: pushLib.clavePublica(), tipos: pushLib.TIPOS, prefs: pushLib.prefsDe(req.socio), dispositivos: subs.length });
+  }));
+  r.post("/push/suscribir", auth.requireSocio, wrap(async (req, res) => {
+    if (!pushLib.habilitado()) throw httpError(503, "Los avisos todavía no están disponibles.");
+    const sub = (req.body && req.body.subscription) || {};
+    const endpoint = String(sub.endpoint || ""), p256dh = String((sub.keys || {}).p256dh || ""), authK = String((sub.keys || {}).auth || "");
+    const b64 = /^[A-Za-z0-9_-]+={0,2}$/;
+    if (!/^https:\/\//.test(endpoint) || endpoint.length > 700 || !b64.test(p256dh) || p256dh.length > 200 || !b64.test(authK) || authK.length > 100) throw httpError(400, "Suscripción inválida");
+    await store.guardarPushSuscripcion({ socioId: req.socio.id, endpoint, p256dh, auth: authK, ua: String(req.headers["user-agent"] || "").slice(0, 160) });
+    res.json({ ok: true, prefs: pushLib.prefsDe(req.socio) });
+  }));
+  r.post("/push/baja", auth.requireSocio, wrap(async (req, res) => {
+    const endpoint = String((req.body && req.body.endpoint) || "");
+    if (endpoint && store.borrarPushSuscripcion) {
+      const mias = await store.listarPushDeSocio(req.socio.id);
+      if (mias.some((x) => x.endpoint === endpoint)) await store.borrarPushSuscripcion(endpoint);   // solo borra los propios
+    }
+    res.json({ ok: true });
+  }));
+  r.patch("/push/preferencias", auth.requireSocio, wrap(async (req, res) => {
+    const nuevas = pushLib.prefsDe(req.socio);
+    for (const t of pushLib.TIPOS) if (req.body && typeof req.body[t] === "boolean") nuevas[t] = req.body[t];
+    await store.updateSocio(req.socio.id, { push_prefs: nuevas });
+    res.json({ ok: true, prefs: nuevas });
+  }));
+  // Aviso del club (partido de hoy, novedad): lo manda el equipo; opcionalmente solo a una ciudad. Máx. 1 por persona y día.
+  r.post("/admin/push/enviar", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    const b = req.body || {};
+    const tipo = pushLib.TIPOS.includes(b.tipo) ? b.tipo : "partido";
+    const titulo = String(b.titulo || "").trim(), cuerpo = String(b.cuerpo || "").trim();
+    if (titulo.length < 3 || titulo.length > 80 || cuerpo.length > 160) throw httpError(400, "El título lleva entre 3 y 80 caracteres y el texto hasta 160.");
+    const out = await pushLib.difundir(store, { tipo, ciudad: b.ciudad, payload: { titulo, cuerpo, url: b.url || "/miembro", tag: "club-" + tipo }, base: baseUrl(), clave: crypto.createHash("sha1").update(titulo + cuerpo).digest("hex").slice(0, 8) });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "push:enviar", targetId: tipo, detalle: titulo.slice(0, 80) + " · " + out.enviados + "/" + out.destinatarios, por: req.adminUser });
+    res.json(out);
+  }));
+  r.get("/admin/push/resumen", requireAdmin, wrap(async (_req, res) => {
+    res.json({ habilitado: pushLib.habilitado(), ...(store.contarPush ? await store.contarPush() : { dispositivos: 0, personas: 0 }) });
+  }));
   // Rendimiento real: p75 de LCP / INP / CLS / TTFB por pantalla y tipo de dispositivo (últimos N días).
   r.get("/admin/vitales", requireAdmin, wrap(async (req, res) => {
     const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 7, 1), 45);
@@ -1664,6 +1707,10 @@ function buildRouter() {
     const item = await store.updateBeneficio(req.params.id, { destacado });
     if (!item) throw httpError(404, "Beneficio no encontrado");
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: destacado ? "beneficios:destacar" : "beneficios:quitar_destacado", targetId: req.params.id, por: req.adminUser });
+    // Destacar = avisar a quienes tienen avisos de beneficios activados en la ciudad del comercio (máx. 1 por persona y día).
+    if (destacado && pushLib.habilitado() && store.getComercio) {
+      store.getComercio(item.comercio_id).then((c) => c && c.ciudad ? pushLib.difundir(store, { tipo: "beneficio", ciudad: c.ciudad, base: baseUrl(), clave: item.id, payload: { titulo: "Beneficio destacado en " + c.ciudad, cuerpo: (c.nombre || "") + (item.valor ? " · " + item.valor : "") + (item.titulo ? " · " + item.titulo : ""), url: "/miembro/beneficios", tag: "ben-" + item.id } }) : null).catch(() => {});
+    }
     res.json({ ok: true, item });
   }));
   // Beneficios de muestra del club (exclusivos para socios): comercios + ofertas ya aprobadas. Idempotente: no duplica ni pisa ediciones.
@@ -2153,6 +2200,7 @@ function buildRouter() {
     if (!store.cerrarSubastasVencidas) return;
     await store.cerrarSubastasVencidas({ plazoHoras: (await plazosHoras()).r1 });
   }
+  const gsTxt = (n) => "₲ " + Math.round(Number(n) || 0).toLocaleString("es-PY");
   const urlLote = (s) => baseUrl() + "/subasta/" + encodeURIComponent(s.slug || s.id);
 
   // Resuelve el vencimiento de UN lote (por plazo, o forzado desde el admin). Atómico en la base:
@@ -2197,6 +2245,7 @@ function buildRouter() {
       try {
         if (!(await reservar("subasta:porvencer:" + s.id + ":" + (s.ronda || 1)))) continue;
         const socio = await store.getSocioById(s.adjudicado_a);
+        pushLib.avisar(store, s.adjudicado_a, "pago", { titulo: "Se vence tu plazo para pagar", cuerpo: s.titulo + " · " + gsTxt(s.puja_actual), url: urlLote(s), tag: "pago-" + s.id }, { base: baseUrl() }).catch(() => {});
         if (socio && mailer.enviarSubastaPagoPorVencer) {
           await mailer.enviarSubastaPagoPorVencer(socio, { titulo: s.titulo, monto: s.puja_actual, urlSubasta: urlLote(s), vence: s.pago_vence }).catch(() => {});
           out.recordatorios++;
@@ -2333,6 +2382,7 @@ function buildRouter() {
     _subCache.delete(s.id); _listaSub = null; // la puja debe reflejarse al toque
     // Avisar por email al líder anterior que lo superaron (best-effort, no rompe la puja).
     if (out.prevGanador) {
+      pushLib.avisar(store, out.prevGanador, "subasta", { titulo: "Te superaron en " + s.titulo, cuerpo: "Ahora van " + gsTxt(out.subasta.puja_actual) + ". Entrá y subí tu puja.", url: "/subasta/" + encodeURIComponent(s.slug || s.id), tag: "sub-" + s.id }, { base: baseUrl() }).catch(() => {});
       store.getSocioById(out.prevGanador).then((prev) => {
         if (prev && mailer.enviarSubastaSuperado) mailer.enviarSubastaSuperado(prev, { titulo: s.titulo, monto: out.subasta.puja_actual, minimo: out.subasta.puja_actual + out.subasta.incremento, cierre: out.subasta.termina }).catch(() => {});
       }).catch(() => {});

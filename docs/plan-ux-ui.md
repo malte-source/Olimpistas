@@ -199,6 +199,12 @@ Esfuerzo: **S** = una tanda corta (medio día a un día), **M** = 2–4 tandas, 
 
 - **Tanda A (victorias rápidas) — hecha en staging:** enlace para saltar al contenido y `<main>` en las 5 superficies; foco al título al cambiar de pantalla; teclado correcto en cédula y registro; objetivos táctiles de 44 px; buscador global Ctrl/⌘+K; detalle lateral (maestro–detalle) en Beneficios para escritorio; barra de acción fija en las subastas del celular; medición real de velocidad (`/api/vitales`, resumen en `/api/admin/vitales`); Lighthouse semanal informativo.
 
+- **Decisiones del usuario — hechas en staging:**
+  - *Cuenta pendiente de validar:* el correo de verificación ya se mandaba pero no frenaba nada. Ahora las cuentas nuevas quedan **pendientes de validar**: aviso fijo con "Reenviar" y, hasta confirmar, no pueden pujar, pagar, comprar una membresía ni validar la cédula de socio. Las cuentas anteriores ven el aviso pero no se bloquean (migración 0016, `verif_exigida`). Si no hay proveedor de correo, no se exige nada.
+  - *Avisos push:* Web Push con 4 tipos (te superaron en una subasta, vence tu plazo de pago, beneficio destacado en tu ciudad, aviso del club). Permiso con un toque (se ofrece tras la primera puja y en Ajustes), cada tipo se apaga por separado, máximo un aviso de beneficio/club por persona y día, suscripciones vencidas se borran solas. Migración 0017 y claves VAPID en Secret Manager.
+  - *Guaraní (beta):* selector Español / English / Avañe'ẽ en Ajustes; ~60 textos de Inicio, Carnet y Beneficios traducidos y el resto cae al español (jopara). **Requiere revisión de hablantes antes de producción.**
+- **Pendiente (próximas tandas):** Ola 0 completa (capturas de regresión y axe en CI, embudo), Ola 1 (sistema de diseño, partir bundles), Olas 2 y 3 pantalla por pantalla (Subastas, Admin Socios y Comercios), y el aviso "partido de hoy" automático (hoy lo manda el equipo desde `/api/admin/push/enviar`).
+
 ## 7. Cómo mediremos que mejoró
 
 | Indicador | Hoy | Meta |
