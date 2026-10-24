@@ -270,12 +270,25 @@ function createMemoryStore({ filePath = null } = {}) {
         if (f.gasto !== undefined && f.gasto !== null && ((s.gasto_total || 0) > 0) !== f.gasto) return false;
         if (f.ciudad && String(s.ciudad || "").toLowerCase() !== String(f.ciudad).toLowerCase()) return false;
         if (f.excluirId && s.id === f.excluirId) return false;
+        if (f.verificado !== undefined && f.verificado !== null && !!s.email_verificado !== f.verificado) return false;
+        if (f.club !== undefined && f.club !== null && !!s.es_socio_olimpia !== f.club) return false;
+        if (f.conFoto && !s.foto) return false;
         if (f.tier && tierDe(s.id) !== f.tier) return false;
         if (term && !((s.email || "").toLowerCase().includes(term) || ((s.nombre || "") + " " + (s.apellido || "")).toLowerCase().includes(term) || (s.cedula || "").includes(term))) return false;
         return true;
       }).sort((a, b) => String(b.creado).localeCompare(String(a.creado)));
       if (f.paraEnvio) return rows.map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, telefono: s.telefono || "", whatsapp: s.whatsapp || "", idioma: s.idioma || "es", pais_iso: s.pais_iso || "", marketing_baja: !!s.marketing_baja, tier_slug: tierDe(s.id) }));
       return rows.slice(0, Math.min(Number(f.limit) || 500, 5000)).map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, cedula: s.cedula, pais: s.pais, pais_iso: s.pais_iso, ciudad: s.ciudad, es_socio_olimpia: s.es_socio_olimpia, gasto_total: s.gasto_total || 0, ultima_actividad: s.ultima_actividad || null, tiene_foto: !!s.foto, tier_slug: tierDe(s.id), creado: s.creado }));
+    },
+    async paginaSocios(f = {}) {
+      const todos = await this.filtrarSocios({ ...f, limit: 5000 });
+      const full = (id) => (db.socios || []).find((x) => x.id === id) || {};
+      let rows = todos.map((r) => ({ ...r, email_verificado: !!full(r.id).email_verificado, nro_socio: full(r.id).nro_socio || "", socio_desde: full(r.id).socio_desde || null }));
+      const K = { creado: (r) => String(r.creado || ""), nombre: (r) => ((r.apellido || "") + (r.nombre || "")).toLowerCase(), email: (r) => String(r.email || "").toLowerCase(), actividad: (r) => String(r.ultima_actividad || ""), gasto: (r) => Number(r.gasto_total || 0), ciudad: (r) => String(r.ciudad || "").toLowerCase() };
+      const k = K[f.orden] || K.creado, sg = f.dir === "asc" ? 1 : -1;
+      rows.sort((a, b) => { const x = k(a), y = k(b); return (x < y ? -1 : x > y ? 1 : 0) * sg; });
+      const lim = Math.min(Math.max(parseInt(f.limite, 10) || 25, 1), 100), pagina = Math.max(parseInt(f.pagina, 10) || 0, 0);
+      return { items: rows.slice(pagina * lim, pagina * lim + lim), total: rows.length, pagina, limite: lim };
     },
     async cuadrePagos() {
       const peds = db.pedidos || [];

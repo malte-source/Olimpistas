@@ -1489,11 +1489,29 @@ function buildRouter() {
     const items = store.filtrarSocios ? await store.filtrarSocios(f) : [];
     res.json({ total: items.length, items });
   }));
+  // Filtros de la tabla de socios (y de su exportación): nivel, socio del club, correo confirmado, foto y texto libre.
+  const filtrosSociosTabla = (q) => ({
+    q: String(q.q || "").trim().slice(0, 80) || undefined,
+    tier: ["olimpista", "kids", "premium", "socio"].includes(q.tier) ? q.tier : undefined,
+    club: q.club === "1" ? true : q.club === "0" ? false : undefined,
+    verificado: q.verificado === "1" ? true : q.verificado === "0" ? false : undefined,
+    conFoto: q.foto === "1" ? true : undefined,
+    sinFoto: q.foto === "0" ? true : undefined,
+    paisIso: q.pais || undefined,
+    validoSocio: q.validoSocio === "1" ? true : undefined,
+    ciudad: String(q.ciudad || "").trim().slice(0, 60) || undefined,
+  });
+  // Tabla de socios: página con total y orden elegido (solo columnas conocidas).
+  r.get("/admin/socios", requireAdmin, wrap(async (req, res) => {
+    if (!store.paginaSocios) return res.json({ items: [], total: 0, pagina: 0, limite: 25 });
+    const out = await store.paginaSocios({ ...filtrosSociosTabla(req.query), orden: String(req.query.orden || ""), dir: req.query.dir === "asc" ? "asc" : "desc", pagina: req.query.pagina, limite: req.query.limite });
+    res.json(out);
+  }));
   r.get("/admin/export/socios.csv", requireAdmin, requirePerm("export"), wrap(async (req, res) => {
-    const f = { tier: req.query.tier || undefined, paisIso: req.query.pais || undefined, validoSocio: req.query.validoSocio === "1", sinFoto: req.query.sinFoto === "1", q: req.query.q || undefined, limit: 5000 };
+    const f = { ...filtrosSociosTabla(req.query), limit: 5000 };
     const items = store.filtrarSocios ? await store.filtrarSocios(f) : [];
     const q = csvCelda; // neutraliza = + - @ (inyección de fórmulas en Excel)
-    const head = ["nombre", "apellido", "email", "cedula", "pais", "pais_iso", "tier", "socio_olimpia", "tiene_foto", "creado"];
+    const head = ["nombre", "apellido", "email", "cedula", "pais", "pais_iso", "tier", "socio_olimpia", "tiene_foto", "creado"];   // el orden de las columnas existentes no cambia
     const rows = items.map((s) => [s.nombre, s.apellido, s.email, s.cedula, s.pais, s.pais_iso, s.tier_slug, s.es_socio_olimpia ? "si" : "no", s.tiene_foto ? "si" : "no", s.creado].map(q).join(","));
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="socios.csv"');

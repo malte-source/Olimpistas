@@ -229,6 +229,32 @@
     @keyframes dcUp { from { transform:translateY(100%); } to { transform:none; } }
     @media (prefers-reduced-motion: reduce) { .area, .modalbox, .adm-toast { animation:none; transition:none; } }
     @keyframes dcPop { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } }
+
+    .soc-bar { display:flex; flex-direction:column; gap:10px; }
+    .soc-filtros { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .adm .soc-filtros select, .adm .soc-filtros .btn, .adm .soc-filtros summary { width:auto; flex:none; }
+    .adm .soc-filtros select { height:36px; padding:0 10px; border-radius:var(--r-12); border:1px solid var(--border-default); background:var(--surface-card); color:var(--text-primary); font:inherit; font-size:var(--t-13); }
+    .soc-resumen { margin:0; font-size:var(--t-13); }
+    .soc-cols { position:relative; }
+    .soc-cols > summary { list-style:none; cursor:pointer; }
+    .soc-cols > summary::-webkit-details-marker { display:none; }
+    .soc-pop { position:absolute; z-index:20; top:calc(100% + 6px); left:0; min-width:220px; display:flex; flex-direction:column; gap:2px; padding:10px; border-radius:var(--r-14); background:var(--surface-card); box-shadow:0 14px 40px rgba(0,0,0,.35); border:1px solid var(--border-default); }
+    .soc-col { display:flex; align-items:center; gap:8px; padding:6px 4px; font-size:var(--t-13); cursor:pointer; }
+    .soc-tabla .row-actions { flex-wrap:nowrap; }
+    .soc-nivel { position:relative; }
+    .soc-nivel > summary { list-style:none; cursor:pointer; }
+    .soc-nivel > summary::-webkit-details-marker { display:none; }
+    .soc-pop-der { left:auto; right:0; min-width:180px; }
+    .soc-pop-der .btn { width:100%; justify-content:flex-start; }
+    .soc-fila:nth-last-child(-n+2) .soc-pop-der { top:auto; bottom:calc(100% + 6px); }
+    .soc-scroll { overflow-x:auto; border-radius:var(--r-22); min-height:260px; }
+    .soc-tabla thead th { position:sticky; top:0; z-index:2; background:var(--surface-card); }
+    .soc-th { all:unset; cursor:pointer; text-transform:inherit; letter-spacing:inherit; font:inherit; color:inherit; }
+    .soc-th:focus-visible, .soc-fila:focus-visible { outline:2px solid var(--focus-ring); outline-offset:-2px; }
+    .soc-fila { cursor:pointer; }
+    .soc-fila:hover, .soc-fila:focus-within { background:var(--overlay-soft); }
+    .adm .soc-lim select { width:auto; }
+    .soc-lim select { margin-left:6px; height:32px; border-radius:var(--r-12); border:1px solid var(--border-default); background:var(--surface-card); color:var(--text-primary); font:inherit; }
   </style>
 </head>
 <body class="adm">
@@ -322,10 +348,25 @@
 
         <!-- ÁREA: SOCIOS -->
         <section class="area" id="area-socios" hidden>
-          <h2>Buscar socios</h2>
-          <div class="search-row">
-            <input id="q" type="search" placeholder="Email, nombre o cédula…" />
-            <button class="btn btn-sm" id="buscar">Buscar</button>
+          <h2>Socios</h2>
+          <div class="soc-bar">
+            <div class="search-row">
+              <input id="q" type="search" placeholder="Email, nombre o cédula…  ( / )" aria-label="Buscar socios" />
+              <button class="btn btn-sm" id="buscar">Buscar</button>
+            </div>
+            <div class="soc-filtros">
+              <select id="sNivel" aria-label="Nivel"><option value="">Todos los niveles</option><option value="olimpista">Olimpista</option><option value="kids">Junior</option><option value="premium">Plus</option><option value="socio">Socio</option></select>
+              <select id="sClub" aria-label="Socio del club"><option value="">Club: todos</option><option value="1">Socios del club</option><option value="0">No son socios</option></select>
+              <select id="sVerif" aria-label="Correo"><option value="">Correo: todos</option><option value="1">Confirmado</option><option value="0">Pendiente</option></select>
+              <select id="sFoto" aria-label="Foto"><option value="">Foto: todas</option><option value="1">Con foto</option><option value="0">Sin foto</option></select>
+              <button class="btn btn-sm btn-ghost" id="sLimpiar">Limpiar</button>
+              <details class="soc-cols" id="socCols"><summary class="btn btn-sm btn-ghost">Columnas</summary><div class="soc-pop" id="socColsList"></div></details>
+              <select id="sVistas" aria-label="Vistas guardadas"><option value="">Vistas guardadas…</option></select>
+              <button class="btn btn-sm btn-ghost" id="sVistaGuardar">Guardar vista</button>
+              <button class="btn btn-sm btn-ghost" id="sVistaBorrar" hidden>Borrar vista</button>
+              <button class="btn btn-sm btn-ghost" id="sExport">Exportar CSV</button>
+            </div>
+            <p class="muted soc-resumen" id="socResumen" aria-live="polite"></p>
           </div>
           <div id="searchWrap"></div>
 
@@ -656,7 +697,7 @@
     // Loaders que se disparan la PRIMERA vez que se abre cada área (no todo de golpe al entrar).
     var AREA_LOADERS = {
       dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount, cargarMapaAdmin],
-      socios: [],                                 // búsqueda/segmentos/padrón corren a demanda
+      socios: [iniciarSocios],                    // la tabla se carga al abrir; segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
       campanas: [cargarEmailMetricas, cargarComposer, cargarCampanas, cargarGhl],
       contenido: [function () {
@@ -1969,19 +2010,168 @@
       catch (e) { el.style.color = "var(--text-error)"; el.textContent = e.message; }
     }
 
-    async function buscar() {
-      var q = $("q").value.trim();
-      if (!q) { $("searchWrap").innerHTML = ""; return; }
+    // ── Socios: tabla con filtros, orden y páginas en el servidor, columnas elegibles, vistas guardadas y exportación ──
+    var SOC_COLS = [
+      { key: "socio", label: "Socio", orden: "nombre", fijo: true },
+      { key: "cedula", label: "Cédula" },
+      { key: "lugar", label: "Lugar", orden: "ciudad" },
+      { key: "nivel", label: "Nivel" },
+      { key: "club", label: "Socio del club" },
+      { key: "nro", label: "N.º de socio" },
+      { key: "correo", label: "Correo" },
+      { key: "foto", label: "Foto" },
+      { key: "alta", label: "Alta", orden: "creado" },
+      { key: "actividad", label: "Última actividad", orden: "actividad" },
+      { key: "gasto", label: "Gasto", orden: "gasto" },
+      { key: "acc", label: "Acciones", fijo: true }
+    ];
+    var SOC_COLS_DEF = ["socio", "cedula", "lugar", "nivel", "club", "correo", "alta", "acc"];
+    var SOC_LS_COLS = "adm_soc_cols", SOC_LS_VISTAS = "adm_soc_vistas";
+    var soc = { q: "", nivel: "", club: "", verif: "", foto: "", orden: "creado", dir: "desc", pagina: 0, limite: 25, cols: SOC_COLS_DEF.slice(), total: 0, items: [], req: 0, foco: -1 };
+    function socLeer(k, def) { try { var v = JSON.parse(localStorage.getItem(k) || "null"); return v == null ? def : v; } catch (e) { return def; } }
+    function socGuardar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+    function socParams(extra) {
+      var p = [];
+      function add(k, v) { if (v !== "" && v != null) p.push(k + "=" + encodeURIComponent(v)); }
+      add("q", soc.q); add("tier", soc.nivel); add("club", soc.club); add("verificado", soc.verif); add("foto", soc.foto);
+      if (extra) for (var k in extra) add(k, extra[k]);
+      return p.join("&");
+    }
+    function socFiltrosActivos() { return !!(soc.q || soc.nivel || soc.club || soc.verif || soc.foto); }
+    function socFecha(v) { if (!v) return "—"; var d = new Date(v); return isNaN(d) ? "—" : d.toLocaleDateString("es-PY", { day: "2-digit", month: "short", year: "numeric" }); }
+    var SOC_NIVEL = { olimpista: "Olimpista", kids: "Junior", premium: "Plus", socio: "Socio" };
+    function socCelda(k, s) {
+      var nombre = [s.nombre, s.apellido].filter(Boolean).join(" ");
+      switch (k) {
+        case "socio": return '<strong>' + esc(nombre || "—") + '</strong><br><span class="muted">' + esc(s.email || "") + '</span>';
+        case "cedula": return esc(s.cedula || "—");
+        case "lugar": return '<span class="muted">' + esc([s.ciudad, s.pais].filter(Boolean).join(", ") || "—") + '</span>';
+        case "nivel": return '<span class="pill' + (s.tier_slug === "olimpista" ? "" : " pill-ok") + '">' + esc(SOC_NIVEL[s.tier_slug] || s.tier_slug) + '</span>';
+        case "club": return s.es_socio_olimpia ? '<span class="pill pill-ok">Sí</span>' : "—";
+        case "nro": return esc(s.nro_socio || "—");
+        case "correo": return s.email_verificado ? '<span class="pill pill-ok">Confirmado</span>' : '<span class="pill">Pendiente</span>';
+        case "foto": return s.tiene_foto ? "Sí" : "—";
+        case "alta": return '<span class="muted">' + esc(socFecha(s.creado)) + '</span>';
+        case "actividad": return '<span class="muted">' + esc(socFecha(s.ultima_actividad)) + '</span>';
+        case "gasto": return Number(s.gasto_total) > 0 ? esc("₲ " + Number(s.gasto_total).toLocaleString("es-PY")) : "—";
+        case "acc": return '<div class="row-actions"><button class="btn btn-sm btn-ghost" data-ficha="' + esc(s.id) + '">Ficha</button>' + (puede("socios.write") ? '<details class="soc-nivel"><summary class="btn btn-sm">Nivel</summary><div class="soc-pop soc-pop-der"><button class="btn btn-sm" data-tier="socio">Activar Socio</button><button class="btn btn-sm" data-tier="premium">Activar Plus</button><button class="btn btn-sm" data-tier="kids">Activar Junior</button><button class="btn btn-sm btn-ghost" data-tier="olimpista">Pasar a Olimpista</button></div></details>' : '') + '</div>';
+      }
+      return "";
+    }
+    function socPintar() {
+      var cols = SOC_COLS.filter(function (c) { return c.fijo || soc.cols.indexOf(c.key) > -1; });
+      var wrap = $("searchWrap");
+      var th = cols.map(function (c) {
+        if (!c.orden) return '<th scope="col">' + esc(c.label === "Acciones" ? "" : c.label) + '</th>';
+        var on = soc.orden === c.orden;
+        return '<th scope="col" aria-sort="' + (on ? (soc.dir === "asc" ? "ascending" : "descending") : "none") + '"><button type="button" class="soc-th" data-orden="' + c.orden + '">' + esc(c.label) + '<span aria-hidden="true">' + (on ? (soc.dir === "asc" ? " ▲" : " ▼") : "") + '</span></button></th>';
+      }).join("");
+      var trs = soc.items.map(function (s, i) {
+        return '<tr data-id="' + esc(s.id) + '" tabindex="' + (i === Math.max(soc.foco, 0) ? 0 : -1) + '" class="soc-fila">' + cols.map(function (c) { return '<td data-l="' + esc(c.label) + '">' + socCelda(c.key, s) + '</td>'; }).join("") + '</tr>';
+      }).join("");
+      var pages = Math.max(1, Math.ceil(soc.total / soc.limite)), desde = soc.total ? soc.pagina * soc.limite + 1 : 0, hasta = Math.min(soc.total, (soc.pagina + 1) * soc.limite);
+      var pager = '<div class="tbl-pager"><button class="btn btn-sm btn-ghost" data-spg="prev"' + (soc.pagina === 0 ? " disabled" : "") + '>‹ Anterior</button><span class="muted">' + desde + '–' + hasta + ' de ' + soc.total.toLocaleString("es-PY") + '</span>' +
+        '<label class="muted soc-lim">por página <select id="sLimite"><option>25</option><option>50</option><option>100</option></select></label>' +
+        '<button class="btn btn-sm btn-ghost" data-spg="next"' + (soc.pagina >= pages - 1 ? " disabled" : "") + '>Siguiente ›</button></div>';
+      wrap.innerHTML = soc.items.length
+        ? '<div class="soc-scroll"><table class="adm-tabla soc-tabla"><thead><tr>' + th + '</tr></thead><tbody>' + trs + '</tbody></table></div>' + pager
+        : '<p class="empty">' + (socFiltrosActivos() ? "Ningún socio coincide con esos filtros." : "Todavía no hay socios.") + '</p>' + (socFiltrosActivos() ? '<p><button class="btn btn-sm btn-ghost" id="sLimpiar2">Limpiar filtros</button></p>' : "");
+      var sel = $("sLimite"); if (sel) sel.value = String(soc.limite);
+      $("socResumen").textContent = soc.total.toLocaleString("es-PY") + (soc.total === 1 ? " socio" : " socios") + (socFiltrosActivos() ? " con estos filtros" : "");
+    }
+    async function cargarSocios() {
+      var mi = ++soc.req;
+      $("socResumen").textContent = "Cargando…";
       try {
-        var r = await api("/admin/buscar?q=" + encodeURIComponent(q));
-        tabla($("searchWrap"), [
-          { key: "socio", label: "Socio", text: function (s) { return [s.nombre, s.apellido, s.email].filter(Boolean).join(" "); }, cell: function (s) { return '<strong>' + esc([s.nombre, s.apellido].filter(Boolean).join(" ") || "—") + '</strong><br><span class="muted">' + esc(s.email || "") + '</span>'; } },
-          { key: "cedula", label: "Cédula", text: function (s) { return s.cedula || ""; }, cell: function (s) { return esc(s.cedula || "—"); } },
-          { key: "lugar", label: "Lugar", text: function (s) { return [s.ciudad, s.pais].filter(Boolean).join(", "); }, cell: function (s) { return '<span class="muted">' + esc([s.ciudad, s.pais].filter(Boolean).join(", ") || "—") + '</span>'; } },
-          { key: "olimpia", label: "Socio Olimpia", text: function (s) { return s.es_socio_olimpia ? "1" : "0"; }, cell: function (s) { return s.es_socio_olimpia ? '<span class="pill pill-ok">Sí</span>' : "—"; } },
-          { key: "acc", label: "Activar", sortable: false, cell: function (s) { return '<div class="row-actions"><button class="btn btn-sm btn-ghost" data-ficha="' + esc(s.id) + '">Ficha</button>' + (puede("socios.write") ? '<button class="btn btn-sm" data-tier="socio">Socio</button><button class="btn btn-sm" data-tier="premium">Plus</button><button class="btn btn-sm" data-tier="kids">Junior</button><button class="btn btn-sm btn-ghost" data-tier="olimpista">Olimpista</button>' : '') + '</div>'; } }
-        ], r.socios || [], { rowId: function (s) { return s.id; }, filtro: true, filterPh: "Filtrar resultados…", empty: "Sin resultados." });
+        var r = await api("/admin/socios?" + socParams({ orden: soc.orden, dir: soc.dir, pagina: soc.pagina, limite: soc.limite }));
+        if (mi !== soc.req) return;                       // llegó tarde: otra búsqueda ya está en curso
+        soc.items = r.items || []; soc.total = r.total || 0;
+        if (soc.pagina > 0 && !soc.items.length && soc.total) { soc.pagina = Math.max(0, Math.ceil(soc.total / soc.limite) - 1); return cargarSocios(); }
+        socPintar();
+      } catch (e) { if (mi === soc.req) { $("searchWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; $("socResumen").textContent = ""; } }
+    }
+    function buscar() { soc.q = $("q").value.trim(); soc.pagina = 0; cargarSocios(); }
+    function socLeerControles() { soc.q = $("q").value.trim(); soc.nivel = $("sNivel").value; soc.club = $("sClub").value; soc.verif = $("sVerif").value; soc.foto = $("sFoto").value; }
+    function socEscribirControles() { $("q").value = soc.q; $("sNivel").value = soc.nivel; $("sClub").value = soc.club; $("sVerif").value = soc.verif; $("sFoto").value = soc.foto; }
+    function socColumnasUI() {
+      $("socColsList").innerHTML = SOC_COLS.filter(function (c) { return !c.fijo; }).map(function (c) {
+        return '<label class="soc-col"><input type="checkbox" data-col="' + c.key + '"' + (soc.cols.indexOf(c.key) > -1 ? " checked" : "") + ' /> ' + esc(c.label) + '</label>';
+      }).join("");
+    }
+    function socVistasUI(sel) {
+      var v = socLeer(SOC_LS_VISTAS, {}), nombres = Object.keys(v).sort();
+      $("sVistas").innerHTML = '<option value="">Vistas guardadas…</option>' + nombres.map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join("");
+      $("sVistas").value = sel && v[sel] ? sel : "";
+      $("sVistaBorrar").hidden = !$("sVistas").value;
+    }
+    async function socExportar() {
+      try {
+        var res = await fetch("/api/admin/export/socios.csv?" + socParams({ limit: 5000 }), { headers: { "x-admin-token": getToken(), "x-admin-key": getKey() } });
+        if (!res.ok) throw new Error("No se pudo exportar (" + res.status + ")");
+        var blob = await res.blob(), url = URL.createObjectURL(blob), a = document.createElement("a");
+        a.href = url; a.download = "socios.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        toast("Exportados los socios de esta vista (hasta 5.000)");
       } catch (e) { toast(e.message, "err"); }
+    }
+    function iniciarSocios() {
+      if (soc.listo) { cargarSocios(); return; }       // al volver a entrar solo se recarga la lista
+      soc.listo = true;
+      soc.cols = socLeer(SOC_LS_COLS, SOC_COLS_DEF).filter(function (k) { return SOC_COLS.some(function (c) { return c.key === k; }); });
+      socColumnasUI(); socVistasUI(); $("sExport").style.display = puede("export") ? "" : "none";   // exportar datos personales exige el permiso
+      ["sNivel", "sClub", "sVerif", "sFoto"].forEach(function (id) { $(id).addEventListener("change", function () { socLeerControles(); soc.pagina = 0; cargarSocios(); }); });
+      var t = null;
+      $("q").addEventListener("input", function () { clearTimeout(t); t = setTimeout(function () { socLeerControles(); soc.pagina = 0; cargarSocios(); }, 300); });
+      $("q").addEventListener("keydown", function (e) { if (e.key === "Enter") { clearTimeout(t); buscar(); } });
+      function limpiar() { soc.q = soc.nivel = soc.club = soc.verif = soc.foto = ""; socEscribirControles(); $("sVistas").value = ""; $("sVistaBorrar").hidden = true; soc.pagina = 0; cargarSocios(); }
+      $("sLimpiar").addEventListener("click", limpiar);
+      $("socCols").addEventListener("change", function (e) {
+        var c = e.target.closest("input[data-col]"); if (!c) return;
+        soc.cols = SOC_COLS.filter(function (x) { return x.fijo ? false : $("socColsList").querySelector('[data-col="' + x.key + '"]').checked; }).map(function (x) { return x.key; });
+        socGuardar(SOC_LS_COLS, soc.cols); socPintar();
+      });
+      $("sVistaGuardar").addEventListener("click", async function () {
+        var r = await confirmar("Se guardan los filtros, las columnas y el orden de ahora (solo en este navegador).", { titulo: "Guardar vista", input: true, placeholder: "Nombre de la vista", ok: "Guardar" });
+        var nombre = (r.val || "").trim().slice(0, 40); if (!r.ok || !nombre) return;
+        var v = socLeer(SOC_LS_VISTAS, {}); socLeerControles();
+        v[nombre] = { q: soc.q, nivel: soc.nivel, club: soc.club, verif: soc.verif, foto: soc.foto, orden: soc.orden, dir: soc.dir, cols: soc.cols.slice() };
+        socGuardar(SOC_LS_VISTAS, v); socVistasUI(nombre); toast("Vista guardada: " + nombre);
+      });
+      $("sVistas").addEventListener("change", function () {
+        var n = $("sVistas").value, v = socLeer(SOC_LS_VISTAS, {})[n];
+        $("sVistaBorrar").hidden = !n; if (!v) return;
+        soc.q = v.q || ""; soc.nivel = v.nivel || ""; soc.club = v.club || ""; soc.verif = v.verif || ""; soc.foto = v.foto || ""; soc.orden = v.orden || "creado"; soc.dir = v.dir || "desc";
+        soc.cols = (v.cols || SOC_COLS_DEF).slice(); socGuardar(SOC_LS_COLS, soc.cols); socColumnasUI(); socEscribirControles(); soc.pagina = 0; cargarSocios();
+      });
+      $("sVistaBorrar").addEventListener("click", function () {
+        var n = $("sVistas").value; if (!n) return;
+        var v = socLeer(SOC_LS_VISTAS, {}); delete v[n]; socGuardar(SOC_LS_VISTAS, v); socVistasUI(); toast("Vista borrada: " + n);
+      });
+      $("sExport").addEventListener("click", socExportar);
+      // Orden, páginas, "limpiar" y navegación con el teclado dentro de la tabla.
+      $("searchWrap").addEventListener("click", function (e) {
+        var o = e.target.closest("[data-orden]");
+        if (o) { if (soc.orden === o.dataset.orden) soc.dir = soc.dir === "asc" ? "desc" : "asc"; else { soc.orden = o.dataset.orden; soc.dir = o.dataset.orden === "creado" || o.dataset.orden === "gasto" || o.dataset.orden === "actividad" ? "desc" : "asc"; } soc.pagina = 0; cargarSocios(); return; }
+        var p = e.target.closest("[data-spg]"); if (p && !p.disabled) { soc.pagina += p.dataset.spg === "next" ? 1 : -1; cargarSocios(); return; }
+        if (e.target.closest("#sLimpiar2")) { limpiar(); return; }
+        var fila = e.target.closest("tr.soc-fila");
+        if (fila && !e.target.closest("button, a, select, input")) abrirFicha(fila.dataset.id);
+      });
+      $("searchWrap").addEventListener("change", function (e) { if (e.target.id === "sLimite") { soc.limite = parseInt(e.target.value, 10) || 25; soc.pagina = 0; cargarSocios(); } });
+      $("searchWrap").addEventListener("keydown", function (e) {
+        var fila = e.target.closest && e.target.closest("tr.soc-fila"); if (!fila) return;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault(); var sib = e.key === "ArrowDown" ? fila.nextElementSibling : fila.previousElementSibling;
+          if (sib) { fila.tabIndex = -1; sib.tabIndex = 0; sib.focus(); }
+        } else if (e.key === "Enter" && e.target === fila) { e.preventDefault(); abrirFicha(fila.dataset.id); }
+      });
+      // "/" lleva al buscador cuando se está en Socios y no se está escribiendo.
+      document.addEventListener("keydown", function (e) {
+        if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+        if ((location.hash || "").indexOf("socios") < 0) return;
+        var tag = (document.activeElement && document.activeElement.tagName) || ""; if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
+        e.preventDefault(); $("q").focus();
+      });
+      cargarSocios();
     }
 
     // ── Eventos ──
