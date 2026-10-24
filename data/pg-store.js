@@ -847,9 +847,13 @@ function createPgStore({ databaseUrl, debug }) {
           grupo_club = CASE WHEN s.grupo_club = '' THEN coalesce(c.grupo, '') ELSE s.grupo_club END
         FROM socios_club c WHERE s.es_socio_olimpia AND c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0')
           AND (s.socio_desde IS NULL OR s.nro_socio = '' OR s.grupo_club = '')`;
+      // Fechas que el club cargó mal (fecha_fuente 'dudosa'): se quita la que había puesto el sistema; una declarada por la persona o fijada por un admin no se toca.
+      const c = await sql`UPDATE socios s SET socio_desde = NULL FROM socios_club k
+        WHERE s.es_socio_olimpia AND s.socio_desde IS NOT NULL AND s.socio_desde_fuente = '' AND k.fecha_fuente = 'dudosa' AND k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), 'D', '', 'g'), '0')`;
       const b = await sql`UPDATE socios s SET socio_desde = (SELECT (m.inicio AT TIME ZONE 'America/Asuncion')::date FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio' ORDER BY m.inicio DESC LIMIT 1)
-        WHERE s.es_socio_olimpia AND s.socio_desde IS NULL AND EXISTS (SELECT 1 FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio')`;
-      return { desde_club: a.count || 0, desde_membresia: b.count || 0 };
+        WHERE s.es_socio_olimpia AND s.socio_desde IS NULL AND EXISTS (SELECT 1 FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio')
+          AND NOT EXISTS (SELECT 1 FROM socios_club k WHERE k.fecha_fuente = 'dudosa' AND k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), 'D', '', 'g'), '0'))`;
+      return { desde_club: a.count || 0, desde_membresia: b.count || 0, dudosas_quitadas: c.count || 0 };
     },
     // Cuentas en mora que se revisan de nuevo solas (para activarlas apenas el club vuelva a decir "al día").
     async cuentasEnMora({ limite = 30, desdeMin = 60 } = {}) {

@@ -1865,7 +1865,7 @@
           '<p class="muted" style="margin:0">' + esc(s.email || "") + ' · <span class="pill">' + esc(TIER[tierAct] || tierAct) + '</span>' + (s.es_socio_olimpia ? ' · socio Olimpia' : '') + '</p>' +
           '<div id="f360"><p class="muted" style="font-size:13px">Cargando ficha 360…</p></div>' +
           (s.foto ? '<div style="text-align:center;margin:12px 0"><img src="' + esc(s.foto) + '" alt="" style="max-width:150px;max-height:150px;border-radius:12px;border:1px solid var(--border-default)" /></div>' : '') +
-          '<div class="fgrid">' + fld("fNombre", "Nombre", s.nombre) + fld("fApellido", "Apellido", s.apellido) + fld("fEmail", "Email", s.email, true) + fld("fCedula", "Cédula", s.cedula) + fld("fIso", "ISO país", s.pais_iso) + fld("fCiudad", "Ciudad", s.ciudad) + fld("fPais", "País", s.pais) + '</div>' +
+          '<div class="fgrid">' + fld("fNombre", "Nombre", s.nombre) + fld("fApellido", "Apellido", s.apellido) + fld("fEmail", "Email", s.email, true) + fld("fCedula", "Cédula", s.cedula) + fld("fIso", "ISO país", s.pais_iso) + fld("fCiudad", "Ciudad", s.ciudad) + fld("fPais", "País", s.pais) + (s.es_socio_olimpia ? '<div class="full"><label>Socio desde (AAAA-MM-DD; vacío = que decida la base del club)</label><input id="fDesde" data-orig="' + esc(s.socio_desde ? String(s.socio_desde).slice(0, 10) : "") + '" value="' + esc(s.socio_desde ? String(s.socio_desde).slice(0, 10) : "") + '" placeholder="sin fecha" /><span class="muted" style="font-size:12px">' + (s.socio_desde_fuente === "declarada" ? "La declaró el socio." : s.socio_desde_fuente === "admin" ? "Fijada por un administrador." : s.socio_desde ? "Viene de la base del club." : "Sin fecha: la base del club no es confiable para este socio.") + '</span></div>' : '') + '</div>' +
           '<p class="ok" id="fOk"></p>' +
           // Acciones agrupadas por función (antes eran 7-8 botones sueltos en una sola fila,
           // mezclando "guardar datos" con "otorgar membresía" con "dar de baja" sin jerarquía).
@@ -2023,6 +2023,7 @@
     }
     async function guardarFicha(id) {
       var body = { nombre: $("fNombre").value, apellido: $("fApellido").value, email: $("fEmail").value, cedula: $("fCedula").value, ciudad: $("fCiudad").value, pais: $("fPais").value, pais_iso: $("fIso").value };
+      var fd = $("fDesde"); if (fd && fd.value.trim() !== fd.dataset.orig) body.socio_desde = fd.value.trim();   // solo si lo cambió: así no se marca como fijada a mano una fecha que vino del club
       var el = $("fOk"); el.style.color = "var(--text-success)";
       try { await api("/admin/socios/" + encodeURIComponent(id), { method: "PATCH", body: body }); el.textContent = "Guardado "; cargarAbandonos(); }
       catch (e) { el.style.color = "var(--text-error)"; el.textContent = e.message; }

@@ -328,7 +328,7 @@
     const s = SESSION.socio, socio = esSocioValidado(), desde = socio && s.socio_desde ? String(s.socio_desde).slice(0, 10) : "";
     const a = desde ? aniosDeSocio(desde) : null;
     const num = desde ? (a >= 1 ? (a === 1 ? T("cn_anio_uno") : T("cn_anios").replace("{n}", a)) : T("hi_nuevo")) : fechaMes(new Date(s.creado).toISOString().slice(0, 10));
-    const sub = desde ? T("cn_socio_desde") + " " + fechaMes(desde) : T("m_cn_desde");
+    const sub = desde ? T("cn_socio_desde") + " " + fechaSocio(desde) : T("m_cn_desde");
     return `<button type="button" class="wg" data-goto="historia" aria-label="${esc(T("hi_h"))}">
         <span class="wg-cab">${esc(T("hi_h"))}</span><span class="wg-num wg-num-s">${esc(num)}</span><span class="wg-sub">${esc(sub)}</span><span class="wg-nota">${esc(T("hi_tile_nota"))}</span></button>`;
   }
@@ -568,6 +568,27 @@
     host.querySelector("#upBannerBtn").onclick = validarSocioModal;
     host.querySelector("#upBannerX").onclick = () => { try { sessionStorage.setItem("oli_socio_banner", "1"); } catch (e) {} host.innerHTML = ""; };
   }
+  // La persona cuenta desde qué año es socia (la base del club se equivoca en algunos grupos): queda como "declarada" y nada la pisa.
+  function socioDesdeModal(volverA) {
+    const tope = new Date().getFullYear();
+    const { root, close: cerrar } = OLI.modal(`
+      <h3>${T("sd_h")}</h3>
+      <p class="muted">${T("sd_p")}</p>
+      <input id="sdAnio" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" enterkeyhint="done" autocomplete="off" placeholder="${esc(T("sd_ph"))}" />
+      <p class="err" id="sdErr"></p>
+      <button class="btn btn-block" id="sdGuardar">${T("sd_guardar")}</button>
+      <button class="btn btn-ghost btn-block" id="sdCerrar" style="margin-top:8px">${T("up_cerrar")}</button>`);
+    root.querySelector("#sdCerrar").onclick = cerrar;
+    root.querySelector("#sdAnio").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); root.querySelector("#sdGuardar").click(); } });
+    root.querySelector("#sdGuardar").onclick = async () => {
+      const anio = (root.querySelector("#sdAnio").value || "").trim(), err = root.querySelector("#sdErr"); err.textContent = "";
+      if (!/^\d{4}$/.test(anio) || +anio < 1950 || +anio > tope) { err.textContent = T("sd_err"); return; }
+      const btn = root.querySelector("#sdGuardar"); btn.disabled = true;
+      try { await api("/socio-desde", { method: "POST", body: { anio: +anio } }); cerrar(); await refrescar(); toast(T("sd_ok")); activar(volverA === "historia" ? "historia" : "carnet"); }
+      catch (e) { err.textContent = e.message; btn.disabled = false; }
+    };
+  }
+  document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-sd-declarar]"); if (b) socioDesdeModal(b.dataset.sdDeclarar); });
   function validarSocioModal() {
     if (esSocioValidado()) { toast(T("up_ya")); return; }
     const faltaFecha = false; // el nivel Socio se da a cualquier edad: la fecha de nacimiento ya no frena la validación
@@ -2022,13 +2043,18 @@
   // Son dos cosas distintas y se muestran por separado: "Miembro desde" (cuándo se registró en olimpistas.com) y, si es socio del club,
   // "Socio desde" (su antigüedad REAL en el club). Si el club todavía no nos dio esa fecha, se muestra su número de socio y nunca una fecha inventada.
   const fechaMes = (d) => new Date(d + "T12:00:00").toLocaleDateString(LOC, { year: "numeric", month: "long" });
+  // Sin día real (fecha del 1 de enero = solo se sabe el año): se muestra el año, no un mes inventado.
+  const fechaSocio = (d) => (/-01-01$/.test(d) ? d.slice(0, 4) : fechaMes(d));
   const aniosDeSocio = (d) => Math.floor((Date.now() - new Date(d + "T12:00:00").getTime()) / 31557600000);
   const textoAnios = (a) => (a < 1 ? "" : " · " + (a === 1 ? T("cn_anio_uno") : T("cn_anios").replace("{n}", a)));
   function antiguedadesCarnet(c, desdeOlimpistas) {
     const filas = [{ et: T("m_cn_desde"), val: desdeOlimpistas }];
     if (c.esSocio) {
-      if (c.socioDesde) filas.push({ et: T("cn_socio_desde"), val: fechaMes(c.socioDesde) + textoAnios(aniosDeSocio(c.socioDesde)) });
-      else if (c.nroSocio) filas.push({ et: T("cn_nro_socio"), val: c.nroSocio });
+      if (c.socioDesde) filas.push({ et: T("cn_socio_desde"), val: fechaSocio(c.socioDesde) + textoAnios(aniosDeSocio(c.socioDesde)) });
+      else {
+        if (c.nroSocio) filas.push({ et: T("cn_nro_socio"), val: c.nroSocio });
+        filas.push({ et: T("cn_socio_desde"), val: "", accion: "carnet" });   // sin fecha confiable: la persona la cuenta
+      }
     }
     return filas;
   }
@@ -2046,7 +2072,7 @@
         <div class="cn2-datos">
           <div class="cn2-dato"><small>${T("cn_nombre")}</small><b class="cn2-nom">${esc(c.nombre)}</b></div>
           <div class="cn2-dato"><small>${T("cn_numero")}</small><b class="cn2-nro">${esc(c.numero)}</b></div>
-          ${antig.map((a) => `<div class="cn2-dato"><small>${esc(a.et)}</small><b>${esc(a.val || "")}</b></div>`).join("")}
+          ${antig.map((a) => `<div class="cn2-dato"><small>${esc(a.et)}</small>${a.accion ? `<button type="button" class="cn2-declarar" data-sd-declarar="${esc(a.accion)}">${esc(T("sd_falta"))}</button>` : `<b>${esc(a.val || "")}</b>`}</div>`).join("")}
           <div class="cn2-sello">${bandera}${socio ? `<span class="cn2-socio">${OLI.ic("verificado", 14, true)} ${T("cn_socio")}</span>` : ""}</div>
         </div>
       </div>`;
@@ -2061,7 +2087,8 @@
     const hero = h.es_socio
       ? `<section class="hi-hero"><span class="hi-eb">${esc(T("hi_socio"))}</span>
           <div class="hi-grande">${esc(h.socio_desde ? aniosTxt(h.anios_socio) : T("hi_socio"))}</div>
-          <p class="hi-sub">${h.socio_desde ? esc(T("cn_socio_desde")) + " <b>" + esc(mes(h.socio_desde)) + "</b>" : ""}</p>
+          <p class="hi-sub">${h.socio_desde ? esc(T("cn_socio_desde")) + " <b>" + esc(/-01-01$/.test(h.socio_desde) ? h.socio_desde.slice(0, 4) : mes(h.socio_desde)) + "</b>" + (h.socio_desde_fuente === "declarada" ? " · " + esc(T("sd_declarado")) : "") : ""}</p>
+          <button type="button" class="btn btn-ghost btn-sm hi-corregir" data-sd-declarar="historia">${esc(h.socio_desde ? T("sd_corregir") : T("sd_falta"))}</button>
           ${chips.length ? `<div class="hi-chips">${chips.map((c) => `<span>${c}</span>`).join("")}</div>` : ""}
           <p class="hi-peq">${esc(T("m_cn_desde"))} ${esc(dia(h.miembro_desde))}</p></section>`
       : `<section class="hi-hero"><span class="hi-eb">${esc(T("hi_miembro"))}</span>
@@ -2138,7 +2165,7 @@
               </div></div>
               <div class="cn2-resumen">
                 <h3>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h3>
-                <p class="muted">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}.${carnet.esSocio && carnet.socioDesde ? "<br>" + T("cn_socio_desde") + " " + fechaMes(carnet.socioDesde) + "." : ""}</p>
+                <p class="muted">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}.${carnet.esSocio && carnet.socioDesde ? "<br>" + T("cn_socio_desde") + " " + fechaSocio(carnet.socioDesde) + "." : ""}</p>
                 ${ubicHtml}
                 ${social}
                 <ul class="benefits">${(tier?.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>

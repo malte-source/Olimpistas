@@ -77,3 +77,24 @@ test("la consulta en lote del importador carga 2.500 filas en trozos sin perder 
   assert.strictEqual(await pg.upsertSociosClub(filas), 2500);
   assert.strictEqual((await pg.resumenSociosClub()).total, 5 + 2500);
 });
+
+test("fechas dudosas: se quita la que puso el sistema, no la declarada ni la de un admin, y no se inventa la de la membresía (Postgres = memoria)", opts, async () => {
+  async function caso(store) {
+    const mk = async (email, ced, extra) => { const s = await store.createSocio({ email, passwordHash: "x", nombre: "N", cedula: ced }); await store.updateSocio(s.id, { es_socio_olimpia: true, ...extra }); return s.id; };
+    await store.upsertSociosClub([reg("6000001", { grupo: "VITALICIO", fecha_fuente: "dudosa" }), reg("6000002", { grupo: "VITALICIO", fecha_fuente: "dudosa" }), reg("6000003", { grupo: "VITALICIO", fecha_fuente: "dudosa" }), reg("6000004", { grupo: "VITALICIO", fecha_fuente: "dudosa" }), reg("6000005", { socio_desde: "2015-02-02", fecha_calidad: "creible", fecha_fuente: "ingreso" })]);
+    const ids = [
+      await mk("d1@ejemplo.com", "6000001", { socio_desde: "2001-08-26", socio_desde_fuente: "" }),
+      await mk("d2@ejemplo.com", "6000002", { socio_desde: "2008-01-01", socio_desde_fuente: "declarada" }),
+      await mk("d3@ejemplo.com", "6000003", { socio_desde: "2010-05-05", socio_desde_fuente: "admin" }),
+      await mk("d4@ejemplo.com", "6000004", {}),
+      await mk("d5@ejemplo.com", "6000005", {}),
+    ];
+    await store.setMembresia(ids[3], { tierSlug: "socio", ciclo: "anio", pagoRef: "socio:t" });
+    const r = await store.completarSociosDesdeClub();
+    const f = async (id) => String((await store.getSocioById(id)).socio_desde || "").slice(0, 10);
+    return { quitadas: r.dudosas_quitadas, fechas: [await f(ids[0]), await f(ids[1]), await f(ids[2]), await f(ids[3]), await f(ids[4])] };
+  }
+  const esperado = { quitadas: 1, fechas: ["", "2008-01-01", "2010-05-05", "", "2015-02-02"] };
+  assert.deepStrictEqual(await caso(pg), esperado, "Postgres");
+  assert.deepStrictEqual(await caso(mem), esperado, "memoria");
+});

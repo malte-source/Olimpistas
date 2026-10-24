@@ -1956,3 +1956,7 @@ body.pal-abierta { overflow: hidden; }
 .hi-vacio { margin: 16px 0 0; }
 @media (min-width: 900px) { .hi-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 32px; align-items: start; } .hi-grande { font-size: var(--t-56); } }
 .hi-hero .ben-ahorro.asp { background: rgba(255, 255, 255, .08); }
+/* "Socio desde" sin fecha confiable: la persona la cuenta (carnet e Historia). */
+.cn2-declarar { align-self: flex-start; min-height: 32px; padding: 4px 0; background: none; border: 0; border-bottom: 1px dashed currentColor; color: var(--oro, #d9b65a); font: inherit; font-size: var(--t-14); font-weight: 600; cursor: pointer; }
+.cn2-declarar:focus-visible { outline: 2px solid var(--oro, #d9b65a); outline-offset: 3px; }
+.hi-corregir { margin: 4px 0 8px; }
