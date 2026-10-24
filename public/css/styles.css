@@ -1914,3 +1914,8 @@ body.pal-abierta { overflow: hidden; }
 .ob-socio { margin: 4px 0 10px; font-size: var(--t-13); }
 .ob-socio > summary { cursor: pointer; font-weight: 600; color: var(--text-secondary); padding: 8px 0; min-height: 44px; display: flex; align-items: center; }
 .ob-socio[open] > summary { color: var(--text-primary); }
+
+/* Aviso de cuota pendiente / baja en el club: mismo formato que los otros avisos, con las dos acciones a mano. */
+.socio-banner-club { flex-wrap: wrap; gap: 8px; }
+.socio-banner-club .sb-txt { flex: 1 1 100%; font-weight: 500; font-size: var(--t-13); line-height: 1.4; }
+.socio-banner.socio-banner-club .sb-txt svg { display: inline-block; vertical-align: -3px; margin-right: 6px; }

@@ -18,6 +18,7 @@ const adminAuth = require("./lib/admin-auth");
 const pushLib = require("./lib/push");
 const clubSync = require("./lib/club-sync");
 const { claveCedula } = require("./lib/club-import");
+const { clasificar, confianza, PORTAL_URL } = require("./lib/club-estado");
 const mailer = require("./lib/email");
 const access = require("./lib/access");
 const log = require("./lib/log");
@@ -109,7 +110,7 @@ function buildRouter() {
     res.setHeader("Cache-Control", "public, max-age=60"); // corto: precios/tiers se propagan rápido al cambiarlos
     // ticketera: Liberá tu Lugar y el abono dependen de los endpoints nuevos de Tuti. Hasta que existan (TUTI_TICKETERA=1)
     // la pestaña Partidos explica qué viene; la compra de entradas la vende Tuti (TUTI_TICKETERA_URL si está definida).
-    res.json({ brand: BRAND, tiers: TIERS, paises: listaPaises(), ticketera: { activa: process.env.TUTI_TICKETERA === "1", url: /^https:\/\//.test(process.env.TUTI_TICKETERA_URL || "") ? process.env.TUTI_TICKETERA_URL : "" } });
+    res.json({ portal_socios: PORTAL_URL(), brand: BRAND, tiers: TIERS, paises: listaPaises(), ticketera: { activa: process.env.TUTI_TICKETERA === "1", url: /^https:\/\//.test(process.env.TUTI_TICKETERA_URL || "") ? process.env.TUTI_TICKETERA_URL : "" } });
   });
 
   // Health público (sin auth, sin PII): ping barato a la DB → 200 ok / 503 caída.
@@ -636,7 +637,7 @@ function buildRouter() {
     if (ref && ref.tuti_consultado && ref.tuti_estado && Date.now() - new Date(ref.tuti_consultado).getTime() < maxHoras * 3600000) {
       if (ref.tuti_estado === "NO_ENCONTRADO") return { ok: true, encontrado: false, guardado: true };
       const deuda = Number(ref.tuti_deuda) || 0;
-      return { ok: true, encontrado: true, guardado: true, socio: { status: ref.tuti_estado, plan: ref.tuti_plan || "", numeroSocio: ref.tuti_numero || "", alDia: !!ref.tuti_al_dia, deuda, deudor: deuda > 0 } };
+      return { ok: true, encontrado: true, guardado: true, socio: { status: ref.tuti_estado, plan: ref.tuti_plan || "", numeroSocio: ref.tuti_numero || "", alDia: !!ref.tuti_al_dia, deuda, deudor: deuda > 0, email: ref.tuti_correo || "", nombre: ref.tuti_nombre || "", apellido: "" } };
     }
     if (!tutiApi.habilitado()) return null;
     const v = await tutiApi.consultarSocio(cedula);
@@ -652,12 +653,14 @@ function buildRouter() {
   // Automática: se consulta al club en el momento. Con `silencioso` (la app lo manda sola al abrir, con la cédula
   // que la cuenta ya tiene) se reintenta sin dejar un reclamo en la bandeja ni mandar el mail de "en revisión":
   // así quien se puso al día en el club sube de nivel solo, sin volver a escribir nada.
+  const _reintentoClub = new Map();   // cuenta → último "Ya pagué, revisar" (una consulta en vivo por minuto)
   const _revalidacion = new Map();   // socio → última consulta silenciosa (cuida el límite de la API del club)
   r.post("/perfil/validar-socio", auth.requireSocio, wrap(async (req, res) => {
     const silencioso = req.body?.silencioso === true;
     if (correoPendiente(req.socio)) { if (silencioso) return res.json({ validado: false, omitido: true }); exigirCorreo(req, "validar tu cédula de socio"); }
     const socioFull = await store.getSocioById(req.socio.id);
-    const cedula = soloDigitos(req.body?.cedula || (silencioso ? socioFull.cedula : ""));
+    const reintentar = req.body?.reintentar === true;
+    const cedula = soloDigitos(req.body?.cedula || ((silencioso || reintentar) ? socioFull.cedula : ""));
     if (silencioso) {
       if (socioFull.es_socio_olimpia || !cedula) return res.json({ validado: false, omitido: true });
       const ult = _revalidacion.get(req.socio.id) || 0;
@@ -667,13 +670,20 @@ function buildRouter() {
     }
     if (cedula.length < 5 || cedula.length > 12) throw httpError(400, "Número de cédula inválido");
 
-    res.json(await validarSocioCore(req.socio.id, cedula, { silencioso }));
+    let forzar = false;
+    if (reintentar && !silencioso) {
+      const u = _reintentoClub.get(req.socio.id) || 0;
+      if (Date.now() - u >= 60000) { forzar = true; _reintentoClub.set(req.socio.id, Date.now()); if (_reintentoClub.size > 20000) _reintentoClub.clear(); }
+    }
+    res.json(await validarSocioCore(req.socio.id, cedula, { silencioso, forzar }));
   }));
 
   // Valida la cédula de una cuenta contra el club y, si corresponde, le da el nivel Socio. La usan la pantalla de validación,
   // el reintento silencioso al abrir la app y la confirmación del correo.
-  async function validarSocioCore(socioId, cedula, { silencioso } = {}) {
+  const hoyPy = () => new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+  async function validarSocioCore(socioId, cedula, { silencioso, forzar } = {}) {
     const socioFull = await store.getSocioById(socioId);
+    const previo = socioFull.club_estado || "";   // lo que figuraba antes de esta consulta (se lee ahora: más abajo la cuenta se actualiza)
     // El socio real del club recibe SIEMPRE el nivel "Socio" (la cima institucional),
     // sin importar la edad — es superior a Plus y no se compra, se otorga.
     const tier = "socio";
@@ -688,21 +698,25 @@ function buildRouter() {
     catch (e) { throw httpError(409, "Esa cédula ya está registrada en otra cuenta de Olimpistas"); }
     unirPenaPorCedula(socioId);
 
-    // Estado EN VIVO en el club (API de socios, ITI/Tuti) + padrón estático como respaldo.
-    //  · 200 = autoritativo (sólo trae titulares): al día → socio; mora/baja → NO, aunque
-    //    el padrón viejo lo tenga (ej. quien se dio de baja después del export de agosto).
-    //  · 404 / timeout / error = no concluyente: la API no conoce a los ADHERENTES de un
-    //    plan familiar (probado 2026-10-05) — caer al padrón, donde sí están.
-    const vivo = await estadoTuti(cedula, { maxHoras: silencioso ? 24 : 1 });   // lo guardado si es reciente; si no, la API en vivo
+    // Estado en el club (API de socios, ITI/Tuti: lo guardado si es reciente, si no en vivo) + padrón estático como respaldo.
+    //  · 200 = autoritativo (solo trae titulares): al día → se activa el nivel Socio solo; mora → se le pide que pague en el portal de socios y se
+    //    revisa de nuevo (a mano con "Ya pagué" y solo, cada hora); baja → puede reactivar en el portal. Ni mora ni baja pasan por el padrón viejo.
+    //  · 404 = no concluyente: la API no conoce a los ADHERENTES de un plan familiar (probado 2026-10-05) — se cae al padrón, donde sí están.
+    //  · sin respuesta (límite, red, API apagada) = "reintentar": no se crea ningún reclamo ni se manda el aviso de "en revisión".
+    const vivo = await estadoTuti(cedula, { maxHoras: forzar ? 0 : silencioso ? 24 : 1 });
     const enClub = vivo && vivo.ok && vivo.encontrado ? vivo.socio : null;
-    const noAlDia = !!(enClub && !enClub.alDia);
+    const sinRespuesta = !vivo || !vivo.ok;
+    const cls = enClub ? clasificar(enClub) : { estado: sinRespuesta ? "sin_respuesta" : "no_encontrado", deuda: 0 };
+    const noAlDia = !!enClub && cls.estado !== "al_dia";
     const ref = store.getSocioClub ? await store.getSocioClub(claveCedula(cedula)).catch(() => null) : null;   // base de referencia: antigüedad, grupo, número
+    const conf = confianza({ cuenta: socioFull, tutiSocio: enClub, ref });   // ¿la cuenta coincide con la persona del club? decide cuánto detalle se muestra
     if (enClub && enClub.plan) store.updateSocio(socioId, { plan_club: enClub.plan }).catch(() => {}); // copia de lectura del plan
+    const ahora = new Date().toISOString();
 
     // Match contra el padrón (foto de agosto: todo el padrón se tomó como AL DÍA).
     let fila = null, validado = false;
     if (store.buscarPadron && !noAlDia) fila = await store.buscarPadron({ cedula });
-    if (fila || (enClub && enClub.alDia)) {
+    if (fila || cls.estado === "al_dia") {
       // Reclamo atómico de la fila del padrón (si matcheó por padrón).
       let gano = true;
       if (fila && store.marcarPadronReclamado) {
@@ -712,21 +726,37 @@ function buildRouter() {
       }
       // Entrega AUTOMÁTICA del nivel Socio (otorgado, no comprable). pagoRef "socio:" = marcador
       // de socio del club (id de padrón, o "tuti-<nº de socio>" si vino sólo de la API en vivo).
-      const marca = fila ? fila.id : "tuti-" + (enClub.numeroSocio || cedula);
+      const marca = fila ? fila.id : "tuti-" + ((enClub && enClub.numeroSocio) || cedula);
       await store.setMembresia(socioId, { tierSlug: tier, ciclo: "anio", pagoRef: "socio:" + marca });
-      // Antigüedad real y número de socio del club (padrón o API en vivo); si el club no la tiene, queda vacía y el carnet no inventa una.
+      // "Socio desde" siempre queda definido: padrón, base del club (que ya trae su cadena de respaldo) o API; si nadie sabe, cuenta desde hoy.
       const antig = {};
-      const desde = (fila && fila.socio_desde) || (ref && ref.socio_desde) || (enClub && enClub.desde) || null;
-      if (desde) antig.socio_desde = String(desde).slice(0, 10);
+      const desde = (fila && fila.socio_desde) || (ref && ref.socio_desde) || (enClub && enClub.desde) || hoyPy();
+      antig.socio_desde = String(desde).slice(0, 10);
       const nro = (fila && fila.nro_socio) || (ref && ref.nro_socio) || (enClub && enClub.numeroSocio) || "";
       if (ref && ref.grupo) antig.grupo_club = String(ref.grupo).slice(0, 40);
       if (nro) antig.nro_socio = String(nro).slice(0, 40);
-      await store.updateSocio(socioId, { es_socio_olimpia: true, ...antig });
+      await store.updateSocio(socioId, { es_socio_olimpia: true, club_estado: "al_dia", club_deuda: null, club_consulta: ahora, ...antig });
       validado = true;
       mailer.enviarReconocido && mailer.enviarReconocido({ ...socioFull, cedula }, tier).catch(() => {});
     }
-    // Staging: registramos el claim para verificar/unificar después.
-    if (store.crearActualizacion && (validado || !silencioso)) {
+
+    // Lo que se le cuenta a la persona. El detalle (mora, baja, monto) solo se muestra si la cuenta coincide con la persona del club
+    // (correo confirmado igual al del club = "alta" → con monto; nombre y apellido iguales = "media" → sin monto); si no, respuesta neutra,
+    // igual que para quien no figura: la cédula no es secreta y probar cédulas ajenas no debe revelar el estado de pago de nadie.
+    let estadoCuenta = "revision", respuesta = { validado: true, tier, estado: "validado_auto" };
+    if (!validado) {
+      if (cls.estado === "sin_respuesta") respuesta = { validado: false, tier, estado: "reintentar" };
+      else {
+        const detalle = conf !== "baja";
+        if (cls.estado === "mora" && detalle) { estadoCuenta = "mora"; respuesta = { validado: false, tier, estado: "mora", deuda: conf === "alta" ? Math.round(cls.deuda) : null, portal: PORTAL_URL() }; }
+        else if (cls.estado === "baja" && detalle) { estadoCuenta = "baja"; respuesta = { validado: false, tier, estado: "baja", portal: PORTAL_URL() }; }
+        else respuesta = { validado: false, tier, estado: "a_revisar" };
+        await store.updateSocio(socioId, { club_estado: estadoCuenta, club_deuda: estadoCuenta === "mora" && conf === "alta" ? Math.round(cls.deuda) : null, club_consulta: ahora });
+      }
+    }
+
+    // Reclamo para revisar a mano: al validar, y cuando cambia lo que figura (no uno por cada "Ya pagué").
+    if (store.crearActualizacion && (validado || (cls.estado !== "sin_respuesta" && !silencioso && previo !== estadoCuenta))) {
       store.crearActualizacion({
         socioId: socioId, tipo: "socio_claim",
         nombre: socioFull.nombre, apellido: socioFull.apellido, email: socioFull.email,
@@ -736,19 +766,34 @@ function buildRouter() {
         notas: validado
           ? (enClub ? `API de socios: ${enClub.status} (${enClub.plan}) nº ${enClub.numeroSocio}, carnet entregado automático` : "Match padrón, carnet entregado automático")
           : noAlDia
-            ? `API de socios: estado ${enClub.status}${enClub.deudor ? ` (deuda ₲${enClub.deuda})` : ""} — NO está al día, revisar manual`
+            ? `API de socios: estado ${enClub.status}${cls.deuda ? ` (deuda ₲${cls.deuda})` : ""} — ${cls.estado === "mora" ? "EN MORA: se le pidió pagar en el portal de socios" : "NO está al día"}; coincidencia de la cuenta con el club: ${conf}`
             : "Cédula sin match en padrón ni en la API de socios — revisar manual",
       }).catch(() => {});
     }
-    if (!validado && !silencioso) {
+    // El aviso de "en revisión" se manda una sola vez, y solo cuando de verdad queda en revisión (no por mora, baja ni por una API caída).
+    if (!validado && !silencioso && estadoCuenta === "revision" && cls.estado !== "sin_respuesta" && previo !== "revision") {
       mailer.enviarEnRevision && mailer.enviarEnRevision(socioFull).catch(() => {});
     }
-    // Misma respuesta para "no encontrado" y "no está al día": el motivo queda solo en la
-    // actualización interna (para revisión). Si no, cualquiera podía averiguar el estado de
-    // pago de un socio probando su cédula.
-    return { validado, tier, estado: validado ? "validado_auto" : "a_revisar" };
+    return respuesta;
   }
 
+  // Cuentas en mora: se revisan de nuevo solas (cada hora, un lote chico) y, apenas el club dice "al día", se les activa el nivel Socio.
+  async function revisarMoras() {
+    const out = { revisadas: 0, activadas: 0 };
+    if (!store.cuentasEnMora || !tutiApi.habilitado() || process.env.TUTI_BARRIDO === "off") return out;
+    const cuentas = await store.cuentasEnMora({ limite: Math.min(Number(process.env.TUTI_LOTE_MORA) || 30, 100), desdeMin: 60 });
+    for (const c of cuentas) {
+      const ced = soloDigitos(c.cedula);
+      const v = await tutiApi.consultarSocio(ced);
+      if (!v.ok) { if (/limite|credenciales/.test(String(v.motivo || ""))) break; continue; }
+      if (store.guardarEstadoTuti) await store.guardarEstadoTuti(claveCedula(ced), clubSync.aEstado(v));
+      out.revisadas++;
+      try { const r0 = await validarSocioCore(c.id, ced, { silencioso: true }); if (r0.validado) out.activadas++; }
+      catch (e) { log.warn({ err: e.message }, "revisar mora: validación"); }
+      await new Promise((x) => setTimeout(x, Number(process.env.TUTI_PAUSA_MS) || 400));
+    }
+    return out;
+  }
   // ─── Membresía ──────────────────────────────────────────────────────────────
   r.get("/membresia", auth.requireSocio, wrap(async (req, res) => {
     const membresia = await store.getMembresia(req.socio.id);
@@ -1060,6 +1105,8 @@ function buildRouter() {
     try { out.subastas = await procesarPlazosSubastas(); } catch (e) { out.subastas = { error: true }; log.error({ err: e.message }, "cron horario: plazos"); }
     try { out.pagos = await conciliarPagos(); } catch (e) { out.pagos = { error: true }; log.error({ err: e.message }, "cron horario: pagos"); }
     try { out.campanas = await campanasLib.procesarLote({ store, log: () => {} }); } catch (e) { out.campanas = { error: true }; log.error({ err: e.message }, "cron horario: campañas"); }
+    try { out.moras = await revisarMoras(); } catch (e) { out.moras = { error: true }; log.error({ err: e.message }, "cron horario: moras"); }
+    try { if (store.completarSociosDesdeClub) out.sociosCompletados = await store.completarSociosDesdeClub(); } catch (e) { log.error({ err: e.message }, "cron horario: completar socios"); }
     try { out.clubSync = await clubSync.procesarLote({ store, tuti: tutiApi }); } catch (e) { out.clubSync = { error: true }; log.error({ err: e.message }, "cron horario: club-sync"); }
     try { out.reservasLiberadas = await liberarReservas(); } catch (e) { out.reservasLiberadas = { error: true }; log.error({ err: e.message }, "cron horario: reservas"); }
     res.json(out);
@@ -1329,9 +1376,31 @@ function buildRouter() {
     res.json({ habilitado: pushLib.habilitado(), ...(store.contarPush ? await store.contarPush() : { dispositivos: 0, personas: 0 }) });
   }));
   // Base del club: cuántas cédulas tenemos, cuántas ya se consultaron a la API y qué estados devolvió. Sin datos personales.
+  // Perfiles guardados para la campaña de validación de datos (las campañas siguen apagadas hasta que se decida activarlas). Son segmentos normales:
+  // aparecen en Campañas y se pueden usar o ajustar como cualquier otro.
+  const PERFILES_CAMPANA = [
+    { clave: "porReconocer", nombre: "Validación de datos · cuentas por reconocer", filtros: { porReconocer: true } },
+    { clave: "candidataCorreo", nombre: "Validación de datos · sin cédula, con correo en la base del club", filtros: { candidataCorreo: true } },
+    { clave: "enMora", nombre: "Validación de datos · socios en mora", filtros: { enMora: true } },
+  ];
+  const totalPerfil = async (p) => (store.paginaSocios ? (await store.paginaSocios({ ...p.filtros, limite: 1 })).total : 0);
   r.get("/admin/club/resumen", requireAdmin, wrap(async (_req, res) => {
     const r0 = store.resumenSociosClub ? await store.resumenSociosClub() : { total: 0, en_base: 0, consultados: 0, pendientes: 0, estados: [], cuentas_para_reconocer: 0 };
-    res.json({ ...r0, api_habilitada: tutiApi.habilitado(), barrido: process.env.TUTI_BARRIDO !== "off", lote: Number(process.env.TUTI_LOTE) || 120 });
+    const perfiles = [];
+    for (const p of PERFILES_CAMPANA) perfiles.push({ nombre: p.nombre, total: await totalPerfil(p) });
+    res.json({ ...r0, perfiles, api_habilitada: tutiApi.habilitado(), barrido: process.env.TUTI_BARRIDO !== "off", lote: Number(process.env.TUTI_LOTE) || 120 });
+  }));
+  r.post("/admin/club/perfiles", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    if (!store.crearSegmento || !store.listSegmentos) throw httpError(503, "No disponible");
+    const existentes = new Set((await store.listSegmentos()).map((x) => x.nombre));
+    const out = { creados: [], existentes: [] };
+    for (const p of PERFILES_CAMPANA) {
+      if (existentes.has(p.nombre)) { out.existentes.push(p.nombre); continue; }
+      await store.crearSegmento({ nombre: p.nombre, filtros: limpiarFiltros(p.filtros), por: req.adminUser });
+      out.creados.push(p.nombre);
+    }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "club:guardar_perfiles", targetId: "campana_validacion", detalle: JSON.stringify(out), por: req.adminUser });
+    res.json({ ...out, perfiles: await Promise.all(PERFILES_CAMPANA.map(async (p) => ({ nombre: p.nombre, total: await totalPerfil(p) }))) });
   }));
   // Rendimiento real: p75 de LCP / INP / CLS / TTFB por pantalla y tipo de dispositivo (últimos N días).
   r.get("/admin/vitales", requireAdmin, wrap(async (req, res) => {
@@ -1582,12 +1651,12 @@ function buildRouter() {
     if (v.ok) return { ...base, fuente: "portal", confirmado: true, encontrado: false, nota: "No figura como titular (la API no trae adherentes de un plan familiar)." };
     return { ...base, fuente: "padron", confirmado: false, motivo: v.motivo };
   }
-  const FILTROS_SEGMENTO = ["paisIso", "tier", "validoSocio", "sinFoto", "canjes", "pujas", "gasto", "ciudad", "q"];
+  const FILTROS_SEGMENTO = ["paisIso", "tier", "validoSocio", "sinFoto", "canjes", "pujas", "gasto", "ciudad", "q", "porReconocer", "candidataCorreo", "enMora"];
   function limpiarFiltros(f) {
     const out = {}, src = f && typeof f === "object" ? f : {};
     if (typeof src.paisIso === "string" && /^[A-Za-z]{2}$/.test(src.paisIso)) out.paisIso = src.paisIso.toUpperCase();
     if (typeof src.tier === "string" && tierBySlug(src.tier)) out.tier = src.tier;
-    for (const k of ["validoSocio", "sinFoto"]) if (src[k] === true) out[k] = true;
+    for (const k of ["validoSocio", "sinFoto", "porReconocer", "candidataCorreo", "enMora"]) if (src[k] === true) out[k] = true;
     for (const k of ["canjes", "pujas", "gasto"]) if (typeof src[k] === "boolean") out[k] = src[k];
     for (const k of ["ciudad", "q"]) if (typeof src[k] === "string" && src[k].trim()) out[k] = src[k].trim().slice(0, 80);
     return out;

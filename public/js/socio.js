@@ -529,6 +529,21 @@
       };
       return;
     }
+    // Cuota pendiente o baja en el club: aviso fijo con el acceso al portal de socios y "Ya pagué". Apenas el club vuelve a decir "al día", el nivel se activa solo.
+    if (sv && !sv.es_socio_olimpia && (sv.club_estado === "mora" || sv.club_estado === "baja")) {
+      const mora = sv.club_estado === "mora";
+      host.innerHTML = `<div class="socio-banner socio-banner-club" role="status">
+        <span class="sb-txt">${icon("trophy", { size: 16 })} ${mora ? T("mo_banner").replace("{monto}", sv.club_deuda ? " (" + esc(gs(sv.club_deuda)) + ")" : "") : T("ba_banner")}</span>
+        <a class="btn btn-sm" href="${esc(portalClub())}" target="_blank" rel="noopener">${T("up_portal")}</a>
+        <button class="btn btn-sm btn-ghost" id="clubPague">${T("up_ya_pague")}</button></div>`;
+      host.querySelector("#clubPague").onclick = async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try { const r = await revisarClub(); if (r.validado) { await clubOk(); return; } toast(r.estado === "mora" || r.estado === "baja" ? T("up_sigue_mora") : T("up_reintentar_p")); await refrescar(); }
+        catch (e) { toast(e.message); }
+        setTimeout(() => { b.disabled = false; }, 4000);
+      };
+      return;
+    }
     let off = false; try { off = sessionStorage.getItem("oli_socio_banner") === "1"; } catch (e) {}
     if (esSocioValidado() || off) { host.innerHTML = ""; return; }
     host.innerHTML = `<div class="socio-banner">
@@ -565,20 +580,40 @@
           await api("/perfil", { method: "PATCH", body: { fecha_nacimiento: f } });
         }
         const r = await api("/perfil/validar-socio", { method: "POST", body: { cedula } });
-        if (r.validado) { cerrar(); await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); activar("carnet"); }
-        else {
-          // No lo encontramos como socio al día: se dice claro y se ofrece corregir el número o hablar con una persona.
-          root.querySelector("h3").textContent = T("up_no_h");
-          root.querySelector(".muted").textContent = T("up_no_p");
-          root.querySelector("#upCedula").hidden = true; { const f = root.querySelector("#upFecha"); if (f) { f.previousElementSibling && f.previousElementSibling.remove(); f.remove(); } }
-          err.textContent = "";
-          btn.disabled = false; btn.textContent = T("up_otra");
-          btn.onclick = () => { cerrar(); validarSocioModal(); };
-          const ch = document.createElement("button"); ch.type = "button"; ch.className = "btn btn-ghost btn-block"; ch.style.marginTop = "8px"; ch.textContent = T("up_persona");
-          ch.onclick = () => { cerrar(); document.getElementById("atcFab")?.click(); };
-          btn.after(ch);
-        }
+        if (r.validado) { cerrar(); await clubOk(); }
+        else pintarResultadoClub(root, r, cerrar);
       } catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = T("ob_validar"); }
+    };
+  }
+  async function clubOk() { await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); activar("carnet"); }
+  const portalClub = () => { const u = (CONFIG && CONFIG.portal_socios) || "https://socios.clubolimpia.com.py"; return /^https:\/\//.test(u) ? u : "https://socios.clubolimpia.com.py"; };
+  // "Ya pagué, revisar de nuevo": vuelve a consultar al club en vivo (una vez por minuto). Devuelve lo que contestó el servidor.
+  async function revisarClub() { return api("/perfil/validar-socio", { method: "POST", body: { reintentar: true } }); }
+  // Qué se le cuenta a la persona cuando todavía no se pudo activar el nivel Socio.
+  function pintarResultadoClub(root, r, cerrar) {
+    const esc2 = (t) => esc(String(t));
+    let h = T("up_no_h"), p = T("up_no_p");
+    if (r.estado === "mora") { h = T("up_mora_h"); p = r.deuda ? T("up_mora_p").replace("{monto}", gs(r.deuda)) : T("up_mora_p2"); }
+    else if (r.estado === "baja") { h = T("up_baja_h"); p = T("up_baja_p"); }
+    else if (r.estado === "reintentar") { h = T("up_reintentar_h"); p = T("up_reintentar_p"); }
+    const conPortal = r.estado === "mora" || r.estado === "baja";
+    root.innerHTML = `<h3>${esc2(h)}</h3><p class="muted">${esc2(p)}</p><p class="err" id="upErr"></p>` +
+      (conPortal ? `<a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${esc2(T("up_portal"))}</a><button type="button" class="btn btn-ghost btn-block" id="upPague" style="margin-top:8px">${esc2(T("up_ya_pague"))}</button>`
+        : r.estado === "reintentar" ? `<button type="button" class="btn btn-block" id="upPague">${esc2(T("up_reintentar"))}</button>`
+        : `<button type="button" class="btn btn-block" id="upOtra">${esc2(T("up_otra"))}</button><button type="button" class="btn btn-ghost btn-block" id="upPersona" style="margin-top:8px">${esc2(T("up_persona"))}</button>`) +
+      `<button type="button" class="btn btn-ghost btn-block" id="upCerrar2" style="margin-top:8px">${esc2(T("up_cerrar"))}</button>`;
+    root.querySelector("#upCerrar2").onclick = cerrar;
+    const otra = root.querySelector("#upOtra"); if (otra) otra.onclick = () => { cerrar(); validarSocioModal(); };
+    const per = root.querySelector("#upPersona"); if (per) per.onclick = () => { cerrar(); document.getElementById("atcFab")?.click(); };
+    const pague = root.querySelector("#upPague");
+    if (pague) pague.onclick = async () => {
+      pague.disabled = true; const txt = pague.textContent; pague.textContent = T("up_consultando");
+      try {
+        const r2 = await revisarClub();
+        if (r2.validado) { cerrar(); await clubOk(); return; }
+        if (r2.estado === r.estado && r.estado !== "reintentar") toast(T("up_sigue_mora"));
+        pintarResultadoClub(root, r2, cerrar);
+      } catch (e) { root.querySelector("#upErr").textContent = e.message; pague.disabled = false; pague.textContent = txt; }
     };
   }
 
@@ -1957,10 +1992,12 @@
   // Son dos cosas distintas y se muestran por separado: "Miembro desde" (cuándo se registró en olimpistas.com) y, si es socio del club,
   // "Socio desde" (su antigüedad REAL en el club). Si el club todavía no nos dio esa fecha, se muestra su número de socio y nunca una fecha inventada.
   const fechaMes = (d) => new Date(d + "T12:00:00").toLocaleDateString(LOC, { year: "numeric", month: "long" });
+  const aniosDeSocio = (d) => Math.floor((Date.now() - new Date(d + "T12:00:00").getTime()) / 31557600000);
+  const textoAnios = (a) => (a < 1 ? "" : " · " + (a === 1 ? T("cn_anio_uno") : T("cn_anios").replace("{n}", a)));
   function antiguedadesCarnet(c, desdeOlimpistas) {
     const filas = [{ et: T("m_cn_desde"), val: desdeOlimpistas }];
     if (c.esSocio) {
-      if (c.socioDesde) filas.push({ et: T("cn_socio_desde"), val: fechaMes(c.socioDesde) });
+      if (c.socioDesde) filas.push({ et: T("cn_socio_desde"), val: fechaMes(c.socioDesde) + textoAnios(aniosDeSocio(c.socioDesde)) });
       else if (c.nroSocio) filas.push({ et: T("cn_nro_socio"), val: c.nroSocio });
     }
     return filas;

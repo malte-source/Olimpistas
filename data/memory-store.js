@@ -273,6 +273,10 @@ function createMemoryStore({ filePath = null } = {}) {
         if (f.verificado !== undefined && f.verificado !== null && !!s.email_verificado !== f.verificado) return false;
         if (f.club !== undefined && f.club !== null && !!s.es_socio_olimpia !== f.club) return false;
         if (f.conFoto && !s.foto) return false;
+        const clb = (db.socios_club || {}), clv = (c) => String(c || "").replace(/\D/g, "").replace(/^0+/, "");
+        if (f.porReconocer && !(!s.es_socio_olimpia && (clb[clv(s.cedula)] || {}).tuti_al_dia === true)) return false;
+        if (f.candidataCorreo && !(!s.es_socio_olimpia && !s.cedula && Object.values(clb).some((c) => c.en_base && c.correo && c.correo === String(s.email || "").toLowerCase()))) return false;
+        if (f.enMora && s.club_estado !== "mora") return false;
         if (f.tier && tierDe(s.id) !== f.tier) return false;
         if (term && !((s.email || "").toLowerCase().includes(term) || ((s.nombre || "") + " " + (s.apellido || "")).toLowerCase().includes(term) || (s.cedula || "").includes(term))) return false;
         return true;
@@ -1114,7 +1118,7 @@ function createMemoryStore({ filePath = null } = {}) {
     async guardarEstadoTuti(cedula, e) {
       const t = (db.socios_club = db.socios_club || {});
       const p = t[String(cedula)] || { cedula: String(cedula), en_base: false, grupo: "", nro_socio: "", correo: "", tuti_intentos: 0 };
-      t[String(cedula)] = { ...p, tuti_estado: e.estado || "", tuti_plan: e.plan || "", tuti_numero: e.numero || "", tuti_al_dia: e.alDia == null ? null : !!e.alDia, tuti_deuda: e.deuda == null ? null : Math.round(e.deuda), tuti_consultado: nowIso(), tuti_intentos: (p.tuti_intentos || 0) + 1 };
+      t[String(cedula)] = { ...p, tuti_estado: e.estado || "", tuti_plan: e.plan || "", tuti_numero: e.numero || "", tuti_al_dia: e.alDia == null ? null : !!e.alDia, tuti_deuda: e.deuda == null ? null : Math.round(e.deuda), tuti_correo: String(e.correo || "").toLowerCase(), tuti_nombre: String(e.nombre || ""), tuti_consultado: nowIso(), tuti_intentos: (p.tuti_intentos || 0) + 1 };
       persist();
     },
     async siguientesParaConsultar({ limite = 100, staleDias = 7 } = {}) {
@@ -1136,7 +1140,28 @@ function createMemoryStore({ filePath = null } = {}) {
       return { total: t.length, en_base: t.filter((r) => r.en_base).length, consultados: t.filter((r) => r.tuti_consultado).length, pendientes: t.filter((r) => r.en_base && !r.tuti_consultado).length,
         con_socio_desde: t.filter((r) => r.socio_desde).length, ultima_consulta: t.map((r) => r.tuti_consultado).filter(Boolean).sort().slice(-1)[0] || null,
         estados: Object.entries(estados).sort((a, b) => b[1] - a[1]).map(([estado, n]) => ({ estado, n })),
-        cuentas_para_reconocer: (db.socios || []).filter((s) => !s.es_socio_olimpia && alDia.has(clave(s.cedula))).length };
+        cuentas_para_reconocer: (db.socios || []).filter((s) => !s.es_socio_olimpia && alDia.has(clave(s.cedula))).length,
+        fuentes: Object.entries(t.filter((r) => r.en_base).reduce((m, r) => { const k = r.fecha_fuente || ""; m[k] = (m[k] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1]).map(([fuente, n]) => ({ fuente, n })),
+        cuentas_en_mora: (db.socios || []).filter((s) => s.club_estado === "mora" && !s.es_socio_olimpia).length };
+    },
+    async completarSociosDesdeClub() {
+      const clb = db.socios_club || {}, clv = (c) => String(c || "").replace(/\D/g, "").replace(/^0+/, "");
+      let desde_club = 0, desde_membresia = 0;
+      for (const s of (db.socios || [])) {
+        if (!s.es_socio_olimpia) continue;
+        const c = clb[clv(s.cedula)];
+        if (c && (!s.socio_desde || !s.nro_socio || !s.grupo_club)) { if (!s.socio_desde && c.socio_desde) s.socio_desde = c.socio_desde; if (!s.nro_socio) s.nro_socio = c.nro_socio || ""; if (!s.grupo_club) s.grupo_club = c.grupo || ""; desde_club++; }
+        if (!s.socio_desde) {
+          const m = (db.membresias || []).filter((x) => x.socio_id === s.id && x.estado === "activa" && x.tier_slug === "socio").slice(-1)[0];
+          if (m) { s.socio_desde = String(new Date(new Date(m.inicio).getTime() - 3 * 3600000).toISOString()).slice(0, 10); desde_membresia++; }
+        }
+      }
+      persist(); return { desde_club, desde_membresia };
+    },
+    async cuentasEnMora({ limite = 30, desdeMin = 60 } = {}) {
+      const corte = Date.now() - desdeMin * 60000;
+      return (db.socios || []).filter((s) => s.club_estado === "mora" && !s.es_socio_olimpia && s.cedula && (!s.verif_exigida || s.email_verificado) && (!s.club_consulta || new Date(s.club_consulta).getTime() < corte))
+        .sort((a, b) => String(a.club_consulta || "").localeCompare(String(b.club_consulta || ""))).slice(0, limite).map((s) => ({ id: s.id, cedula: s.cedula }));
     },
     // ── Push ──
     async guardarPushSuscripcion({ socioId, endpoint, p256dh, auth, ua }) {
