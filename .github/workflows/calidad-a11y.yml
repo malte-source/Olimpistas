@@ -1,0 +1,44 @@
+name: Calidad UX (accesibilidad)
+
+# Revisa con axe-core las vistas clave (públicas y del miembro) en celular, escritorio y tema oscuro. La línea base es cero violaciones:
+# falla si aparece una SERIA o CRÍTICA; las moderadas y leves se listan en el resumen de la corrida. Corre en cada PR que toca la interfaz, a mano y una vez por semana.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * 1"
+  pull_request:
+    paths:
+      - "public/**"
+      - "routes.js"
+      - "scripts/a11y-axe.js"
+      - ".github/workflows/calidad-a11y.yml"
+
+jobs:
+  axe:
+    runs-on: ubuntu-latest
+    env:
+      PORT: "3000"
+      OLIMPISTAS_PERSIST: "0"
+      NODE_ENV: development
+      BASE: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Navegador y axe (no son dependencias del proyecto)
+        run: |
+          npm install --no-save --no-package-lock playwright@1.49.1 @axe-core/playwright@4.10.1
+          npx playwright install --with-deps chromium
+      - name: Levantar la app
+        run: |
+          node server.js > server.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf "$BASE/api/salud" >/dev/null && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: Revisar accesibilidad
+        run: node scripts/a11y-axe.js
+      - name: Registro del servidor
+        if: failure()
+        run: tail -n 80 server.log

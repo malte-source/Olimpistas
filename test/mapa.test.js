@@ -127,7 +127,7 @@ test("encontrarse en el globo: botonera Mi ciudad · Paraguay · El mundo, leyen
   assert.deepStrictEqual(botones, ["ciudad", "pais", "mundo"]);
   assert.match(h, /id="globoVista"[^>]*role="radiogroup"/);
   assert.match(h, /<ol class="mapa-lista" id="mapaLista">/);
-  assert.match(h, /<details class="mapa-lista-wrap" id="mapaListaWrap">/);
+  assert.match(h, /<details class="mapa-lista-wrap" id="mapaListaWrap" hidden>/);
   const g = leer("js/globe.js");
   assert.match(g, /vista\(nombre, p\)/);
   assert.match(g, /setAttribute\("role", "img"\)/, "el canvas es una imagen para lectores de pantalla");
