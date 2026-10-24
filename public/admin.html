@@ -437,6 +437,19 @@
           <p class="hint">Entrega, aperturas y clics de los correos. La apertura es referencial (Apple Mail y otros la inflan/bloquean); el clic y la conversión en el sitio son más fiables.</p>
           <div class="cards" id="emailCards"><p class="loading">Cargando…</p></div>
 
+          <h2 style="margin-top:34px">Avisos al celular (push)</h2>
+          <p class="hint" id="pushResumen">Cargando…</p>
+          <div id="pushBox" hidden>
+            <div class="fgrid">
+              <div><label for="pushTipo">Tipo de aviso</label><select id="pushTipo"><option value="partido">Partido o aviso del club</option><option value="beneficio">Beneficio nuevo o destacado</option></select></div>
+              <div><label for="pushCiudad">Solo una ciudad (opcional)</label><input id="pushCiudad" maxlength="60" placeholder="Ej. Asunción" /></div>
+              <div class="full"><label for="pushTitulo">Título (entre 3 y 80 caracteres)</label><input id="pushTitulo" maxlength="80" placeholder="Ej. Hoy juega el Decano" /></div>
+              <div class="full"><label for="pushCuerpo">Texto (hasta 160 caracteres)</label><input id="pushCuerpo" maxlength="160" placeholder="Ej. Mostrá tu carnet y disfrutá los beneficios de la fecha" /></div>
+              <div class="full"><label for="pushUrl">A dónde lleva el aviso</label><select id="pushUrl"><option value="/miembro">Inicio</option><option value="/miembro/beneficios">Beneficios</option><option value="/miembro/carnet">Mi carnet</option></select></div>
+            </div>
+            <div class="row-actions" style="margin-top:10px;align-items:center"><button class="btn" id="pushEnviar">Enviar aviso</button><span class="muted" id="pushMsg" role="status"></span></div>
+          </div>
+
           <h2 style="margin-top:34px">Nueva campaña</h2>
           <p class="hint">Elegí a quién va, por dónde, qué decir y mirá cómo queda antes de enviar. Quien se dio de baja de novedades nunca la recibe, y el envío sale por tandas (podés cancelar lo que todavía no salió).</p>
           <p class="hint" id="cmpOff" hidden><span class="pill pill-warn">Desactivadas</span> Las campañas todavía no están activas: podés armar el mensaje y ver cómo queda, pero no probar ni enviar. Se encienden cuando el club lo decida.</p>
@@ -715,7 +728,7 @@
       dashboard: [cargarPendientes, cargarTablero, cargarGerencia, cargarComercial, cargarSalud, cargarReportes, cargarRevCount, cargarMapaAdmin],
       socios: [iniciarSocios],                    // la tabla se carga al abrir; segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
-      campanas: [cargarEmailMetricas, cargarComposer, cargarCampanas, cargarGhl],
+      campanas: [cargarPush, cargarEmailMetricas, cargarComposer, cargarCampanas, cargarGhl],
       contenido: [function () {
         if (veSeccion("contenido", "subastas", "estadio")) cargarCrud();
         if (veSeccion("contenido")) cargarActualizaciones();
@@ -897,6 +910,33 @@
         cargarCohortes();
       } catch (e) { $("repCards").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
+    // ── Avisos al celular (push): el club manda un aviso de partido o de beneficio a quienes lo activaron ──
+    async function cargarPush() {
+      var res = $("pushResumen"), box = $("pushBox"); if (!res || !box) return;
+      try {
+        var d = await api("/admin/push/resumen"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
+        box.hidden = !puede("campanas.write");
+        if (!d.habilitado) { res.innerHTML = '<span class="pill pill-warn">Sin conectar</span> Los avisos al celular todavía no están conectados (faltan las claves del servicio): podés armar el mensaje pero no se envía.'; $("pushEnviar").disabled = true; return; }
+        $("pushEnviar").disabled = false;
+        res.innerHTML = '<b>' + nf(d.personas) + '</b> personas tienen los avisos activados (' + nf(d.dispositivos) + ' dispositivos). Cada persona recibe como máximo un aviso de cada tipo por día, y puede apagar los que no quiere desde su cuenta.';
+        box.dataset.personas = d.personas;
+      } catch (e) { res.textContent = "No se pudo cargar el estado de los avisos."; }
+    }
+    document.addEventListener("click", async function (e) {
+      if (!e.target.closest || !e.target.closest("#pushEnviar")) return;
+      var titulo = $("pushTitulo").value.trim(), cuerpo = $("pushCuerpo").value.trim(), msg = $("pushMsg"), btn = $("pushEnviar");
+      msg.textContent = "";
+      if (titulo.length < 3) { msg.textContent = "Escribí el título (mínimo 3 caracteres)."; $("pushTitulo").focus(); return; }
+      var n = Number($("pushBox").dataset.personas || 0), donde = $("pushCiudad").value.trim();
+      if (!(await confirmar("Se manda a " + (donde ? "las personas de " + donde : "todas las personas") + " que tienen este tipo de aviso activado (hay unas " + n.toLocaleString("es-PY") + " en total).\n\n«" + titulo + "»" + (cuerpo ? "\n" + cuerpo : "") + "\n\nNo se puede deshacer.", { titulo: "Enviar aviso al celular", ok: "Enviar ahora" }))) return;
+      btn.disabled = true;
+      try {
+        var r = await api("/admin/push/enviar", { method: "POST", body: { tipo: $("pushTipo").value, titulo: titulo, cuerpo: cuerpo, ciudad: donde || undefined, url: $("pushUrl").value } });
+        msg.style.color = "var(--text-success)"; msg.textContent = "Listo: se envió a " + Number(r.destinatarios || 0).toLocaleString("es-PY") + " personas (" + Number(r.enviados || 0).toLocaleString("es-PY") + " dispositivos).";
+        $("pushTitulo").value = ""; $("pushCuerpo").value = "";
+      } catch (err) { msg.style.color = "var(--text-error)"; msg.textContent = err.message; }
+      btn.disabled = false;
+    });
     // ── Para hacer ahora: todo lo que espera al equipo, en un solo lugar; cada fila lleva al área donde se resuelve ──
     async function cargarPendientes() {
       var box = $("paraHacer"); if (!box) return;
@@ -1245,10 +1285,21 @@
             (c.estados && c.estados.length ? '<br>Estados: ' + c.estados.map(function (e) { return esc(e.estado) + ' ' + nf(e.n); }).join(' · ') : '') +
             (c.sincronizacion ? '<br>Nivel Socio según el club: ' + nf(c.sincronizacion.al_dia) + ' al día · ' + nf(c.sincronizacion.por_pausar_mora) + ' en mora · ' + nf(c.sincronizacion.por_pausar_baja) + ' de baja · ' + (c.sincronizacion.activada ? 'pausa automática ACTIVA (mora y baja pasan a Olimpista y se les avisa)' : 'pausa automática apagada (nadie pierde el nivel todavía)') : '') +
             '<br>Consulta de fondo: ' + (c.api_habilitada ? (c.barrido ? 'activa (' + nf(c.lote) + ' por hora)' : 'apagada') : 'sin conexión a la API') + (c.ultima_consulta ? ' · última: ' + esc(new Date(c.ultima_consulta).toLocaleString("es-PY")) : '') +
-            '</small></span><span class="pill ' + (c.api_habilitada && c.barrido ? "pill-ok" : "pill-warn") + '">' + (c.api_habilitada && c.barrido ? "Consultando" : "Pausada") + '</span></div></div>';
+            '</small></span><span class="pill ' + (c.api_habilitada && c.barrido ? "pill-ok" : "pill-warn") + '">' + (c.api_habilitada && c.barrido ? "Consultando" : "Pausada") + '</span></div></div>' +
+            (puede("campanas.write") ? '<div class="row-actions" style="margin-top:10px;align-items:center"><button type="button" class="btn btn-sm btn-ghost" id="clubPerfiles">Guardar los perfiles de la campaña de validación</button><span class="muted" id="clubPerfilesMsg" role="status" style="font-size:13px"></span></div><p class="hint" style="margin:6px 0 0">Crea tres segmentos en Campañas (cuentas por reconocer, sin cédula con correo en la base del club, y socios en mora). Las campañas siguen apagadas hasta que se decida encenderlas.</p>' : '');
         } catch (e2) { /* sin permiso o sin base: no se muestra */ }
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
+    document.addEventListener("click", async function (e) {
+      var b = e.target.closest && e.target.closest("#clubPerfiles"); if (!b) return;
+      var m = $("clubPerfilesMsg"); m.textContent = ""; b.disabled = true;
+      try {
+        var r = await api("/admin/club/perfiles", { method: "POST" });
+        m.style.color = "var(--text-success)";
+        m.textContent = (r.creados.length ? "Guardados " + r.creados.length + " perfiles nuevos. " : "") + (r.existentes.length ? r.existentes.length + " ya existían. " : "") + (r.perfiles || []).map(function (p) { return Number(p.total || 0).toLocaleString("es-PY") + " personas"; }).join(" · ");
+      } catch (err) { m.style.color = "var(--text-error)"; m.textContent = err.message; }
+      b.disabled = false;
+    });
     async function cargarMatrizRoles() {
       var box = $("matrizWrap"); if (!box || !puede("usuarios")) return;
       try {
