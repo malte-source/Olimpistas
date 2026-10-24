@@ -1177,7 +1177,7 @@
         if (!c) return;
         return upgrade(slug, c);
       }
-      if (r.gratis) { await refrescar(); return vMembresia(); }
+      if (r.gratis) { await refrescar(); return activar("carnet"); }
       window.OLI.track("InicioPago", "InitiateCheckout", { content_name: slug });
       location.href = r.pago.urlPago;
     } catch (e) { toast(e.message); }

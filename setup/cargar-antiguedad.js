@@ -59,23 +59,23 @@ console.log("Muestra:", [...regs].slice(0, 3));
   const sql = postgres(process.env.OLIMPISTAS_DATABASE_URL, { max: 2, prepare: false, ssl: "require" });
   const cedulas = [...regs.keys()], fechas = cedulas.map((c) => regs.get(c));
   const [{ n: enCuentas }] = await sql`
-    SELECT COUNT(*)::int n FROM socios s JOIN unnest(${cedulas}::text[]) c(ced) ON regexp_replace(s.cedula, '\D', '', 'g') = c.ced WHERE s.es_socio_olimpia`;
+    SELECT COUNT(*)::int n FROM socios s JOIN unnest(${cedulas}::text[]) c(ced) ON regexp_replace(s.cedula, '[^0-9]', '', 'g') = c.ced WHERE s.es_socio_olimpia`;
   const [{ n: enPadron }] = await sql`
-    SELECT COUNT(*)::int n FROM padron_olimpia p JOIN unnest(${cedulas}::text[]) c(ced) ON regexp_replace(p.cedula, '\D', '', 'g') = c.ced`;
+    SELECT COUNT(*)::int n FROM padron_olimpia p JOIN unnest(${cedulas}::text[]) c(ced) ON regexp_replace(p.cedula, '[^0-9]', '', 'g') = c.ced`;
   console.log(`Cuentas de socios que recibirían la fecha: ${enCuentas} | filas del padrón: ${enPadron}`);
   if (!apply) { console.log("\n(ensayo) — no se tocó la base. Agregá --apply para cargar."); await sql.end(); process.exit(0); }
   await sql.begin(async (t) => {
     await t`
       UPDATE padron_olimpia p SET socio_desde = c.f::date
-      FROM unnest(${cedulas}::text[], ${fechas}::text[]) c(ced, f) WHERE regexp_replace(p.cedula, '\D', '', 'g') = c.ced`;
+      FROM unnest(${cedulas}::text[], ${fechas}::text[]) c(ced, f) WHERE regexp_replace(p.cedula, '[^0-9]', '', 'g') = c.ced`;
     await t`
       UPDATE socios s SET socio_desde = c.f::date
-      FROM unnest(${cedulas}::text[], ${fechas}::text[]) c(ced, f) WHERE s.es_socio_olimpia AND regexp_replace(s.cedula, '\D', '', 'g') = c.ced`;
+      FROM unnest(${cedulas}::text[], ${fechas}::text[]) c(ced, f) WHERE s.es_socio_olimpia AND regexp_replace(s.cedula, '[^0-9]', '', 'g') = c.ced`;
     // Cuentas ya validadas que todavía no tienen su número de socio: se completa con el del padrón.
     await t`
       UPDATE socios s SET nro_socio = p.nro_socio
       FROM padron_olimpia p WHERE s.es_socio_olimpia AND s.nro_socio = '' AND coalesce(p.nro_socio, '') <> ''
-        AND regexp_replace(p.cedula, '\D', '', 'g') = regexp_replace(s.cedula, '\D', '', 'g') AND s.cedula <> ''`;
+        AND regexp_replace(p.cedula, '[^0-9]', '', 'g') = regexp_replace(s.cedula, '[^0-9]', '', 'g') AND s.cedula <> ''`;
   });
   const [r] = await sql`SELECT COUNT(*) FILTER (WHERE socio_desde IS NOT NULL)::int con_fecha, COUNT(*)::int total FROM socios WHERE es_socio_olimpia`;
   console.log(`Listo. Socios con antigüedad cargada: ${r.con_fecha} de ${r.total}.`);

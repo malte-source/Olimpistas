@@ -78,6 +78,19 @@ test("la consulta en lote del importador carga 2.500 filas en trozos sin perder 
   assert.strictEqual((await pg.resumenSociosClub()).total, 5 + 2500);
 });
 
+test("las cédulas con puntos o guiones también cruzan con la base del club (Postgres = memoria)", opts, async () => {
+  async function caso(store) {
+    const s = await store.createSocio({ email: "ced-puntos@ejemplo.com", passwordHash: "x", nombre: "P", cedula: "7.000.001" });
+    await store.updateSocio(s.id, { es_socio_olimpia: true });
+    await store.upsertSociosClub([reg("7000001", { socio_desde: "2011-01-01", fecha_calidad: "creible", fecha_fuente: "ingreso", nro_socio: "77" })]);
+    await store.completarSociosDesdeClub();
+    const x = await store.getSocioById(s.id);
+    return [String(x.socio_desde).slice(0, 10), x.nro_socio];
+  }
+  assert.deepStrictEqual(await caso(pg), ["2011-01-01", "77"], "Postgres");
+  assert.deepStrictEqual(await caso(mem), ["2011-01-01", "77"], "memoria");
+});
+
 test("fechas dudosas: se quita la que puso el sistema, no la declarada ni la de un admin, y no se inventa la de la membresía (Postgres = memoria)", opts, async () => {
   async function caso(store) {
     const mk = async (email, ced, extra) => { const s = await store.createSocio({ email, passwordHash: "x", nombre: "N", cedula: ced }); await store.updateSocio(s.id, { es_socio_olimpia: true, ...extra }); return s.id; };

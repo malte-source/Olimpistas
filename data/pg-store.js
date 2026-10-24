@@ -191,7 +191,7 @@ function createPgStore({ databaseUrl, debug }) {
     if (f.club === false) conds.push(sql`s.es_socio_olimpia = false`);
     if (f.conFoto === true) conds.push(sql`(s.foto IS NOT NULL AND s.foto <> '')`);
     // Perfiles de la campaña de validación de datos: cuentas que el club dice al día y todavía no son socias; cuentas sin cédula cuyo correo figura en la base; cuentas en mora.
-    if (f.porReconocer) conds.push(sql`(NOT s.es_socio_olimpia AND EXISTS (SELECT 1 FROM socios_club c WHERE c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0') AND c.tuti_al_dia IS TRUE))`);
+    if (f.porReconocer) conds.push(sql`(NOT s.es_socio_olimpia AND EXISTS (SELECT 1 FROM socios_club c WHERE c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g'), '0') AND c.tuti_al_dia IS TRUE))`);
     if (f.candidataCorreo) conds.push(sql`(NOT s.es_socio_olimpia AND coalesce(s.cedula, '') = '' AND EXISTS (SELECT 1 FROM socios_club c WHERE c.en_base AND c.correo = lower(s.email)))`);
     if (f.enMora) conds.push(sql`s.club_estado = 'mora'`);
     return conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`));
@@ -254,7 +254,7 @@ function createPgStore({ databaseUrl, debug }) {
       const [r] = await sql`
         SELECT * FROM padron_olimpia
         WHERE (${em} <> '' AND lower(email) = ${em})
-           OR (${ced} <> '' AND regexp_replace(cedula, '\D', '', 'g') = ${ced})
+           OR (${ced} <> '' AND regexp_replace(cedula, '[^0-9]', '', 'g') = ${ced})
         LIMIT 1`;
       return r || null;
     },
@@ -819,7 +819,7 @@ function createPgStore({ databaseUrl, debug }) {
       const dom = "%@" + SEED_DOMAIN, out = [], vistos = new Set();
       const tomar = (filas) => { for (const f of filas) if (out.length < limite && !vistos.has(f.cedula)) { vistos.add(f.cedula); out.push(f.cedula); } };
       tomar(await sql`
-        SELECT k.ced AS cedula FROM (SELECT DISTINCT ltrim(regexp_replace(s.cedula, '\D', '', 'g'), '0') AS ced FROM socios s WHERE coalesce(s.cedula, '') <> '' AND s.email NOT LIKE ${dom}) k
+        SELECT k.ced AS cedula FROM (SELECT DISTINCT ltrim(regexp_replace(s.cedula, '[^0-9]', '', 'g'), '0') AS ced FROM socios s WHERE coalesce(s.cedula, '') <> '' AND s.email NOT LIKE ${dom}) k
         LEFT JOIN socios_club c ON c.cedula = k.ced
         WHERE length(k.ced) BETWEEN 5 AND 12 AND (c.cedula IS NULL OR c.tuti_consultado IS NULL OR c.tuti_consultado < now() - make_interval(days => ${staleDias}))
         ORDER BY c.tuti_consultado NULLS FIRST LIMIT ${limite}`);
@@ -835,7 +835,7 @@ function createPgStore({ databaseUrl, debug }) {
         COUNT(*) FILTER (WHERE en_base AND tuti_consultado IS NULL)::int AS pendientes, COUNT(*) FILTER (WHERE socio_desde IS NOT NULL)::int AS con_socio_desde,
         MAX(tuti_consultado) AS ultima_consulta FROM socios_club`;
       const estados = await sql`SELECT tuti_estado AS estado, COUNT(*)::int AS n FROM socios_club WHERE tuti_estado <> '' GROUP BY 1 ORDER BY 2 DESC`;
-      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios s JOIN socios_club c ON c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0')
+      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios s JOIN socios_club c ON c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g'), '0')
         WHERE NOT s.es_socio_olimpia AND c.tuti_al_dia IS TRUE`;
       const fuentes = await sql`SELECT fecha_fuente AS fuente, COUNT(*)::int AS n FROM socios_club WHERE en_base GROUP BY 1 ORDER BY 2 DESC`;
       const [m] = await sql`SELECT COUNT(*)::int AS n FROM socios WHERE club_estado = 'mora' AND NOT es_socio_olimpia`;
@@ -845,21 +845,21 @@ function createPgStore({ databaseUrl, debug }) {
     async completarSociosDesdeClub() {
       const a = await sql`UPDATE socios s SET socio_desde = COALESCE(s.socio_desde, c.socio_desde), nro_socio = CASE WHEN s.nro_socio = '' THEN coalesce(c.nro_socio, '') ELSE s.nro_socio END,
           grupo_club = CASE WHEN s.grupo_club = '' THEN coalesce(c.grupo, '') ELSE s.grupo_club END
-        FROM socios_club c WHERE s.es_socio_olimpia AND c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0')
+        FROM socios_club c WHERE s.es_socio_olimpia AND c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g'), '0')
           AND (s.socio_desde IS NULL OR s.nro_socio = '' OR s.grupo_club = '')`;
       // Fechas que el club cargó mal (fecha_fuente 'dudosa'): se quita la que había puesto el sistema; una declarada por la persona o fijada por un admin no se toca.
       const c = await sql`UPDATE socios s SET socio_desde = NULL FROM socios_club k
-        WHERE s.es_socio_olimpia AND s.socio_desde IS NOT NULL AND s.socio_desde_fuente = '' AND k.fecha_fuente = 'dudosa' AND k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), 'D', '', 'g'), '0')`;
+        WHERE s.es_socio_olimpia AND s.socio_desde IS NOT NULL AND s.socio_desde_fuente = '' AND k.fecha_fuente = 'dudosa' AND k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g'), '0')`;
       const b = await sql`UPDATE socios s SET socio_desde = (SELECT (m.inicio AT TIME ZONE 'America/Asuncion')::date FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio' ORDER BY m.inicio DESC LIMIT 1)
         WHERE s.es_socio_olimpia AND s.socio_desde IS NULL AND EXISTS (SELECT 1 FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio')
-          AND NOT EXISTS (SELECT 1 FROM socios_club k WHERE k.fecha_fuente = 'dudosa' AND k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), 'D', '', 'g'), '0'))`;
+          AND NOT EXISTS (SELECT 1 FROM socios_club k WHERE k.fecha_fuente = 'dudosa' AND k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g'), '0'))`;
       return { desde_club: a.count || 0, desde_membresia: b.count || 0, dudosas_quitadas: c.count || 0 };
     },
     // Cuentas en mora que se revisan de nuevo solas (para activarlas apenas el club vuelva a decir "al día").
     // Socios con nivel Socio y lo último que dijo la API del club de ellos (lo guardado, sin consultar de nuevo): base de la sincronización del nivel.
     async sociosConEstadoClub() {
       return sql`SELECT s.id, s.email, s.nombre, s.apellido, s.idioma, s.pais_iso, s.club_estado, s.club_consulta, k.tuti_estado, k.tuti_al_dia, k.tuti_deuda, k.tuti_consultado, m.pago_ref
-        FROM socios s JOIN socios_club k ON k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0')
+        FROM socios s JOIN socios_club k ON k.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g'), '0')
         JOIN membresias m ON m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio'
         WHERE s.es_socio_olimpia AND k.tuti_estado <> '' AND k.tuti_consultado IS NOT NULL`;
     },
@@ -1829,6 +1829,15 @@ function createPgStore({ databaseUrl, debug }) {
         return m;
       });
     },
+    // 👍/👎 de la persona sobre una respuesta del asistente (solo de SU conversación): queda en `meta.valoracion` (1, -1; 0 = la quita).
+    async valorarMensajeAtencion({ mensajeId, socioId, valor }) {
+      const [m] = await sql`SELECT m.id, m.meta FROM atencion_mensajes m JOIN atencion_conversaciones c ON c.id = m.conversacion_id WHERE m.id = ${mensajeId} AND m.de = 'ia' AND c.socio_id = ${socioId}`;
+      if (!m) return null;
+      let meta = {}; try { meta = m.meta ? JSON.parse(m.meta) : {}; } catch (e) { meta = {}; }
+      if (valor === 0) delete meta.valoracion; else meta.valoracion = valor;
+      await sql`UPDATE atencion_mensajes SET meta = ${JSON.stringify(meta)} WHERE id = ${mensajeId}`;
+      return { id: mensajeId, valoracion: valor };
+    },
     async listMensajesAtencion(conversacionId, { limit = 100 } = {}) {
       const n = Math.min(Number(limit) || 100, 500);
       return sql`SELECT * FROM (SELECT * FROM atencion_mensajes WHERE conversacion_id = ${conversacionId} ORDER BY creado DESC, id DESC LIMIT ${n}) t ORDER BY creado, id`;
@@ -1847,7 +1856,9 @@ function createPgStore({ databaseUrl, debug }) {
           round(avg(extract(epoch FROM (humano_responde_en - derivada_en)) / 60) FILTER (WHERE humano_responde_en IS NOT NULL AND derivada_en IS NOT NULL))::int AS primera_resp_min
         FROM atencion_conversaciones WHERE creado >= ${desde7}`;
       const [b] = await sql`SELECT count(*)::int AS n FROM atencion_conversaciones WHERE estado = 'humano'`;
-      return { hoy: a.hoy, semana: a.semana, solo_ia: a.solo_ia, primera_resp_min: a.primera_resp_min == null ? null : Number(a.primera_resp_min), abiertas_humano: b.n };
+      const [v] = await sql`SELECT count(*) FILTER (WHERE meta LIKE '%"valoracion":1%')::int AS utiles, count(*) FILTER (WHERE meta LIKE '%"valoracion":-1%')::int AS no_utiles
+        FROM atencion_mensajes WHERE de = 'ia' AND creado >= ${desde7}`;
+      return { hoy: a.hoy, semana: a.semana, solo_ia: a.solo_ia, primera_resp_min: a.primera_resp_min == null ? null : Number(a.primera_resp_min), abiertas_humano: b.n, utiles: v.utiles, no_utiles: v.no_utiles };
     },
     async getAtencionConfig() {
       const base = { consultar_cuenta: true, listar_beneficios: true, liberar_lugar: false, abrir_pago_subasta: true, derivar_a_humano: true };
