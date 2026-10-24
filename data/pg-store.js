@@ -1302,6 +1302,13 @@ function createPgStore({ databaseUrl, debug }) {
     async getComercioByUsuario(usuario) { const [c] = await sql`SELECT * FROM comercios WHERE usuario = ${String(usuario || "").toLowerCase()} LIMIT 1`; return c || null; },
     async setComercioAcceso(id, usuario, passwordHash) { const [c] = await sql`UPDATE comercios SET usuario = ${String(usuario || "").toLowerCase()}, password_hash = ${passwordHash} WHERE id = ${id} RETURNING *`; return c || null; },
     async createComercioSession(comercioId, token, expiraIso) { await sql`INSERT INTO comercio_sesiones (token, comercio_id, expira) VALUES (${token}, ${comercioId}, ${expiraIso})`; return true; },
+    // Recuperar la contraseña: el link lleva un token de un solo uso; acá se guarda solo su huella (sha256) y vence en una hora.
+    async getComercioPorClaveToken(huella) {
+      if (!huella) return null;
+      const [c] = await sql`SELECT * FROM comercios WHERE clave_token = ${huella} AND clave_exp > now() LIMIT 1`;
+      return c || null;
+    },
+    async borrarSesionesDeComercio(comercioId) { await sql`DELETE FROM comercio_sesiones WHERE comercio_id = ${comercioId} AND left(token, 4) <> 'adm_'`; return true; },
     async getComercioSession(token) {
       const [row] = await sql`SELECT s.token, s.expira, c.id AS comercio_id, c.nombre, c.estado
         FROM comercio_sesiones s JOIN comercios c ON c.id = s.comercio_id

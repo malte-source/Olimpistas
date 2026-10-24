@@ -3087,9 +3087,65 @@ function buildRouter() {
     const u = await store.getPenaUsuarioPorSetupToken(String(req.body?.token || ""));
     if (!u) throw httpError(400, "El link venció o ya se usó. Pedile al club que te mande otro.");
     await store.updatePenaUsuario(u.id, { password_hash: await bcrypt.hash(password, 10), setup_token: null, setup_exp: null });
+    if (store.borrarSesionesDePena) await store.borrarSesionesDePena(u.pena_id);   // al cambiar la contraseña se cierran las sesiones abiertas con la anterior
     const p = await store.getPena(u.pena_id);
     if (!p || p.estado !== "verificada") throw httpError(403, "Tu peña todavía no está verificada o está en pausa.");
     res.json({ token: await abrirSesionPena(p.id), pena: { nombre: p.nombre, slug: p.slug } });
+  }));
+  // ── Recuperar la contraseña (peña y comercio): correo con un link de un solo uso que vence en 1 hora ──
+  // La respuesta es siempre la misma exista o no la cuenta (no se puede averiguar qué usuarios hay) y cada cuenta tiene un respiro de 5 minutos entre correos.
+  const RESP_OLVIDE = { ok: true, mensaje: "Si el usuario existe y tiene un correo cargado, te mandamos un link para elegir una contraseña nueva. Vence en 1 hora." };
+  const olvideReciente = new Map();
+  const respiroOlvide = (clave) => {
+    if (Date.now() - (olvideReciente.get(clave) || 0) < 5 * 60000) return false;
+    if (olvideReciente.size > 5000) olvideReciente.clear();
+    olvideReciente.set(clave, Date.now());
+    return true;
+  };
+  const huellaToken = (t) => crypto.createHash("sha256").update(String(t)).digest("hex");
+  r.post("/pena/olvide", wrap(async (req, res) => {
+    const dato = String(req.body?.usuario || "").trim().toLowerCase().slice(0, 160);
+    if (dato) {
+      let u = null, p = null;
+      if (dato.includes("@")) {   // también se puede pedir con el correo de contacto de la peña
+        p = (await store.listPenas({ estado: "verificada" })).find((x) => String(x.contacto || "").toLowerCase() === dato) || null;
+        u = p && store.getPenaUsuarioDePena ? await store.getPenaUsuarioDePena(p.id) : null;
+      } else {
+        u = store.getPenaUsuarioPorUsuario ? await store.getPenaUsuarioPorUsuario(dato) : null;
+        p = u ? await store.getPena(u.pena_id) : null;
+      }
+      if (u && p && p.estado === "verificada" && emailOk(p.contacto) && respiroOlvide("pena:" + p.id)) {
+        const token = crypto.randomBytes(24).toString("base64url");
+        await store.updatePenaUsuario(u.id, { setup_token: token, setup_exp: new Date(Date.now() + 3600000).toISOString() });
+        if (mailer.enviarRecuperarClave) mailer.enviarRecuperarClave({ email: p.contacto }, { nombre: p.nombre, usuario: u.usuario, url: baseUrl() + "/pena?token=" + encodeURIComponent(token), tipo: "peña" }).catch(() => {});
+      }
+    }
+    res.json(RESP_OLVIDE);
+  }));
+  r.post("/comercio/olvide", wrap(async (req, res) => {
+    const dato = String(req.body?.usuario || "").trim().toLowerCase().slice(0, 160);
+    if (dato) {
+      const c = dato.includes("@")
+        ? (await store.listComercios()).find((x) => String(x.contacto || "").toLowerCase() === dato && x.usuario) || null
+        : (store.getComercioByUsuario ? await store.getComercioByUsuario(dato) : null);
+      if (c && c.estado === "activo" && c.usuario && emailOk(c.contacto) && respiroOlvide("com:" + c.id)) {
+        const token = crypto.randomBytes(24).toString("base64url");
+        await store.updateComercio(c.id, { clave_token: huellaToken(token), clave_exp: new Date(Date.now() + 3600000).toISOString() });
+        if (mailer.enviarRecuperarClave) mailer.enviarRecuperarClave({ email: c.contacto }, { nombre: c.nombre, usuario: c.usuario, url: baseUrl() + "/comercio?clave=" + encodeURIComponent(token), tipo: "comercio" }).catch(() => {});
+      }
+    }
+    res.json(RESP_OLVIDE);
+  }));
+  r.post("/comercio/clave", wrap(async (req, res) => {
+    const password = String(req.body?.password || "");
+    if (password.length < 8) throw httpError(400, "La contraseña debe tener al menos 8 caracteres");
+    const c = store.getComercioPorClaveToken ? await store.getComercioPorClaveToken(huellaToken(req.body?.token || "")) : null;
+    if (!c || c.estado !== "activo") throw httpError(400, "El link venció o ya se usó. Pedí uno nuevo desde «Olvidé mi contraseña».");
+    await store.updateComercio(c.id, { password_hash: await bcrypt.hash(password, 10), clave_token: null, clave_exp: null });
+    if (store.borrarSesionesDeComercio) await store.borrarSesionesDeComercio(c.id);   // se cierran las sesiones abiertas con la contraseña anterior
+    const token = crypto.randomBytes(32).toString("base64url");
+    await store.createComercioSession(c.id, token, new Date(Date.now() + 12 * 3600 * 1000).toISOString());
+    res.json({ token, comercio: { id: c.id, nombre: c.nombre } });
   }));
   r.post("/pena/entrar-como", requireAdmin, exigirOwner, wrap(async (req, res) => {
     const [p] = await store.listPenas({ id: String(req.body?.id || "") });

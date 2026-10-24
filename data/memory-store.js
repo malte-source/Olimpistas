@@ -489,6 +489,11 @@ function createMemoryStore({ filePath = null } = {}) {
     async getComercioByUsuario(usuario) { const u = String(usuario || "").toLowerCase(); return (db.comercios || []).find((c) => (c.usuario || "").toLowerCase() === u) || null; },
     async setComercioAcceso(id, usuario, passwordHash) { const c = (db.comercios || []).find((x) => x.id === id); if (!c) return null; c.usuario = String(usuario || "").toLowerCase(); c.password_hash = passwordHash; persist(); return c; },
     async createComercioSession(comercioId, token, expiraIso) { (db.comercio_sesiones = db.comercio_sesiones || []).push({ token, comercio_id: comercioId, expira: expiraIso }); persist(); return true; },
+    async getComercioPorClaveToken(huella) {
+      if (!huella) return null;
+      return (db.comercios || []).find((c) => c.clave_token === huella && c.clave_exp && new Date(c.clave_exp).getTime() > Date.now()) || null;
+    },
+    async borrarSesionesDeComercio(comercioId) { db.comercio_sesiones = (db.comercio_sesiones || []).filter((s) => s.comercio_id !== comercioId || String(s.token).startsWith("adm_")); persist(); return true; },
     async getComercioSession(token) {
       const s = (db.comercio_sesiones || []).find((x) => x.token === token);
       if (!s || new Date(s.expira).getTime() < Date.now()) return null;
