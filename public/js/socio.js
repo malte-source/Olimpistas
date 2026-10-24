@@ -334,8 +334,8 @@
   }
   function wAhorro(ahorro, potencial) {
     if (potencial && potencial.mensual > 0 && !esSocioValidado()) {
-      return `<button type="button" class="wg wg-2 wg-asp" data-goto="beneficios" aria-label="${esc(T("asp_lbl"))}">
-        <span class="wg-cab">${OLI.ic("ahorro", 18)}${esc(T("asp_lbl"))}</span>
+      return `<button type="button" class="wg wg-2 wg-asp" data-goto="beneficios" aria-label="${esc(lblAsp())}">
+        <span class="wg-cab">${OLI.ic("ahorro", 18)}${esc(lblAsp())}</span>
         <span class="wg-num">${esc(T("asp_tile_n").replace("{monto}", gs(potencial.mensual)))}</span><span class="wg-sub">${esc(T("asp_tile_sub"))}</span>
         <span class="wg-nota">${esc(T("asp_tile_nota"))}</span></button>`;
     }
@@ -510,6 +510,13 @@
 
   // ── Upgrade de socio (validación de cédula) — disponible en todo el portal ──
   function esSocioValidado() { return !!(SESSION && SESSION.socio && SESSION.socio.es_socio_olimpia); }
+  // Un solo lugar para el estado de la cuenta, en cualquier pestaña: primero lo que cuesta plata (subasta por pagar), después el correo y el nivel Socio.
+  // Se muestran juntos (antes un aviso tapaba al otro) y cada uno dice qué pasó y qué hacer, en las palabras de quien ya es socio.
+  const CLUB_VISTO = "oli_club_estado_visto";
+  const pausadoClub = () => { const s = SESSION && SESSION.socio; return !!(s && !s.es_socio_olimpia && (s.club_estado === "mora" || s.club_estado === "baja")); };
+  const ctaAsociate = () => T(pausadoClub() ? "asp_regulariza" : "asp_asociate");
+  const lblAsp = () => T(pausadoClub() ? "asp_lbl_pausa" : "asp_lbl");
+  const yaSoyTxt = () => T(pausadoClub() ? "asp_ya_pague" : "asp_ya_soy");
   async function renderBannerSocio() {
     let host = document.getElementById("socioBanner");
     if (!host) {
@@ -517,56 +524,79 @@
       const vista = view();
       if (vista && vista.parentNode) vista.parentNode.insertBefore(host, vista);
     }
-    // Prioridad 1: ganaste una subasta y falta pagar. Es la única alerta con plata real
-    // de por medio — se ve en CUALQUIER pestaña, no solo si entrás a Subastas a mirar.
+    const sv = SESSION && SESSION.socio, partes = [], enlazar = [];
+    const guardarVisto = (v) => { try { v ? localStorage.setItem(CLUB_VISTO, v) : localStorage.removeItem(CLUB_VISTO); } catch (e) {} };
+    let visto = ""; try { visto = localStorage.getItem(CLUB_VISTO) || ""; } catch (e) {}
+
+    // 1. Ganaste una subasta y falta pagar: es la única alerta con plata real de por medio.
     try {
       const { items } = await api("/subastas");
       const pendiente = (items || []).find((x) => x.gano && x.pago_estado !== "pagado");
       if (pendiente) {
-        host.innerHTML = `<div class="socio-banner socio-banner-pago">
+        partes.push(`<div class="socio-banner socio-banner-pago">
           <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("m_sub_banner_pago")} <b>${esc(pendiente.titulo)}</b>${pendiente.pago_vence ? `<br>${plazoPagoHtml(pendiente.pago_vence, pendiente.ronda)}` : ""}</span>
-          <button class="btn btn-valor btn-sm" id="pagoBannerBtn">${T("m_sub_pagar")}</button></div>`;
-        host.querySelector("#pagoBannerBtn").onclick = () => { descSeg = "subastas"; activar("descubrir"); };
-        return;
+          <button class="btn btn-valor btn-sm" id="pagoBannerBtn">${T("m_sub_pagar")}</button></div>`);
+        enlazar.push(() => { host.querySelector("#pagoBannerBtn").onclick = () => { descSeg = "subastas"; activar("descubrir"); }; });
       }
     } catch (e) {}
-    // Correo sin confirmar: va antes que la invitación a validar la cédula. Las cuentas nuevas no pueden pujar ni pagar hasta confirmarlo.
-    const sv = SESSION && SESSION.socio;
-    if (sv && !sv.email_verificado) {
-      host.innerHTML = `<div class="socio-banner socio-banner-correo" role="status">
+
+    // 2. Correo sin confirmar: las cuentas nuevas no pueden pujar ni pagar hasta confirmarlo.
+    const sinCorreo = !!(sv && !sv.email_verificado);
+    if (sinCorreo) {
+      partes.push(`<div class="socio-banner socio-banner-correo" role="status">
         <span class="sb-txt">${icon("bell", { size: 16 })} ${T("vf_banner").replace("{email}", "<b>" + esc(sv.email || "") + "</b>")}</span>
-        <button class="btn btn-sm" id="vfReenviar">${T("vf_reenviar")}</button></div>`;
-      host.querySelector("#vfReenviar").onclick = async (ev) => {
-        const b = ev.currentTarget; b.disabled = true;
-        try { await api("/auth/reenviar-verificacion", { method: "POST", body: {} }); toast(T("vf_enviado")); }
-        catch (e) { toast(e.message); }
-        setTimeout(() => { b.disabled = false; }, 8000);
-      };
-      return;
+        <button class="btn btn-sm" id="vfReenviar">${T("vf_reenviar")}</button></div>`);
+      enlazar.push(() => {
+        host.querySelector("#vfReenviar").onclick = async (ev) => {
+          const b = ev.currentTarget; b.disabled = true;
+          try { await api("/auth/reenviar-verificacion", { method: "POST", body: {} }); toast(T("vf_enviado")); }
+          catch (e) { toast(e.message); }
+          setTimeout(() => { b.disabled = false; }, 8000);
+        };
+      });
     }
-    // Cuota pendiente o baja en el club: aviso fijo con el acceso al portal de socios y "Ya pagué". Apenas el club vuelve a decir "al día", el nivel se activa solo.
-    if (sv && !sv.es_socio_olimpia && (sv.club_estado === "mora" || sv.club_estado === "baja")) {
+
+    // 3. Nivel Socio. Pausado por el club (cuota pendiente o baja): sigue siendo "su" nivel, se explica qué hacer y vuelve solo apenas el club diga "al día".
+    if (pausadoClub()) {
       const mora = sv.club_estado === "mora";
-      host.innerHTML = `<div class="socio-banner socio-banner-club" role="status">
-        <span class="sb-txt">${icon("trophy", { size: 16 })} ${mora ? T("mo_banner").replace("{monto}", sv.club_deuda ? " (" + esc(gs(sv.club_deuda)) + ")" : "") : T("ba_banner")}</span>
-        <a class="btn btn-sm" href="${esc(portalClub())}" target="_blank" rel="noopener">${T("up_portal")}</a>
-        <button class="btn btn-sm btn-ghost" id="clubPague">${T("up_ya_pague")}</button></div>`;
-      host.querySelector("#clubPague").onclick = async (ev) => {
-        const b = ev.currentTarget; b.disabled = true;
-        try { const r = await revisarClub(); if (r.validado) { await clubOk(); return; } toast(r.estado === "mora" || r.estado === "baja" ? T("up_sigue_mora") : T("up_reintentar_p")); await refrescar(); }
-        catch (e) { toast(e.message); }
-        setTimeout(() => { b.disabled = false; }, 4000);
-      };
-      return;
+      guardarVisto(sv.club_estado);
+      partes.push(`<div class="socio-banner socio-banner-club estado-cuenta" role="status">
+        <div class="sb-txt"><b>${icon("trophy", { size: 16 })} ${mora ? T("ec_mora_h").replace("{monto}", sv.club_deuda ? " (" + esc(gs(sv.club_deuda)) + ")" : "") : T("ec_baja_h")}</b><span class="ec-p">${mora ? T("ec_mora_p") : T("ec_baja_p")}</span></div>
+        <div class="ec-acc"><a class="btn btn-sm" href="${esc(portalClub())}" target="_blank" rel="noopener">${mora ? T("ec_portal_mora") : T("ec_portal_baja")}</a>
+        <button class="btn btn-sm btn-ghost" id="clubPague">${mora ? T("up_ya_pague") : T("ec_ya_baja")}</button></div></div>`);
+      enlazar.push(() => {
+        host.querySelector("#clubPague").onclick = async (ev) => {
+          const b = ev.currentTarget; b.disabled = true;
+          try { const r = await revisarClub(); if (r.validado) { guardarVisto(""); await clubOk(); return; } toast(r.estado === "mora" || r.estado === "baja" ? T("up_sigue_mora") : T("up_reintentar_p")); await refrescar(); }
+          catch (e) { toast(e.message); }
+          setTimeout(() => { b.disabled = false; }, 4000);
+        };
+      });
+    } else if (esSocioValidado() && (visto === "mora" || visto === "baja")) {
+      // Estaba en pausa y el club ya lo reconoce al día (lo devolvió la revisión automática): se le avisa una vez, hasta que lo cierre.
+      partes.push(`<div class="socio-banner socio-banner-vuelta estado-cuenta" role="status">
+        <div class="sb-txt"><b>${icon("trophy", { size: 16 })} ${T("ec_vuelta_h")}</b><span class="ec-p">${T("ec_vuelta_p")}</span></div>
+        <div class="ec-acc"><button class="btn btn-sm" id="vueltaVer">${T("ec_ver")}</button><button class="up-x" id="vueltaX" aria-label="${esc(T("up_cerrar"))}">${icon("x", { size: 16 })}</button></div></div>`);
+      enlazar.push(() => {
+        host.querySelector("#vueltaVer").onclick = () => { guardarVisto(""); activar("beneficios"); };
+        host.querySelector("#vueltaX").onclick = () => { guardarVisto(""); renderBannerSocio(); };
+      });
+    } else if (!sinCorreo) {
+      // Invitación a validar la cédula (se puede cerrar por la sesión). No va junto al aviso de correo: primero lo primero.
+      let off = false; try { off = sessionStorage.getItem("oli_socio_banner") === "1"; } catch (e) {}
+      if (!esSocioValidado() && !off) {
+        partes.push(`<div class="socio-banner">
+          <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("up_banner")}</span>
+          <button class="btn btn-sm" id="upBannerBtn">${T("up_cta")}</button>
+          <button class="up-x" id="upBannerX" aria-label="${esc(T("up_cerrar"))}">${icon("x", { size: 16 })}</button></div>`);
+        enlazar.push(() => {
+          host.querySelector("#upBannerBtn").onclick = validarSocioModal;
+          host.querySelector("#upBannerX").onclick = () => { try { sessionStorage.setItem("oli_socio_banner", "1"); } catch (e) {} renderBannerSocio(); };
+        });
+      }
     }
-    let off = false; try { off = sessionStorage.getItem("oli_socio_banner") === "1"; } catch (e) {}
-    if (esSocioValidado() || off) { host.innerHTML = ""; return; }
-    host.innerHTML = `<div class="socio-banner">
-      <span class="sb-txt">${icon("trophy", { size: 16 })} ${T("up_banner")}</span>
-      <button class="btn btn-sm" id="upBannerBtn">${T("up_cta")}</button>
-      <button class="up-x" id="upBannerX" aria-label="Cerrar">${icon("x", { size: 16 })}</button></div>`;
-    host.querySelector("#upBannerBtn").onclick = validarSocioModal;
-    host.querySelector("#upBannerX").onclick = () => { try { sessionStorage.setItem("oli_socio_banner", "1"); } catch (e) {} host.innerHTML = ""; };
+    host.innerHTML = partes.join("");
+    enlazar.forEach((f) => f());
   }
   // La persona cuenta desde qué año es socia (la base del club se equivoca en algunos grupos): queda como "declarada" y nada la pisa.
   function socioDesdeModal(volverA) {
@@ -621,7 +651,7 @@
       } catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = T("ob_validar"); }
     };
   }
-  async function clubOk() { await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); activar("carnet"); }
+  async function clubOk() { try { localStorage.removeItem("oli_club_estado_visto"); } catch (e) {} await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); activar("carnet"); }
   const portalClub = () => { const u = (CONFIG && CONFIG.portal_socios) || "https://socios.clubolimpia.com.py"; return /^https:\/\//.test(u) ? u : "https://socios.clubolimpia.com.py"; };
   // "Ya pagué, revisar de nuevo": vuelve a consultar al club en vivo (una vez por minuto). Devuelve lo que contestó el servidor.
   async function revisarClub() { return api("/perfil/validar-socio", { method: "POST", body: { reintentar: true } }); }
@@ -1528,10 +1558,10 @@
     const sinAhorro = !ah.mes && !ah.total && !ah.anio;
     _potencialBen = r.potencial || null;
     const asp = !esSocioValidado() && r.potencial && r.potencial.mensual > 0;
-    const aspCard = asp ? '<div class="ben-ahorro asp"><div class="ba-lbl">' + T("asp_lbl") + '</div><div class="ba-monto">' + esc(T("asp_hasta").replace("{monto}", gs(r.potencial.mensual))) + '</div>' +
+    const aspCard = asp ? '<div class="ben-ahorro asp"><div class="ba-lbl">' + lblAsp() + '</div><div class="ba-monto">' + esc(T("asp_hasta").replace("{monto}", gs(r.potencial.mensual))) + '</div>' +
       '<div class="ba-nota">' + esc(T("asp_nota").replace("{anual}", gs(r.potencial.anual)).replace("{n}", r.potencial.usos).replace("{ticket}", gs(r.potencial.ticket))) + '</div>' +
-      '<a class="btn btn-block" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + T("asp_asociate") + '</a>' +
-      '<button type="button" class="btn btn-ghost btn-block" id="bxYaSoy">' + T("asp_ya_soy") + '</button></div>' : "";
+      '<a class="btn btn-block" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + ctaAsociate() + '</a>' +
+      '<button type="button" class="btn btn-ghost btn-block" id="bxYaSoy">' + yaSoyTxt() + '</button></div>' : "";
     const ahorroCard = asp ? aspCard : sinAhorro ? '<div class="ben-ahorro cero"><div class="ba-lbl">' + T("m_ben_billetera") + '</div><div class="ba-nota">' + T("bx_ahorro_cero") + '</div></div>' : '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
       '<div class="ba-fila"><div><div class="ba-sub">' + T("m_ben_ahorro_mes") + '</div><div class="ba-monto">' + gs(ah.mes) + '</div></div>' +
       '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
@@ -1587,7 +1617,7 @@
       '<button type="button" class="btn btn-ghost btn-block" id="bxCarnet">' + T("bx_abrir_carnet") + '</button></div>';
     const nivelUp = bloqueados.length ? (bloqueados.some((x) => x.nivel_min === "socio") ? "socio" : (bloqueados[0].nivel_min || "premium")) : "";
     const up = bloqueados.length ? '<div class="bx-up"><b>' + T("bx_up_h").replace("{n}", bloqueados.length) + '</b><p>' + (nivelUp === "socio" ? T("bx_up_socio") : T("bx_up_p").replace("{nivel}", TL[nivelUp] || "Plus")) + '</p>' +
-      (nivelUp === "socio" ? '<a class="btn" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + T("asp_asociate") + '</a><button type="button" class="btn btn-ghost" id="bxUp" style="margin-top:8px">' + T("asp_ya_soy") + '</button>'
+      (nivelUp === "socio" ? '<a class="btn" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + ctaAsociate() + '</a><button type="button" class="btn btn-ghost" id="bxUp" style="margin-top:8px">' + yaSoyTxt() + '</button>'
         : '<button type="button" class="btn" id="bxUp">' + T("m_ben_subi") + " " + (TL[nivelUp] || "Plus") + '</button>') + '</div>' : "";
 
     const fila = (x) => '<button type="button" class="bx-card' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '">' +
@@ -1740,7 +1770,7 @@
       ${aspEste}
       ${cuerpo}
       ${!b.desbloqueado && b.nivel_min === "socio"
-        ? `<a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${T("asp_asociate")}</a><button type="button" class="btn btn-ghost btn-block" id="benCta" style="margin-top:8px">${T("asp_ya_soy")}</button>`
+        ? `<a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${ctaAsociate()}</a><button type="button" class="btn btn-ghost btn-block" id="benCta" style="margin-top:8px">${yaSoyTxt()}</button>`
         : `<button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")}</button>`}
       <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`;
     let root, close;
@@ -2094,10 +2124,10 @@
           <p class="hi-peq">${esc(T("m_cn_desde"))} ${esc(dia(h.miembro_desde))}</p></section>`
       : `<section class="hi-hero"><span class="hi-eb">${esc(T("hi_miembro"))}</span>
           <div class="hi-grande">${esc(mes(h.miembro_desde))}</div><p class="hi-sub">${esc(T("hi_asoc"))}</p>
-          ${h.potencial && h.potencial.mensual > 0 ? `<div class="ben-ahorro asp" style="margin-top:14px"><div class="ba-lbl">${esc(T("asp_lbl"))}</div><div class="ba-monto">${esc(T("asp_hasta").replace("{monto}", gs(h.potencial.mensual)))}</div>
+          ${h.potencial && h.potencial.mensual > 0 ? `<div class="ben-ahorro asp" style="margin-top:14px"><div class="ba-lbl">${esc(lblAsp())}</div><div class="ba-monto">${esc(T("asp_hasta").replace("{monto}", gs(h.potencial.mensual)))}</div>
             <div class="ba-nota">${esc(T("asp_nota").replace("{anual}", gs(h.potencial.anual)).replace("{n}", h.potencial.usos).replace("{ticket}", gs(h.potencial.ticket)))}</div>
-            <a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${esc(T("asp_asociate"))}</a>
-            <button type="button" class="btn btn-ghost btn-block" id="hiYaSoy">${esc(T("asp_ya_soy"))}</button></div>` : ""}</section>`;
+            <a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${esc(ctaAsociate())}</a>
+            <button type="button" class="btn btn-ghost btn-block" id="hiYaSoy">${esc(yaSoyTxt())}</button></div>` : ""}</section>`;
     const st = h.stats, tile = (n, l) => `<div class="hi-tile"><b>${n}</b><span>${esc(l)}</span></div>`;
     const tiles = [tile(String(st.canjes), T("hi_s_canjes")), tile(esc(gs(st.ahorro_total)), T("hi_s_ahorro")), tile(String(st.puntos), T("hi_s_puntos")),
       tile(String(st.subastas_ganadas), T("hi_s_subastas") + (st.pujas ? " · " + T("hi_s_pujas").replace("{n}", st.pujas) : "")), tile(String(st.referidos), T("hi_s_referidos")), st.pena ? tile(esc(st.pena), T("hi_s_pena")) : ""].join("");
