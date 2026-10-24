@@ -1,6 +1,6 @@
 "use strict";
 // Validación de socio automática (cédula → consulta al club en el momento) y antigüedad REAL en el carnet.
-const PUERTO_TUTI = 39881;
+const PUERTO_TUTI = 29881;   // fuera del rango de puertos efímeros (32768+): en CI los servidores de prueba toman puertos de ahí y chocaban con este
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";

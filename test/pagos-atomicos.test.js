@@ -1,7 +1,7 @@
 "use strict";
 // Cobro y entrega atómicos: webhook de Pagopar, reintentos, reversión y conciliación.
 // Pagopar se simula con un servidor local (el cliente acepta PAGOPAR_API_URL).
-const PUERTO_FAKE = 39871;
+const PUERTO_FAKE = 29871;   // fuera del rango de puertos efímeros (32768+)
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";

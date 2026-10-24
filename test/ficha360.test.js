@@ -1,6 +1,6 @@
 "use strict";
 // Sprint 1 — Billetera de Ahorro, Ficha 360, parecidos y segmentos guardados.
-const PUERTO_TUTI = 39873;
+const PUERTO_TUTI = 29873;   // fuera del rango de puertos efímeros (32768+): en CI los servidores de prueba toman puertos de ahí y chocaban con este
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";

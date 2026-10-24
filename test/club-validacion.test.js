@@ -1,7 +1,7 @@
 "use strict";
 // Validación de socio con la base del club: usa el estado guardado si es reciente, guarda lo que consulta, enriquece con la antigüedad
 // creíble, y la inscripción con cédula consulta el club y activa el nivel al confirmar el correo.
-const PUERTO_TUTI = 39882;
+const PUERTO_TUTI = 29882;   // fuera del rango de puertos efímeros (32768+): en CI los servidores de prueba toman puertos de ahí y chocaban con este
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";
