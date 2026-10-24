@@ -70,7 +70,8 @@ test("un socio sin fecha de alta en el club no recibe una inventada: el carnet t
   assert.strictEqual(c.socioDesde, "");
   assert.strictEqual(c.nroSocio, "4321");
   const sj = leer("public", "js", "socio.js");
-  assert.match(sj, /c\.socioDesde \? \{ et: T\("cn_socio_desde"\), val: fechaMes\(c\.socioDesde\) \} : \{ et: T\("cn_nro_socio"\)/);
+  assert.match(sj, /if \(c\.socioDesde\) filas\.push\(\{ et: T\("cn_socio_desde"\), val: fechaMes\(c\.socioDesde\) \}\);\s*else if \(c\.nroSocio\) filas\.push\(\{ et: T\("cn_nro_socio"\)/);
+  assert.match(sj, /const filas = \[\{ et: T\("m_cn_desde"\), val: desdeOlimpistas \}\]/, "siempre se muestra desde cuándo es miembro de Olimpistas");
 });
 
 test("quien no es socio ve desde cuándo es hincha de Olimpistas, no una antigüedad de socio", async () => {
