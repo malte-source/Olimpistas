@@ -486,6 +486,19 @@
           </div>
 
           <div data-sec="beneficios">
+          <h2>Comercios de la red</h2>
+          <p class="hint">Qué le falta a cada comercio para estar completo (logo, ubicación, acceso al portal, beneficios) y cómo viene el mes. Se ordena primero por lo que más falta.</p>
+          <div class="soc-filtros" style="margin:6px 0">
+            <select id="comFalta" aria-label="Falta completar"></select>
+            <select id="comEstado" aria-label="Estado"><option value="">Todos los estados</option><option value="activo">Activos</option><option value="pausado">Pausados</option></select>
+            <select id="comRubro" aria-label="Rubro"></select>
+            <button class="btn btn-sm btn-ghost" id="comLimpiar">Limpiar</button>
+            <button class="btn btn-sm btn-ghost" id="comCsv">Exportar CSV</button>
+          </div>
+          <p class="muted soc-resumen" id="comResumen" aria-live="polite"></p>
+          <div id="comWrap"><p class="loading">Cargando…</p></div>
+          </div>
+          <div data-sec="beneficios">
           <h2>Ofertas de comercios</h2>
           <p class="hint">Las ofertas que cargan los comercios esperan acá: <b>aprobá y publicá</b> o <b>rechazá</b> con el motivo (lo ve el comercio). El reporte para sponsors cruza canjes, ahorro y ventas por comercio, ciudad y nivel.</p>
           <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">Reporte para sponsors (mes en curso)</button> <button class="btn btn-sm btn-ghost" id="cargarMuestra">Cargar beneficios de muestra (socios)</button></div>
@@ -571,7 +584,7 @@
     function resetAdminState() {
       ADMIN_ROL = ""; ADMIN_PERMS = []; ADMIN_AREAS = ["dashboard"]; ADMIN_SECCIONES = ["tablero"]; ADMIN_SOLO_LECTURA = false;
       crudItems = []; ROLES_ADMIN = ["owner", "finanzas", "marketing", "soporte", "lectura", "cd", "comercial", "operaciones"]; areaLoaded = {};
-      ["usuWrap", "segWrap", "searchWrap", "metreWrap", "abWrap", "actWrap", "padronWrap", "selfiesWrap", "accWrap", "campWrap", "crudList", "pendWrap"].forEach(function (id) {
+      ["usuWrap", "segWrap", "searchWrap", "metreWrap", "abWrap", "actWrap", "padronWrap", "selfiesWrap", "accWrap", "campWrap", "crudList", "pendWrap", "comWrap"].forEach(function (id) {
         var c = $(id); if (c) { c.innerHTML = ""; try { delete c._tbl; delete c._tblInit; } catch (e) {} }
       });
     }
@@ -703,7 +716,7 @@
       contenido: [function () {
         if (veSeccion("contenido", "subastas", "estadio")) cargarCrud();
         if (veSeccion("contenido")) cargarActualizaciones();
-        if (veSeccion("beneficios")) cargarOfertasAdmin();
+        if (veSeccion("beneficios")) { iniciarComercios(); cargarComercios(); cargarOfertasAdmin(); }
         if (veSeccion("penas")) cargarPenasAdmin();
         if (veSeccion("puntos")) cargarPuntosAdmin();
       }],
@@ -2008,6 +2021,83 @@
       var el = $("fOk"); el.style.color = "var(--text-success)";
       try { var r = await api("/admin/socios/" + encodeURIComponent(id) + "/reenviar-verificacion", { method: "POST" }); el.textContent = r.ok ? "Verificación reenviada " : "No se pudo enviar (revisá RESEND)"; }
       catch (e) { el.style.color = "var(--text-error)"; el.textContent = e.message; }
+    }
+
+    // ── Comercios de la red: tabla con lo que falta completar, la actividad del mes y accesos directos ──
+    var COM_FALTA = { logo: "Sin logo", ubicacion: "Sin ubicación", acceso: "Sin acceso al portal", beneficios: "Sin beneficios publicados", aprobar: "Con ofertas por aprobar", canjes: "Sin canjes este mes" };
+    var com = { items: [], falta: "", estado: "", rubro: "", mes: "" };
+    function comFaltas(c) {
+      var f = [];
+      if (!c.logo) f.push("logo");
+      if (c.lat == null) f.push("ubicacion");
+      if (!c.usuario) f.push("acceso");
+      if (!c.beneficios_pub) f.push("beneficios");
+      if (c.por_aprobar) f.push("aprobar");
+      if (!c.canjes_mes) f.push("canjes");
+      return f;
+    }
+    function comFiltrados() {
+      return com.items.filter(function (c) {
+        if (com.estado && c.estado !== com.estado) return false;
+        if (com.rubro && (c.rubro || "") !== com.rubro) return false;
+        if (com.falta && comFaltas(c).indexOf(com.falta) < 0) return false;
+        return true;
+      });
+    }
+    function comPad(n) { return String(Math.round(Number(n) || 0)).padStart(12, "0"); }
+    function comFecha(v) { if (!v) return "—"; var d = new Date(v); return isNaN(d) ? "—" : d.toLocaleDateString("es-PY", { day: "2-digit", month: "short" }); }
+    function pintarComercios() {
+      var rows = comFiltrados();
+      var cols = [
+        { key: "nombre", label: "Comercio", text: function (c) { return c.nombre || ""; }, cell: function (c) { return '<strong>' + esc(c.nombre || "—") + '</strong><br><span class="muted">' + esc([c.rubro, c.ciudad].filter(Boolean).join(" · ") || "—") + '</span>'; } },
+        { key: "estado", label: "Estado", text: function (c) { return c.estado || ""; }, cell: function (c) { return '<span class="pill ' + (c.estado === "activo" ? "pill-ok" : "pill-warn") + '">' + esc(c.estado === "activo" ? "Activo" : (c.estado || "—")) + '</span>'; } },
+        { key: "ben", label: "Beneficios", text: function (c) { return comPad(c.beneficios_pub); }, cell: function (c) { return esc(c.beneficios_pub + " publicados") + (c.por_aprobar ? '<br><span class="pill pill-warn">' + c.por_aprobar + ' por aprobar</span>' : ""); } },
+        { key: "canjes", label: "Canjes del mes", text: function (c) { return comPad(c.canjes_mes); }, cell: function (c) { return c.canjes_mes ? esc(String(c.canjes_mes)) + '<br><span class="muted">' + esc("₲ " + Number(c.ahorro_mes || 0).toLocaleString("es-PY")) + ' ahorrados</span>' : "—"; } },
+        { key: "ultimo", label: "Último canje", text: function (c) { return c.ultimo_canje || ""; }, cell: function (c) { return '<span class="muted">' + esc(comFecha(c.ultimo_canje)) + '</span>'; } },
+        { key: "falta", label: "Para completar", text: function (c) { return comFaltas(c).length ? String(comFaltas(c).length) : "0"; }, cell: function (c) { var f = comFaltas(c).filter(function (k) { return k !== "canjes"; }); return f.length ? f.map(function (k) { return '<span class="pill pill-warn">' + esc(COM_FALTA[k]) + '</span>'; }).join(" ") : '<span class="pill pill-ok">Completo</span>'; } },
+        { key: "acc", label: "", sortable: false, cell: function (c) { return puede("beneficios.write") ? '<div class="row-actions"><button class="btn btn-sm btn-ghost" data-comedit="' + esc(c.id) + '">Editar</button><button class="btn btn-sm btn-ghost" data-comacceso="' + esc(c.id) + '">Acceso</button></div>' : ""; } }
+      ];
+      tabla($("comWrap"), cols, rows, { rowId: function (c) { return c.id; }, filtro: true, filterPh: "Filtrar por nombre, rubro o ciudad…", empty: "Ningún comercio coincide con esos filtros.", sortKey: "falta", sortDir: -1 });
+      var completos = com.items.filter(function (c) { return !comFaltas(c).filter(function (k) { return k !== "canjes"; }).length; }).length;
+      $("comResumen").textContent = com.items.length + " comercios · " + completos + " completos" + (rows.length !== com.items.length ? " · mostrando " + rows.length : "");
+    }
+    async function cargarComercios() {
+      if (!$("comWrap")) return;
+      try {
+        var r = await api("/admin/comercios/resumen");
+        com.items = r.items || []; com.mes = r.mes || "";
+        var rubros = {}; com.items.forEach(function (c) { if (c.rubro) rubros[c.rubro] = 1; });
+        $("comRubro").innerHTML = '<option value="">Todos los rubros</option>' + Object.keys(rubros).sort().map(function (k) { return '<option>' + esc(k) + '</option>'; }).join("");
+        $("comRubro").value = com.rubro;
+        pintarComercios();
+      } catch (e) { $("comWrap").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    function exportarComercios() {
+      var q = function (v) { v = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+      var head = ["comercio", "rubro", "ciudad", "estado", "beneficios_publicados", "por_aprobar", "canjes_mes", "ahorro_mes", "ultimo_canje", "falta_completar"];
+      var lines = comFiltrados().map(function (c) { return [c.nombre, c.rubro, c.ciudad, c.estado, c.beneficios_pub, c.por_aprobar, c.canjes_mes, c.ahorro_mes, c.ultimo_canje ? String(c.ultimo_canje).slice(0, 10) : "", comFaltas(c).filter(function (k) { return k !== "canjes"; }).map(function (k) { return COM_FALTA[k]; }).join("; ")].map(q).join(","); });
+      var blob = new Blob(["﻿" + head.join(",") + "\n" + lines.join("\n")], { type: "text/csv;charset=utf-8" }), url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = "comercios.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+    // "Editar" y "Acceso" reutilizan el formulario y la ventana que ya existen en Contenido → Comercios.
+    async function irAComercio(id, accion) {
+      $("crudSel").value = "comercios"; await cargarCrud();
+      if (accion === "acceso") { accesoComercio(id); return; }
+      var it = crudItems.filter(function (x) { return x.id === id; })[0]; if (!it) return;
+      formCrud(it); var f = $("crudForm"); if (f && f.scrollIntoView) f.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    function iniciarComercios() {
+      if (com.listo) return; com.listo = true;
+      $("comFalta").innerHTML = '<option value="">Todo</option>' + Object.keys(COM_FALTA).map(function (k) { return '<option value="' + k + '">' + esc(COM_FALTA[k]) + '</option>'; }).join("");
+      $("comFalta").addEventListener("change", function () { com.falta = $("comFalta").value; pintarComercios(); });
+      $("comEstado").addEventListener("change", function () { com.estado = $("comEstado").value; pintarComercios(); });
+      $("comRubro").addEventListener("change", function () { com.rubro = $("comRubro").value; pintarComercios(); });
+      $("comLimpiar").addEventListener("click", function () { com.falta = com.estado = com.rubro = ""; $("comFalta").value = $("comEstado").value = $("comRubro").value = ""; var f = $("comWrap").querySelector(".tbl-filter"); if (f) f.value = ""; if ($("comWrap")._tbl) $("comWrap")._tbl.filter = ""; pintarComercios(); });
+      $("comCsv").addEventListener("click", exportarComercios);
+      $("comWrap").addEventListener("click", function (e) {
+        var b = e.target.closest("[data-comedit]"); if (b) { irAComercio(b.dataset.comedit, "editar"); return; }
+        b = e.target.closest("[data-comacceso]"); if (b) irAComercio(b.dataset.comacceso, "acceso");
+      });
     }
 
     // ── Socios: tabla con filtros, orden y páginas en el servidor, columnas elegibles, vistas guardadas y exportación ──

@@ -1753,6 +1753,13 @@ function buildRouter() {
     }
     res.json({ ok: true, oferta: ofertaOut(b) });
   }));
+  // Resumen de la red de comercios (qué le falta a cada uno + canjes del mes, mes calendario de Paraguay). Sin contraseñas ni datos de hinchas.
+  r.get("/admin/comercios/resumen", requireAdmin, wrap(async (_req, res) => {
+    const L = new Date(Date.now() - 3 * 3600000);
+    const desde = new Date(Date.UTC(L.getUTCFullYear(), L.getUTCMonth(), 1) + 3 * 3600000).toISOString();
+    const items = store.resumenComercios ? await store.resumenComercios({ desde }) : [];
+    res.json({ mes: desde.slice(0, 7), items: items.map((c) => ({ ...c, ahorro_mes: Number(c.ahorro_mes) || 0 })) });
+  }));
   r.get("/admin/comercios/estadisticas.csv", requireAdmin, requirePerm("export"), wrap(async (req, res) => {
     const p = periodo({ desde: req.query.desde, hasta: req.query.hasta });
     const filas = await store.estadisticasPorComercio({ desde: p.desde, hasta: p.hasta });
