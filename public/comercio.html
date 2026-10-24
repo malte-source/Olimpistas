@@ -601,7 +601,25 @@
     $("pasoNo").addEventListener("click", function(){ cerrarPaso(); $("codigo").value = ""; });
     $("montoPaso").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); confirmarPaso(true); } });
 
-    // ── Escanear el QR del carnet con la cámara (BarcodeDetector; si el navegador no lo trae, se pega el texto) ──
+    // ── Escanear el QR del carnet con la cámara: BarcodeDetector (Chrome/Android) y, donde no existe (iPhone/Safari, Firefox),
+    //    la librería jsQR, que se baja recién cuando se toca "Escanear". Si nada funciona, queda pegar el código. ──
+    function cargarJsQR(){
+      return new Promise(function(res, rej){
+        if(window.jsQR) return res();
+        var s = document.createElement("script"); s.src = "/assets/vendor/jsQR.js";
+        s.onload = res; s.onerror = rej; document.head.appendChild(s);
+      });
+    }
+    function detectorJsQR(){
+      var cv = document.createElement("canvas"), cx = cv.getContext("2d", { willReadFrequently:true });
+      return { detect: async function(v){
+        if(!v.videoWidth) return [];
+        var w = Math.min(480, v.videoWidth), h = Math.round(w * v.videoHeight / v.videoWidth);
+        cv.width = w; cv.height = h; cx.drawImage(v, 0, 0, w, h);
+        var r = window.jsQR(cx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts:"dontInvert" });
+        return r ? [{ rawValue: r.data }] : [];
+      } };
+    }
     var stream = null, escaneando = false;
     function cerrarVisor(){
       escaneando = false;
@@ -612,11 +630,13 @@
     $("escanearBtn").addEventListener("click", async function(){
       $("valErr").textContent = "";
       if(!$("benSel").value){ $("valErr").textContent = "Primero elegí el beneficio a canjear."; return; }
-      if(!("BarcodeDetector" in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-        $("valErr").textContent = "Este navegador no puede escanear. Abrí el panel en Chrome o pegá abajo el texto del QR."; return;
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        $("valErr").textContent = "Este navegador no puede abrir la cámara. Pegá abajo el texto del QR."; return;
       }
       try{
-        var det = new BarcodeDetector({ formats:["qr_code"] });
+        var det;
+        if("BarcodeDetector" in window) det = new BarcodeDetector({ formats:["qr_code"] });
+        else { await cargarJsQR(); det = detectorJsQR(); }
         stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"environment" }, audio:false });
         var v = $("video"); v.srcObject = stream; await v.play();
         $("visor").classList.remove("hide"); escaneando = true;

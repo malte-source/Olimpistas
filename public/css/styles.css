@@ -1888,3 +1888,24 @@ body.pal-abierta { overflow: hidden; }
 .socio-banner-correo .sb-txt { font-weight: 500; font-size: var(--t-13); line-height: 1.4; }
 .socio-banner-correo .sb-txt svg { display: inline-block; vertical-align: -3px; margin-right: 6px; }
 .socio-banner-correo .sb-txt b { font-weight: 700; }
+
+/* Detalle de subasta. Celular: una columna en el orden de siempre (foto, título, puja, acciones, movimientos).
+   Escritorio (≥1000 px): a la izquierda la pieza y su historia; a la derecha, fija al hacer scroll, la puja con todo lo que hace falta
+   para pujar sin bajar (monto, reloj, acciones). */
+.sub-cols { display: flex; flex-direction: column; }
+.sub-izq, .sub-der { display: contents; }
+.sub-cols .sub-hero { order: 1; } .sub-cols h2 { order: 2; } .sub-cols .lead { order: 3; }
+.sub-cols .sub-box { order: 4; } .sub-cols .sub-meta { order: 5; } .sub-cols .sub-antisnipe { order: 6; } .sub-cols #subAcciones { order: 7; }
+.sub-cols .sub-feed-h { order: 8; margin-top: 24px; } .sub-cols .sub-feed { order: 9; }
+@media (min-width: 1000px) {
+  .sub-detalle-wrap { max-width: 1080px; }
+  .sub-cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 8px 40px; align-items: start; }
+  .sub-izq { display: flex; flex-direction: column; min-width: 0; }
+  .sub-der { display: flex; flex-direction: column; position: sticky; top: 24px; }
+  .sub-cols .sub-hero, .sub-cols h2, .sub-cols .lead, .sub-cols .sub-box, .sub-cols .sub-meta, .sub-cols .sub-antisnipe, .sub-cols #subAcciones, .sub-cols .sub-feed-h, .sub-cols .sub-feed { order: 0; }
+  .sub-cols .sub-hero { margin-top: 0; }
+  .sub-cols #subAcciones { position: static; margin: 0; padding: 0; background: none; box-shadow: none; }
+}
+
+/* El monto libre de la puja arranca oculto: la regla de display no puede pisar el atributo hidden. */
+.sub-custom-form[hidden], .sub-custom-toggle[hidden] { display: none; }
