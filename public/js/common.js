@@ -655,7 +655,7 @@ window.OLI = (function () {
       let done = false;
       const { root, close } = modal(
         `<h3>${esc(titulo || tt("m_cedula_pago") || "Ingresá tu cédula")}</h3>
-         <input id="mdlCed" type="text" inputmode="numeric" autocomplete="off" placeholder="${tt("ob_cedula_ph") || "Tu cédula"}" />
+         <input id="mdlCed" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="go" autocomplete="off" placeholder="${tt("ob_cedula_ph") || "Tu cédula"}" />
          <p class="err" id="mdlCedErr"></p>
          <button class="btn btn-block" id="mdlCedOk">${tt("ob_validar") || "Continuar"}</button>
          <button class="btn btn-ghost btn-block" id="mdlCedX" style="margin-top:8px">${tt("up_cerrar") || "Cancelar"}</button>`,

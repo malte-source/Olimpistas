@@ -1830,3 +1830,61 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 
 /* La invitación a subir de nivel, más baja en el celular (antes empujaba la lista una pantalla entera). */
 @media (max-width: 899px) { .bx-up { padding: 14px 16px; } .bx-up p { margin: 4px 0 10px; } }
+
+/* Accesibilidad: enlace "Saltar al contenido" (visible solo con el foco del teclado) y foco visible en el destino. */
+.skip-link { position: fixed; left: 12px; top: 12px; z-index: 10000; padding: 12px 18px; border-radius: var(--r-14); background: #fff; color: #0a0a0a; font-weight: 700; font-size: var(--t-15); text-decoration: none; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); transform: translateY(-200%); transition: transform .15s; }
+.skip-link:focus { transform: none; outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+#main:focus, #mTitle:focus { outline: none; }
+#mTitle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { .skip-link { transition: none; } }
+
+/* Objetivos táctiles: en pantallas táctiles todo lo que se toca mide al menos 44 px. */
+@media (pointer: coarse) {
+  .btn, .bx-chip, .ctl-seg-b, .pw-toggle, .mhead-av, .up-x, .atc-pill, .tab { min-height: 44px; }
+  .bx-chip { display: inline-flex; align-items: center; }
+  .pw-toggle, .up-x { min-width: 44px; }
+  .btn-sm { min-height: 44px; padding-top: 0; padding-bottom: 0; }
+}
+
+/* Beneficios en escritorio: maestro–detalle. El detalle abre en la columna derecha y la tarjeta elegida queda marcada. */
+.bx-detalle { padding: 18px; border-radius: var(--r-26); background: var(--surface-card); outline: none; }
+.bx-detalle[hidden] { display: none; }
+.bx-card[aria-current="true"] { box-shadow: inset 0 0 0 2px var(--text-primary); }
+@media (min-width: 1180px) { .bx-side { max-height: calc(100dvh - 48px); overflow-y: auto; scrollbar-width: thin; } }
+
+/* Buscador global (Ctrl/⌘ + K): cuadro centrado sobre un velo; en el celular no se muestra el botón (el atajo no existe). */
+.side-buscar { display: none; }
+@media (min-width: 900px) {
+  .side-buscar { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--border-default); border-radius: var(--r-14); background: var(--surface-card); color: var(--text-secondary); font: inherit; font-size: var(--t-13); cursor: pointer; text-align: left; }
+  .side-buscar span { flex: 1; }
+  .side-buscar kbd, .pal-pie kbd { font: 600 var(--t-11) / 1 var(--mono, ui-monospace, monospace); padding: 3px 6px; border-radius: 6px; border: 1px solid var(--border-default); background: var(--overlay-soft); color: var(--text-secondary); }
+  .side-buscar:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+}
+.pal[hidden] { display: none; }
+.pal { position: fixed; inset: 0; z-index: 9000; display: grid; place-items: start center; padding: 12vh 16px 16px; }
+.pal-fondo { position: absolute; inset: 0; background: rgba(0, 0, 0, .55); }
+.pal-caja { position: relative; width: min(640px, 100%); max-height: 70vh; display: flex; flex-direction: column; border-radius: var(--r-22); background: var(--surface-card); color: var(--text-primary); box-shadow: 0 30px 80px rgba(0, 0, 0, .5); overflow: hidden; }
+.pal-caja input { width: 100%; padding: 18px 20px; border: 0; border-bottom: 1px solid var(--border-default); background: transparent; color: inherit; font: inherit; font-size: 16px; outline: none; }
+.pal-caja ul { list-style: none; margin: 0; padding: 8px; overflow-y: auto; }
+.pal-g { padding: 10px 12px 4px; font-size: var(--t-11); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); }
+.pal-it { display: flex; flex-direction: column; gap: 2px; padding: 11px 12px; border-radius: var(--r-12); cursor: pointer; font-size: var(--t-15); font-weight: 600; }
+.pal-it small { font-size: var(--t-12); font-weight: 500; color: var(--text-secondary); }
+.pal-it[aria-selected="true"] { background: var(--action-primary-bg); color: var(--action-primary-text); }
+.pal-it[aria-selected="true"] small { color: inherit; opacity: .75; }
+.pal-vacio { padding: 24px 12px; text-align: center; color: var(--text-secondary); font-size: var(--t-13); }
+.pal-pie { margin: 0; padding: 10px 16px; border-top: 1px solid var(--border-default); font-size: var(--t-12); color: var(--text-secondary); }
+body.pal-abierta { overflow: hidden; }
+@media (max-width: 899px) { .pal-pie { display: none; } }
+
+/* Subasta en el celular: la acción principal (pujar / pagar) queda fija al alcance del pulgar, sobre la barra de pestañas. */
+@media (max-width: 899px) {
+  #subAcciones { position: sticky; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 6; margin: 0 -6px; padding: 10px 6px 8px; background: var(--surface-grouped, var(--surface-page)); box-shadow: 0 -14px 18px -14px rgba(0, 0, 0, .3); }
+  body.en-puja .atc-fab { display: none; }
+}
+/* Correo sin confirmar: el aviso es el mismo formato que los otros, con un acento propio y sin botón de cerrar. */
+.socio-banner-correo { border-color: var(--oro, var(--border-default)); }
+.socio-banner-correo .sb-txt b { word-break: break-all; }
+
+.socio-banner-correo .sb-txt { font-weight: 500; font-size: var(--t-13); line-height: 1.4; }
+.socio-banner-correo .sb-txt svg { display: inline-block; vertical-align: -3px; margin-right: 6px; }
+.socio-banner-correo .sb-txt b { font-weight: 700; }

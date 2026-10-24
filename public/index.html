@@ -32,6 +32,7 @@
   <link rel="stylesheet" href="/css/styles.css?v=96" />
 </head>
 <body>
+  <a class="skip-link" href="#main" data-i18n="skip_main">Saltar al contenido</a>
   <header class="nav" data-nav-solid="1">
     <a class="brand" href="/"><img class="brand-h" src="/assets/logo-horizontal.svg?v=96" alt="Olimpistas" /></a>
     <nav class="nav-links">
@@ -48,6 +49,7 @@
     </div>
   </header>
 
+  <main id="main" tabindex="-1">
   <section class="hero">
     <div class="hero-inner wrap">
       <div class="hero-text">
@@ -143,6 +145,8 @@
     </div>
   </section>
 
+  </main>
+
   <footer class="footer">
     <div class="wrap footer-inner">
       <div class="footer-brand">
@@ -215,5 +219,6 @@
   <script src="/js/onboarding.js?v=96"></script>
   <!-- MapLibre + globe.js se cargan en diferido (lazy) al llegar a la sección del mundo -->
   <script src="/js/landing.js?v=96"></script>
+  <script src="/js/vitales.js?v=96" defer></script>
 </body>
 </html>

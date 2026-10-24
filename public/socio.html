@@ -23,6 +23,7 @@
   <style>html { background: var(--surface-grouped); }</style>
 </head>
 <body class="app">
+  <a class="skip-link" href="#main" data-i18n="skip_main">Saltar al contenido</a>
   <!-- Encabezado negro: título de la vista (grande, se achica al hacer scroll), escudo blanco, avatar → Ajustes y franjas. -->
   <header class="mhead" id="mHead" style="--c:0">
     <div class="mhead-body">
@@ -40,6 +41,7 @@
   <!-- Navegación: barra inferior fija en el móvil; barra lateral de 250 px en escritorio. -->
   <aside class="side" id="side">
     <a class="side-brand" href="/"><img src="/assets/logo-horizontal.svg?v=88" alt="Olimpistas.com" height="30" /></a>
+    <button type="button" class="side-buscar" id="sideBuscar" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K"><svg class="ic" width="16" height="16"><use href="/assets/icons.svg#i-buscar"/></svg><span data-i18n="pal_buscar">Buscar…</span><kbd>Ctrl K</kbd></button>
     <nav class="tabs" id="tabs" role="tablist" aria-label="Secciones">
       <span class="tab-ind" id="tabInd" aria-hidden="true"></span>
       <button class="tab active" role="tab" aria-selected="true" data-tab="inicio"><svg class="ic tab-ic"><use href="/assets/icons.svg#i-inicio-f"/></svg><span data-i18n="tab_inicio">Inicio</span></button>
@@ -52,15 +54,17 @@
     <button type="button" class="side-user" id="sideUser" aria-haspopup="dialog"></button>
   </aside>
 
-  <div class="wrap">
+  <main class="wrap" id="main" tabindex="-1">
     <div id="view" role="tabpanel"><p class="muted" data-i18n="m_cargando">Cargando…</p></div>
-  </div>
+  </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/js/i18n.js?v=96"></script>
   <script src="/js/common.js?v=96"></script>
   <script src="/assets/vendor/qrcode.js" defer></script>
   <script src="/js/socio.js?v=96"></script>
+  <script src="/js/paleta.js?v=96"></script>
+  <script src="/js/vitales.js?v=96" defer></script>
   <script src="/js/atencion.js?v=96"></script>
 </body>
 </html>

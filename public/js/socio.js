@@ -120,6 +120,9 @@
       history.replaceState({}, "", "/miembro");
       SESSION = await yo();
     }
+    // Vuelta desde el enlace del correo: se avisa si quedó confirmado y se actualiza la sesión.
+    const vq = new URLSearchParams(location.search).get("verificado");
+    if (vq !== null) { history.replaceState({}, "", location.pathname); if (vq === "1") { SESSION = await yo(); toast(T("vf_ok")); } else toast(T("vf_mal")); }
     renderProgreso();
     renderBannerSocio();
     revalidarSocioSilencioso();
@@ -143,6 +146,7 @@
     });
   }
 
+  let _enfocarTitulo = false;
   function activar(tab, opts) {
     opts = opts || {};
     window.scrollTo(0, 0); // si venías scrolleado, el título de la pestaña nueva no debe quedar tapado por el header fijo
@@ -150,6 +154,7 @@
     detenerQrBeneficios();                          // y el QR rotativo del carnet
     _contentHost = null;                            // fuera de Descubrir el contenido ocupa todo #view
     curTab = tab; curSubId = null;
+    _enfocarTitulo = !opts.fromRoute;                // el foco pasa al título de la pantalla nueva (no en la primera carga)
     // fromRoute (init/popstate): normaliza con replace si hiciera falta, sin nueva entrada.
     // Navegación desde la UI (click): agrega una entrada de historial nueva.
     syncUrl(!!opts.fromRoute);
@@ -182,6 +187,14 @@
     });
   }
 
+  // Lo que usa el buscador global (paleta.js) para llevarte a una pantalla o abrir un beneficio.
+  window.OLI.nav = {
+    ir: (tab, seg) => { if (tab === "descubrir" && seg) descSeg = seg; activar(tab); },
+    verBeneficio: (id) => { _benAbrir = id; activar("beneficios"); },
+    validarSocio: () => validarSocioModal(),
+    esSocio: () => esSocioValidado(),
+    logout: () => logout(),
+  };
   async function logout() { try { await api("/auth/logout", { method: "POST" }); } finally { location.href = "/"; } }
   async function refrescar() { SESSION = await yo(); renderProgreso(); renderHeader(); renderBannerSocio(); }
 
@@ -502,6 +515,20 @@
         return;
       }
     } catch (e) {}
+    // Correo sin confirmar: va antes que la invitación a validar la cédula. Las cuentas nuevas no pueden pujar ni pagar hasta confirmarlo.
+    const sv = SESSION && SESSION.socio;
+    if (sv && !sv.email_verificado) {
+      host.innerHTML = `<div class="socio-banner socio-banner-correo" role="status">
+        <span class="sb-txt">${icon("bell", { size: 16 })} ${T("vf_banner").replace("{email}", "<b>" + esc(sv.email || "") + "</b>")}</span>
+        <button class="btn btn-sm" id="vfReenviar">${T("vf_reenviar")}</button></div>`;
+      host.querySelector("#vfReenviar").onclick = async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try { await api("/auth/reenviar-verificacion", { method: "POST", body: {} }); toast(T("vf_enviado")); }
+        catch (e) { toast(e.message); }
+        setTimeout(() => { b.disabled = false; }, 8000);
+      };
+      return;
+    }
     let off = false; try { off = sessionStorage.getItem("oli_socio_banner") === "1"; } catch (e) {}
     if (esSocioValidado() || off) { host.innerHTML = ""; return; }
     host.innerHTML = `<div class="socio-banner">
@@ -518,12 +545,13 @@
     const { root, close: cerrar } = OLI.modal(`
       <h3>${T("up_modal_h")}</h3>
       <p class="muted">${T("up_modal_p")}</p>
-      <input id="upCedula" type="text" inputmode="numeric" autocomplete="off" placeholder="${T("ob_cedula_ph")}" />
+      <input id="upCedula" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="go" autocomplete="off" placeholder="${T("ob_cedula_ph")}" />
       ${faltaFecha ? `<label style="display:block;color:var(--gris);font-size:13px;margin-top:10px">${T("ob_fechanac")}</label><input id="upFecha" type="date" max="${hoy}" />` : ""}
       <p class="err" id="upErr"></p>
       <button class="btn btn-block" id="upValidar">${T("ob_validar")}</button>
       <button class="btn btn-ghost btn-block" id="upCerrar" style="margin-top:8px">${T("up_cerrar")}</button>`);
     root.querySelector("#upCerrar").onclick = cerrar;
+    root.querySelector("#upCedula").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); root.querySelector("#upValidar").click(); } });
     root.querySelector("#upValidar").onclick = async () => {
       const cedula = (root.querySelector("#upCedula").value || "").trim();
       const err = root.querySelector("#upErr"); err.textContent = "";
@@ -579,6 +607,8 @@
     const lead = h && h.nextElementSibling && h.nextElementSibling.classList.contains("lead") ? h.nextElementSibling : null;
     const txt = (h && h.textContent.trim()) || T("tab_" + curTab);
     if (t.textContent !== txt) t.textContent = txt;
+    document.title = txt + " — Olimpistas";
+    if (_enfocarTitulo && h) { _enfocarTitulo = false; t.tabIndex = -1; try { t.focus({ preventScroll: true }); } catch (e) {} }
     const st = lead ? lead.textContent.trim() : "";
     if (sub.textContent !== st) sub.textContent = st;
   }
@@ -613,6 +643,40 @@
   const sw = (id, on) => `<button type="button" role="switch" class="interruptor" id="${id}" aria-checked="${on}"></button>`;
   const cuadro = (color, ic) => `<span class="grupo-ic" style="background:${color}"><svg class="ic" width="18" height="18"><use href="/assets/icons.svg#i-${ic}"/></svg></span>`;
   const chev = '<svg class="ic grupo-chev"><use href="/assets/icons.svg#i-chevron-derecha"/></svg>';
+  // ─── Avisos push ───
+  const pushSoporta = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const b64aU8 = (b64) => { const p = "=".repeat((4 - (b64.length % 4)) % 4), r = atob((b64 + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map((c) => c.charCodeAt(0))); };
+  async function pushEstado() {
+    const out = { soporta: pushSoporta(), permiso: pushSoporta() ? Notification.permission : "denied", suscrito: false, cfg: null };
+    try { out.cfg = await api("/push/config"); } catch (e) { return out; }
+    if (out.soporta && out.permiso === "granted") { try { const reg = await navigator.serviceWorker.ready; out.suscrito = !!(await reg.pushManager.getSubscription()) && out.cfg.dispositivos > 0; } catch (e) {} }
+    return out;
+  }
+  async function pushActivar(cfg) {
+    const permiso = await Notification.requestPermission();
+    if (permiso !== "granted") return { ok: false, motivo: permiso };
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aU8(cfg.clave) });
+    await api("/push/suscribir", { method: "POST", body: { subscription: sub.toJSON() } });
+    return { ok: true };
+  }
+  async function pushDesactivar() {
+    try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) { const ep = sub.endpoint; await sub.unsubscribe(); await api("/push/baja", { method: "POST", body: { endpoint: ep } }); } } catch (e) {}
+  }
+  // Después de la primera puja se ofrece, una sola vez, que le avisemos si lo superan.
+  async function ofrecerAvisoSubasta() {
+    try {
+      if (!pushSoporta() || Notification.permission !== "default" || localStorage.getItem("oli_push_oferta")) return;
+      const est = await pushEstado(); if (!est.cfg || !est.cfg.habilitado) return;
+      localStorage.setItem("oli_push_oferta", "1");
+      const { root, close } = OLI.modal(`<h3>${esc(T("push_of_h"))}</h3><p class="muted">${esc(T("push_of_p"))}</p>
+        <button type="button" class="btn btn-block" id="pofSi">${esc(T("push_of_si"))}</button>
+        <button type="button" class="btn btn-ghost btn-block" id="pofNo" style="margin-top:8px">${esc(T("push_of_no"))}</button>`);
+      root.querySelector("#pofNo").onclick = close;
+      root.querySelector("#pofSi").onclick = async () => { close(); try { const r = await pushActivar(est.cfg); toast(r.ok ? T("push_ok") : T("push_bloq")); } catch (e) { toast(e.message); } };
+    } catch (e) { /* ofrecer avisos nunca rompe una puja */ }
+  }
   function abrirMenuCuenta() {
     const s = SESSION.socio, slug = (SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista";
     const inicial = (s.nombre || s.email || "?").trim().charAt(0).toUpperCase();
@@ -628,9 +692,12 @@
       </div>
       <div class="grupo-h">${T("m_tema_h")}</div>
       <div class="ctl-seg ctl-seg-full" role="radiogroup" aria-label="${T("m_tema_h")}" id="ajTema">${segTema(prefActual())}</div>
+      <div class="grupo-h">${T("push_h")}</div>
+      <div class="grupo" id="ajPushBox"><div class="grupo-fila"><span class="grupo-tx"><small>${T("push_cargando")}</small></span></div></div>
       <div class="grupo-h">${T("m_aj_pref")}</div>
       <div class="grupo">
-        <button type="button" class="grupo-fila" id="ajLang">${cuadro("#0E7C86", "idioma")}<span class="grupo-tx"><b>${T("m_idioma")}</b></span><span class="grupo-val">${lang === "en" ? "English" : "Español"}</span></button>
+        <div class="grupo-fila">${cuadro("#0E7C86", "idioma")}<span class="grupo-tx"><b>${T("m_idioma")}</b></span></div>
+        <div class="ctl-seg ctl-seg-full" role="radiogroup" aria-label="${T("m_idioma")}" id="ajLang">${[["es", "Español"], ["en", "English"], ["gn", "Avañe'ẽ (beta)"]].map(([v, l]) => `<button type="button" role="radio" class="ctl-seg-b" data-lang="${v}" lang="${v}" aria-checked="${lang === v}">${l}</button>`).join("")}</div>
         ${avisos.map(([k, l]) => `<div class="grupo-fila">${cuadro("#D0612F", "avisos")}<span class="grupo-tx"><b>${l}</b></span>${sw("aj_" + k, s[k] !== false)}</div>`).join("")}
       </div>
       <div class="grupo-h">${T("m_aj_ayuda")}</div>
@@ -641,7 +708,7 @@
     root.classList.add("aj");
     root.querySelector("#ajPerfil").onclick = () => { close(); activar("perfil"); };
     root.querySelector("#ajPena").onclick = () => { close(); descSeg = "penas"; activar("descubrir"); };
-    root.querySelector("#ajLang").onclick = () => { OLI_I18N.setLang(lang === "en" ? "es" : "en"); location.reload(); };
+    root.querySelectorAll("#ajLang [data-lang]").forEach((b) => b.onclick = () => { if (b.dataset.lang === lang) return; OLI_I18N.setLang(b.dataset.lang); location.reload(); });
     root.querySelectorAll("#ajTema [data-tema]").forEach((b) => b.onclick = () => {
       OLI.setThemePref(b.dataset.tema, true);
       root.querySelectorAll("#ajTema [data-tema]").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
@@ -652,6 +719,40 @@
       catch (e) { el.setAttribute("aria-checked", String(!on)); toast(e.message); }
     }; });
     root.querySelector("#ajSalir").onclick = () => { close(); logout(); };
+    pintarPushAjustes(root);
+  }
+  // Avisos en el celular: estado del permiso, activar o apagar este dispositivo y elegir qué avisos llegan.
+  async function pintarPushAjustes(root) {
+    const box = root.querySelector("#ajPushBox"); if (!box) return;
+    const est = await pushEstado();
+    if (!box.isConnected) return;
+    const nota = (t) => { box.innerHTML = `<div class="grupo-fila"><span class="grupo-tx"><small>${esc(t)}</small></span></div>`; };
+    if (!est.cfg || !est.cfg.habilitado) return nota(T("push_no_disp"));
+    if (!est.soporta) return nota(T("push_no_soporta"));
+    if (est.permiso === "denied") return nota(T("push_bloq"));
+    const tipos = [["subasta", T("push_t_subasta")], ["pago", T("push_t_pago")], ["beneficio", T("push_t_beneficio")], ["partido", T("push_t_partido")]];
+    box.innerHTML = `<div class="grupo-fila">${cuadro("#D0612F", "avisos")}<span class="grupo-tx"><b>${T("push_este")}</b><small>${T("push_este_p")}</small></span>${sw("ajp_on", est.suscrito)}</div>` +
+      tipos.map(([k, l]) => `<div class="grupo-fila"${est.suscrito ? "" : " hidden"} data-ajp><span class="grupo-tx"><b>${esc(l)}</b></span>${sw("ajp_" + k, est.cfg.prefs[k] !== false)}</div>`).join("");
+    const mostrar = (on) => box.querySelectorAll("[data-ajp]").forEach((f) => { f.hidden = !on; });
+    const master = box.querySelector("#ajp_on");
+    master.onclick = async () => {
+      const quiere = master.getAttribute("aria-checked") !== "true";
+      master.disabled = true;
+      try {
+        if (quiere) { const r = await pushActivar(est.cfg); if (!r.ok) { toast(T("push_bloq")); return pintarPushAjustes(root); } toast(T("push_ok")); }
+        else await pushDesactivar();
+        master.setAttribute("aria-checked", String(quiere)); mostrar(quiere);
+      } catch (e) { toast(e.message); }
+      master.disabled = false;
+    };
+    tipos.forEach(([k]) => {
+      const el = box.querySelector("#ajp_" + k);
+      el.onclick = async () => {
+        const on = el.getAttribute("aria-checked") !== "true"; el.setAttribute("aria-checked", String(on));
+        try { await api("/push/preferencias", { method: "PATCH", body: { [k]: on } }); }
+        catch (e) { el.setAttribute("aria-checked", String(!on)); toast(e.message); }
+      };
+    });
   }
 
   const hap = () => { try { navigator.vibrate && navigator.vibrate(10); } catch (e) {} };
@@ -1422,7 +1523,7 @@
       '<h2>' + T("m_ben_h") + '</h2><p class="lead">' + (ciudad ? T("m_ben_p_local").replace("{ciudad}", esc(ciudadTxt)) : T("m_ben_p")) + '</p>' +
       '<div class="bx">' +
         '<div class="bx-main">' + hero + barra + '<div class="bx-lista" id="bxLista"></div></div>' +
-        '<aside class="bx-side">' + ahorroCard + cod + guia + up + '</aside>' +
+        '<aside class="bx-side"><section class="bx-detalle" id="bxDetalle" aria-label="' + esc(T("bx_detalle")) + '" tabindex="-1" hidden></section>' + ahorroCard + cod + guia + up + '</aside>' +
       '</div></div>';
 
     // Estado de los filtros y pintado de la lista.
@@ -1546,7 +1647,8 @@
       ? '<dl class="bx-dl">' + datos.map((d) => '<div><dt>' + T(d.k) + '</dt><dd>' + esc(d.v) + '</dd></div>').join("") + '</dl>'
       : '<p class="ben-hoja-p">' + (esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))) + '</p>';
     const estado = b.desbloqueado ? '<span class="bx-estado ok">' + T("bx_disponible") + '</span>' : '<span class="bx-estado">' + OLI.ic("candado", 13) + " " + T("bx_solo") + " " + esc(TL[b.nivel_min] || "Plus") + '</span>';
-    const { root, close } = OLI.modal(`
+    const desktopPanel = window.matchMedia("(min-width: 1180px)").matches ? view().querySelector("#bxDetalle") : null;
+    const html = `
       <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
       <div class="bx-hoja-cab">${b.comercio_logo ? '<span class="bx-logo grande"><img src="' + esc(b.comercio_logo) + '" alt=""></span>' : '<span class="bx-logo ini grande" aria-hidden="true">' + esc(String(b.comercio_nombre || "?").trim().charAt(0).toUpperCase()) + '</span>'}
         <div style="flex:1;min-width:0"><h3 class="ben-hoja-t">${esc(b.titulo || "")}</h3><p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>${estado}</div>
@@ -1554,7 +1656,19 @@
       ${b.desbloqueado ? "" : '<p class="ben-hoja-p">' + T("m_ben_hoja_subi").replace("{nivel}", esc(TL[b.nivel_min] || "Plus")) + '</p>'}
       ${cuerpo}
       <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : (b.nivel_min === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus"))}</button>
-      <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`);
+      <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`;
+    let root, close;
+    if (desktopPanel) {
+      // Maestro–detalle: la lista queda a la vista y el detalle cambia al elegir otro beneficio.
+      root = desktopPanel; root.innerHTML = html; root.hidden = false;
+      const marcar = (id) => view().querySelectorAll(".bx-card[data-ben]").forEach((c) => { if (c.dataset.ben === id) c.setAttribute("aria-current", "true"); else c.removeAttribute("aria-current"); });
+      marcar(b.id);
+      close = () => { root.hidden = true; root.innerHTML = ""; marcar(null); };
+      try { root.focus({ preventScroll: true }); } catch (e) {}
+      root.onkeydown = (e) => { if (e.key === "Escape") { close(); } };
+    } else {
+      ({ root, close } = OLI.modal(html));
+    }
     root.querySelector("#benCerrar").onclick = close;
     root.querySelector("#benCta").onclick = () => { close(); if (b.desbloqueado) activar("carnet"); else if (b.nivel_min === "socio") validarSocioModal(); else mostrarUpsell(b.nivel_min || "premium", T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")); };
   }
@@ -1564,7 +1678,7 @@
   // _subGen invalida a un pollTick que ya salió a la red: sin esto, si el usuario salía del lote
   // mientras la respuesta estaba en vuelo, ese tick se reprogramaba solo y quedaba un poller
   // "zombie" golpeando la API para siempre (uno más por cada lote que se abría y cerraba).
-  function stopSub() { _subGen++; if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
+  function stopSub() { document.body.classList.remove("en-puja"); _subGen++; if (_subPoll) clearTimeout(_subPoll); if (_subTick) clearInterval(_subTick); _subPoll = _subTick = null; }
   const gsK = (n) => "₲" + Math.round((Number(n) || 0) / 1000) + "k";
   function cdTexto(termina) {
     const ms = new Date(termina).getTime() - Date.now();
@@ -1699,6 +1813,7 @@
     </div>`;
     cv().querySelector(".sub-back").onclick = () => { window.scrollTo(0, 0); stopSub(); descSeg = "subastas"; curSubId = null; syncUrl(); vSubastas(); };
     bindPujas(s.id);
+    document.body.classList.add("en-puja");   // en el celular la barra de acciones queda fija abajo y el chat se corre
   }
   function bindPujas(id) {
     cv().querySelectorAll(".sub-puja").forEach((b) => b.addEventListener("click", () => pujar(id, Number(b.dataset.monto))));
@@ -1786,6 +1901,7 @@
       const r = await api("/subastas/" + id + "/pujar", { method: "POST", body: { monto } });
       hap();
       toast(r.extendida ? T("m_sub_extendido") : T("m_sub_vas_ganando"));
+      setTimeout(ofrecerAvisoSubasta, 1800);
       try { window.OLI.track && window.OLI.track("Puja", null, { value: monto }); } catch (e) {}
     } catch (e) { toast(e.message); }
     pujando = false;

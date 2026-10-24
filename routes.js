@@ -15,6 +15,7 @@ const crypto = require("crypto");
 const { getStore } = require("./data/store");
 const auth = require("./lib/auth");
 const adminAuth = require("./lib/admin-auth");
+const pushLib = require("./lib/push");
 const mailer = require("./lib/email");
 const access = require("./lib/access");
 const log = require("./lib/log");
@@ -386,7 +387,8 @@ function buildRouter() {
     if (process.env.EMAIL_VERIF !== "off") {
       try {
         const vtoken = crypto.randomBytes(24).toString("base64url");
-        await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false });
+        // Pendiente de validar: solo se exige confirmar si de verdad podemos mandar el correo.
+        await store.updateSocio(socio.id, { verif_token: vtoken, email_verificado: false, verif_exigida: mailer.habilitado === true });
         const link = `${baseUrl()}/api/auth/verificar?token=${vtoken}`;
         mailer.enviarVerificacion(socio, link).catch(() => {});
       } catch (e) { log.error({ err: e.message }, "verificación de email no disponible"); }
@@ -476,6 +478,20 @@ function buildRouter() {
   }));
 
   // Verificación de email (link del correo). Tolerante: nunca tira error feo.
+  // Reenviar el enlace para confirmar el correo (una vez por minuto por cuenta).
+  const _reenvioVerif = new Map();
+  r.post("/auth/reenviar-verificacion", auth.requireSocio, wrap(async (req, res) => {
+    const s = req.socio;
+    if (s.email_verificado) return res.json({ ok: true, ya: true });
+    const ult = _reenvioVerif.get(s.id) || 0;
+    if (Date.now() - ult < 60000) throw httpError(429, "Ya te enviamos el correo hace un momento. Revisá tu bandeja (y el correo no deseado) y probá de nuevo en un minuto.");
+    _reenvioVerif.set(s.id, Date.now());
+    if (_reenvioVerif.size > 20000) _reenvioVerif.clear();
+    const vtoken = crypto.randomBytes(24).toString("base64url");
+    await store.updateSocio(s.id, { verif_token: vtoken });
+    const out = await mailer.enviarVerificacion(s, `${baseUrl()}/api/auth/verificar?token=${vtoken}`);
+    res.json({ ok: true, enviado: !!(out && out.ok) });
+  }));
   r.get("/auth/verificar", wrap(async (req, res) => {
     let ok = false;
     try {
@@ -590,6 +606,12 @@ function buildRouter() {
     res.json({ ok: true, foto: socio.foto, progreso });
   }));
 
+  // Cuenta nueva con el correo sin confirmar: no puede pujar, pagar ni validar su cédula hasta confirmarlo.
+  // (Las cuentas anteriores a esta regla tienen verif_exigida = false: ven el aviso, pero no se les bloquea nada.)
+  const correoPendiente = (s) => !!(s && s.verif_exigida && !s.email_verificado);
+  const exigirCorreo = (req, paraQue) => {
+    if (correoPendiente(req.socio)) throw httpError(403, `Confirmá tu correo para ${paraQue}. Te enviamos un enlace al registrarte; si no lo ves, pedí otro desde el aviso de arriba.`);
+  };
   // ─── Instancia 3 — Validación de socio (cédula → nivel SOCIO otorgado) ──
   // Reglas: cédula ÚNICA (1 cédula = 1 cuenta); el socio del club obtiene el nivel
   // "Socio" (superior a Plus, otorgado, no comprable), a cualquier edad;
@@ -600,8 +622,9 @@ function buildRouter() {
   // así quien se puso al día en el club sube de nivel solo, sin volver a escribir nada.
   const _revalidacion = new Map();   // socio → última consulta silenciosa (cuida el límite de la API del club)
   r.post("/perfil/validar-socio", auth.requireSocio, wrap(async (req, res) => {
-    const socioFull = await store.getSocioById(req.socio.id);
     const silencioso = req.body?.silencioso === true;
+    if (correoPendiente(req.socio)) { if (silencioso) return res.json({ validado: false, omitido: true }); exigirCorreo(req, "validar tu cédula de socio"); }
+    const socioFull = await store.getSocioById(req.socio.id);
     const cedula = soloDigitos(req.body?.cedula || (silencioso ? socioFull.cedula : ""));
     if (silencioso) {
       if (socioFull.es_socio_olimpia || !cedula) return res.json({ validado: false, omitido: true });
@@ -695,6 +718,7 @@ function buildRouter() {
   // usuario (Junior → Junior, Plus → Plus). La edad solo define el carnet gratis
   // incluido para socios (en /perfil/validar-socio). Cobro anual único.
   r.post("/membresia/unirse", auth.requireSocio, wrap(async (req, res) => {
+    exigirCorreo(req, "comprar una membresía");
     const tier = tierBySlug(req.body?.tier);
     if (!tier) throw httpError(400, "Nivel inválido");
 
@@ -973,6 +997,20 @@ function buildRouter() {
     if (n) log.info({ liberadas: n }, "reservas de preventa liberadas por falta de pago");
     return n;
   }
+  // Medición real de velocidad (anónima, muestreada en el navegador). Sin cédula, correo ni IP: solo pantalla y números.
+  const PAGINAS_VITALES = new Set(["landing", "inicio", "partidos", "carnet", "beneficios", "puntos", "perfil", "descubrir", "otra"]);
+  r.post("/vitales", wrap(async (req, res) => {
+    const b = req.body || {};
+    const num = (x, max) => { const n = Number(x); return Number.isFinite(n) && n >= 0 && n <= max ? Math.round(n * 1000) / 1000 : null; };
+    const v = {
+      pagina: PAGINAS_VITALES.has(b.p) ? b.p : "otra",
+      lcp: num(b.lcp, 60000), inp: num(b.inp, 60000), cls: num(b.cls, 10), fcp: num(b.fcp, 60000), ttfb: num(b.ttfb, 60000),
+      dispositivo: ["movil", "tablet", "escritorio"].includes(b.d) ? b.d : "",
+      conexion: ["slow-2g", "2g", "3g", "4g"].includes(b.c) ? b.c : "",
+    };
+    if (store.registrarVitales && [v.lcp, v.inp, v.cls, v.fcp, v.ttfb].some((x) => x != null)) store.registrarVitales(v).catch(() => {});
+    res.status(204).end();
+  }));
   r.post("/cron/horario", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
     if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
@@ -1017,6 +1055,7 @@ function buildRouter() {
         if (mailer.enviarRenovacion) await mailer.enviarRenovacion(s, { tier: s.tier_slug, dias: Number(s.dias_rest) }).catch(() => {}); out.renovaciones++; await new Promise((done) => setTimeout(done, 300));
       }
     } catch (e) { log.error({ err: e.message }, "cron renov"); }
+    try { if (store.purgarVitales) out.vitalesPurgados = await store.purgarVitales(); } catch (e) { log.error({ err: e.message }, "cron purga vitales"); }
     try { if (store.purgarSesionesVencidas) out.sesionesPurgadas = await store.purgarSesionesVencidas(); } catch (e) { log.error({ err: e.message }, "cron purga sesiones"); }
     log.info(out, "cron diario");
     res.json({ ok: true, ...out });
@@ -1204,6 +1243,54 @@ function buildRouter() {
     const subastasSinPagar = (subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && s.pago_estado !== "pagado").length;
     const subastasPausadas = (subastas || []).filter((s) => s.estado === "pausada").length;
     res.json({ totalReal, pendientes: enrich, subastasSinPagar, subastasPausadas });
+  }));
+  // ─── Notificaciones push ──────────────────────────────────────────────────────
+  // El navegador pide permiso en la pantalla (nunca al entrar). Cuatro tipos de aviso; cada persona elige cuáles.
+  r.get("/push/config", auth.requireSocio, wrap(async (req, res) => {
+    const subs = store.listarPushDeSocio ? await store.listarPushDeSocio(req.socio.id) : [];
+    res.json({ habilitado: pushLib.habilitado(), clave: pushLib.clavePublica(), tipos: pushLib.TIPOS, prefs: pushLib.prefsDe(req.socio), dispositivos: subs.length });
+  }));
+  r.post("/push/suscribir", auth.requireSocio, wrap(async (req, res) => {
+    if (!pushLib.habilitado()) throw httpError(503, "Los avisos todavía no están disponibles.");
+    const sub = (req.body && req.body.subscription) || {};
+    const endpoint = String(sub.endpoint || ""), p256dh = String((sub.keys || {}).p256dh || ""), authK = String((sub.keys || {}).auth || "");
+    const b64 = /^[A-Za-z0-9_-]+={0,2}$/;
+    if (!/^https:\/\//.test(endpoint) || endpoint.length > 700 || !b64.test(p256dh) || p256dh.length > 200 || !b64.test(authK) || authK.length > 100) throw httpError(400, "Suscripción inválida");
+    await store.guardarPushSuscripcion({ socioId: req.socio.id, endpoint, p256dh, auth: authK, ua: String(req.headers["user-agent"] || "").slice(0, 160) });
+    res.json({ ok: true, prefs: pushLib.prefsDe(req.socio) });
+  }));
+  r.post("/push/baja", auth.requireSocio, wrap(async (req, res) => {
+    const endpoint = String((req.body && req.body.endpoint) || "");
+    if (endpoint && store.borrarPushSuscripcion) {
+      const mias = await store.listarPushDeSocio(req.socio.id);
+      if (mias.some((x) => x.endpoint === endpoint)) await store.borrarPushSuscripcion(endpoint);   // solo borra los propios
+    }
+    res.json({ ok: true });
+  }));
+  r.patch("/push/preferencias", auth.requireSocio, wrap(async (req, res) => {
+    const nuevas = pushLib.prefsDe(req.socio);
+    for (const t of pushLib.TIPOS) if (req.body && typeof req.body[t] === "boolean") nuevas[t] = req.body[t];
+    await store.updateSocio(req.socio.id, { push_prefs: nuevas });
+    res.json({ ok: true, prefs: nuevas });
+  }));
+  // Aviso del club (partido de hoy, novedad): lo manda el equipo; opcionalmente solo a una ciudad. Máx. 1 por persona y día.
+  r.post("/admin/push/enviar", requireAdmin, requirePerm("campanas.write"), wrap(async (req, res) => {
+    const b = req.body || {};
+    const tipo = pushLib.TIPOS.includes(b.tipo) ? b.tipo : "partido";
+    const titulo = String(b.titulo || "").trim(), cuerpo = String(b.cuerpo || "").trim();
+    if (titulo.length < 3 || titulo.length > 80 || cuerpo.length > 160) throw httpError(400, "El título lleva entre 3 y 80 caracteres y el texto hasta 160.");
+    const out = await pushLib.difundir(store, { tipo, ciudad: b.ciudad, payload: { titulo, cuerpo, url: b.url || "/miembro", tag: "club-" + tipo }, base: baseUrl(), clave: crypto.createHash("sha1").update(titulo + cuerpo).digest("hex").slice(0, 8) });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "push:enviar", targetId: tipo, detalle: titulo.slice(0, 80) + " · " + out.enviados + "/" + out.destinatarios, por: req.adminUser });
+    res.json(out);
+  }));
+  r.get("/admin/push/resumen", requireAdmin, wrap(async (_req, res) => {
+    res.json({ habilitado: pushLib.habilitado(), ...(store.contarPush ? await store.contarPush() : { dispositivos: 0, personas: 0 }) });
+  }));
+  // Rendimiento real: p75 de LCP / INP / CLS / TTFB por pantalla y tipo de dispositivo (últimos N días).
+  r.get("/admin/vitales", requireAdmin, wrap(async (req, res) => {
+    const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 7, 1), 45);
+    const filas = store.resumenVitales ? await store.resumenVitales(dias) : [];
+    res.json({ dias, filas: filas.map((f) => ({ ...f, lcp_p75: f.lcp_p75 == null ? null : Math.round(f.lcp_p75), inp_p75: f.inp_p75 == null ? null : Math.round(f.inp_p75), ttfb_p75: f.ttfb_p75 == null ? null : Math.round(f.ttfb_p75), cls_p75: f.cls_p75 == null ? null : Math.round(f.cls_p75 * 1000) / 1000 })) });
   }));
   // Reportes de negocio: embudo, membresías (pagas vs gratis), top países, altas/día.
   r.get("/admin/reportes", requireAdmin, wrap(async (_req, res) => {
@@ -1620,6 +1707,10 @@ function buildRouter() {
     const item = await store.updateBeneficio(req.params.id, { destacado });
     if (!item) throw httpError(404, "Beneficio no encontrado");
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: destacado ? "beneficios:destacar" : "beneficios:quitar_destacado", targetId: req.params.id, por: req.adminUser });
+    // Destacar = avisar a quienes tienen avisos de beneficios activados en la ciudad del comercio (máx. 1 por persona y día).
+    if (destacado && pushLib.habilitado() && store.getComercio) {
+      store.getComercio(item.comercio_id).then((c) => c && c.ciudad ? pushLib.difundir(store, { tipo: "beneficio", ciudad: c.ciudad, base: baseUrl(), clave: item.id, payload: { titulo: "Beneficio destacado en " + c.ciudad, cuerpo: (c.nombre || "") + (item.valor ? " · " + item.valor : "") + (item.titulo ? " · " + item.titulo : ""), url: "/miembro/beneficios", tag: "ben-" + item.id } }) : null).catch(() => {});
+    }
     res.json({ ok: true, item });
   }));
   // Beneficios de muestra del club (exclusivos para socios): comercios + ofertas ya aprobadas. Idempotente: no duplica ni pisa ediciones.
@@ -2109,6 +2200,7 @@ function buildRouter() {
     if (!store.cerrarSubastasVencidas) return;
     await store.cerrarSubastasVencidas({ plazoHoras: (await plazosHoras()).r1 });
   }
+  const gsTxt = (n) => "₲ " + Math.round(Number(n) || 0).toLocaleString("es-PY");
   const urlLote = (s) => baseUrl() + "/subasta/" + encodeURIComponent(s.slug || s.id);
 
   // Resuelve el vencimiento de UN lote (por plazo, o forzado desde el admin). Atómico en la base:
@@ -2153,6 +2245,7 @@ function buildRouter() {
       try {
         if (!(await reservar("subasta:porvencer:" + s.id + ":" + (s.ronda || 1)))) continue;
         const socio = await store.getSocioById(s.adjudicado_a);
+        pushLib.avisar(store, s.adjudicado_a, "pago", { titulo: "Se vence tu plazo para pagar", cuerpo: s.titulo + " · " + gsTxt(s.puja_actual), url: urlLote(s), tag: "pago-" + s.id }, { base: baseUrl() }).catch(() => {});
         if (socio && mailer.enviarSubastaPagoPorVencer) {
           await mailer.enviarSubastaPagoPorVencer(socio, { titulo: s.titulo, monto: s.puja_actual, urlSubasta: urlLote(s), vence: s.pago_vence }).catch(() => {});
           out.recordatorios++;
@@ -2263,6 +2356,7 @@ function buildRouter() {
     });
   }));
   r.post("/subastas/:id/pujar", auth.requireSocio, wrap(async (req, res) => {
+    exigirCorreo(req, "pujar");
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     const membresia = await store.getMembresia(req.socio.id);
@@ -2288,6 +2382,7 @@ function buildRouter() {
     _subCache.delete(s.id); _listaSub = null; // la puja debe reflejarse al toque
     // Avisar por email al líder anterior que lo superaron (best-effort, no rompe la puja).
     if (out.prevGanador) {
+      pushLib.avisar(store, out.prevGanador, "subasta", { titulo: "Te superaron en " + s.titulo, cuerpo: "Ahora van " + gsTxt(out.subasta.puja_actual) + ". Entrá y subí tu puja.", url: "/subasta/" + encodeURIComponent(s.slug || s.id), tag: "sub-" + s.id }, { base: baseUrl() }).catch(() => {});
       store.getSocioById(out.prevGanador).then((prev) => {
         if (prev && mailer.enviarSubastaSuperado) mailer.enviarSubastaSuperado(prev, { titulo: s.titulo, monto: out.subasta.puja_actual, minimo: out.subasta.puja_actual + out.subasta.incremento, cierre: out.subasta.termina }).catch(() => {});
       }).catch(() => {});
@@ -2333,6 +2428,7 @@ function buildRouter() {
     return { pago };
   }
   r.post("/subastas/:id/pagar", auth.requireSocio, wrap(async (req, res) => {
+    exigirCorreo(req, "pagar un lote");
     const s = await store.getSubasta(req.params.id);
     if (!s) throw httpError(404, "Subasta no encontrada");
     if (s.estado !== "cerrada" || (s.adjudicado_a || s.ganador_id) !== req.socio.id) throw httpError(403, "Este lote no está adjudicado a vos");

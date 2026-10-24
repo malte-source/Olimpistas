@@ -747,6 +747,36 @@ function createPgStore({ databaseUrl, debug }) {
     // Cierra TODAS las sesiones de un socio (p. ej. al resetear la contraseña).
     async borrarSesionesDeSocio(socioId) { await sql`DELETE FROM sesiones WHERE socio_id = ${socioId}`; return true; },
     // Purga sesiones vencidas (se llama desde el cron; evita bloat de la tabla).
+    // ── Push ──
+    async guardarPushSuscripcion({ socioId, endpoint, p256dh, auth, ua }) {
+      const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM push_suscripciones WHERE socio_id = ${socioId} AND endpoint <> ${endpoint}`;
+      if (n >= 5) await sql`DELETE FROM push_suscripciones WHERE id IN (SELECT id FROM push_suscripciones WHERE socio_id = ${socioId} AND endpoint <> ${endpoint} ORDER BY creado ASC LIMIT ${n - 4})`;
+      await sql`INSERT INTO push_suscripciones (id, socio_id, endpoint, p256dh, auth, ua) VALUES (${uid("psh")}, ${socioId}, ${endpoint}, ${p256dh}, ${auth}, ${ua || ""})
+        ON CONFLICT (endpoint) DO UPDATE SET socio_id = EXCLUDED.socio_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, ua = EXCLUDED.ua`;
+    },
+    async listarPushDeSocio(socioId) { return sql`SELECT endpoint, p256dh, auth FROM push_suscripciones WHERE socio_id = ${socioId}`; },
+    async borrarPushSuscripcion(endpoint) { await sql`DELETE FROM push_suscripciones WHERE endpoint = ${endpoint}`; },
+    async listarPushDifusion({ ciudad, limit }) {
+      const c = String(ciudad || "").trim().toLowerCase();
+      return sql`SELECT p.socio_id, p.endpoint, p.p256dh, p.auth, s.push_prefs FROM push_suscripciones p JOIN socios s ON s.id = p.socio_id
+        WHERE (${c} = '' OR lower(coalesce(s.ciudad, '')) = ${c}) ORDER BY p.socio_id LIMIT ${Math.min(Number(limit) || 2000, 5000)}`;
+    },
+    async contarPush() { const [r] = await sql`SELECT COUNT(*)::int AS dispositivos, COUNT(DISTINCT socio_id)::int AS personas FROM push_suscripciones`; return r; },
+    // Medición real de velocidad (Core Web Vitals): una fila por visita muestreada, sin datos personales.
+    async registrarVitales(v) {
+      await sql`INSERT INTO vitales_ux (pagina, lcp, inp, cls, fcp, ttfb, dispositivo, conexion)
+        VALUES (${v.pagina}, ${v.lcp}, ${v.inp}, ${v.cls}, ${v.fcp}, ${v.ttfb}, ${v.dispositivo}, ${v.conexion})`;
+    },
+    async resumenVitales(dias) {
+      return sql`SELECT pagina, dispositivo, COUNT(*)::int AS n,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY lcp)  AS lcp_p75,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY inp)  AS inp_p75,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY cls)  AS cls_p75,
+          percentile_cont(0.75) WITHIN GROUP (ORDER BY ttfb) AS ttfb_p75
+        FROM vitales_ux WHERE creado > now() - make_interval(days => ${dias})
+        GROUP BY pagina, dispositivo ORDER BY n DESC`;
+    },
+    async purgarVitales() { const r = await sql`DELETE FROM vitales_ux WHERE creado < now() - interval '45 days'`; return r.count || 0; },
     async purgarSesionesVencidas() { const r = await sql`DELETE FROM sesiones WHERE expira < now()`; return r.count || 0; },
     // Idempotencia de notificaciones: true = primera vez (reservado) / false = ya enviada.
     // Atómico e inmune a doble corrida del cron y a concurrencia entre instancias.

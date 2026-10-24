@@ -51,9 +51,9 @@ window.OLI_ONB = (function () {
       <div class="ob-step">
         <h2>${T("ob_cuenta_h")}</h2>
         <p class="ob-sub">${T("ob_cuenta_p")}</p>
-        <div class="ob-field"><label>${T("m_nombre")}</label><input id="obNombre" type="text" autocomplete="given-name" /></div>
-        <div class="ob-field"><label>${T("m_apellido")}</label><input id="obApellido" type="text" autocomplete="family-name" /></div>
-        <div class="ob-field"><label>${T("m_email")}</label><input id="obEmail" type="email" autocomplete="email" /></div>
+        <div class="ob-field"><label>${T("m_nombre")}</label><input id="obNombre" type="text" autocomplete="given-name" autocapitalize="words" enterkeyhint="next" /></div>
+        <div class="ob-field"><label>${T("m_apellido")}</label><input id="obApellido" type="text" autocomplete="family-name" autocapitalize="words" enterkeyhint="next" /></div>
+        <div class="ob-field"><label>${T("m_email")}</label><input id="obEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" enterkeyhint="next" /></div>
         <div class="ob-field"><label>${T("m_pass")}</label><div class="pw-wrap"><input id="obPass" type="password" autocomplete="new-password" /><button class="pw-toggle" type="button" aria-label="${T("m_pw_ver")}">${OLI.icon("eye", { size: 18 })}</button></div></div>
         <div class="ob-field"><label>${T("ob_pass2")}</label><div class="pw-wrap"><input id="obPass2" type="password" autocomplete="new-password" /><button class="pw-toggle" type="button" aria-label="${T("m_pw_ver")}">${OLI.icon("eye", { size: 18 })}</button></div></div>
         <label class="consent"><input type="checkbox" id="obConsent" />
