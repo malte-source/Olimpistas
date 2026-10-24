@@ -168,6 +168,31 @@ function createPgStore({ databaseUrl, debug }) {
   };
   const cacheBust = (clave) => { delete _cache[clave]; };
 
+  // Condiciones de filtro de socios, compartidas por el segmento/exportación y por la tabla del panel.
+  const condicionesSocios = (f) => {
+    const dom = "%@" + SEED_DOMAIN;
+    const conds = [sql`s.email NOT LIKE ${dom}`];
+    if (f.paisIso) conds.push(sql`s.pais_iso = ${String(f.paisIso).toUpperCase()}`);
+    if (f.validoSocio) conds.push(sql`s.es_socio_olimpia = true`);
+    if (f.sinFoto) conds.push(sql`(s.foto IS NULL OR s.foto = '')`);
+    if (f.canjes === true) conds.push(sql`EXISTS (SELECT 1 FROM canjes c WHERE c.socio_id = s.id)`);
+    if (f.canjes === false) conds.push(sql`NOT EXISTS (SELECT 1 FROM canjes c WHERE c.socio_id = s.id)`);
+    if (f.pujas === true) conds.push(sql`EXISTS (SELECT 1 FROM pujas p WHERE p.socio_id = s.id)`);
+    if (f.pujas === false) conds.push(sql`NOT EXISTS (SELECT 1 FROM pujas p WHERE p.socio_id = s.id)`);
+    if (f.gasto === true) conds.push(sql`s.gasto_total > 0`);
+    if (f.gasto === false) conds.push(sql`s.gasto_total = 0`);
+    if (f.ciudad) conds.push(sql`lower(s.ciudad) = ${String(f.ciudad).toLowerCase()}`);
+    if (f.excluirId) conds.push(sql`s.id <> ${f.excluirId}`);
+    if (f.tier) conds.push(sql`coalesce(m.tier_slug, 'olimpista') = ${f.tier}`);
+    if (f.q) { const term = "%" + String(f.q).toLowerCase() + "%"; conds.push(sql`(lower(s.email) LIKE ${term} OR lower(coalesce(s.nombre,'')) LIKE ${term} OR lower(coalesce(s.apellido,'')) LIKE ${term} OR coalesce(s.cedula,'') LIKE ${term})`); }
+    if (f.verificado === true) conds.push(sql`s.email_verificado = true`);
+    if (f.verificado === false) conds.push(sql`s.email_verificado = false`);
+    if (f.club === true) conds.push(sql`s.es_socio_olimpia = true`);
+    if (f.club === false) conds.push(sql`s.es_socio_olimpia = false`);
+    if (f.conFoto === true) conds.push(sql`(s.foto IS NOT NULL AND s.foto <> '')`);
+    return conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`));
+  };
+
   const store = {
     kind: "postgres",
     _sql: sql,
@@ -298,21 +323,7 @@ function createPgStore({ databaseUrl, debug }) {
     async filtrarSocios(f = {}) {
       const dom = "%@" + SEED_DOMAIN;
       const lim = f.paraEnvio ? 200000 : Math.min(Number(f.limit) || 500, 5000);
-      const conds = [sql`s.email NOT LIKE ${dom}`];
-      if (f.paisIso) conds.push(sql`s.pais_iso = ${String(f.paisIso).toUpperCase()}`);
-      if (f.validoSocio) conds.push(sql`s.es_socio_olimpia = true`);
-      if (f.sinFoto) conds.push(sql`(s.foto IS NULL OR s.foto = '')`);
-      if (f.canjes === true) conds.push(sql`EXISTS (SELECT 1 FROM canjes c WHERE c.socio_id = s.id)`);
-      if (f.canjes === false) conds.push(sql`NOT EXISTS (SELECT 1 FROM canjes c WHERE c.socio_id = s.id)`);
-      if (f.pujas === true) conds.push(sql`EXISTS (SELECT 1 FROM pujas p WHERE p.socio_id = s.id)`);
-      if (f.pujas === false) conds.push(sql`NOT EXISTS (SELECT 1 FROM pujas p WHERE p.socio_id = s.id)`);
-      if (f.gasto === true) conds.push(sql`s.gasto_total > 0`);
-      if (f.gasto === false) conds.push(sql`s.gasto_total = 0`);
-      if (f.ciudad) conds.push(sql`lower(s.ciudad) = ${String(f.ciudad).toLowerCase()}`);
-      if (f.excluirId) conds.push(sql`s.id <> ${f.excluirId}`);
-      if (f.tier) conds.push(sql`coalesce(m.tier_slug, 'olimpista') = ${f.tier}`);
-      if (f.q) { const term = "%" + String(f.q).toLowerCase() + "%"; conds.push(sql`(lower(s.email) LIKE ${term} OR lower(coalesce(s.nombre,'')) LIKE ${term} OR lower(coalesce(s.apellido,'')) LIKE ${term} OR coalesce(s.cedula,'') LIKE ${term})`); }
-      const where = conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`));
+      const where = condicionesSocios(f);
       // Destinatarios de una campaña: sin tope y con lo que hace falta para decidir si reciben (baja, teléfono). Nunca se devuelve al navegador.
       if (f.paraEnvio) return sql`
         SELECT s.id, s.nombre, s.apellido, s.email, s.telefono, s.whatsapp, s.idioma, s.pais_iso, s.marketing_baja, coalesce(m.tier_slug,'olimpista') AS tier_slug
@@ -325,6 +336,22 @@ function createPgStore({ databaseUrl, debug }) {
         FROM socios s
         LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
         WHERE ${where} ORDER BY s.creado DESC LIMIT ${lim}`;
+    },
+
+    // Tabla del panel: una página con total, orden elegible (solo columnas conocidas) y los mismos filtros que los segmentos.
+    async paginaSocios(f = {}) {
+      const ORDEN = { creado: sql`s.creado`, nombre: sql`lower(coalesce(s.apellido,'') || ' ' || coalesce(s.nombre,''))`, email: sql`lower(s.email)`, actividad: sql`s.ultima_actividad`, gasto: sql`s.gasto_total`, ciudad: sql`lower(coalesce(s.ciudad,''))` };
+      const col = ORDEN[f.orden] || ORDEN.creado, dir = f.dir === "asc" ? sql`ASC` : sql`DESC`;
+      const lim = Math.min(Math.max(parseInt(f.limite, 10) || 25, 1), 100), off = Math.max(parseInt(f.pagina, 10) || 0, 0) * lim;
+      const where = condicionesSocios(f);
+      const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM socios s LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true WHERE ${where}`;
+      const items = await sql`
+        SELECT s.id, s.nombre, s.apellido, s.email, s.cedula, s.pais, s.pais_iso, s.ciudad, s.es_socio_olimpia, s.email_verificado, s.gasto_total, s.ultima_actividad, s.creado, s.nro_socio, s.socio_desde,
+               (s.foto IS NOT NULL AND s.foto <> '') AS tiene_foto, coalesce(m.tier_slug,'olimpista') AS tier_slug
+        FROM socios s
+        LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
+        WHERE ${where} ORDER BY ${col} ${dir} NULLS LAST, s.id LIMIT ${lim} OFFSET ${off}`;
+      return { items, total: n, pagina: Math.floor(off / lim), limite: lim };
     },
 
     // Cuadre de pagos: pedidos por estado, membresías pagas y conciliación Metrepay.
