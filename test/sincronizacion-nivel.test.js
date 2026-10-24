@@ -1,6 +1,6 @@
 "use strict";
 // El nivel Socio sigue al estado en el club: al día lo mantiene; mora o baja lo pausan (con un aviso, una sola vez) y vuelve solo al regularizar.
-const PUERTO_TUTI = 39884;
+const PUERTO_TUTI = 29892;   // fuera del rango de puertos efímeros (32768+) y distinto de los demás tests: en CI corren en paralelo
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";

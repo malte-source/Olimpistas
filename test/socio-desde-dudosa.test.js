@@ -1,6 +1,6 @@
 "use strict";
 // "Socio desde" cuando la fecha del club no es confiable: no se muestra como hecho, la persona (o un admin) la corrige y nada la pisa.
-const PUERTO_TUTI = 39883;
+const PUERTO_TUTI = 29891;   // distinto de club-mora (39883) y fuera del rango efímero
 process.env.OLIMPISTAS_PERSIST = "0";
 process.env.OLIMPISTAS_DATABASE_URL = "";
 process.env.NODE_ENV = "test";
