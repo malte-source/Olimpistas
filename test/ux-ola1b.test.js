@@ -16,7 +16,7 @@ test("detalle de subasta: la puja va en una columna derecha fija en escritorio y
   const c = leer("public", "css", "styles.css");
   assert.match(c, /\.sub-izq, \.sub-der \{ display: contents; \}/, "en el celular los envoltorios no cambian el orden");
   assert.match(c, /\.sub-cols \.sub-box \{ order: 4; \}[\s\S]*#subAcciones \{ order: 7; \}[\s\S]*\.sub-feed \{ order: 9; \}/);
-  assert.match(c, /@media \(min-width: 1000px\) \{\s*\.sub-detalle-wrap \{ max-width: 1080px; \}[\s\S]*\.sub-der \{ display: flex; flex-direction: column; position: sticky; top: 24px; \}/);
+  assert.match(c, /@media \(min-width: 1200px\) \{\s*\.sub-detalle-wrap \{ max-width: 1080px; \}[\s\S]*\.sub-der \{ display: flex; flex-direction: column; position: sticky; top: 24px; \}/);
 });
 
 test("el monto libre de la puja arranca oculto de verdad", () => {

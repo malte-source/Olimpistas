@@ -116,7 +116,7 @@ button { font-family: inherit; cursor: pointer; }
 .nav-links { display: flex; gap: 28px; align-items: center; margin-left: 36px; }
 .nav-links a { color: rgba(255,255,255,.85); font-size: var(--t-15); font-weight: 600; text-decoration: none; }
 .nav-links a:hover { color: #fff; }
-@media (max-width: 1024px) { .nav-links { display: none; } }
+@media (max-width: 899px) { .nav-links { display: none; } }
 /* Al hacer scroll, la nav se vuelve "glass" y persistente (CTA siempre visible). */
 .nav.scrolled {
   background: var(--oli-900); /* sólido, no vidrio translúcido: sobre fondo claro un negro
@@ -134,7 +134,7 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; }
 .nav-sw:hover { border-color: #fff; color: #fff; }
 .nav-sw-ic { display: block; flex: none; }
-@media (max-width: 640px) {
+@media (max-width: 599px) {
   .nav-sw { padding: 6px 10px; font-size: var(--t-11); min-height: 44px; min-width: 44px; }
   /* El toggle de tema queda solo con el ícono en mobile — con texto ("Oscuro"/
      "Claro") apretaba la topbar contra el borde en pantallas angostas junto a
@@ -189,7 +189,7 @@ button { font-family: inherit; cursor: pointer; }
   .hero-text .hero-social { margin-left: 0; }
   .hero-side { flex: 0 0 340px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 }
-@media (min-width: 1180px) {
+@media (min-width: 1200px) {
   .hero-text h1 { font-size: var(--t-56); }
   .hero-side { flex-basis: 380px; }
 }
@@ -448,7 +448,7 @@ button { font-family: inherit; cursor: pointer; }
 .tier-chip--premium { background: var(--oro-50); color: var(--oro-700); border: none; }
 .tier-chip--kids { background: var(--oli-300); color: var(--oli-900); border: none; }
 .tier-chip--socio { background: var(--oro-500); color: #fff; border: none; }
-@media (max-width: 640px) { .me-txt strong { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+@media (max-width: 599px) { .me-txt strong { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
 
 /* Estado vacío (listas sin items) */
 .empty { text-align: center; padding: 48px 20px; color: var(--gris); }
@@ -543,7 +543,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .perfil-casa { background: var(--negro-2); border: 1px solid var(--linea); border-radius: var(--r-14); padding: 18px; }
 .perfil-casa .casa-toggle { max-width: none; margin: 14px 0 0; }
 .perfil-casa .ubic { justify-content: flex-start; }
-@media (max-width: 860px) {
+@media (max-width: 899px) {
   .perfil-grid { grid-template-columns: 1fr; gap: 22px; max-width: 720px; }
   .perfil-casa { background: transparent; border: none; padding: 0; margin-top: 6px; }
 }
@@ -811,10 +811,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .cookie-bar span { font-size: var(--t-13); color: #cfcfd6; flex: 1; }
 .cookie-bar a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
 .cookie-bar .btn { padding: 9px 16px; font-size: var(--t-13); flex: 0 0 auto; } /* mismo tamaño que .btn-sm, no un one-off */
-@media (max-width: 560px) { .cookie-bar { flex-direction: column; align-items: stretch; text-align: center; } }
+@media (max-width: 599px) { .cookie-bar { flex-direction: column; align-items: stretch; text-align: center; } }
 
 /* ─── Responsive (al final: deben ganar por orden a las reglas base) ──────── */
-@media (max-width: 920px) {
+@media (max-width: 899px) {
   .tiers { grid-template-columns: repeat(2, 1fr); }
   .grid-3 { grid-template-columns: 1fr; }
   .why { grid-template-columns: repeat(2, 1fr); }
@@ -822,7 +822,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .nav { padding-left: 18px; padding-right: 18px; }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 599px) {
   .wrap { padding: 0 16px; }
   /* En mobile el header no entra con todos los botones: ocultamos el CTA de registro
      (el hero ya tiene el botón grande "Hacete Olimpista gratis"). Queda logo + EN + Ingresar. */
@@ -860,12 +860,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .top-paises { position: static; width: auto; margin-top: 16px; backdrop-filter: none; }
 }
 
-@media (max-width: 400px) {
+@media (max-width: 430px) {
   .why { grid-template-columns: 1fr; }
 }
 
 /* Pantallas grandes (monitores 27"–32"+): aprovechar el ancho y agrandar el gancho. */
-@media (min-width: 1500px) {
+@media (min-width: 1600px) {
   .wrap { max-width: 1340px; }
   .hero { min-height: 760px; }
   .hero h1 { font-size: 84px; }
@@ -1030,7 +1030,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .destacado-cta { display: flex; align-items: center; justify-content: center; gap: 6px;
   background: var(--action-value-bg); color: #fff; font-weight: 800;
   padding: 14px 20px; border-radius: var(--r-12); font-size: var(--t-15); width: 100%; }
-@media (min-width: 640px) {
+@media (min-width: 600px) {
   .destacado { grid-template-columns: 260px 1fr; grid-template-areas: "media info"; }
   .destacado-media { aspect-ratio: auto; height: 100%; }
   .destacado-info { justify-content: center; }
@@ -1130,7 +1130,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .atc-form input { flex: 1; min-width: 0; height: 42px; border-radius: var(--r-pill); border: 1px solid var(--border-default); background: var(--surface-input); color: var(--text-primary); padding: 0 16px; font-size: var(--t-15); }
 .atc-send { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--action-primary-bg); color: var(--action-primary-text); cursor: pointer; }
 .atc-fab:focus-visible, .atc-x:focus-visible, .atc-pill:focus-visible, .atc-send:focus-visible, .atc-form input:focus-visible, .atc-tj-a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-@media (max-width: 640px) {
+@media (max-width: 599px) {
   .atc-fab { bottom: calc(76px + env(safe-area-inset-bottom)); right: 14px; }
   .atc-fab-t { display: none; }
   .atc-fab { width: 52px; padding: 0; justify-content: center; }
@@ -1148,7 +1148,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 /* ─── Hojas (bottom sheets): en el móvil los diálogos suben desde abajo (radio 28, manija, 320 ms) ─── */
 @keyframes hojaFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes hojaSube { from { transform: translateY(100%); } to { transform: none; } }
-@media (max-width: 640px) {
+@media (max-width: 599px) {
   .oli-modal-bg { align-items: flex-end; padding: 0; background: rgba(0,0,0,.45); animation: hojaFade .2s ease both; }
   .oli-modal { max-width: none; border: 0; border-radius: var(--r-28) var(--r-28) 0 0; padding: 30px 20px max(24px, env(safe-area-inset-bottom)); max-height: 92vh; overflow-y: auto; position: relative;
     animation: hojaSube .32s cubic-bezier(.2,.8,.2,1) both; }
@@ -1223,7 +1223,7 @@ body.app #view > .section:first-child { padding-top: 4px; }
 
 /* Navegación */
 .side-brand, .side-tema, .side-user { display: none; }
-@media (max-width: 900px) {
+@media (max-width: 899px) {
   .side { display: contents; }
   body.app .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; margin: 0; border-radius: 0; border: 0; border-top: 1px solid var(--sep);
     display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; padding: 8px 8px max(10px, env(safe-area-inset-bottom));
@@ -1236,7 +1236,7 @@ body.app #view > .section:first-child { padding-top: 4px; }
   .tab-ind { display: block; position: absolute; top: 12px; left: 0; width: 56px; height: 30px; border-radius: 15px; background: var(--card2); border: 0;
     transition: transform .28s var(--ease), opacity .2s; pointer-events: none; z-index: 0; }
 }
-@media (min-width: 901px) {
+@media (min-width: 900px) {
   .mhead { left: 250px; }
   .mhead-sp { height: 134px; margin-left: 250px; }
   .mhead-body { height: 128px; padding: 0 32px; }
@@ -1277,7 +1277,7 @@ body.app #view > .section:first-child { padding-top: 4px; }
 
 /* Diálogo de escritorio y hoja del móvil (sin borde superior de color) */
 .oli-modal { border-top-width: 1px; }
-@media (min-width: 641px) { .oli-modal { border: 0; border-radius: var(--r-28); max-width: 460px; animation: dcPop .22s var(--ease) both; } }
+@media (min-width: 600px) { .oli-modal { border: 0; border-radius: var(--r-28); max-width: 460px; animation: dcPop .22s var(--ease) both; } }
 @keyframes dcPop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 
 /* Apretar en vez de levantar: el hover solo cambia fondo/borde; el toque encoge */
@@ -1340,7 +1340,7 @@ body.app #view > .section { animation: dcIn .35s var(--ease) both; }
 .wg-vivo { font-weight: 700; font-size: var(--t-11); letter-spacing: .08em; color: var(--ok); text-transform: uppercase; }
 .wg-negro { background: #0a0a0a; color: #fff; }
 .wg-fr { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: repeating-linear-gradient(90deg, #fff 0 10px, #0a0a0a 10px 20px); }
-@media (max-width: 340px) { .wg-2 { grid-column: span 1; } }
+@media (max-width: 359px) { .wg-2 { grid-column: span 1; } }
 @media (prefers-reduced-motion: reduce) { .wg { transition: none; } }
 
 /* Avisos de arriba (ganaste una subasta / validá tu socio) y filas de Inicio con la lista agrupada */
@@ -1449,7 +1449,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .atc-x { color: var(--oro-claro); }
 .atc-fr { flex: none; height: 5px; background: repeating-linear-gradient(90deg, #fff 0 14px, #0a0a0a 14px 28px); }
 .atc-head-t b { font-weight: 700; font-size: var(--t-15); }
-@media (min-width: 901px) { .atc-fab, body.app .atc-fab { bottom: 18px; } }
+@media (min-width: 900px) { .atc-fab, body.app .atc-fab { bottom: 18px; } }
 
 /* ─── Peñas (04-pantallas): filas con cuadrado de 40 px y botón en píldora, dentro de una lista agrupada ─── */
 .pena-mia { border: 0; border-radius: var(--r-22); background: var(--surface-card); }
@@ -1465,7 +1465,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .ptr.on { opacity: 1 !important; }
 .ptr.on span { animation: ptrFr .6s linear infinite; }
 @keyframes ptrFr { to { transform: translateX(-16px); } }
-@media (min-width: 901px) { .ptr { display: none; } }
+@media (min-width: 900px) { .ptr { display: none; } }
 @media (prefers-reduced-motion: reduce) { .ptr.on span { animation: none; } }
 
 /* Mapa del mundo: botonera de vistas, leyenda y lista accesible de países (handoff v3 · M2.4 y M2.5). */
@@ -1482,7 +1482,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .mapa-lista { list-style: none; margin: 8px 0 0; padding: 0; columns: 3 220px; column-gap: 28px; }
 .mapa-lista li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.12); font-size: var(--t-13); break-inside: avoid; }
 .mapa-lista li strong { color: #fff; font-variant-numeric: tabular-nums; }
-@media (max-width: 900px) {
+@media (max-width: 899px) {
   .globo { height: 70vh; max-height: 620px; }
   .globo-vista { top: 6px; }
   .globo-vista .ctl-seg-b { padding: 6px 10px; }
@@ -1576,7 +1576,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .bx-ban-pie { margin-top: auto; padding-top: 12px; display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-12); font-weight: 700; }
 .bx-ban.lock .bx-ban-pie { color: rgba(255, 255, 255, .8); }
 .bx-rail.uno .bx-ban { flex: 1 1 100%; min-height: 208px; }
-@media (min-width: 700px) { .bx-ban { flex-basis: calc(46% - 6px); } } /* el tercero asoma: se nota que hay más para deslizar */
+@media (min-width: 600px) { .bx-ban { flex-basis: calc(46% - 6px); } } /* el tercero asoma: se nota que hay más para deslizar */
 
 .bx-bar { display: flex; flex-direction: column; gap: 12px; }
 .bx-busca { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; border-radius: var(--r-14); background: var(--surface-card); border: 1px solid var(--border-default); color: var(--text-secondary); }
@@ -1629,7 +1629,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .oli-modal { max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
 
 /* Escritorio: dos columnas. A la izquierda lo principal; a la derecha, billetera, subir de nivel y guía (fija al hacer scroll). */
-@media (min-width: 1180px) {
+@media (min-width: 1200px) {
   .bx { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; align-items: start; }
   .bx-main, .bx-side { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
   .bx-main > *, .bx-side > * { order: 0; }
@@ -1675,7 +1675,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .pn-top-t b { display: block; font-size: var(--t-15); }
 .pn-top-t small { font-size: var(--t-13); color: var(--text-secondary); }
 .pena-sol summary { cursor: pointer; font-size: var(--t-15); font-weight: 600; min-height: 44px; display: flex; align-items: center; }
-@media (min-width: 1180px) {
+@media (min-width: 1200px) {
   .pn { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; align-items: start; }
   .pn-side { position: sticky; top: 24px; }
   .pn-bar { position: sticky; top: 0; z-index: 4; padding: 8px 0; background: var(--surface-grouped, var(--surface-page)); }
@@ -1695,7 +1695,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 /* Móvil: objetivos táctiles de al menos 44 px y la sección activa de la tira siempre a la vista. */
 .faltantes button { min-height: 40px; padding: 8px 14px; }
 .ed-ubic { display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; }
-@media (max-width: 700px) {
+@media (max-width: 599px) {
   #view .btn-sm { min-height: 44px; }
   .seg-b { min-height: 44px; }
 }
@@ -1754,7 +1754,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .ih-nov .ini-feed { margin-top: 0; }
 .ih-pf .progreso { margin: 0; }
 
-@media (min-width: 1180px) {
+@media (min-width: 1200px) {
   .ih { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
   .ih-main, .ih-side { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
   .ih-hero, .ih-side > *, .ih-main > * { order: 0; }
@@ -1769,7 +1769,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .atc-b.atc-p p { margin: 0 0 .75em; }
 .atc-b.atc-p p:last-child { margin-bottom: 0; }
 .atc-b { line-height: 1.5; }
-@media (max-width: 420px) { .ih-c-qr i { display: none; } .ih-c-qr { padding: 10px; } .ih-c-tx small { white-space: normal; } }
+@media (max-width: 430px) { .ih-c-qr i { display: none; } .ih-c-qr { padding: 10px; } .ih-c-tx small { white-space: normal; } }
 
 /* Chat: tarjeta de beneficios destacados (logo, comercio y descuento). */
 .atc-bens { display: flex; flex-direction: column; gap: 8px; max-width: 92%; padding: 12px; border-radius: var(--r-14); background: var(--surface-card); border: 1px solid var(--border-default); }
@@ -1805,7 +1805,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .cn2-corte { border-top: 2px dashed #d4d4da; margin: 0 18px; }
 .cn2-pase { margin: 0; font-size: var(--t-12); font-weight: 600; letter-spacing: .04em; color: #6b6b70; text-align: center; }
 .cn2 .cn2-body { padding-top: 16px; }
-@media (max-width: 380px) { .cn2-frente { gap: 12px; padding: 16px; } .cn2-foto { width: 92px; height: 120px; } }
+@media (max-width: 359px) { .cn2-frente { gap: 12px; padding: 16px; } .cn2-foto { width: 92px; height: 120px; } }
 
 /* Beneficios, más compacto: una fila de búsqueda (+ Lista/Mapa), chips, y una línea con cantidad y orden; las listas arrancan antes. */
 .bx-r1 { display: flex; align-items: center; gap: 8px; }
@@ -1850,7 +1850,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .bx-detalle { padding: 18px; border-radius: var(--r-26); background: var(--surface-card); outline: none; }
 .bx-detalle[hidden] { display: none; }
 .bx-card[aria-current="true"] { box-shadow: inset 0 0 0 2px var(--text-primary); }
-@media (min-width: 1180px) { .bx-side { max-height: calc(100dvh - 48px); overflow-y: auto; scrollbar-width: thin; } }
+@media (min-width: 1200px) { .bx-side { max-height: calc(100dvh - 48px); overflow-y: auto; scrollbar-width: thin; } }
 
 /* Buscador global (Ctrl/⌘ + K): cuadro centrado sobre un velo; en el celular no se muestra el botón (el atajo no existe). */
 .side-buscar { display: none; }
@@ -1886,7 +1886,7 @@ body.pal-abierta { overflow: hidden; }
 .socio-banner-correo .sb-txt b { word-break: break-all; }
 
 .socio-banner-correo .sb-txt { font-weight: 500; font-size: var(--t-13); line-height: 1.4; }
-.socio-banner-correo .sb-txt svg { display: inline-block; vertical-align: -3px; margin-right: 6px; }
+.socio-banner.socio-banner-correo .sb-txt svg { display: inline-block; vertical-align: -3px; margin-right: 6px; }
 .socio-banner-correo .sb-txt b { font-weight: 700; }
 
 /* Detalle de subasta. Celular: una columna en el orden de siempre (foto, título, puja, acciones, movimientos).
@@ -1897,7 +1897,7 @@ body.pal-abierta { overflow: hidden; }
 .sub-cols .sub-hero { order: 1; } .sub-cols h2 { order: 2; } .sub-cols .lead { order: 3; }
 .sub-cols .sub-box { order: 4; } .sub-cols .sub-meta { order: 5; } .sub-cols .sub-antisnipe { order: 6; } .sub-cols #subAcciones { order: 7; }
 .sub-cols .sub-feed-h { order: 8; margin-top: 24px; } .sub-cols .sub-feed { order: 9; }
-@media (min-width: 1000px) {
+@media (min-width: 1200px) {
   .sub-detalle-wrap { max-width: 1080px; }
   .sub-cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 8px 40px; align-items: start; }
   .sub-izq { display: flex; flex-direction: column; min-width: 0; }
