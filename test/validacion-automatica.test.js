@@ -63,14 +63,14 @@ test("la cédula de un socio al día valida en el momento y guarda su antigüeda
   assert.deepStrictEqual({ esSocio: c.esSocio, socioDesde: c.socioDesde, nroSocio: c.nroSocio }, { esSocio: true, socioDesde: "2009-03-14", nroSocio: "4321" });
 });
 
-test("un socio sin fecha de alta en el club no recibe una inventada: el carnet trae el número de socio y la fecha vacía", async () => {
+test("un socio sin fecha de alta en el club igual tiene su antigüedad definida: cuenta desde el día en que se lo reconoce (y trae su número de socio)", async () => {
   const A = await hincha();
   assert.strictEqual((await (await api("/perfil/validar-socio", { metodo: "POST", h: A.h, cuerpo: { cedula: "7000002" } })).json()).validado, true);
   const c = (await (await api("/carnet", { h: A.h })).json()).carnet;
-  assert.strictEqual(c.socioDesde, "");
+  assert.strictEqual(c.socioDesde, new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10), "sin dato del club, la antigüedad cuenta desde hoy (hora de Paraguay)");
   assert.strictEqual(c.nroSocio, "4321");
   const sj = leer("public", "js", "socio.js");
-  assert.match(sj, /if \(c\.socioDesde\) filas\.push\(\{ et: T\("cn_socio_desde"\), val: fechaMes\(c\.socioDesde\) \}\);\s*else if \(c\.nroSocio\) filas\.push\(\{ et: T\("cn_nro_socio"\)/);
+  assert.match(sj, /if \(c\.socioDesde\) filas\.push\(\{ et: T\("cn_socio_desde"\), val: fechaMes\(c\.socioDesde\) \+ textoAnios\(aniosDeSocio\(c\.socioDesde\)\) \}\);\s*else if \(c\.nroSocio\) filas\.push\(\{ et: T\("cn_nro_socio"\)/);
   assert.match(sj, /const filas = \[\{ et: T\("m_cn_desde"\), val: desdeOlimpistas \}\]/, "siempre se muestra desde cuándo es miembro de Olimpistas");
 });
 

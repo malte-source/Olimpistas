@@ -73,7 +73,7 @@ test("pantalla: destacados, buscador, rubros, orden, disponibilidad, hoja estruc
   for (const id of ['class="bx-hero"', 'id="bxQ"', 'id="bxChips"', 'id="bxOrden"', 'id="bxDisp"', 'id="bxVista"', 'class="bx-side"', 'class="bx-up"', 'class="bx-guia"']) assert.ok(v.includes(id), id);
   assert.match(v, /x\.destacado/);
   assert.match(v, /querySelector\("\.bx"\)\.addEventListener/, "el clic se engancha al contenedor de esta pantalla (no se acumula en #view)");
-  const h = s.slice(s.indexOf("function abrirBeneficio("), s.indexOf("function abrirBeneficio(") + 2600);
+  const h = s.slice(s.indexOf("function abrirBeneficio("), s.indexOf("function abrirBeneficio(") + 4200);
   assert.match(h, /bx-dl/);
   assert.match(h, /m_ben_mostrar_qr/, "el desbloqueado siempre muestra el QR");
   const c = leer("css/styles.css");

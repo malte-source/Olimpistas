@@ -56,6 +56,9 @@ window.OLI_ONB = (function () {
         <div class="ob-field"><label>${T("m_email")}</label><input id="obEmail" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" enterkeyhint="next" /></div>
         <div class="ob-field"><label>${T("m_pass")}</label><div class="pw-wrap"><input id="obPass" type="password" autocomplete="new-password" /><button class="pw-toggle" type="button" aria-label="${T("m_pw_ver")}">${OLI.icon("eye", { size: 18 })}</button></div></div>
         <div class="ob-field"><label>${T("ob_pass2")}</label><div class="pw-wrap"><input id="obPass2" type="password" autocomplete="new-password" /><button class="pw-toggle" type="button" aria-label="${T("m_pw_ver")}">${OLI.icon("eye", { size: 18 })}</button></div></div>
+        <details class="ob-socio"><summary>${T("ob_socio_q")}</summary>
+          <div class="ob-field"><label>${T("ob_cedula")}</label><input id="obCedula" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" enterkeyhint="done" placeholder="${T("ob_cedula_ph")}" /></div>
+          <p class="ob-sub">${T("ob_socio_p")}</p></details>
         <label class="consent"><input type="checkbox" id="obConsent" />
           <span>${T("consent_1")} <a href="/legal#terminos" target="_blank">${T("consent_terms")}</a> ${T("consent_and")} <a href="/legal#privacidad" target="_blank">${T("consent_privacy")}</a></span></label>
         <p class="ob-err" id="obErr"></p>
@@ -76,7 +79,8 @@ window.OLI_ONB = (function () {
     if (!document.getElementById("obConsent").checked) { err.textContent = T("consent_err"); return; }
     const btn = document.getElementById("obCrear"); btn.disabled = true;
     try {
-      await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena() } });
+      const cedula = (val("obCedula") || "").replace(/\D/g, "");
+      await api("/auth/registro", { method: "POST", body: { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena(), ...(cedula.length >= 5 ? { cedula } : {}) } });
       window.OLI.track("Registro", "CompleteRegistration");
       irPaso(2);
     } catch (e) { err.textContent = e.message; btn.disabled = false; }

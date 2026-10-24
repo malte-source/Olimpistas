@@ -190,6 +190,10 @@ function createPgStore({ databaseUrl, debug }) {
     if (f.club === true) conds.push(sql`s.es_socio_olimpia = true`);
     if (f.club === false) conds.push(sql`s.es_socio_olimpia = false`);
     if (f.conFoto === true) conds.push(sql`(s.foto IS NOT NULL AND s.foto <> '')`);
+    // Perfiles de la campaña de validación de datos: cuentas que el club dice al día y todavía no son socias; cuentas sin cédula cuyo correo figura en la base; cuentas en mora.
+    if (f.porReconocer) conds.push(sql`(NOT s.es_socio_olimpia AND EXISTS (SELECT 1 FROM socios_club c WHERE c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0') AND c.tuti_al_dia IS TRUE))`);
+    if (f.candidataCorreo) conds.push(sql`(NOT s.es_socio_olimpia AND coalesce(s.cedula, '') = '' AND EXISTS (SELECT 1 FROM socios_club c WHERE c.en_base AND c.correo = lower(s.email)))`);
+    if (f.enMora) conds.push(sql`s.club_estado = 'mora'`);
     return conds.reduce((a, c, i) => (i === 0 ? c : sql`${a} AND ${c}`));
   };
 
@@ -788,6 +792,70 @@ function createPgStore({ databaseUrl, debug }) {
     // Cierra TODAS las sesiones de un socio (p. ej. al resetear la contraseña).
     async borrarSesionesDeSocio(socioId) { await sql`DELETE FROM sesiones WHERE socio_id = ${socioId}`; return true; },
     // Purga sesiones vencidas (se llama desde el cron; evita bloat de la tabla).
+    // ── Base de socios del club (referencia) + estado consultado a la API de socios ──
+    async upsertSociosClub(registros) {
+      const cols = ["cedula", "grupo", "nro_socio", "socio_desde", "fecha_calidad", "antig_anios", "meses_pagados", "activo_erp", "nombre", "correo", "telefono", "nacimiento", "fecha_fuente"];
+      let n = 0;
+      for (let i = 0; i < registros.length; i += 1000) {
+        const chunk = registros.slice(i, i + 1000).map((r) => { const o = {}; for (const c of cols) o[c] = r[c] === undefined ? null : r[c]; if (o.fecha_fuente == null) o.fecha_fuente = ""; o.en_base = true; return o; });
+        await sql`INSERT INTO socios_club ${sql(chunk, ...cols, "en_base")}
+          ON CONFLICT (cedula) DO UPDATE SET grupo = EXCLUDED.grupo, nro_socio = EXCLUDED.nro_socio, socio_desde = EXCLUDED.socio_desde, fecha_calidad = EXCLUDED.fecha_calidad, fecha_fuente = EXCLUDED.fecha_fuente,
+            antig_anios = EXCLUDED.antig_anios, meses_pagados = EXCLUDED.meses_pagados, activo_erp = EXCLUDED.activo_erp, nombre = EXCLUDED.nombre, correo = EXCLUDED.correo,
+            telefono = EXCLUDED.telefono, nacimiento = EXCLUDED.nacimiento, en_base = true, importado = now()`;
+        n += chunk.length;
+      }
+      return n;
+    },
+    async getSocioClub(cedula) { const [r] = await sql`SELECT * FROM socios_club WHERE cedula = ${String(cedula)} LIMIT 1`; return r || null; },
+    async guardarEstadoTuti(cedula, e) {
+      await sql`INSERT INTO socios_club (cedula, en_base, tuti_estado, tuti_plan, tuti_numero, tuti_al_dia, tuti_deuda, tuti_correo, tuti_nombre, tuti_consultado, tuti_intentos)
+        VALUES (${String(cedula)}, false, ${e.estado || ""}, ${e.plan || ""}, ${e.numero || ""}, ${e.alDia == null ? null : !!e.alDia}, ${e.deuda == null ? null : Math.round(e.deuda)}, ${String(e.correo || "").toLowerCase().slice(0, 160)}, ${String(e.nombre || "").slice(0, 160)}, now(), 1)
+        ON CONFLICT (cedula) DO UPDATE SET tuti_estado = EXCLUDED.tuti_estado, tuti_plan = EXCLUDED.tuti_plan, tuti_numero = EXCLUDED.tuti_numero, tuti_al_dia = EXCLUDED.tuti_al_dia,
+          tuti_deuda = EXCLUDED.tuti_deuda, tuti_correo = EXCLUDED.tuti_correo, tuti_nombre = EXCLUDED.tuti_nombre, tuti_consultado = now(), tuti_intentos = socios_club.tuti_intentos + 1`;
+    },
+    // A quién consultar ahora en la API: primero las cuentas de Olimpistas con cédula (nunca consultadas o con estado viejo), después quienes
+    // figuran en la base con un correo que ya tiene cuenta, y al final el resto de la base (los adherentes de plan familiar al último: la API no los devuelve).
+    async siguientesParaConsultar({ limite = 100, staleDias = 7 } = {}) {
+      const dom = "%@" + SEED_DOMAIN, out = [], vistos = new Set();
+      const tomar = (filas) => { for (const f of filas) if (out.length < limite && !vistos.has(f.cedula)) { vistos.add(f.cedula); out.push(f.cedula); } };
+      tomar(await sql`
+        SELECT k.ced AS cedula FROM (SELECT DISTINCT ltrim(regexp_replace(s.cedula, '\D', '', 'g'), '0') AS ced FROM socios s WHERE coalesce(s.cedula, '') <> '' AND s.email NOT LIKE ${dom}) k
+        LEFT JOIN socios_club c ON c.cedula = k.ced
+        WHERE length(k.ced) BETWEEN 5 AND 12 AND (c.cedula IS NULL OR c.tuti_consultado IS NULL OR c.tuti_consultado < now() - make_interval(days => ${staleDias}))
+        ORDER BY c.tuti_consultado NULLS FIRST LIMIT ${limite}`);
+      if (out.length < limite) tomar(await sql`
+        SELECT c.cedula FROM socios_club c WHERE c.tuti_consultado IS NULL AND c.correo <> '' AND EXISTS (SELECT 1 FROM socios s WHERE lower(s.email) = c.correo)
+        ORDER BY c.tuti_intentos, c.cedula LIMIT ${limite}`);
+      if (out.length < limite) tomar(await sql`
+        SELECT cedula FROM socios_club WHERE tuti_consultado IS NULL ORDER BY (grupo = 'FAMILIAR'), tuti_intentos, cedula LIMIT ${limite}`);
+      return out;
+    },
+    async resumenSociosClub() {
+      const [t] = await sql`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE en_base)::int AS en_base, COUNT(*) FILTER (WHERE tuti_consultado IS NOT NULL)::int AS consultados,
+        COUNT(*) FILTER (WHERE en_base AND tuti_consultado IS NULL)::int AS pendientes, COUNT(*) FILTER (WHERE socio_desde IS NOT NULL)::int AS con_socio_desde,
+        MAX(tuti_consultado) AS ultima_consulta FROM socios_club`;
+      const estados = await sql`SELECT tuti_estado AS estado, COUNT(*)::int AS n FROM socios_club WHERE tuti_estado <> '' GROUP BY 1 ORDER BY 2 DESC`;
+      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios s JOIN socios_club c ON c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0')
+        WHERE NOT s.es_socio_olimpia AND c.tuti_al_dia IS TRUE`;
+      const fuentes = await sql`SELECT fecha_fuente AS fuente, COUNT(*)::int AS n FROM socios_club WHERE en_base GROUP BY 1 ORDER BY 2 DESC`;
+      const [m] = await sql`SELECT COUNT(*)::int AS n FROM socios WHERE club_estado = 'mora' AND NOT es_socio_olimpia`;
+      return { ...t, estados, fuentes, cuentas_para_reconocer: r.n, cuentas_en_mora: m.n };
+    },
+    // Completa a las cuentas que ya son socias con lo que sabe la base (antigüedad, número, grupo); si la base no tiene fecha, cuenta desde que se las reconoció.
+    async completarSociosDesdeClub() {
+      const a = await sql`UPDATE socios s SET socio_desde = COALESCE(s.socio_desde, c.socio_desde), nro_socio = CASE WHEN s.nro_socio = '' THEN coalesce(c.nro_socio, '') ELSE s.nro_socio END,
+          grupo_club = CASE WHEN s.grupo_club = '' THEN coalesce(c.grupo, '') ELSE s.grupo_club END
+        FROM socios_club c WHERE s.es_socio_olimpia AND c.cedula = ltrim(regexp_replace(coalesce(s.cedula, ''), '\D', '', 'g'), '0')
+          AND (s.socio_desde IS NULL OR s.nro_socio = '' OR s.grupo_club = '')`;
+      const b = await sql`UPDATE socios s SET socio_desde = (SELECT (m.inicio AT TIME ZONE 'America/Asuncion')::date FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio' ORDER BY m.inicio DESC LIMIT 1)
+        WHERE s.es_socio_olimpia AND s.socio_desde IS NULL AND EXISTS (SELECT 1 FROM membresias m WHERE m.socio_id = s.id AND m.estado = 'activa' AND m.tier_slug = 'socio')`;
+      return { desde_club: a.count || 0, desde_membresia: b.count || 0 };
+    },
+    // Cuentas en mora que se revisan de nuevo solas (para activarlas apenas el club vuelva a decir "al día").
+    async cuentasEnMora({ limite = 30, desdeMin = 60 } = {}) {
+      return sql`SELECT s.id, s.cedula FROM socios s WHERE s.club_estado = 'mora' AND NOT s.es_socio_olimpia AND coalesce(s.cedula, '') <> '' AND (NOT s.verif_exigida OR s.email_verificado)
+        AND (s.club_consulta IS NULL OR s.club_consulta < now() - make_interval(mins => ${desdeMin})) ORDER BY s.club_consulta NULLS FIRST LIMIT ${limite}`;
+    },
     // ── Push ──
     async guardarPushSuscripcion({ socioId, endpoint, p256dh, auth, ua }) {
       const [{ n }] = await sql`SELECT COUNT(*)::int AS n FROM push_suscripciones WHERE socio_id = ${socioId} AND endpoint <> ${endpoint}`;

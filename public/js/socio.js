@@ -12,7 +12,7 @@
   // deben reflejar la vista actual. Esquema: /miembro, /miembro/carnet,
   // /miembro/beneficios, /miembro/perfil, /miembro/descubrir(/<segmento>)(/subastas/<id>).
   let curTab = "inicio", curSubId = null;
-  const TABS_RUTA = ["inicio", "partidos", "carnet", "beneficios", "puntos", "perfil", "descubrir"];
+  const TABS_RUTA = ["inicio", "partidos", "carnet", "beneficios", "puntos", "perfil", "descubrir", "historia"];
   const PESTANAS = ["inicio", "partidos", "carnet", "beneficios", "puntos"]; // las 5 de la barra; perfil y descubrir abren con "‹ Inicio"
   const SEGS_RUTA = ["subastas", "sorteos", "preventas", "media", "penas"];
   function parseRuta(pathname) {
@@ -168,7 +168,7 @@
     const back = document.getElementById("mBack"); if (back) back.hidden = PESTANAS.includes(tab);
     moveTabInd();
     const conVista = (fn) => (document.startViewTransition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? document.startViewTransition(() => { fn(); }) /* sin devolver la promesa: la transición no espera a los datos de la vista */ : fn());
-    conVista(({ inicio: vInicio, partidos: vPartidos, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil }[tab] || vInicio));
+    conVista(({ inicio: vInicio, partidos: vPartidos, carnet: vCarnet, beneficios: vBeneficios, puntos: vPuntos, descubrir: vDescubrir, perfil: vPerfil, historia: vHistoria }[tab] || vInicio));
   }
 
   // Pulido PRO: pill deslizante bajo el tab activo (solo mobile) + borde glass al hacer scroll.
@@ -303,7 +303,7 @@
             <div class="ini-feed">${club.join("")}</div></section>
         </div>
         <aside class="ih-side">
-          <section class="ih-b ih-res"><div class="wg-grid ih-res-g">${wAhorro(ahorroR)}${wPuntos(puntosR)}${wPenaIni(penasR)}</div></section>
+          <section class="ih-b ih-res"><div class="wg-grid ih-res-g">${wAhorro(ahorroR, benR && benR.potencial)}${wPuntos(puntosR)}${wPenaIni(penasR)}${wHistoria()}</div></section>
           ${wMision(puntosR)}
           <section class="ih-b ih-pf"><div id="progreso"></div></section>
           ${escalonCard()}
@@ -323,7 +323,22 @@
     if (card && enc) bindEncuesta(card, enc);
   }
   // ─── Piezas del Inicio (cada una aparece solo si su dato cargó) ───
-  function wAhorro(ahorro) {
+  // Para quien todavía no es socio: en vez de la billetera vacía, lo que ahorraría siéndolo (estimado).
+  function wHistoria() {
+    const s = SESSION.socio, socio = esSocioValidado(), desde = socio && s.socio_desde ? String(s.socio_desde).slice(0, 10) : "";
+    const a = desde ? aniosDeSocio(desde) : null;
+    const num = desde ? (a >= 1 ? (a === 1 ? T("cn_anio_uno") : T("cn_anios").replace("{n}", a)) : T("hi_nuevo")) : fechaMes(new Date(s.creado).toISOString().slice(0, 10));
+    const sub = desde ? T("cn_socio_desde") + " " + fechaMes(desde) : T("m_cn_desde");
+    return `<button type="button" class="wg" data-goto="historia" aria-label="${esc(T("hi_h"))}">
+        <span class="wg-cab">${esc(T("hi_h"))}</span><span class="wg-num wg-num-s">${esc(num)}</span><span class="wg-sub">${esc(sub)}</span><span class="wg-nota">${esc(T("hi_tile_nota"))}</span></button>`;
+  }
+  function wAhorro(ahorro, potencial) {
+    if (potencial && potencial.mensual > 0 && !esSocioValidado()) {
+      return `<button type="button" class="wg wg-2 wg-asp" data-goto="beneficios" aria-label="${esc(T("asp_lbl"))}">
+        <span class="wg-cab">${OLI.ic("ahorro", 18)}${esc(T("asp_lbl"))}</span>
+        <span class="wg-num">${esc(T("asp_tile_n").replace("{monto}", gs(potencial.mensual)))}</span><span class="wg-sub">${esc(T("asp_tile_sub"))}</span>
+        <span class="wg-nota">${esc(T("asp_tile_nota"))}</span></button>`;
+    }
     if (!ahorro) return "";
     const anio = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
     return `<button type="button" class="wg wg-2" data-goto="beneficios" aria-label="${T("m_wg_ahorro")}">
@@ -529,6 +544,21 @@
       };
       return;
     }
+    // Cuota pendiente o baja en el club: aviso fijo con el acceso al portal de socios y "Ya pagué". Apenas el club vuelve a decir "al día", el nivel se activa solo.
+    if (sv && !sv.es_socio_olimpia && (sv.club_estado === "mora" || sv.club_estado === "baja")) {
+      const mora = sv.club_estado === "mora";
+      host.innerHTML = `<div class="socio-banner socio-banner-club" role="status">
+        <span class="sb-txt">${icon("trophy", { size: 16 })} ${mora ? T("mo_banner").replace("{monto}", sv.club_deuda ? " (" + esc(gs(sv.club_deuda)) + ")" : "") : T("ba_banner")}</span>
+        <a class="btn btn-sm" href="${esc(portalClub())}" target="_blank" rel="noopener">${T("up_portal")}</a>
+        <button class="btn btn-sm btn-ghost" id="clubPague">${T("up_ya_pague")}</button></div>`;
+      host.querySelector("#clubPague").onclick = async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try { const r = await revisarClub(); if (r.validado) { await clubOk(); return; } toast(r.estado === "mora" || r.estado === "baja" ? T("up_sigue_mora") : T("up_reintentar_p")); await refrescar(); }
+        catch (e) { toast(e.message); }
+        setTimeout(() => { b.disabled = false; }, 4000);
+      };
+      return;
+    }
     let off = false; try { off = sessionStorage.getItem("oli_socio_banner") === "1"; } catch (e) {}
     if (esSocioValidado() || off) { host.innerHTML = ""; return; }
     host.innerHTML = `<div class="socio-banner">
@@ -565,20 +595,40 @@
           await api("/perfil", { method: "PATCH", body: { fecha_nacimiento: f } });
         }
         const r = await api("/perfil/validar-socio", { method: "POST", body: { cedula } });
-        if (r.validado) { cerrar(); await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); activar("carnet"); }
-        else {
-          // No lo encontramos como socio al día: se dice claro y se ofrece corregir el número o hablar con una persona.
-          root.querySelector("h3").textContent = T("up_no_h");
-          root.querySelector(".muted").textContent = T("up_no_p");
-          root.querySelector("#upCedula").hidden = true; { const f = root.querySelector("#upFecha"); if (f) { f.previousElementSibling && f.previousElementSibling.remove(); f.remove(); } }
-          err.textContent = "";
-          btn.disabled = false; btn.textContent = T("up_otra");
-          btn.onclick = () => { cerrar(); validarSocioModal(); };
-          const ch = document.createElement("button"); ch.type = "button"; ch.className = "btn btn-ghost btn-block"; ch.style.marginTop = "8px"; ch.textContent = T("up_persona");
-          ch.onclick = () => { cerrar(); document.getElementById("atcFab")?.click(); };
-          btn.after(ch);
-        }
+        if (r.validado) { cerrar(); await clubOk(); }
+        else pintarResultadoClub(root, r, cerrar);
       } catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = T("ob_validar"); }
+    };
+  }
+  async function clubOk() { await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); activar("carnet"); }
+  const portalClub = () => { const u = (CONFIG && CONFIG.portal_socios) || "https://socios.clubolimpia.com.py"; return /^https:\/\//.test(u) ? u : "https://socios.clubolimpia.com.py"; };
+  // "Ya pagué, revisar de nuevo": vuelve a consultar al club en vivo (una vez por minuto). Devuelve lo que contestó el servidor.
+  async function revisarClub() { return api("/perfil/validar-socio", { method: "POST", body: { reintentar: true } }); }
+  // Qué se le cuenta a la persona cuando todavía no se pudo activar el nivel Socio.
+  function pintarResultadoClub(root, r, cerrar) {
+    const esc2 = (t) => esc(String(t));
+    let h = T("up_no_h"), p = T("up_no_p");
+    if (r.estado === "mora") { h = T("up_mora_h"); p = r.deuda ? T("up_mora_p").replace("{monto}", gs(r.deuda)) : T("up_mora_p2"); }
+    else if (r.estado === "baja") { h = T("up_baja_h"); p = T("up_baja_p"); }
+    else if (r.estado === "reintentar") { h = T("up_reintentar_h"); p = T("up_reintentar_p"); }
+    const conPortal = r.estado === "mora" || r.estado === "baja";
+    root.innerHTML = `<h3>${esc2(h)}</h3><p class="muted">${esc2(p)}</p><p class="err" id="upErr"></p>` +
+      (conPortal ? `<a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${esc2(T("up_portal"))}</a><button type="button" class="btn btn-ghost btn-block" id="upPague" style="margin-top:8px">${esc2(T("up_ya_pague"))}</button>`
+        : r.estado === "reintentar" ? `<button type="button" class="btn btn-block" id="upPague">${esc2(T("up_reintentar"))}</button>`
+        : `<button type="button" class="btn btn-block" id="upOtra">${esc2(T("up_otra"))}</button><button type="button" class="btn btn-ghost btn-block" id="upPersona" style="margin-top:8px">${esc2(T("up_persona"))}</button>`) +
+      `<button type="button" class="btn btn-ghost btn-block" id="upCerrar2" style="margin-top:8px">${esc2(T("up_cerrar"))}</button>`;
+    root.querySelector("#upCerrar2").onclick = cerrar;
+    const otra = root.querySelector("#upOtra"); if (otra) otra.onclick = () => { cerrar(); validarSocioModal(); };
+    const per = root.querySelector("#upPersona"); if (per) per.onclick = () => { cerrar(); document.getElementById("atcFab")?.click(); };
+    const pague = root.querySelector("#upPague");
+    if (pague) pague.onclick = async () => {
+      pague.disabled = true; const txt = pague.textContent; pague.textContent = T("up_consultando");
+      try {
+        const r2 = await revisarClub();
+        if (r2.validado) { cerrar(); await clubOk(); return; }
+        if (r2.estado === r.estado && r.estado !== "reintentar") toast(T("up_sigue_mora"));
+        pintarResultadoClub(root, r2, cerrar);
+      } catch (e) { root.querySelector("#upErr").textContent = e.message; pague.disabled = false; pague.textContent = txt; }
     };
   }
 
@@ -1455,7 +1505,13 @@
     const anioNum = new Date().toLocaleDateString("en-CA", { timeZone: "America/Asuncion" }).slice(0, 4);
     const notaMes = ah.canjes_mes ? ah.canjes_mes + " " + (ah.canjes_mes === 1 ? T("m_ben_canje_uno") : T("m_ben_canje_n")) : T("m_ben_canje_ninguno");
     const sinAhorro = !ah.mes && !ah.total && !ah.anio;
-    const ahorroCard = sinAhorro ? '<div class="ben-ahorro cero"><div class="ba-lbl">' + T("m_ben_billetera") + '</div><div class="ba-nota">' + T("bx_ahorro_cero") + '</div></div>' : '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
+    _potencialBen = r.potencial || null;
+    const asp = !esSocioValidado() && r.potencial && r.potencial.mensual > 0;
+    const aspCard = asp ? '<div class="ben-ahorro asp"><div class="ba-lbl">' + T("asp_lbl") + '</div><div class="ba-monto">' + esc(T("asp_hasta").replace("{monto}", gs(r.potencial.mensual))) + '</div>' +
+      '<div class="ba-nota">' + esc(T("asp_nota").replace("{anual}", gs(r.potencial.anual)).replace("{n}", r.potencial.usos).replace("{ticket}", gs(r.potencial.ticket))) + '</div>' +
+      '<a class="btn btn-block" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + T("asp_asociate") + '</a>' +
+      '<button type="button" class="btn btn-ghost btn-block" id="bxYaSoy">' + T("asp_ya_soy") + '</button></div>' : "";
+    const ahorroCard = asp ? aspCard : sinAhorro ? '<div class="ben-ahorro cero"><div class="ba-lbl">' + T("m_ben_billetera") + '</div><div class="ba-nota">' + T("bx_ahorro_cero") + '</div></div>' : '<div class="ben-ahorro"><div class="ba-lbl">' + T("m_ben_billetera") + '</div>' +
       '<div class="ba-fila"><div><div class="ba-sub">' + T("m_ben_ahorro_mes") + '</div><div class="ba-monto">' + gs(ah.mes) + '</div></div>' +
       '<div class="ba-anio"><div class="ba-sub">' + T("m_ben_ahorro_anio") + ' ' + anioNum + '</div><div class="ba-monto-s">' + gs(ah.anio != null ? ah.anio : ah.total) + '</div></div></div>' +
       '<div class="ba-nota">' + notaMes + ' · ' + T("m_ben_ahorro_total") + ': <b>' + gs(ah.total) + '</b></div>' + paga + '</div>';
@@ -1510,7 +1566,8 @@
       '<button type="button" class="btn btn-ghost btn-block" id="bxCarnet">' + T("bx_abrir_carnet") + '</button></div>';
     const nivelUp = bloqueados.length ? (bloqueados.some((x) => x.nivel_min === "socio") ? "socio" : (bloqueados[0].nivel_min || "premium")) : "";
     const up = bloqueados.length ? '<div class="bx-up"><b>' + T("bx_up_h").replace("{n}", bloqueados.length) + '</b><p>' + (nivelUp === "socio" ? T("bx_up_socio") : T("bx_up_p").replace("{nivel}", TL[nivelUp] || "Plus")) + '</p>' +
-      '<button type="button" class="btn" id="bxUp">' + (nivelUp === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")) + '</button></div>' : "";
+      (nivelUp === "socio" ? '<a class="btn" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + T("asp_asociate") + '</a><button type="button" class="btn btn-ghost" id="bxUp" style="margin-top:8px">' + T("asp_ya_soy") + '</button>'
+        : '<button type="button" class="btn" id="bxUp">' + T("m_ben_subi") + " " + (TL[nivelUp] || "Plus") + '</button>') + '</div>' : "";
 
     const fila = (x) => '<button type="button" class="bx-card' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '">' +
       '<span class="bx-card-top">' + logoDe(x) +
@@ -1584,6 +1641,7 @@
       if (el) abrirBeneficio(items.find((x) => x.id === el.dataset.ben), TL);
     });
     view().querySelector("#bxCarnet").onclick = () => activar("carnet");
+    { const ya = view().querySelector("#bxYaSoy"); if (ya) ya.onclick = validarSocioModal; }
     const upBtn = view().querySelector("#bxUp");
     if (upBtn) upBtn.onclick = () => { if (nivelUp === "socio") validarSocioModal(); else mostrarUpsell(nivelUp || "premium", T("m_ben_subi") + " " + (TL[nivelUp] || "Plus")); };
     pintar();
@@ -1637,6 +1695,7 @@
   }
   // Hoja con el detalle del beneficio. Los datos vienen en líneas "Etiqueta: texto" (Dónde / Incluye / Cómo acceder / Importante) y se
   // muestran ordenados; un texto libre (de un beneficio cargado a mano) se muestra tal cual. El canje es siempre con el carnet.
+  let _potencialBen = null;
   function abrirBeneficio(b, TL) {
     if (!b) return;
     const ETQ = { "Dónde": "bx_l_donde", "Incluye": "bx_l_incluye", "Cómo acceder": "bx_l_acceso", "Importante": "bx_l_importante" };
@@ -1647,6 +1706,9 @@
       ? '<dl class="bx-dl">' + datos.map((d) => '<div><dt>' + T(d.k) + '</dt><dd>' + esc(d.v) + '</dd></div>').join("") + '</dl>'
       : '<p class="ben-hoja-p">' + (esc(b.descripcion || "") || (b.desbloqueado ? T("m_ben_hoja_usar") : T("m_ben_hoja_subi").replace("{nivel}", TL[b.nivel_min] || "Plus"))) + '</p>';
     const estado = b.desbloqueado ? '<span class="bx-estado ok">' + T("bx_disponible") + '</span>' : '<span class="bx-estado">' + OLI.ic("candado", 13) + " " + T("bx_solo") + " " + esc(TL[b.nivel_min] || "Plus") + '</span>';
+    // Lo que ahorraría con ESTE beneficio siendo socio (estimado con la misma compra promedio de la tarjeta).
+    const ticketB = (_potencialBen && _potencialBen.ticket) || 0, ahB = Number(b.ahorro_estimado) || (Number(b.pct) > 0 && ticketB ? Math.round((ticketB * Number(b.pct)) / 100) : 0);
+    const aspEste = !b.desbloqueado && b.nivel_min === "socio" && ahB > 0 && ticketB ? '<p class="ben-hoja-p"><b>' + esc(T("asp_este").replace("{monto}", gs(ahB)).replace("{ticket}", gs(ticketB))) + '</b></p>' : "";
     const desktopPanel = window.matchMedia("(min-width: 1200px)").matches ? view().querySelector("#bxDetalle") : null;
     const html = `
       <p class="ben-hoja-eb">${esc(b.comercio_nombre || "")}</p>
@@ -1654,8 +1716,11 @@
         <div style="flex:1;min-width:0"><h3 class="ben-hoja-t">${esc(b.titulo || "")}</h3><p class="ben-hoja-p muted">${esc([b.comercio_rubro, b.comercio_ciudad].filter(Boolean).join(" · "))}</p>${estado}</div>
         <span class="bx-val grande${b.desbloqueado ? "" : " lock"}${String(b.valor || "").length > 5 ? " chico" : ""}">${esc(b.valor || "")}</span></div>
       ${b.desbloqueado ? "" : '<p class="ben-hoja-p">' + T("m_ben_hoja_subi").replace("{nivel}", esc(TL[b.nivel_min] || "Plus")) + '</p>'}
+      ${aspEste}
       ${cuerpo}
-      <button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : (b.nivel_min === "socio" ? T("ob_validar") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus"))}</button>
+      ${!b.desbloqueado && b.nivel_min === "socio"
+        ? `<a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${T("asp_asociate")}</a><button type="button" class="btn btn-ghost btn-block" id="benCta" style="margin-top:8px">${T("asp_ya_soy")}</button>`
+        : `<button type="button" class="btn btn-block" id="benCta">${b.desbloqueado ? T("m_ben_mostrar_qr") : T("m_ben_subi") + " " + (TL[b.nivel_min] || "Plus")}</button>`}
       <button type="button" class="btn btn-ghost btn-block" id="benCerrar">${T("up_cerrar")}</button>`;
     let root, close;
     if (desktopPanel) {
@@ -1957,10 +2022,12 @@
   // Son dos cosas distintas y se muestran por separado: "Miembro desde" (cuándo se registró en olimpistas.com) y, si es socio del club,
   // "Socio desde" (su antigüedad REAL en el club). Si el club todavía no nos dio esa fecha, se muestra su número de socio y nunca una fecha inventada.
   const fechaMes = (d) => new Date(d + "T12:00:00").toLocaleDateString(LOC, { year: "numeric", month: "long" });
+  const aniosDeSocio = (d) => Math.floor((Date.now() - new Date(d + "T12:00:00").getTime()) / 31557600000);
+  const textoAnios = (a) => (a < 1 ? "" : " · " + (a === 1 ? T("cn_anio_uno") : T("cn_anios").replace("{n}", a)));
   function antiguedadesCarnet(c, desdeOlimpistas) {
     const filas = [{ et: T("m_cn_desde"), val: desdeOlimpistas }];
     if (c.esSocio) {
-      if (c.socioDesde) filas.push({ et: T("cn_socio_desde"), val: fechaMes(c.socioDesde) });
+      if (c.socioDesde) filas.push({ et: T("cn_socio_desde"), val: fechaMes(c.socioDesde) + textoAnios(aniosDeSocio(c.socioDesde)) });
       else if (c.nroSocio) filas.push({ et: T("cn_nro_socio"), val: c.nroSocio });
     }
     return filas;
@@ -1983,6 +2050,35 @@
           <div class="cn2-sello">${bandera}${socio ? `<span class="cn2-socio">${OLI.ic("verificado", 14, true)} ${T("cn_socio")}</span>` : ""}</div>
         </div>
       </div>`;
+  }
+  async function vHistoria() {
+    view().innerHTML = skeleton(2);
+    let h;
+    try { h = await api("/historia"); } catch (e) { view().innerHTML = vacio(T("m_error_generico")); return; }
+    const mes = (d) => fechaMes(d), dia = (d) => fecha(d + "T12:00:00");
+    const aniosTxt = (a) => (a >= 1 ? (a === 1 ? T("cn_anio_uno") : T("cn_anios").replace("{n}", a)) : T("hi_nuevo"));
+    const chips = h.es_socio ? [h.grupo_club ? T("hi_grupo").replace("{g}", esc(h.grupo_club.charAt(0) + h.grupo_club.slice(1).toLowerCase())) : "", h.nro_socio ? T("hi_nro").replace("{n}", esc(h.nro_socio)) : ""].filter(Boolean) : [];
+    const hero = h.es_socio
+      ? `<section class="hi-hero"><span class="hi-eb">${esc(T("hi_socio"))}</span>
+          <div class="hi-grande">${esc(h.socio_desde ? aniosTxt(h.anios_socio) : T("hi_socio"))}</div>
+          <p class="hi-sub">${h.socio_desde ? esc(T("cn_socio_desde")) + " <b>" + esc(mes(h.socio_desde)) + "</b>" : ""}</p>
+          ${chips.length ? `<div class="hi-chips">${chips.map((c) => `<span>${c}</span>`).join("")}</div>` : ""}
+          <p class="hi-peq">${esc(T("m_cn_desde"))} ${esc(dia(h.miembro_desde))}</p></section>`
+      : `<section class="hi-hero"><span class="hi-eb">${esc(T("hi_miembro"))}</span>
+          <div class="hi-grande">${esc(mes(h.miembro_desde))}</div><p class="hi-sub">${esc(T("hi_asoc"))}</p>
+          ${h.potencial && h.potencial.mensual > 0 ? `<div class="ben-ahorro asp" style="margin-top:14px"><div class="ba-lbl">${esc(T("asp_lbl"))}</div><div class="ba-monto">${esc(T("asp_hasta").replace("{monto}", gs(h.potencial.mensual)))}</div>
+            <div class="ba-nota">${esc(T("asp_nota").replace("{anual}", gs(h.potencial.anual)).replace("{n}", h.potencial.usos).replace("{ticket}", gs(h.potencial.ticket)))}</div>
+            <a class="btn btn-block" href="${esc(portalClub())}" target="_blank" rel="noopener">${esc(T("asp_asociate"))}</a>
+            <button type="button" class="btn btn-ghost btn-block" id="hiYaSoy">${esc(T("asp_ya_soy"))}</button></div>` : ""}</section>`;
+    const st = h.stats, tile = (n, l) => `<div class="hi-tile"><b>${n}</b><span>${esc(l)}</span></div>`;
+    const tiles = [tile(String(st.canjes), T("hi_s_canjes")), tile(esc(gs(st.ahorro_total)), T("hi_s_ahorro")), tile(String(st.puntos), T("hi_s_puntos")),
+      tile(String(st.subastas_ganadas), T("hi_s_subastas") + (st.pujas ? " · " + T("hi_s_pujas").replace("{n}", st.pujas) : "")), tile(String(st.referidos), T("hi_s_referidos")), st.pena ? tile(esc(st.pena), T("hi_s_pena")) : ""].join("");
+    const TIT = { socio: "hi_t_socio", miembro: "hi_t_miembro", nivel: "hi_t_nivel", canje: "hi_t_canje", subasta: "hi_t_subasta" };
+    const linea = (h.hitos || []).filter((x) => x.fecha).map((x) => `<li class="hi-it hi-${esc(x.tipo)}"><time datetime="${esc(x.fecha)}">${esc(dia(x.fecha))}</time><b>${esc(T(TIT[x.tipo] || "hi_t_miembro"))}</b>${x.detalle ? `<small>${esc(x.detalle)}</small>` : ""}</li>`).join("");
+    view().innerHTML = `<div class="section" style="border:none;padding-top:8px"><h2>${esc(T("hi_h"))}</h2><p class="lead">${esc(T("hi_p"))}</p>
+      <div class="hi-grid"><div class="hi-main">${hero}<div class="hi-tiles">${tiles}</div></div>
+      <div class="hi-lado"><h3 class="hi-h3">${esc(T("hi_linea"))}</h3><ol class="hi-linea">${linea}</ol>${st.canjes ? "" : `<p class="muted hi-vacio">${esc(T("hi_vacio"))}</p>`}</div></div></div>`;
+    const ya = view().querySelector("#hiYaSoy"); if (ya) ya.onclick = validarSocioModal;
   }
   async function vCarnet() {
     view().innerHTML = skeleton(0);

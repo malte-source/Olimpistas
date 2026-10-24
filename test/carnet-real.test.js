@@ -32,7 +32,7 @@ test("textos del carnet en español e inglés y estilos con tokens", () => {
 test("el carnet distingue 'Miembro desde' (registro en Olimpistas) de 'Socio desde' (antigüedad real en el club)", () => {
   const s = leer("public", "js", "socio.js");
   const src = s.slice(s.indexOf("const fechaMes"), s.indexOf("function carnetFrente"));
-  const LOC = "es-PY", T = (k) => k;
+  const LOC = "es-PY", T = (k) => ({ cn_anios: "{n} años", cn_anio_uno: "1 año" }[k] || k);
   const { antiguedadesCarnet } = new Function("LOC", "T", src + "; return { antiguedadesCarnet };")(LOC, T);
   const desde = "23 de octubre de 2026";
   // no es socio: solo cuándo se registró
@@ -41,7 +41,9 @@ test("el carnet distingue 'Miembro desde' (registro en Olimpistas) de 'Socio des
   const dos = antiguedadesCarnet({ esSocio: true, socioDesde: "2009-03-14", nroSocio: "4321" }, desde);
   assert.deepStrictEqual(dos.map((x) => x.et), ["m_cn_desde", "cn_socio_desde"]);
   assert.strictEqual(dos[0].val, desde);
-  assert.match(dos[1].val, /2009/);
+  assert.match(dos[1].val, /2009 · \d+ años/, "con la antigüedad en años");
+  const hoy = new Date().toISOString().slice(0, 10);
+  assert.ok(!/ · /.test(antiguedadesCarnet({ esSocio: true, socioDesde: hoy }, desde)[1].val), "menos de un año: solo la fecha");
   // socio sin fecha todavía: su número, nunca una fecha inventada
   assert.deepStrictEqual(antiguedadesCarnet({ esSocio: true, socioDesde: "", nroSocio: "4321" }, desde).map((x) => x.et), ["m_cn_desde", "cn_nro_socio"]);
   assert.strictEqual(antiguedadesCarnet({ esSocio: true, socioDesde: "", nroSocio: "" }, desde).length, 1, "sin fecha ni número no se muestra una fila vacía");
