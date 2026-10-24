@@ -1164,6 +1164,15 @@ function createMemoryStore({ filePath = null } = {}) {
       const cs = (db.canjes || []).filter((c) => c.creado >= desde && c.creado < hasta);
       return { canjes: cs.length, ahorro: cs.reduce((a, c) => a + (Number(c.ahorro) || 0), 0), monto: cs.reduce((a, c) => a + (Number(c.monto) || 0), 0), socios: new Set(cs.map((c) => c.socio_id)).size };
     },
+    async origenesDeAlta({ desde }) {
+      const ev = db.socio_eventos || [], por = {};
+      for (const s of (db.socios || [])) {
+        if (s.creado < desde || /@demo\.olimpistas\.test$/.test(s.email || "")) continue;
+        const k = s.origen_fuente || "(sin dato)", c = (por[k] = por[k] || { fuente: k, registrados: 0, verificaron: 0, socios: 0, canjearon: 0, pagaron: 0 }), tiene = (t) => ev.some((x) => x.socio_id === s.id && x.tipo === t);
+        c.registrados++; if (s.email_verificado) c.verificaron++; if (tiene("nivel_socio_activado")) c.socios++; if (tiene("primer_canje")) c.canjearon++; if (tiene("primer_pago")) c.pagaron++;
+      }
+      return Object.values(por).sort((a, b) => b.registrados - a.registrados).slice(0, 50);
+    },
     async resumenNivelClub() {
       const ss = (db.socios || []).filter((s) => !/@demo\.olimpistas\.test$/.test(s.email || "")), pausa = (e) => ss.filter((s) => !s.es_socio_olimpia && s.club_estado === e);
       return { socios_activos: ss.filter((s) => s.es_socio_olimpia).length, pausados_mora: pausa("mora").length, pausados_baja: pausa("baja").length, deuda_en_mora: pausa("mora").reduce((a, s) => a + (Number(s.club_deuda) || 0), 0) };

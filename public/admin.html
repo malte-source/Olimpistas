@@ -965,8 +965,19 @@
         };
         box.innerHTML = '<h2>Cohortes de alta</h2><p class="muted" style="margin:2px 0 8px;font-size:13px">Qué pasó con quienes se registraron cada semana. Los hitos se guardan con fecha desde el 24 de octubre; antes se reconstruyen de los registros (registro, primer canje, primer pago).</p>' +
           (filas ? '<div style="overflow-x:auto"><table class="adm-tabla" style="font-size:13px"><thead><tr><th scope="col">Semana del</th><th scope="col">Se registraron</th><th scope="col">Confirmaron el correo</th><th scope="col">Llegaron a Socio</th><th scope="col">Usaron un beneficio</th><th scope="col">Pagaron</th><th scope="col">Días hasta el 1.er canje</th></tr></thead><tbody>' + filas + '</tbody></table></div>' : '<p class="empty">Todavía no hay altas en estas semanas.</p>') +
-          '<h2>Movimientos del club</h2><div class="grupo adm-grupo">' + club(d.club && d.club.dias7, "Últimos 7 días") + club(d.club && d.club.dias30, "Últimos 30 días") + '</div>';
+          '<div id="origenesBox"></div><h2>Movimientos del club</h2><div class="grupo adm-grupo">' + club(d.club && d.club.dias7, "Últimos 7 días") + club(d.club && d.club.dias30, "Últimos 30 días") + '</div>';
+        cargarOrigenes();
       } catch (e) { box.innerHTML = '<p class="muted">No se pudieron cargar las cohortes (' + esc(e.message) + ').</p>'; }
+    }
+    // De dónde vienen las altas (últimos 90 días) y cuántas de cada origen llegaron a cada hito.
+    async function cargarOrigenes() {
+      var box = $("origenesBox"); if (!box) return;
+      try {
+        var d = await api("/admin/origenes?dias=90"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); }, pc = function (x, t) { return t ? Math.round(100 * (x || 0) / t) + " %" : "—"; };
+        var filas = (d.origenes || []).map(function (o) { return '<tr><td data-l="Origen"><b>' + esc(o.fuente) + '</b></td><td data-l="Se registraron">' + nf(o.registrados) + '</td><td data-l="Confirmaron el correo">' + pc(o.verificaron, o.registrados) + '</td><td data-l="Llegaron a Socio">' + pc(o.socios, o.registrados) + '</td><td data-l="Usaron un beneficio">' + pc(o.canjearon, o.registrados) + '</td><td data-l="Pagaron">' + pc(o.pagaron, o.registrados) + '</td></tr>'; }).join("");
+        box.innerHTML = '<h2>De dónde vienen las altas</h2><p class="muted" style="margin:2px 0 8px;font-size:13px">Últimos ' + d.dias + ' días. "referido" y "pena" son invitaciones; el resto sale del enlace (utm) o del sitio que mandó a la persona. "(sin dato)" son altas anteriores a esta medición.</p>' +
+          (filas ? '<div style="overflow-x:auto"><table class="adm-tabla" style="font-size:13px"><thead><tr><th scope="col">Origen</th><th scope="col">Se registraron</th><th scope="col">Confirmaron el correo</th><th scope="col">Llegaron a Socio</th><th scope="col">Usaron un beneficio</th><th scope="col">Pagaron</th></tr></thead><tbody>' + filas + '</tbody></table></div>' : '<p class="empty">Todavía no hay altas en este período.</p>');
+      } catch (e) { box.innerHTML = ''; }
     }
 
     // ── Pagos Metrepay (reconciliación) ──

@@ -871,6 +871,16 @@ function createPgStore({ databaseUrl, debug }) {
       const [r] = await sql`SELECT COUNT(*)::int AS canjes, COALESCE(SUM(ahorro), 0)::bigint AS ahorro, COALESCE(SUM(monto), 0)::bigint AS monto, COUNT(DISTINCT socio_id)::int AS socios FROM canjes WHERE creado >= ${desde} AND creado < ${hasta}`;
       return { canjes: r.canjes, ahorro: Number(r.ahorro), monto: Number(r.monto), socios: r.socios };
     },
+    async origenesDeAlta({ desde }) {
+      const dom = "%@" + SEED_DOMAIN;
+      return sql`SELECT CASE WHEN s.origen_fuente = '' THEN '(sin dato)' ELSE s.origen_fuente END AS fuente,
+          count(*)::int AS registrados,
+          count(*) FILTER (WHERE s.email_verificado)::int AS verificaron,
+          count(*) FILTER (WHERE EXISTS (SELECT 1 FROM socio_eventos e WHERE e.socio_id = s.id AND e.tipo = 'nivel_socio_activado'))::int AS socios,
+          count(*) FILTER (WHERE EXISTS (SELECT 1 FROM socio_eventos e WHERE e.socio_id = s.id AND e.tipo = 'primer_canje'))::int AS canjearon,
+          count(*) FILTER (WHERE EXISTS (SELECT 1 FROM socio_eventos e WHERE e.socio_id = s.id AND e.tipo = 'primer_pago'))::int AS pagaron
+        FROM socios s WHERE s.creado >= ${desde} AND s.email NOT LIKE ${dom} GROUP BY 1 ORDER BY 2 DESC LIMIT 50`;
+    },
     async resumenNivelClub() {
       const [r] = await sql`SELECT COUNT(*) FILTER (WHERE es_socio_olimpia)::int AS socios_activos,
           COUNT(*) FILTER (WHERE NOT es_socio_olimpia AND club_estado = 'mora')::int AS pausados_mora,

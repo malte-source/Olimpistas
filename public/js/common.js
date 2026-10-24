@@ -682,6 +682,17 @@ window.OLI = (function () {
       if (pe) sessionStorage.setItem("oli_pena", String(pe).trim().toLowerCase().slice(0, 60));
     } catch (e) {}
   })();
+  // De dónde vino el alta: utm del enlace (fuente, medio, campaña) o el sitio que mandó a la persona. Se guarda al entrar (primer contacto de la visita) hasta el registro.
+  (function () {
+    try {
+      if (sessionStorage.getItem("oli_origen")) return;
+      const q = new URLSearchParams(location.search), o = {};
+      for (const [k, p] of [["fuente", "utm_source"], ["medio", "utm_medium"], ["campana", "utm_campaign"]]) { const v = q.get(p); if (v) o[k] = String(v).slice(0, 40); }
+      if (!o.fuente && document.referrer) { const h = new URL(document.referrer).hostname.replace(/^www\./, ""); if (h && h !== location.hostname.replace(/^www\./, "")) o.referrer = h.slice(0, 40); }
+      sessionStorage.setItem("oli_origen", JSON.stringify(o));
+    } catch (e) {}
+  })();
+  function origen() { try { return JSON.parse(sessionStorage.getItem("oli_origen") || "{}"); } catch (e) { return {}; } }
   function pena() { try { return sessionStorage.getItem("oli_pena") || ""; } catch (e) { return ""; } }
   function ref() { try { return sessionStorage.getItem("oli_ref") || ""; } catch (e) { return ""; } }
   // Link de invitación del socio (para compartir): www.olimpistas.com/?ref=<su_codigo>
@@ -697,5 +708,5 @@ window.OLI = (function () {
     try { if (window.gtag) window.gtag("event", GA_EV[fbEvent] || String(goal || "event").toLowerCase(), fbParams || {}); } catch (e) {}
   }
 
-  return { api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, yoEstado, makeQR, carnet, carnetImagen, storyImagen, storyMapaImagen, compartirStory, currency, setCurrency, cargarMapa, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
+  return { origen, api, esc, gs, gsUsdRef, precioTier, artGradient, artSvg, toast, yo, yoEstado, makeQR, carnet, carnetImagen, storyImagen, storyMapaImagen, compartirStory, currency, setCurrency, cargarMapa, confetti, fotoModal, modal, pedirCedula, wirePasswordToggles, ref, pena, refLink, track, theme, setTheme, themePref, setThemePref, initThemeToggle, icon, ic };
 })();

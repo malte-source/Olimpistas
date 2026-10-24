@@ -420,6 +420,13 @@ function buildRouter() {
         }
       } catch (e) { log.warn({ err: e.message }, "registro: no se pudo asignar la peña"); }
     }
+    // De dónde vino el alta (qué canales traen gente que después usa el club): referido y peña son invitaciones explícitas y mandan; si no, el utm del enlace, el sitio que la mandó o "directo".
+    try {
+      const o = (req.body && typeof req.body.origen === "object" && req.body.origen) || {};
+      const limpio = (v) => String(v == null ? "" : v).toLowerCase().replace(/[^a-z0-9._:-]/g, "").slice(0, 40);
+      const fuente = socio.referido_por ? "referido" : socio.pena_id ? "pena" : limpio(o.fuente) || limpio(o.referrer) || "directo";
+      await store.updateSocio(socio.id, { origen_fuente: fuente, origen_medio: limpio(o.medio), origen_campana: limpio(o.campana) });
+    } catch (e) { log.warn({ err: e.message }, "registro: no se pudo guardar el origen"); }
     // Puntos al que invitó: una vez por referido (ref = el id del invitado).
     if (socio.referido_por) darPuntos(socio.referido_por, "referido", socio.id, "Referido: " + (nombre || "un hincha")).catch(() => {});
     if (socio.referido_por) evento(socio.referido_por, "referido", { invitado: socio.id });
@@ -1478,6 +1485,11 @@ function buildRouter() {
       store.resumenHistorialClub ? store.resumenHistorialClub({ desde: new Date(ahora - 30 * 86400000).toISOString() }) : null,
     ]);
     res.json({ cohortes, club: { dias7: club7, dias30: club30 } });
+  }));
+  // De dónde vienen las altas y cuántas de cada origen llegaron a cada hito (últimos N días, hasta 365). Solo totales.
+  r.get("/admin/origenes", requireAdmin, wrap(async (req, res) => {
+    const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 90, 1), 365);
+    res.json({ dias, origenes: store.origenesDeAlta ? await store.origenesDeAlta({ desde: new Date(Date.now() - dias * 86400000).toISOString() }) : [] });
   }));
   r.get("/admin/reportes", requireAdmin, wrap(async (_req, res) => {
     res.json(await memoAdmin("reportes", 30000, async () => {
@@ -3269,7 +3281,15 @@ function buildRouter() {
     return { saldo: p.saldo, pendiente: p.canje_pendiente, disponible: Math.max(0, p.saldo - p.canje_pendiente), pena: p };
   }
   r.get("/pena/panel", requirePena, wrap(async (req, res) => {
-    const [f, altas, ranking, pct] = await Promise.all([fondoDe(req.pena.id), store.ultimasAltasPena(req.pena.id, 8), penasVerificadas(), decision("pct")]);
+    const [f, todas, ranking, pct] = await Promise.all([fondoDe(req.pena.id), store.ultimasAltasPena(req.pena.id, 20000), penasVerificadas(), decision("pct")]);
+    const altas = todas.slice(0, 8);
+    // Altas por mes de los últimos 12 meses (con ceros), a partir de quienes se sumaron por el link de la peña.
+    const altasPorMes = (() => {
+      const base = new Date(Date.now() - 3 * 3600000), meses = [];
+      for (let i = 11; i >= 0; i--) { const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - i, 1)); meses.push({ mes: d.toISOString().slice(0, 7), n: 0 }); }
+      for (const s of todas) { const k = new Date(new Date(s.creado).getTime() - 3 * 3600000).toISOString().slice(0, 7), m = meses.find((x) => x.mes === k); if (m) m.n++; }
+      return meses;
+    })();
     const mia = ranking.find((x) => x.id === req.pena.id);
     res.json({
       pena: { nombre: f.pena.nombre, slug: f.pena.slug, ciudad: f.pena.ciudad, pais_iso: f.pena.pais_iso, estado: f.pena.estado },
@@ -3281,7 +3301,17 @@ function buildRouter() {
       top: ranking.slice(0, 5).map((x) => ({ nombre: x.nombre, ciudad: x.ciudad || "", hinchada: x.hinchada != null ? x.hinchada : x.altas, es_tuya: x.id === req.pena.id })),
       datos: { nombre: f.pena.nombre, ciudad: f.pena.ciudad || "", pais_iso: f.pena.pais_iso || "PY", presidente: f.pena.presidente || "", contacto: f.pena.contacto || "" },
       ultimas_altas: altas.map((s) => ({ nombre: nombreCorto(s), ciudad: s.ciudad || "", nivel: (tierBySlug(s.tier_slug) || {}).nombre || "Olimpista", creado: s.creado })),
+      altas_por_mes: altasPorMes,
     });
+  }));
+  // Todas las altas por el link de la peña en una planilla: fecha, nombre, inicial del apellido, ciudad y nivel. Sin correo, teléfono ni cédula (igual que en pantalla).
+  r.get("/pena/altas.csv", requirePena, wrap(async (req, res) => {
+    const filas = await store.ultimasAltasPena(req.pena.id, 20000);
+    const cab = ["fecha_alta", "nombre", "inicial_apellido", "ciudad", "nivel"];
+    const lineas = filas.map((s) => [new Date(new Date(s.creado).getTime() - 3 * 3600000).toISOString().slice(0, 10), s.nombre || "", s.apellido ? s.apellido[0].toUpperCase() : "", s.ciudad || "", (tierBySlug(s.tier_slug) || {}).nombre || "Olimpista"].map(csvCelda).join(","));
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="altas-${String(req.pena.slug || "pena").replace(/[^a-z0-9-]/gi, "")}.csv"`);
+    res.send("﻿" + cab.join(",") + "\n" + lineas.join("\n"));
   }));
   // La comisión completa y corrige los datos de su peña (se ven en el listado público: ciudad, país; presidente y contacto son internos).
   r.patch("/pena/perfil", requirePena, noLectura, wrap(async (req, res) => {

@@ -142,6 +142,20 @@ test("anular un canje: se borra, vuelve el cupo y queda el registro; el plazo y 
   assert.deepStrictEqual(await caso(mem, "mem"), esperado, "memoria");
 });
 
+test("origen de las altas: cuántos de cada origen llegaron a cada hito (Postgres = memoria)", opts, async () => {
+  async function caso(store, tag) {
+    const desde = new Date(Date.now() - 86400000).toISOString(), fuente = "zz" + tag;
+    const mk = async (i) => { const s = await store.createSocio({ email: `og${i}-${tag}@ejemplo.com`, passwordHash: "x", nombre: "O" }); await store.updateSocio(s.id, { origen_fuente: fuente, origen_medio: "m", origen_campana: "c" }); return s; };
+    const a = await mk(1), b = await mk(2);
+    await store.updateSocio(a.id, { email_verificado: true });
+    await store.registrarEvento(a.id, "primer_canje"); await store.registrarEvento(a.id, "nivel_socio_activado"); await store.registrarEvento(b.id, "primer_pago");
+    const o = (await store.origenesDeAlta({ desde })).find((x) => x.fuente === fuente);
+    return [o.registrados, o.verificaron, o.socios, o.canjearon, o.pagaron];
+  }
+  assert.deepStrictEqual(await caso(pg, "pg"), [2, 1, 1, 1, 1], "Postgres");
+  assert.deepStrictEqual(await caso(mem, "mem"), [2, 1, 1, 1, 1], "memoria");
+});
+
 test("las cédulas con puntos o guiones también cruzan con la base del club (Postgres = memoria)", opts, async () => {
   async function caso(store) {
     const s = await store.createSocio({ email: "ced-puntos@ejemplo.com", passwordHash: "x", nombre: "P", cedula: "7.000.001" });

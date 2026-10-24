@@ -534,7 +534,7 @@
     if (btn) { btn.disabled = true; btn.textContent = T("m_guardando"); } // evita doble envío
     try {
       const path = mode === "registro" ? "/auth/registro" : "/auth/login";
-      const body = mode === "registro" ? { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena(), idioma: LANG } : { email, password };
+      const body = mode === "registro" ? { email, password, nombre, apellido, ref: window.OLI.ref(), pena: window.OLI.pena(), idioma: LANG, origen: window.OLI.origen() } : { email, password };
       SESSION = await api(path, { method: "POST", body });
       if (mode === "registro") window.OLI.track("Registro", "CompleteRegistration");
       closeModal();
