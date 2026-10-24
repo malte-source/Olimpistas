@@ -120,6 +120,9 @@
       history.replaceState({}, "", "/miembro");
       SESSION = await yo();
     }
+    // Vuelta desde el enlace del correo: se avisa si quedó confirmado y se actualiza la sesión.
+    const vq = new URLSearchParams(location.search).get("verificado");
+    if (vq !== null) { history.replaceState({}, "", location.pathname); if (vq === "1") { SESSION = await yo(); toast(T("vf_ok")); } else toast(T("vf_mal")); }
     renderProgreso();
     renderBannerSocio();
     revalidarSocioSilencioso();
@@ -512,6 +515,20 @@
         return;
       }
     } catch (e) {}
+    // Correo sin confirmar: va antes que la invitación a validar la cédula. Las cuentas nuevas no pueden pujar ni pagar hasta confirmarlo.
+    const sv = SESSION && SESSION.socio;
+    if (sv && !sv.email_verificado) {
+      host.innerHTML = `<div class="socio-banner socio-banner-correo" role="status">
+        <span class="sb-txt">${icon("bell", { size: 16 })} ${T("vf_banner").replace("{email}", "<b>" + esc(sv.email || "") + "</b>")}</span>
+        <button class="btn btn-sm" id="vfReenviar">${T("vf_reenviar")}</button></div>`;
+      host.querySelector("#vfReenviar").onclick = async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try { await api("/auth/reenviar-verificacion", { method: "POST", body: {} }); toast(T("vf_enviado")); }
+        catch (e) { toast(e.message); }
+        setTimeout(() => { b.disabled = false; }, 8000);
+      };
+      return;
+    }
     let off = false; try { off = sessionStorage.getItem("oli_socio_banner") === "1"; } catch (e) {}
     if (esSocioValidado() || off) { host.innerHTML = ""; return; }
     host.innerHTML = `<div class="socio-banner">

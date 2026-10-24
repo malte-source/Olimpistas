@@ -1881,3 +1881,6 @@ body.pal-abierta { overflow: hidden; }
   #subAcciones { position: sticky; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 6; margin: 0 -6px; padding: 10px 6px 8px; background: var(--surface-grouped, var(--surface-page)); box-shadow: 0 -14px 18px -14px rgba(0, 0, 0, .3); }
   body.en-puja .atc-fab { display: none; }
 }
+/* Correo sin confirmar: el aviso es el mismo formato que los otros, con un acento propio y sin botón de cerrar. */
+.socio-banner-correo { border-color: var(--oro, var(--border-default)); }
+.socio-banner-correo .sb-txt b { word-break: break-all; }
