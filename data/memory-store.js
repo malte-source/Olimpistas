@@ -280,6 +280,18 @@ function createMemoryStore({ filePath = null } = {}) {
       if (f.paraEnvio) return rows.map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, telefono: s.telefono || "", whatsapp: s.whatsapp || "", idioma: s.idioma || "es", pais_iso: s.pais_iso || "", marketing_baja: !!s.marketing_baja, tier_slug: tierDe(s.id) }));
       return rows.slice(0, Math.min(Number(f.limit) || 500, 5000)).map((s) => ({ id: s.id, nombre: s.nombre, apellido: s.apellido, email: s.email, cedula: s.cedula, pais: s.pais, pais_iso: s.pais_iso, ciudad: s.ciudad, es_socio_olimpia: s.es_socio_olimpia, gasto_total: s.gasto_total || 0, ultima_actividad: s.ultima_actividad || null, tiene_foto: !!s.foto, tier_slug: tierDe(s.id), creado: s.creado }));
     },
+    async resumenComercios({ desde }) {
+      const d = new Date(desde).getTime();
+      return (db.comercios || []).slice().sort((a, b) => String(a.nombre).toLowerCase().localeCompare(String(b.nombre).toLowerCase())).map((c) => {
+        const bs = (db.beneficios || []).filter((b) => b.comercio_id === c.id);
+        const ks = (db.canjes || []).filter((k) => k.comercio_id === c.id);
+        const delMes = ks.filter((k) => new Date(k.creado).getTime() >= d);
+        const ultimo = ks.map((k) => k.creado).sort().slice(-1)[0] || null;
+        return { id: c.id, nombre: c.nombre, rubro: c.rubro || "", ciudad: c.ciudad || "", estado: c.estado || "activo", usuario: c.usuario || null, lat: c.lat == null ? null : c.lat, lng: c.lng == null ? null : c.lng, creado: c.creado,
+          logo: !!c.logo, beneficios_pub: bs.filter((b) => b.activo !== false && (b.estado || "aprobado") === "aprobado").length, por_aprobar: bs.filter((b) => b.estado === "borrador").length,
+          canjes_mes: delMes.length, ahorro_mes: delMes.reduce((a, k) => a + (k.ahorro || 0), 0), ultimo_canje: ultimo };
+      });
+    },
     async paginaSocios(f = {}) {
       const todos = await this.filtrarSocios({ ...f, limit: 5000 });
       const full = (id) => (db.socios || []).find((x) => x.id === id) || {};

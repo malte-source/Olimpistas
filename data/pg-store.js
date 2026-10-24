@@ -354,6 +354,20 @@ function createPgStore({ databaseUrl, debug }) {
       return { items, total: n, pagina: Math.floor(off / lim), limite: lim };
     },
 
+    // Resumen de la red de comercios para el panel: qué le falta a cada uno y su actividad desde `desde` (inicio del mes).
+    async resumenComercios({ desde }) {
+      return sql`
+        SELECT c.id, c.nombre, c.rubro, c.ciudad, c.estado, c.usuario, c.lat, c.lng, c.creado,
+               (c.logo IS NOT NULL AND c.logo <> '') AS logo,
+               (SELECT COUNT(*)::int FROM beneficios b WHERE b.comercio_id = c.id AND b.activo AND b.estado = 'aprobado') AS beneficios_pub,
+               (SELECT COUNT(*)::int FROM beneficios b WHERE b.comercio_id = c.id AND b.estado = 'borrador') AS por_aprobar,
+               COALESCE(k.canjes, 0)::int AS canjes_mes, COALESCE(k.ahorro, 0)::bigint AS ahorro_mes, k.ultimo AS ultimo_canje
+        FROM comercios c
+        LEFT JOIN LATERAL (SELECT COUNT(*) FILTER (WHERE creado >= ${desde}) AS canjes, SUM(ahorro) FILTER (WHERE creado >= ${desde}) AS ahorro, MAX(creado) AS ultimo
+                           FROM canjes WHERE comercio_id = c.id) k ON true
+        ORDER BY lower(c.nombre)`;
+    },
+
     // Cuadre de pagos: pedidos por estado, membresías pagas y conciliación Metrepay.
     async cuadrePagos() {
       const dom = "%@" + SEED_DOMAIN;
