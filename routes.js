@@ -1361,7 +1361,7 @@ function buildRouter() {
   }));
 
   // Resumen: total de socios reales + pedidos pendientes de confirmar.
-  r.get("/admin/resumen", requireAdmin, wrap(async (_req, res) => {
+  r.get("/admin/resumen", requireAdmin, wrap(async (req, res) => {
     const [totalReal, pendientes, subastas] = await Promise.all([
       store.contarTotal ? store.contarTotal() : 0,
       store.listPedidos ? store.listPedidos({ estado: "pendiente", limit: 200 }) : [],
@@ -1379,7 +1379,9 @@ function buildRouter() {
     // + pausadas, que son fáciles de olvidar una vez que dejan de aparecer en el home.
     const subastasSinPagar = (subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && s.pago_estado !== "pagado").length;
     const subastasPausadas = (subastas || []).filter((s) => s.estado === "pausada").length;
-    res.json({ totalReal, pendientes: enrich, subastasSinPagar, subastasPausadas });
+    // Los pedidos pendientes traen nombre y correo de quien paga: solo los ve quien tiene Pagos o Hinchas (la CD y el rol comercial reciben solo el número).
+    const verPersonas = adminAuth.puedeVer(req.adminRole, "pagos") || adminAuth.puedeVer(req.adminRole, "hinchas");
+    res.json({ totalReal, pendientes: verPersonas ? enrich : [], pendientesTotal: enrich.length, subastasSinPagar, subastasPausadas });
   }));
   // ─── Notificaciones push ──────────────────────────────────────────────────────
   // El navegador pide permiso en la pantalla (nunca al entrar). Cuatro tipos de aviso; cada persona elige cuáles.
@@ -3163,7 +3165,7 @@ function buildRouter() {
     const urlClave = baseUrl() + "/pena?token=" + encodeURIComponent(setupToken);
     let correo = false;
     if (emailOk(pena.contacto) && mailer.enviarPenaVerificada) {
-      await mailer.enviarPenaVerificada({ email: pena.contacto }, { pena, usuario: u.usuario, urlClave, urlLink: linkPena(pena) }).then(() => { correo = true; }).catch(() => {});
+      await mailer.enviarPenaVerificada({ email: pena.contacto }, { pena, usuario: u.usuario, urlClave, urlLink: linkPena(pena) }).then((e) => { correo = !!(e && e.ok && e.modo === "resend"); }).catch(() => {});   // enviar() no lanza si falla: hay que mirar el resultado
     }
     return { usuario: u.usuario, urlClave, correo };
   }
@@ -3756,8 +3758,18 @@ function buildRouter() {
     res.json({ estado: out.conversacion.estado, conversacion_id: out.conversacion.id, mensajes: out.nuevos.map(msgPublico), sugerencias });
   }));
 
+  // "Me sirvió" / "No me sirvió" sobre una respuesta del asistente (valor 1, -1, o 0 para quitarlo): el equipo ve qué respuestas no funcionan.
+  r.post("/atencion/mensajes/:id/valorar", auth.requireSocio, wrap(async (req, res) => {
+    const valor = req.body && req.body.valor;   // número estricto: null o texto no cuentan como "quitar"
+    if (![1, -1, 0].includes(valor)) throw httpError(400, "Valoración inválida");
+    if (!store.valorarMensajeAtencion) throw httpError(503, "No disponible");
+    const out = await store.valorarMensajeAtencion({ mensajeId: String(req.params.id), socioId: req.socio.id, valor });
+    if (!out) throw httpError(404, "Mensaje no encontrado");
+    res.json({ ok: true, valoracion: valor });
+  }));
+
   // Admin · Atención
-  const AT_VACIO = { hoy: 0, semana: 0, solo_ia: 0, primera_resp_min: null, abiertas_humano: 0 };
+  const AT_VACIO = { hoy: 0, semana: 0, solo_ia: 0, primera_resp_min: null, abiertas_humano: 0, utiles: 0, no_utiles: 0 };
   r.get("/admin/atencion", requireAdmin, wrap(async (req, res) => {
     const estado = ["ia", "humano", "resuelta"].includes(req.query.estado) ? req.query.estado : undefined;
     const ahora = Date.now();
@@ -3767,7 +3779,7 @@ function buildRouter() {
     ]);
     res.json({
       items,
-      indicadores: { hoy: ind.hoy, pct_ia: ind.semana ? Math.round((ind.solo_ia / ind.semana) * 100) : null, primera_resp_min: ind.primera_resp_min, abiertas_humano: ind.abiertas_humano },
+      indicadores: { hoy: ind.hoy, pct_ia: ind.semana ? Math.round((ind.solo_ia / ind.semana) * 100) : null, primera_resp_min: ind.primera_resp_min, abiertas_humano: ind.abiertas_humano, utiles: ind.utiles || 0, no_utiles: ind.no_utiles || 0 },
     });
   }));
   const configAtencion = async () => {

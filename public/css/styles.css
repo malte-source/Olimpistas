@@ -1960,3 +1960,10 @@ body.pal-abierta { overflow: hidden; }
 .cn2-declarar { align-self: flex-start; min-height: 32px; padding: 4px 0; background: none; border: 0; border-bottom: 1px dashed currentColor; color: var(--oro, #d9b65a); font: inherit; font-size: var(--t-14); font-weight: 600; cursor: pointer; }
 .cn2-declarar:focus-visible { outline: 2px solid var(--oro, #d9b65a); outline-offset: 3px; }
 .hi-corregir { margin: 4px 0 8px; }
+/* Valorar las respuestas del asistente: me sirvió / no me sirvió. */
+.atc-val { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.atc-pulgar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-pill, 999px); border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.atc-pulgar:hover { background: var(--card2, rgba(127, 127, 127, .12)); }
+.atc-pulgar.on { color: var(--text-primary); background: var(--card2, rgba(127, 127, 127, .18)); }
+.atc-pulgar:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.atc-gracias { font-size: var(--t-12); color: var(--text-secondary); margin-left: 4px; }

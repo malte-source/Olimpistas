@@ -1022,7 +1022,8 @@
         var d = await api("/admin/atencion" + (atFiltro ? "?estado=" + atFiltro : ""));
         var ind = d.indicadores || {}, c = function (n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + '</div></div>'; };
         $("atCards").innerHTML = c(Number(ind.hoy || 0).toLocaleString("es-PY"), "Conversaciones hoy") + c(ind.pct_ia == null ? "—" : ind.pct_ia + " %", "Resueltas solo por la IA (7 días)") +
-          c(ind.primera_resp_min == null ? "—" : ind.primera_resp_min + " min", "Primera respuesta de una persona") + c(Number(ind.abiertas_humano || 0).toLocaleString("es-PY"), "Abiertas con una persona");
+          c(ind.primera_resp_min == null ? "—" : ind.primera_resp_min + " min", "Primera respuesta de una persona") + c(Number(ind.abiertas_humano || 0).toLocaleString("es-PY"), "Abiertas con una persona") +
+          c(Number(ind.utiles || 0).toLocaleString("es-PY") + " / " + Number(ind.no_utiles || 0).toLocaleString("es-PY"), "Respuestas de la IA: me sirvió / no me sirvió (7 días)");
         var b = $("atBadge"); if (b) { b.hidden = !ind.abiertas_humano; b.textContent = ind.abiertas_humano || ""; }
         if (!(d.items || []).length) { box.innerHTML = '<p class="empty">No hay conversaciones' + (atFiltro ? " en este estado" : " todavía") + '.</p>'; return; }
         box.innerHTML = '<div style="overflow-x:auto"><table class="adm-tabla"><thead><tr><th>Hincha</th><th>Canal</th><th>Motivo / último mensaje</th><th>Estado</th><th>Hace</th><th></th></tr></thead><tbody>' + d.items.map(function (x) {
@@ -1044,7 +1045,7 @@
           if (m.de === "sistema") return '<div class="muted" style="text-align:center;font-size:12px;margin:6px 0">' + esc(m.texto) + '</div>';
           if (m.de === "tarjeta") return '<div class="muted" style="text-align:center;font-size:12px;margin:6px 0">▣ ' + esc(m.texto) + '</div>';
           var yo = m.de === "hincha", hu = m.de === "humano";
-          var et = yo ? ((s && s.nombre) || "Hincha") : hu ? ((m.meta && m.meta.agente) || "Persona del club") : "Asistente · IA";
+          var et = yo ? ((s && s.nombre) || "Hincha") : hu ? ((m.meta && m.meta.agente) || "Persona del club") : "Asistente · IA" + (m.meta && m.meta.valoracion === 1 ? " · me sirvió" : m.meta && m.meta.valoracion === -1 ? " · NO le sirvió" : "");
           return '<div style="display:flex;flex-direction:column;align-items:' + (yo ? "flex-start" : "flex-end") + ';margin:8px 0"><span class="muted" style="font-size:11px">' + esc(et) + ' · ' + esc(fmtFecha(m.creado)) + '</span>' +
             '<div style="max-width:80%;padding:9px 13px;border-radius:14px;border:1px solid var(--border-default);' + (hu ? 'background:color-mix(in srgb, var(--text-success) 16%, transparent)' : yo ? 'background:var(--card2)' : '') + '">' + esc(m.texto) + '</div></div>';
         }).join("");

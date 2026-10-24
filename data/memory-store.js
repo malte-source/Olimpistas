@@ -1522,6 +1522,14 @@ function createMemoryStore({ filePath = null } = {}) {
       const m = { id: uid("atm"), conversacion_id: conversacionId, de, texto: String(texto), meta: meta == null ? null : (typeof meta === "string" ? meta : JSON.stringify(meta)), creado: nowIso() };
       (db.atencion_msg = db.atencion_msg || []).push(m); c.actualizado = m.creado; persist(); return m;
     },
+    async valorarMensajeAtencion({ mensajeId, socioId, valor }) {
+      const m = (db.atencion_msg || []).find((x) => x.id === mensajeId && x.de === "ia"), c = m && (db.atencion_conv || []).find((x) => x.id === m.conversacion_id);
+      if (!m || !c || c.socio_id !== socioId) return null;
+      let meta = {}; try { meta = m.meta ? JSON.parse(m.meta) : {}; } catch (e) { meta = {}; }
+      if (valor === 0) delete meta.valoracion; else meta.valoracion = valor;
+      m.meta = JSON.stringify(meta); persist();
+      return { id: mensajeId, valoracion: valor };
+    },
     async listMensajesAtencion(conversacionId, { limit = 100 } = {}) {
       return (db.atencion_msg || []).filter((m) => m.conversacion_id === conversacionId).slice(-Math.min(Number(limit) || 100, 500));
     },
@@ -1546,6 +1554,8 @@ function createMemoryStore({ filePath = null } = {}) {
         solo_ia: sem.filter((c) => !c.derivada_en).length,
         primera_resp_min: tiempos.length ? Math.round(tiempos.reduce((a, x) => a + x, 0) / tiempos.length) : null,
         abiertas_humano: todas.filter((c) => c.estado === "humano").length,
+        utiles: (db.atencion_msg || []).filter((m) => m.de === "ia" && m.creado >= desde7 && /"valoracion":1\b/.test(m.meta || "")).length,
+        no_utiles: (db.atencion_msg || []).filter((m) => m.de === "ia" && m.creado >= desde7 && /"valoracion":-1\b/.test(m.meta || "")).length,
       };
     },
     async getAtencionConfig() {

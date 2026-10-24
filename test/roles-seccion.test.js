@@ -111,6 +111,21 @@ test("la CD ve el tablero y las decisiones, pero no los pagos ni los hinchas con
   }
 });
 
+test("el resumen no entrega nombre ni correo de quien paga a la CD ni al comercial; el owner y finanzas sí lo ven", async () => {
+  const reg = await (await api("/auth/registro", { metodo: "POST", cuerpo: { email: `rs-${Date.now()}@ejemplo.com`, password: "clave-larga-123", nombre: "Pagador" } })).json();
+  await store.createPedidoPago({ socioId: reg.socio.id, concepto: "Membresía Plus", monto: 180000, moneda: "PYG", tierSlug: "premium", ciclo: "anio" });
+  for (const rol of ["cd", "comercial"]) {
+    const r = await (await hit(rol, "/resumen")).json();
+    assert.deepStrictEqual(r.pendientes, [], rol + ": sin datos personales");
+    assert.ok(r.pendientesTotal >= 1, rol + ": sí el total");
+    assert.ok(!JSON.stringify(r).includes("Pagador"), rol);
+  }
+  for (const h of [OWNER, await como("finanzas")]) {
+    const r = await (await api("/admin/resumen", { h })).json();
+    assert.ok(r.pendientes.some((p) => p.nombre === "Pagador"));
+  }
+});
+
 test("la CD no puede registrar decisiones ni tocar nada: mensaje claro de solo lectura", async () => {
   const r = await hit("cd", "/decisiones/pct", { metodo: "PUT", cuerpo: { valor: "15" } });
   assert.strictEqual(r.status, 403);

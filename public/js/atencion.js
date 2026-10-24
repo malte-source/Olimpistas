@@ -12,12 +12,14 @@
       asistente: "Asistente · IA", persona: "Atención del club", placeholder: "Escribí tu consulta…", enviar: "Enviar", cerrar: "Cerrar",
       bienvenida: "Soy el asistente de Olimpistas.\n\nContame en qué te puedo ayudar: miro tus puntos, tus beneficios o te paso con una persona del club.", pensando: "El asistente está escribiendo",
       esperando: "Una persona del club te va a responder acá mismo.", error: "No pudimos enviar tu mensaje. Probá de nuevo.", abrirLink: "Abrir", verTodos: "Ver todos los beneficios",
+      util: "Me sirvió", noUtil: "No me sirvió", gracias: "Gracias, nos ayuda a mejorar.",
     },
     en: {
       abrir: "Support", titulo: "Olimpistas Support", ia: "AI assistant · replies instantly", humano: "Club agent · person",
       asistente: "Assistant · AI", persona: "Club support", placeholder: "Type your question…", enviar: "Send", cerrar: "Close",
       bienvenida: "I'm the Olimpistas assistant.\n\nTell me how I can help: I can check your points, your benefits or pass you to a club agent.", pensando: "The assistant is typing",
       esperando: "A person from the club will reply right here.", error: "We couldn't send your message. Try again.", abrirLink: "Open", verTodos: "See all benefits",
+      util: "Helpful", noUtil: "Not helpful", gracias: "Thanks, it helps us improve.",
     },
   }[LANG === "en" ? "en" : "es"];
 
@@ -73,6 +75,16 @@
     panel.querySelector("#atcX").addEventListener("click", cerrar);
     panel.querySelector("#atcForm").addEventListener("submit", (e) => { e.preventDefault(); enviar(campo.value); });
     sugBox.addEventListener("click", (e) => { const b = e.target.closest("button[data-sug]"); if (b) enviar(b.dataset.sug); });
+    lista.addEventListener("click", async (e) => {
+      const b = e.target.closest("button[data-val]"); if (!b) return;
+      const msg = b.closest("[data-mid]"), id = msg && msg.dataset.mid; if (!id || /^(tmp|esp)-/.test(id)) return;
+      const nuevo = b.classList.contains("on") ? 0 : Number(b.dataset.val);
+      try {
+        await api("/atencion/mensajes/" + encodeURIComponent(id) + "/valorar", { method: "POST", body: { valor: nuevo } });
+        msg.querySelectorAll("button[data-val]").forEach((x) => { const on = Number(x.dataset.val) === nuevo; x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on)); });
+        msg.querySelector(".atc-gracias").textContent = nuevo ? S.gracias : "";
+      } catch (err) { toast(err.message || S.error); }
+    });
     lista.addEventListener("click", (e) => { const a = e.target.closest("a[data-tj]"); if (a && /^\/miembro/.test(a.getAttribute("href") || "")) cerrar(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && abierto) cerrar(); });
     document.addEventListener("visibilitychange", () => { if (document.hidden) parar(); else if (abierto && estado === "humano") esperar(); });
@@ -89,7 +101,11 @@
     visto.add(m.id);
     let h = "";
     if (m.de === "hincha") h = `<div class="atc-msg yo"><div class="atc-b">${esc(m.texto)}</div></div>`;
-    else if (m.de === "ia") h = `<div class="atc-msg ia"><span class="atc-et">${esc(S.asistente)}</span><div class="atc-b atc-p">${parrafos(m.texto)}</div></div>`;
+    else if (m.de === "ia") {
+      const v = m.meta && m.meta.valoracion, pulgar = (val, txt, d) => `<button type="button" class="atc-pulgar${v === val ? " on" : ""}" data-val="${val}" aria-pressed="${v === val}" aria-label="${esc(txt)}" title="${esc(txt)}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg></button>`;
+      h = `<div class="atc-msg ia" data-mid="${esc(m.id)}"><span class="atc-et">${esc(S.asistente)}</span><div class="atc-b atc-p">${parrafos(m.texto)}</div>
+        <div class="atc-val" role="group" aria-label="${esc(S.util + " / " + S.noUtil)}">${pulgar(1, S.util, "M7 11v9H4v-9h3zm0 0 4-8a2 2 0 0 1 2 2v4h5.5a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.3 20H7")}${pulgar(-1, S.noUtil, "M17 13V4h3v9h-3zm0 0-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 6.7 4H17")}<span class="atc-gracias" role="status"></span></div></div>`;
+    }
     else if (m.de === "humano") h = `<div class="atc-msg hu"><span class="atc-et">${esc(((m.meta && m.meta.agente) || "").replace(/[-_.]+/g, " ") || S.persona)} · ${esc(S.persona)}</span><div class="atc-b">${esc(m.texto)}</div></div>`;
     else if (m.de === "sistema") h = `<div class="atc-sis">${esc(m.texto)}</div>`;
     else if (m.de === "tarjeta") {
