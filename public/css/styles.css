@@ -1806,3 +1806,27 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .cn2-pase { margin: 0; font-size: var(--t-12); font-weight: 600; letter-spacing: .04em; color: #6b6b70; text-align: center; }
 .cn2 .cn2-body { padding-top: 16px; }
 @media (max-width: 380px) { .cn2-frente { gap: 12px; padding: 16px; } .cn2-foto { width: 92px; height: 120px; } }
+
+/* Beneficios, más compacto: una fila de búsqueda (+ Lista/Mapa), chips, y una línea con cantidad y orden; las listas arrancan antes. */
+.bx-r1 { display: flex; align-items: center; gap: 8px; }
+.bx-r1 .bx-busca { flex: 1; min-width: 0; }
+.bx-r1 .ben-vista { flex: none; height: 48px; padding: 3px; align-items: center; }
+.bx-r1 .ben-vista .ctl-seg-b { min-height: 40px; padding: 0 12px; }
+.bx-ctl { flex-wrap: wrap; gap: 8px 10px; }
+.bx-ctl .ctl-seg { flex: 1 1 100%; }
+.bx-ctl .ctl-seg .ctl-seg-b { flex: 1; }
+.bx-ctl .bx-n { margin: 0 auto 0 2px; }
+.bx-ctl .bx-orden { margin-left: 0; height: 38px; }
+.bx-bar { gap: 10px; }
+.ben-ahorro.cero { padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; }
+.ben-ahorro.cero .ba-nota { font-size: var(--t-13); }
+.bx-card-top .grupo-tx { min-width: 0; }
+.bx-card-top .grupo-tx b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bx-tag.loc { display: inline-flex; align-items: center; gap: 4px; background: transparent; box-shadow: inset 0 0 0 1px var(--border-default); color: var(--text-primary); }
+.bx-estado { display: inline-flex; align-items: center; gap: 4px; }
+.atc-fab { transition: transform .2s var(--ease), opacity .2s; }
+.atc-fab.atc-baja { opacity: 0; pointer-events: none; transform: translateY(24px) scale(.85); }
+@media (min-width: 900px) { .bx-ctl .ctl-seg { flex: none; } .bx-ctl .ctl-seg .ctl-seg-b { flex: none; } }
+
+/* La invitación a subir de nivel, más baja en el celular (antes empujaba la lista una pantalla entera). */
+@media (max-width: 899px) { .bx-up { padding: 14px 16px; } .bx-up p { margin: 4px 0 10px; } }
