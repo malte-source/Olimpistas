@@ -81,7 +81,7 @@ test("pantalla: tarjeta aspiracional, acceso al portal de socios, detalle por be
   const s = leer("public", "js", "socio.js");
   assert.match(s, /class="ben-ahorro asp"/);
   assert.match(s, /id="bxYaSoy"/);
-  assert.match(s, /href="' \+ esc\(portalClub\(\)\) \+ '" target="_blank" rel="noopener">' \+ T\("asp_asociate"\)/);
+  assert.match(s, /href="' \+ esc\(portalClub\(\)\) \+ '" target="_blank" rel="noopener">' \+ ctaAsociate\(\)/);   // 'Asociate' para quien no es socio, 'Regularizá tu cuota' para quien está en pausa
   assert.match(s, /T\("asp_este"\)/);
   assert.match(s, /async function vHistoria\(\)/);
   assert.match(s, /historia: vHistoria/);

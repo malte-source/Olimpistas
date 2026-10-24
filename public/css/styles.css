@@ -1971,3 +1971,11 @@ body.pal-abierta { overflow: hidden; }
 .ob-confirma { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; margin: 10px 0 14px; padding: 12px 14px; border: 1px solid var(--border-default); border-radius: 12px; background: var(--card2, transparent); }
 .ob-confirma span { color: var(--text-secondary); font-size: var(--t-14); }
 .mapa-lista-wrap[hidden] { display: none; }
+/* Estado de la cuenta: aviso de pausa/vuelta del nivel Socio, con título, explicación y acciones. */
+.socio-banner.estado-cuenta { align-items: flex-start; flex-wrap: wrap; }
+.estado-cuenta .sb-txt { display: flex; flex-direction: column; gap: 4px; min-width: 220px; }
+.estado-cuenta .ec-p { font-size: var(--t-14); font-weight: 500; color: var(--text-secondary); }
+.estado-cuenta .ec-acc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.socio-banner-vuelta { background: var(--surface-value); border: 1px solid var(--oro-200); color: var(--text-primary); }
+.socio-banner-vuelta .sb-txt, .socio-banner-vuelta .up-x { color: var(--text-primary); }
+.estado-cuenta .sb-txt > b { display: flex; align-items: center; gap: 6px; }
