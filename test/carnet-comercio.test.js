@@ -79,10 +79,15 @@ let srv, url;
 before(async () => { srv = await new Promise((res) => { const s = app.listen(0, () => res(s)); }); url = `http://127.0.0.1:${srv.address().port}`; });
 after(() => srv && srv.close());
 
-let correos;
+let correos, rechazos, canjesAviso;
 const origOferta = mailer.enviarOfertaAprobada;
 after(() => { mailer.enviarOfertaAprobada = origOferta; });
-beforeEach(() => { correos = []; mailer.enviarOfertaAprobada = async (d, x) => { correos.push({ a: d.email, ...x }); return { ok: true }; }; });
+beforeEach(() => {
+  correos = []; rechazos = []; canjesAviso = [];
+  mailer.enviarOfertaAprobada = async (d, x) => { correos.push({ a: d.email, ...x }); return { ok: true }; };
+  mailer.enviarOfertaRechazada = async (d, x) => { rechazos.push({ a: d.email, ...x }); return { ok: true }; };
+  mailer.enviarCanjeExitoso = async (s, x) => { canjesAviso.push({ a: s.email, ...x }); return { ok: true }; };
+});
 
 const ADMIN = { "x-admin-key": "clave-admin-de-prueba" };
 const api = (ruta, { metodo = "GET", cuerpo, h = {} } = {}) => fetch(url + "/api" + ruta, { method: metodo, headers: { "Content-Type": "application/json", ...h }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
@@ -146,6 +151,13 @@ test("validar con QR: aprueba, registra el canje con el nivel del hincha y avisa
   assert.deepStrictEqual({ ok: r.ok, via: r.via, ahorro: r.ahorro, tier: r.socio.tier }, { ok: true, via: "qr", ahorro: 5000, tier: "premium" });
   const canjes = await store.canjesDeComercio({ comercioId: c.id, desde: new Date(Date.now() - 3600000).toISOString(), hasta: new Date(Date.now() + 3600000).toISOString() });
   assert.deepStrictEqual({ n: canjes.length, nivel: canjes[0].nivel, monto: canjes[0].monto }, { n: 1, nivel: "premium", monto: 50000 });
+  await new Promise((x) => setTimeout(x, 30));
+  assert.strictEqual(canjesAviso.length, 1, "el socio recibe el aviso de lo que ahorró");
+  assert.deepStrictEqual({ comercio: canjesAviso[0].comercio, ahorro: canjesAviso[0].ahorro, a: /^caja\d+-\d+@ejemplo\.com$/.test(canjesAviso[0].a) }, { comercio: c.nombre, ahorro: 5000, a: true });
+  const rechazado = await validar(c, { token: "OLI1.basura", beneficioId: b.id, monto: 1000 });
+  await new Promise((x) => setTimeout(x, 30));
+  assert.strictEqual(rechazado.ok, false);
+  assert.strictEqual(canjesAviso.length, 1, "un canje que no se hizo no avisa");
 });
 
 test("un QR sirve UNA vez: reusarlo (aun con otra oferta) o 5 cajas a la vez → un solo canje", async () => {
@@ -274,6 +286,8 @@ test("el club rechaza: exige un motivo y el comercio lo ve en su panel", async (
   const v = mias.ofertas.find((x) => x.id === o.id);
   assert.deepStrictEqual({ estado: v.estado, motivo: v.motivo_rechazo }, { estado: "rechazado", motivo: "El 90% no es sostenible" });
   assert.strictEqual(correos.length, 0, "el rechazo no manda el correo de 'publicada'");
+  assert.strictEqual(rechazos.length, 1, "pero sí avisa al comercio con el motivo");
+  assert.deepStrictEqual({ motivo: rechazos[0].motivo, titulo: rechazos[0].titulo, a: /^contacto\d+@ejemplo\.com$/.test(rechazos[0].a) }, { motivo: "El 90% no es sostenible", titulo: "Oferta dudosa", a: true });
   assert.strictEqual((await admin("/beneficios/ben_inventada", { metodo: "PATCH", cuerpo: { estado: "aprobado" } })).status, 404);
 });
 

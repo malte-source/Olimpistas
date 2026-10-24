@@ -1967,3 +1967,6 @@ body.pal-abierta { overflow: hidden; }
 .atc-pulgar.on { color: var(--text-primary); background: var(--card2, rgba(127, 127, 127, .18)); }
 .atc-pulgar:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
 .atc-gracias { font-size: var(--t-12); color: var(--text-secondary); margin-left: 4px; }
+/* Último paso del registro: el correo sin confirmar se ve, no está escondido. */
+.ob-confirma { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; margin: 10px 0 14px; padding: 12px 14px; border: 1px solid var(--border-default); border-radius: 12px; background: var(--card2, transparent); }
+.ob-confirma span { color: var(--text-secondary); font-size: var(--t-14); }
