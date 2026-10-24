@@ -840,6 +840,31 @@ function createPgStore({ databaseUrl, debug }) {
     async eventosDeSocio(socioId, limit = 100) { return sql`SELECT tipo, ts, meta FROM socio_eventos WHERE socio_id = ${socioId} ORDER BY ts DESC LIMIT ${Math.min(Number(limit) || 100, 500)}`; },
     async historialClubDeCedula(cedula) { return sql`SELECT clase, estado, deuda, desde, hasta, inicial FROM club_estado_historial WHERE cedula = ${String(cedula)} ORDER BY desde DESC, id DESC LIMIT 50`; },
     // Movimientos del club desde una fecha: quiénes entraron en mora o de baja, quiénes volvieron al día y cuánto dura una mora (la foto del primer día no cuenta como entrada).
+    // ── Agregados para los tableros del panel (gerencia y red de comercios) ──
+    async ingresosEntre({ desde, hasta }) {
+      const [r] = await sql`SELECT COALESCE(SUM(monto), 0)::bigint AS total, COUNT(*)::int AS n FROM pedidos_pago WHERE estado = 'pagado' AND moneda = 'PYG' AND COALESCE(pagado_en, creado) >= ${desde} AND COALESCE(pagado_en, creado) < ${hasta}`;
+      return { total: Number(r.total), n: r.n };
+    },
+    async altasEntre({ desde, hasta }) {
+      const [r] = await sql`SELECT COUNT(*)::int AS n FROM socios WHERE creado >= ${desde} AND creado < ${hasta} AND email NOT LIKE ${"%@" + SEED_DOMAIN}`;
+      return r.n;
+    },
+    async resumenCanjesEntre({ desde, hasta }) {
+      const [r] = await sql`SELECT COUNT(*)::int AS canjes, COALESCE(SUM(ahorro), 0)::bigint AS ahorro, COALESCE(SUM(monto), 0)::bigint AS monto, COUNT(DISTINCT socio_id)::int AS socios FROM canjes WHERE creado >= ${desde} AND creado < ${hasta}`;
+      return { canjes: r.canjes, ahorro: Number(r.ahorro), monto: Number(r.monto), socios: r.socios };
+    },
+    async resumenNivelClub() {
+      const [r] = await sql`SELECT COUNT(*) FILTER (WHERE es_socio_olimpia)::int AS socios_activos,
+          COUNT(*) FILTER (WHERE NOT es_socio_olimpia AND club_estado = 'mora')::int AS pausados_mora,
+          COUNT(*) FILTER (WHERE NOT es_socio_olimpia AND club_estado = 'baja')::int AS pausados_baja,
+          COALESCE(SUM(club_deuda) FILTER (WHERE NOT es_socio_olimpia AND club_estado = 'mora'), 0)::bigint AS deuda_en_mora
+        FROM socios WHERE email NOT LIKE ${"%@" + SEED_DOMAIN}`;
+      return { socios_activos: r.socios_activos, pausados_mora: r.pausados_mora, pausados_baja: r.pausados_baja, deuda_en_mora: Number(r.deuda_en_mora) };
+    },
+    async actividadPenas({ desde }) {
+      return sql`SELECT p.id, p.nombre, p.ciudad, count(s.id) FILTER (WHERE s.creado >= ${desde})::int AS altas, count(s.id)::int AS total
+        FROM penas p LEFT JOIN socios s ON s.pena_id = p.id WHERE p.estado = 'verificada' GROUP BY p.id, p.nombre, p.ciudad ORDER BY altas DESC, total DESC`;
+    },
     async resumenHistorialClub({ desde }) {
       const [r] = await sql`SELECT
           count(*) FILTER (WHERE clase = 'mora' AND NOT inicial AND desde >= ${desde})::int AS entraron_mora,

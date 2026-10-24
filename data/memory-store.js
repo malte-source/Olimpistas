@@ -1143,6 +1143,25 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     async eventosDeSocio(socioId, limit = 100) { return (db.socio_eventos || []).filter((x) => x.socio_id === socioId).sort((a, b) => String(b.ts).localeCompare(String(a.ts))).slice(0, Math.min(Number(limit) || 100, 500)); },
     async historialClubDeCedula(cedula) { return (db.club_hist || []).map((x, i) => ({ x, i })).filter(({ x }) => x.cedula === String(cedula)).sort((a, b) => String(b.x.desde).localeCompare(String(a.x.desde)) || b.i - a.i).map(({ x }) => x).slice(0, 50); },
+    async ingresosEntre({ desde, hasta }) {
+      const ps = (db.pedidos || []).filter((p) => p.estado === "pagado" && (!p.moneda || p.moneda === "PYG") && String(p.pagado_en || p.creado) >= desde && String(p.pagado_en || p.creado) < hasta);
+      return { total: ps.reduce((a, p) => a + (Number(p.monto) || 0), 0), n: ps.length };
+    },
+    async altasEntre({ desde, hasta }) { return (db.socios || []).filter((s) => s.creado >= desde && s.creado < hasta && !/@demo\.olimpistas\.test$/.test(s.email || "")).length; },
+    async resumenCanjesEntre({ desde, hasta }) {
+      const cs = (db.canjes || []).filter((c) => c.creado >= desde && c.creado < hasta);
+      return { canjes: cs.length, ahorro: cs.reduce((a, c) => a + (Number(c.ahorro) || 0), 0), monto: cs.reduce((a, c) => a + (Number(c.monto) || 0), 0), socios: new Set(cs.map((c) => c.socio_id)).size };
+    },
+    async resumenNivelClub() {
+      const ss = (db.socios || []).filter((s) => !/@demo\.olimpistas\.test$/.test(s.email || "")), pausa = (e) => ss.filter((s) => !s.es_socio_olimpia && s.club_estado === e);
+      return { socios_activos: ss.filter((s) => s.es_socio_olimpia).length, pausados_mora: pausa("mora").length, pausados_baja: pausa("baja").length, deuda_en_mora: pausa("mora").reduce((a, s) => a + (Number(s.club_deuda) || 0), 0) };
+    },
+    async actividadPenas({ desde }) {
+      return (db.penas || []).filter((p) => p.estado === "verificada").map((p) => {
+        const ss = (db.socios || []).filter((s) => s.pena_id === p.id);
+        return { id: p.id, nombre: p.nombre, ciudad: p.ciudad, altas: ss.filter((s) => s.creado >= desde).length, total: ss.length };
+      }).sort((a, b) => b.altas - a.altas || b.total - a.total);
+    },
     async resumenHistorialClub({ desde }) {
       const h = db.club_hist || [], d = String(desde);
       const durs = h.filter((x) => x.clase === "mora" && !x.inicial && x.hasta && x.hasta >= d).map((x) => (new Date(x.hasta) - new Date(x.desde)) / 86400000);

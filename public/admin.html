@@ -319,6 +319,7 @@
 
         <!-- ÁREA: DASHBOARD -->
         <section class="area" id="area-dashboard">
+          <div id="paraHacer"><p class="loading">Cargando…</p></div>
           <div class="cards">
             <div class="stat"><div class="n" id="stTotal">—</div><div class="l">Socios reales</div></div>
             <div class="stat"><div class="n" id="stPend">—</div><div class="l">Pagos pendientes</div></div>
@@ -330,6 +331,8 @@
           <p class="hint">Un vistazo a cómo va el club: hinchas, ingresos, subastas, puntos, peñas y comercios. Son números agregados, sin datos personales.</p>
           <div class="cards" id="tabCards"><p class="loading">Cargando…</p></div>
           <div id="tabIngresos"></div>
+          <div id="gerenciaBox"></div>
+          <div id="comercialBox"></div>
           <div data-sec="tablero">
           <h2>Mapa del club</h2>
           <p class="hint">Hinchas, conversión a Plus, peñas y comercios por ciudad. Son totales: nunca una persona ni una casa.</p>
@@ -709,7 +712,7 @@
     var AREA_TITLE = { dashboard: "Dashboard", socios: "Socios", atencion: "Atención", pagos: "Pagos", campanas: "Campañas", contenido: "Contenido", decisiones: "Decisiones", sistema: "Sistema" };
     // Loaders que se disparan la PRIMERA vez que se abre cada área (no todo de golpe al entrar).
     var AREA_LOADERS = {
-      dashboard: [cargarTablero, cargarSalud, cargarReportes, cargarRevCount, cargarMapaAdmin],
+      dashboard: [cargarPendientes, cargarTablero, cargarGerencia, cargarComercial, cargarSalud, cargarReportes, cargarRevCount, cargarMapaAdmin],
       socios: [iniciarSocios],                    // la tabla se carga al abrir; segmentos/padrón corren a demanda
       pagos: [cargarPagosRecibidos, cargarMetrepay, cargarCuadre, cargarAbandonos], // pendientes ya viene del resumen
       campanas: [cargarEmailMetricas, cargarComposer, cargarCampanas, cargarGhl],
@@ -893,6 +896,58 @@
           ((r.altas && r.altas.length) ? '<h2>Altas por día (7d)</h2><div class="grupo adm-grupo">' + altaRows + '</div>' : "");
         cargarCohortes();
       } catch (e) { $("repCards").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+    }
+    // ── Para hacer ahora: todo lo que espera al equipo, en un solo lugar; cada fila lleva al área donde se resuelve ──
+    async function cargarPendientes() {
+      var box = $("paraHacer"); if (!box) return;
+      try {
+        var d = await api("/admin/pendientes"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
+        var hace = function (iso) { if (!iso) return ""; var h = Math.floor((Date.now() - new Date(iso).getTime()) / 3600000); return h < 1 ? "hace menos de 1 h" : h < 48 ? "el más viejo, hace " + h + " h" : "el más viejo, hace " + Math.floor(h / 24) + " días"; };
+        var cola = (d.colas || []).slice().sort(function (a, b) { return (b.envejecidos - a.envejecidos) || (b.n - a.n); });
+        var filas = cola.map(function (c) {
+          return '<a class="grupo-fila" href="#/' + esc(c.area) + '" style="text-decoration:none;color:inherit"><span class="grupo-tx"><b>' + esc(c.titulo) + '</b><small>' + (c.n ? esc(hace(c.mas_viejo)) + (c.nota ? ' · ' + esc(c.nota) : '') : 'Nada pendiente') + '</small></span>' +
+            (c.envejecidos ? '<span class="pill pill-warn" title="Más de 48 horas esperando">' + nf(c.envejecidos) + ' con +48 h</span> ' : '') +
+            '<span class="pill ' + (c.n ? "" : "pill-ok") + '">' + nf(c.n) + '</span></a>';
+        }).join("");
+        box.innerHTML = '<h2>Para hacer ahora</h2><p class="hint">Lo que espera a una persona del equipo. Tocá una fila para ir directo a resolverlo.' + (d.total ? ' Hay <b>' + nf(d.total) + '</b> en total' + (d.envejecidos ? ', <b>' + nf(d.envejecidos) + '</b> con más de 48 horas' : '') + '.' : ' <b>Todo al día.</b>') + '</p>' +
+          (filas ? '<div class="grupo adm-grupo">' + filas + '</div>' : '<p class="empty">No hay colas para tu rol.</p>');
+      } catch (e) { box.innerHTML = ''; }
+    }
+    // ── Gerencia: este período contra el anterior ──
+    async function cargarGerencia() {
+      var box = $("gerenciaBox"); if (!box) return;
+      try {
+        var d = await api("/admin/gerencia"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); }, g = function (n) { return "₲ " + nf(n); };
+        var delta = function (p) { if (p.delta_pct == null) return '<span class="muted" style="font-size:12px">todavía sin período previo para comparar</span>'; var up = p.delta_pct >= 0; return '<span class="pill ' + (up ? "pill-ok" : "pill-warn") + '" style="font-size:12px">' + (up ? "▲ " : "▼ ") + Math.abs(p.delta_pct) + ' %</span> <span class="muted" style="font-size:12px">vs. período previo</span>'; };
+        var card = function (n, l, p) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + (p ? '<br>' + delta(p) : '') + '</div></div>'; };
+        var c = d.club || {}, mov = c.movimientos_30 || {}, pn = d.penas || {};
+        box.innerHTML = '<h2>Gerencia</h2><p class="hint">Los últimos 30 días contra los 30 anteriores (7 contra 7 para lo semanal). Números agregados, sin datos personales.</p>' +
+          '<div class="cards">' + card(g(d.ingresos.d30.actual), "Ingresos, 30 días", d.ingresos.d30) + card(g(d.ingresos.d7.actual), "Ingresos, 7 días", d.ingresos.d7) + card(nf(d.altas.d30.actual), "Altas, 30 días", d.altas.d30) + card(nf(d.altas.d7.actual), "Altas, 7 días", d.altas.d7) +
+          card(nf(d.canjes.d30.actual), "Beneficios usados, 30 días", d.canjes.d30) + card(g(d.canjes.ahorro_entregado_30.actual), "Ahorro entregado, 30 días", d.canjes.ahorro_entregado_30) + card(nf(d.canjes.socios_que_usaron_30.actual), "Socios que usaron un beneficio", d.canjes.socios_que_usaron_30) + '</div>' +
+          '<h2>Socios del club</h2><div class="cards">' + card(nf(c.socios_activos), "Con nivel Socio activo") + card(nf(c.pausados_mora), "En pausa por mora") + card(nf(c.pausados_baja), "En pausa por baja") + card(g(c.deuda_en_mora), "Deuda de los que están en mora") + '</div>' +
+          (mov && mov.entraron_mora != null ? '<p class="hint">Últimos 30 días: ' + nf(mov.entraron_mora) + ' entraron en mora, ' + nf(mov.entraron_baja) + ' de baja y ' + nf(mov.volvieron_al_dia) + ' volvieron al día' + (mov.dias_medios_en_mora == null ? '' : '; la mora dura ' + String(mov.dias_medios_en_mora).replace(".", ",") + ' días en promedio') + '.</p>' : '') +
+          '<h2>Peñas</h2><div class="cards">' + card(nf(pn.verificadas), "Peñas verificadas") + card(nf(pn.activas_60), "Con altas en 60 días") + card(nf(pn.dormidas_60), "Sin altas en 60 días") + '</div>' +
+          ((pn.dormidas_top || []).length ? '<p class="hint"><b>Peñas dormidas:</b> ' + pn.dormidas_top.map(function (p) { return esc(p.nombre) + (p.ciudad ? ' (' + esc(p.ciudad) + ')' : ''); }).join(" · ") + '.</p>' : '');
+      } catch (e) { box.innerHTML = ''; }
+    }
+    // ── Red de comercios: ranking, dormidos, mes contra mes y ofertas por vencer (solo roles con acceso a Comercios) ──
+    async function cargarComercial() {
+      var box = $("comercialBox"); if (!box) return;
+      try {
+        var d = await api("/admin/comercial"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); }, g = function (n) { return "₲ " + nf(n); };
+        var r = d.red || {}, card = function (n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + esc(l) + '</div></div>'; };
+        var dp = r.canjes_prev ? Math.round(100 * (r.canjes_30 - r.canjes_prev) / r.canjes_prev) : null;
+        var fecha = function (iso) { return iso ? fmtFecha(iso) : "nunca"; };
+        var rk = (d.ranking || []).map(function (c, i) { return '<div class="grupo-fila"><span class="grupo-tx"><b>' + (i + 1) + '. ' + esc(c.nombre) + '</b><small>' + esc(c.ciudad || "") + (c.canjes_prev ? ' · antes ' + nf(c.canjes_prev) + ' canjes' : '') + '</small></span><span class="grupo-val">' + nf(c.canjes_30) + ' canjes · ' + g(c.ahorro_30) + '</span></div>'; }).join("");
+        var dm = (d.dormidos || []).map(function (c) { return '<div class="grupo-fila"><span class="grupo-tx"><b>' + esc(c.nombre) + '</b><small>' + esc(c.ciudad || "") + ' · último canje: ' + esc(fecha(c.ultimo_canje)) + '</small></span><span class="grupo-val">' + nf(c.publicados) + ' ofertas</span></div>'; }).join("");
+        var pv = (d.por_vencer || []).map(function (b) { return '<div class="grupo-fila"><span class="grupo-tx"><b>' + esc(b.titulo) + '</b><small>' + esc(b.comercio) + '</small></span><span class="grupo-val">vence ' + esc(String(b.hasta).slice(0, 10)) + '</span></div>'; }).join("");
+        box.innerHTML = '<h2>Red de comercios</h2><p class="hint">Los últimos 30 días. Son totales por comercio: nunca datos de los hinchas.</p>' +
+          '<div class="cards">' + card(nf(r.activos) + ' <span style="font-size:13px;font-weight:600">de ' + nf(r.comercios) + '</span>', "Comercios activos") + card(nf(r.con_ofertas), "Con ofertas publicadas") + card(nf(r.dormidos), "Dormidos (sin canjes en 30 días)") +
+          card(nf(r.canjes_30) + (dp == null ? "" : ' <span class="pill ' + (dp >= 0 ? "pill-ok" : "pill-warn") + '" style="font-size:12px">' + (dp >= 0 ? "▲ " : "▼ ") + Math.abs(dp) + " %</span>"), "Canjes en la red") + card(g(r.ahorro_30), "Ahorro entregado") + '</div>' +
+          '<h2>Los que más canjes tuvieron</h2>' + (rk ? '<div class="grupo adm-grupo">' + rk + '</div>' : '<p class="empty">Todavía no hubo canjes en estos 30 días.</p>') +
+          (dm ? '<h2>Comercios dormidos</h2><p class="hint">Tienen ofertas publicadas pero nadie las usó en 30 días: conviene visitarlos o revisar la oferta.</p><div class="grupo adm-grupo">' + dm + '</div>' : '') +
+          (pv ? '<h2>Ofertas que vencen en 14 días</h2><div class="grupo adm-grupo">' + pv + '</div>' : '');
+      } catch (e) { box.innerHTML = ''; }
     }
     // Cohortes de alta (semana de Paraguay): cuántos llegaron a cada hito, y los movimientos del club (mora, bajas, vueltas) de los últimos 7 y 30 días.
     async function cargarCohortes() {
