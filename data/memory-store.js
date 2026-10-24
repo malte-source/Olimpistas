@@ -1146,17 +1146,19 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     async completarSociosDesdeClub() {
       const clb = db.socios_club || {}, clv = (c) => String(c || "").replace(/\D/g, "").replace(/^0+/, "");
-      let desde_club = 0, desde_membresia = 0;
+      let desde_club = 0, desde_membresia = 0, dudosas_quitadas = 0;
       for (const s of (db.socios || [])) {
         if (!s.es_socio_olimpia) continue;
         const c = clb[clv(s.cedula)];
+        const dudosa = !!c && c.fecha_fuente === "dudosa";
+        if (dudosa && s.socio_desde && !s.socio_desde_fuente) { s.socio_desde = null; dudosas_quitadas++; }
         if (c && (!s.socio_desde || !s.nro_socio || !s.grupo_club)) { if (!s.socio_desde && c.socio_desde) s.socio_desde = c.socio_desde; if (!s.nro_socio) s.nro_socio = c.nro_socio || ""; if (!s.grupo_club) s.grupo_club = c.grupo || ""; desde_club++; }
-        if (!s.socio_desde) {
+        if (!s.socio_desde && !dudosa) {
           const m = (db.membresias || []).filter((x) => x.socio_id === s.id && x.estado === "activa" && x.tier_slug === "socio").slice(-1)[0];
           if (m) { s.socio_desde = String(new Date(new Date(m.inicio).getTime() - 3 * 3600000).toISOString()).slice(0, 10); desde_membresia++; }
         }
       }
-      persist(); return { desde_club, desde_membresia };
+      persist(); return { desde_club, desde_membresia, dudosas_quitadas };
     },
     async cuentasEnMora({ limite = 30, desdeMin = 60 } = {}) {
       const corte = Date.now() - desdeMin * 60000;

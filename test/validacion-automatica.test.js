@@ -70,7 +70,7 @@ test("un socio sin fecha de alta en el club igual tiene su antigüedad definida:
   assert.strictEqual(c.socioDesde, new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10), "sin dato del club, la antigüedad cuenta desde hoy (hora de Paraguay)");
   assert.strictEqual(c.nroSocio, "4321");
   const sj = leer("public", "js", "socio.js");
-  assert.match(sj, /if \(c\.socioDesde\) filas\.push\(\{ et: T\("cn_socio_desde"\), val: fechaMes\(c\.socioDesde\) \+ textoAnios\(aniosDeSocio\(c\.socioDesde\)\) \}\);\s*else if \(c\.nroSocio\) filas\.push\(\{ et: T\("cn_nro_socio"\)/);
+  assert.match(sj, /if \(c\.socioDesde\) filas\.push\(\{ et: T\("cn_socio_desde"\), val: fechaSocio\(c\.socioDesde\) \+ textoAnios\(aniosDeSocio\(c\.socioDesde\)\) \}\);\s*else \{\s*if \(c\.nroSocio\) filas\.push\(\{ et: T\("cn_nro_socio"\)/);
   assert.match(sj, /const filas = \[\{ et: T\("m_cn_desde"\), val: desdeOlimpistas \}\]/, "siempre se muestra desde cuándo es miembro de Olimpistas");
 });
 

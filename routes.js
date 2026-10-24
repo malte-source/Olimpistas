@@ -729,9 +729,12 @@ function buildRouter() {
       const marca = fila ? fila.id : "tuti-" + ((enClub && enClub.numeroSocio) || cedula);
       await store.setMembresia(socioId, { tierSlug: tier, ciclo: "anio", pagoRef: "socio:" + marca });
       // "Socio desde" siempre queda definido: padrón, base del club (que ya trae su cadena de respaldo) o API; si nadie sabe, cuenta desde hoy.
+      // Si el club cargó mal su fecha (fecha_fuente "dudosa") no hay fecha: se le pide a la persona. Una fecha declarada por ella o fijada por un admin no se pisa.
       const antig = {};
-      const desde = (fila && fila.socio_desde) || (ref && ref.socio_desde) || (enClub && enClub.desde) || hoyPy();
-      antig.socio_desde = String(desde).slice(0, 10);
+      const manual = ["declarada", "admin"].includes(socioFull.socio_desde_fuente);
+      const dudosa = !!ref && ref.fecha_fuente === "dudosa";
+      const desde = dudosa ? null : (fila && fila.socio_desde) || (ref && ref.socio_desde) || (enClub && enClub.desde) || hoyPy();
+      if (desde && !manual) antig.socio_desde = String(desde).slice(0, 10);
       const nro = (fila && fila.nro_socio) || (ref && ref.nro_socio) || (enClub && enClub.numeroSocio) || "";
       if (ref && ref.grupo) antig.grupo_club = String(ref.grupo).slice(0, 40);
       if (nro) antig.nro_socio = String(nro).slice(0, 40);
@@ -1458,6 +1461,15 @@ function buildRouter() {
     const patch = {};
     for (const f of ["nombre", "apellido", "ciudad", "pais"]) if (b[f] != null) patch[f] = limpiar(b[f]);
     if (b.pais_iso != null) patch.pais_iso = String(b.pais_iso).toUpperCase().slice(0, 2);
+    if (b.socio_desde != null) {   // "Socio desde": fecha (AAAA-MM-DD) fijada por un admin; vacío = que vuelva a decidirlo la base del club
+      const v = String(b.socio_desde).trim();
+      if (!v) { patch.socio_desde = null; patch.socio_desde_fuente = ""; }
+      else {
+        const t = /^\d{4}-\d{2}-\d{2}$/.test(v) ? Date.parse(v + "T00:00:00Z") : NaN;
+        if (!Number.isFinite(t) || new Date(t).toISOString().slice(0, 10) !== v || v < "1950-01-01" || v > hoyPy()) throw httpError(400, "Fecha de socio inválida (AAAA-MM-DD, entre 1950 y hoy)");
+        patch.socio_desde = v; patch.socio_desde_fuente = "admin";
+      }
+    }
     if (b.email != null) {
       const email = String(b.email).toLowerCase().trim();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw httpError(400, "Email inválido");
@@ -3325,6 +3337,18 @@ function buildRouter() {
     res.json({ tier, ciudad: (sFull && sFull.ciudad) || "", codigo, items, ahorro, potencial: potencial && potencial.mensual > 0 ? potencial : null });
   }));
 
+  // La persona cuenta desde qué año es socia del club (la base del club se equivoca en algunos grupos). Queda marcado como declarado por ella:
+  // la base del club y las revalidaciones no lo pisan, y el administrador lo ve en la ficha y puede corregirlo.
+  r.post("/socio-desde", auth.requireSocio, wrap(async (req, res) => {
+    if (!req.socio.es_socio_olimpia) throw httpError(403, "Esto es para socios del club");
+    const anio = Number(req.body && req.body.anio);
+    const tope = Number(hoyPy().slice(0, 4));
+    if (!Number.isInteger(anio) || anio < 1950 || anio > tope) throw httpError(400, "Escribí un año entre 1950 y " + tope);
+    const fecha = anio + "-01-01";
+    await store.updateSocio(req.socio.id, { socio_desde: fecha, socio_desde_fuente: "declarada" });
+    res.json({ ok: true, socio_desde: fecha, socio_desde_fuente: "declarada" });
+  }));
+
   // ─── Tu historia: el recorrido de la persona con el club y con Olimpistas ─────────────────────────────
   // Todo sale de lo que ya tenemos de ella (registro, nivel, canjes, subastas, puntos, referidos, peña); nada se inventa: sin dato, no hay hito.
   r.get("/historia", auth.requireSocio, wrap(async (req, res) => {
@@ -3349,7 +3373,7 @@ function buildRouter() {
     hitos.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
     const anios = socioDesde ? Math.max(0, Math.floor((Date.now() - new Date(socioDesde + "T12:00:00").getTime()) / 31557600000)) : null;
     res.json({
-      es_socio: esSocio, nivel: (m && m.tier_slug) || "olimpista", miembro_desde: dia(s.creado), socio_desde: socioDesde, anios_socio: anios,
+      es_socio: esSocio, nivel: (m && m.tier_slug) || "olimpista", miembro_desde: dia(s.creado), socio_desde: socioDesde, anios_socio: anios, socio_desde_fuente: socioDesde ? s.socio_desde_fuente || "" : "",
       grupo_club: esSocio ? s.grupo_club || "" : "", nro_socio: esSocio ? s.nro_socio || "" : "",
       stats: { canjes: (canjes || []).length, ahorro_total: Number(ahorro.total) || 0, puntos, pujas: (pujas || []).length, subastas_ganadas: ganadas.length, referidos, pena: pena ? pena.nombre : "" },
       hitos, potencial: esSocio ? null : await potencialAhorro().catch(() => null),
@@ -3559,6 +3583,7 @@ function buildRouter() {
         desde: membresia.inicio,
         // Para un Socio, la antigüedad que vale es la del club (si la tenemos), no la de su registro en Olimpistas.
         socioDesde: req.socio.es_socio_olimpia && req.socio.socio_desde ? String(req.socio.socio_desde).slice(0, 10) : "",
+        socioDesdeFuente: req.socio.es_socio_olimpia && req.socio.socio_desde ? req.socio.socio_desde_fuente || "" : "",
         nroSocio: req.socio.es_socio_olimpia ? (req.socio.nro_socio || "") : "",
         esSocio: !!req.socio.es_socio_olimpia,
         numero: "OLI-" + req.socio.id.replace(/\D/g, "").slice(0, 8).padStart(8, "0"),

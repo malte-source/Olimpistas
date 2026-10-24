@@ -44,9 +44,13 @@ test("el carnet distingue 'Miembro desde' (registro en Olimpistas) de 'Socio des
   assert.match(dos[1].val, /2009 · \d+ años/, "con la antigüedad en años");
   const hoy = new Date().toISOString().slice(0, 10);
   assert.ok(!/ · /.test(antiguedadesCarnet({ esSocio: true, socioDesde: hoy }, desde)[1].val), "menos de un año: solo la fecha");
-  // socio sin fecha todavía: su número, nunca una fecha inventada
-  assert.deepStrictEqual(antiguedadesCarnet({ esSocio: true, socioDesde: "", nroSocio: "4321" }, desde).map((x) => x.et), ["m_cn_desde", "cn_nro_socio"]);
-  assert.strictEqual(antiguedadesCarnet({ esSocio: true, socioDesde: "", nroSocio: "" }, desde).length, 1, "sin fecha ni número no se muestra una fila vacía");
+  // socio sin fecha confiable: su número y la invitación a contarla, nunca una fecha inventada
+  const sin = antiguedadesCarnet({ esSocio: true, socioDesde: "", nroSocio: "4321" }, desde);
+  assert.deepStrictEqual(sin.map((x) => x.et), ["m_cn_desde", "cn_nro_socio", "cn_socio_desde"]);
+  assert.deepStrictEqual([sin[2].val, sin[2].accion], ["", "carnet"], "la fila de 'Socio desde' es una acción, sin valor");
+  assert.deepStrictEqual(antiguedadesCarnet({ esSocio: true, socioDesde: "", nroSocio: "" }, desde).map((x) => x.et), ["m_cn_desde", "cn_socio_desde"], "sin número igual se ofrece contarla");
+  // solo se sabe el año (1 de enero): se muestra el año, no un mes
+  assert.match(antiguedadesCarnet({ esSocio: true, socioDesde: "2008-01-01" }, desde)[1].val, /^2008 · \d+ años$/);
   const i = leer("public", "js", "i18n.js");
   assert.ok(!/Hincha desde|Fan since/.test(i), "ya no dice 'Hincha desde'");
   assert.match(i, /m_cn_desde: "Miembro desde"/);
