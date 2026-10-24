@@ -122,6 +122,7 @@
     }
     renderProgreso();
     renderBannerSocio();
+    revalidarSocioSilencioso();
     // Deep-link por query param (viene de fuera: página de subasta, email, /?intent=pujar):
     // gana sobre la ruta del path porque expresa una intención explícita y puntual.
     // Se normaliza a la URL canónica del router (/miembro/descubrir/subastas/<id>).
@@ -183,6 +184,20 @@
 
   async function logout() { try { await api("/auth/logout", { method: "POST" }); } finally { location.href = "/"; } }
   async function refrescar() { SESSION = await yo(); renderProgreso(); renderHeader(); renderBannerSocio(); }
+
+  // Si la cuenta ya tiene cédula y todavía no es Socio, se consulta sola al club al abrir la app (máx. una vez cada 6 h):
+  // quien se puso al día o se asoció después sube de nivel sin tener que volver a validar a mano.
+  async function revalidarSocioSilencioso() {
+    try {
+      const s = SESSION && SESSION.socio;
+      if (!s || !s.cedula || s.es_socio_olimpia) return;
+      const k = "oli_valsoc_" + s.id, ult = Number(localStorage.getItem(k) || 0);
+      if (Date.now() - ult < 6 * 3600000) return;
+      localStorage.setItem(k, String(Date.now()));
+      const r = await api("/perfil/validar-socio", { method: "POST", body: { silencioso: true } });
+      if (r && r.validado) { await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); }
+    } catch (e) { /* sin red o sin cédula: se intenta en la próxima apertura */ }
+  }
 
   // ─── Inicio (home): orden fijo — saludo → urgente → mis cosas → contenido del
   // club → próximo escalón. Bloques vacíos desaparecen, el orden nunca cambia. ──
@@ -498,7 +513,7 @@
   }
   function validarSocioModal() {
     if (esSocioValidado()) { toast(T("up_ya")); return; }
-    const faltaFecha = !SESSION.socio.fecha_nacimiento; // si no tiene fecha, la pedimos acá mismo
+    const faltaFecha = false; // el nivel Socio se da a cualquier edad: la fecha de nacimiento ya no frena la validación
     const hoy = new Date().toISOString().slice(0, 10);
     const { root, close: cerrar } = OLI.modal(`
       <h3>${T("up_modal_h")}</h3>
@@ -513,7 +528,7 @@
       const cedula = (root.querySelector("#upCedula").value || "").trim();
       const err = root.querySelector("#upErr"); err.textContent = "";
       if (!cedula) { err.textContent = T("ob_cedula_err"); return; }
-      const btn = root.querySelector("#upValidar"); btn.disabled = true;
+      const btn = root.querySelector("#upValidar"); btn.disabled = true; btn.textContent = T("up_consultando");
       try {
         // Si falta la fecha de nacimiento, la guardamos primero (la pide para el tier por edad).
         if (faltaFecha) {
@@ -522,10 +537,20 @@
           await api("/perfil", { method: "PATCH", body: { fecha_nacimiento: f } });
         }
         const r = await api("/perfil/validar-socio", { method: "POST", body: { cedula } });
-        cerrar();
-        if (r.validado) { await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); activar("carnet"); }
-        else { toast(T("up_revision")); }
-      } catch (e) { err.textContent = e.message; btn.disabled = false; }
+        if (r.validado) { cerrar(); await refrescar(); try { OLI.confetti && OLI.confetti(); } catch (e) {} toast(T("up_ok")); activar("carnet"); }
+        else {
+          // No lo encontramos como socio al día: se dice claro y se ofrece corregir el número o hablar con una persona.
+          root.querySelector("h3").textContent = T("up_no_h");
+          root.querySelector(".muted").textContent = T("up_no_p");
+          root.querySelector("#upCedula").hidden = true; { const f = root.querySelector("#upFecha"); if (f) { f.previousElementSibling && f.previousElementSibling.remove(); f.remove(); } }
+          err.textContent = "";
+          btn.disabled = false; btn.textContent = T("up_otra");
+          btn.onclick = () => { cerrar(); validarSocioModal(); };
+          const ch = document.createElement("button"); ch.type = "button"; ch.className = "btn btn-ghost btn-block"; ch.style.marginTop = "8px"; ch.textContent = T("up_persona");
+          ch.onclick = () => { cerrar(); document.getElementById("atcFab")?.click(); };
+          btn.after(ch);
+        }
+      } catch (e) { err.textContent = e.message; btn.disabled = false; btn.textContent = T("ob_validar"); }
     };
   }
 
@@ -1804,6 +1829,33 @@
 
   const qrListo = () => new Promise((res) => { let n = 0; (function chk() { if (window.qrcode || n++ > 40) return res(); setTimeout(chk, 50); })(); });
   const NIVEL_COLOR = { olimpista: "#c9c7c1", kids: "#ff8a80", premium: "#d9b65a", socio: "#ffffff" };
+  // Frente del carnet, como un carnet de verdad: escudo, nivel, foto de frente, nombre, número y desde cuándo es hincha.
+  // La fecha del carnet: un Socio muestra su antigüedad REAL en el club ("Socio desde marzo de 2014"); si el club todavía no nos la
+  // dio, muestra su número de socio y no una fecha inventada. Quien no es socio muestra desde cuándo es hincha de Olimpistas.
+  const fechaMes = (d) => new Date(d + "T12:00:00").toLocaleDateString(LOC, { year: "numeric", month: "long" });
+  function antiguedadCarnet(c, desdeOlimpistas) {
+    if (c.esSocio) return c.socioDesde ? { et: T("cn_socio_desde"), val: fechaMes(c.socioDesde) } : { et: T("cn_nro_socio"), val: c.nroSocio || "—" };
+    return { et: T("m_cn_desde"), val: desdeOlimpistas };
+  }
+  function carnetFrente(c, { desde, iso, socio }) {
+    const ant = antiguedadCarnet(c, desde);
+    const code = String(iso || "").toLowerCase().trim();
+    const bandera = /^[a-z]{2}$/.test(code) ? `<img class="cn2-flag" src="/assets/flags/4x3/${code}.svg" alt="" loading="lazy" />` : "";
+    const foto = c.foto
+      ? `<div class="cn2-foto"><img src="${c.foto}" alt="${esc(T("cn_foto_alt"))}" /></div>`
+      : `<button type="button" class="cn2-foto cn2-foto-falta" data-cn-foto>${icon("camera", { size: 26 })}<span>${T("cn_foto_falta")}</span></button>`;
+    return `<div class="cn2-top"><img class="escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" height="34" /><span class="cn2-tit">${T("cn_titulo")}</span><span class="cn2-niv" style="color:${NIVEL_COLOR[c.tierSlug] || "#d9b65a"}">${esc(String(c.tier || "Olimpista").toUpperCase())}</span></div>
+      <div class="cn2-fr" aria-hidden="true"></div>
+      <div class="cn2-frente">
+        ${foto}
+        <div class="cn2-datos">
+          <div class="cn2-dato"><small>${T("cn_nombre")}</small><b class="cn2-nom">${esc(c.nombre)}</b></div>
+          <div class="cn2-dato"><small>${T("cn_numero")}</small><b class="cn2-nro">${esc(c.numero)}</b></div>
+          <div class="cn2-dato"><small>${esc(ant.et)}</small><b>${esc(ant.val || "")}</b></div>
+          <div class="cn2-sello">${bandera}${socio ? `<span class="cn2-socio">${OLI.ic("verificado", 14, true)} ${T("cn_socio")}</span>` : ""}</div>
+        </div>
+      </div>`;
+  }
   async function vCarnet() {
     view().innerHTML = skeleton(0);
     try {
@@ -1836,10 +1888,10 @@
           <p class="lead">${T("m_carnet_p")}</p>
           <div class="cn2-grid">
             <div class="cn2" id="qrBen">
-              <div class="cn2-top"><img class="escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[carnet.tierSlug] || "#d9b65a"}">${esc(String(carnet.tier || "Olimpista").toUpperCase())}</span></div>
-              <div class="cn2-fr" aria-hidden="true"></div>
+              ${carnetFrente(carnet, { desde: membresia ? fecha(membresia.inicio) : fecha(carnet.desde), iso: carnet.iso, socio: esSocioValidado() })}
+              <div class="cn2-corte" aria-hidden="true"></div>
               <div class="cn2-body">
-                <div class="cn2-id"><span class="cn2-nom">${esc(carnet.nombre)}</span><span class="cn2-lin">${T("m_cn_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}${ubic ? " · " + esc(ubic) : ""}</span></div>
+                <p class="cn2-pase">${T("cn_pase")}</p>
                 <div class="cn2-qr"><img id="qrBenImg" alt="${T("m_qr_alt")}" width="188" height="188" /><div class="qr-vel" id="qrBenVel" hidden></div></div>
                 <div class="cn2-pie"><div class="cn2-barra"><span id="qrBenBarra"></span></div><span class="cn2-seg"><span id="qrBenSeg"></span> · <span id="qrBenCod">······</span></span></div>
               </div>
@@ -1862,7 +1914,7 @@
               </div></div>
               <div class="cn2-resumen">
                 <h3>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h3>
-                <p class="muted">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}.</p>
+                <p class="muted">${carnet.esSocio && carnet.socioDesde ? T("cn_socio_desde") + " " + fechaMes(carnet.socioDesde) : T("m_miembro_desde") + " " + (membresia ? fecha(membresia.inicio) : fecha(carnet.desde))}.</p>
                 ${ubicHtml}
                 ${social}
                 <ul class="benefits">${(tier?.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
@@ -1873,6 +1925,7 @@
           ${upsell}
         </div>`;
       view().querySelectorAll("[data-upsell]").forEach((b) => b.addEventListener("click", () => upgrade(b.dataset.upsell)));
+      view().querySelector("[data-cn-foto]")?.addEventListener("click", () => { activar("perfil"); setTimeout(() => document.getElementById("f_foto")?.click(), 120); });
       iniciarQrBeneficios();
       view().querySelector("#upCardBtn")?.addEventListener("click", validarSocioModal);
       view().querySelector(".ed-ubic")?.addEventListener("click", () => { activar("perfil"); setTimeout(() => focusCampo("pais"), 60); });
@@ -1931,9 +1984,9 @@
       if (g && g.carnet && (!navigator.onLine || /fetch|network|load failed/i.test(String(e && e.message)))) {
         const c = g.carnet;
         view().innerHTML = `<div class="section" style="border:none;padding-top:8px"><h2>${T("m_carnet_h")}</h2><p class="lead">${T("m_carnet_p")}</p>
-          <div class="cn2-grid"><div class="cn2"><div class="cn2-top"><img class="escudo-ok" src="/assets/escudo.png" alt="Club Olimpia" height="34" /><span class="cn2-niv" style="color:${NIVEL_COLOR[c.tierSlug] || "#d9b65a"}">${esc(String(c.tier || "Olimpista").toUpperCase())}</span></div>
-            <div class="cn2-fr" aria-hidden="true"></div>
-            <div class="cn2-body"><div class="cn2-id"><span class="cn2-nom">${esc(c.nombre)}</span><span class="cn2-lin">${esc(c.numero)}</span></div>
+          <div class="cn2-grid"><div class="cn2">${carnetFrente(c, { desde: fecha(c.desde), iso: c.iso, socio: false })}
+            <div class="cn2-corte" aria-hidden="true"></div>
+            <div class="cn2-body">
               <span class="cn2-offline">${OLI.ic("reloj", 16)} ${T("m_cn_offline")}</span>
               ${g.ref ? `<div class="cn2-codigo"><small>${T("m_cn_codigo")}</small><b>${esc(String(g.ref).toUpperCase())}</b></div>` : ""}
               <p class="cn2-lin" style="text-align:center">${T("m_cn_offline_p")}</p></div></div></div></div>`;
