@@ -78,6 +78,25 @@ test("la consulta en lote del importador carga 2.500 filas en trozos sin perder 
   assert.strictEqual((await pg.resumenSociosClub()).total, 5 + 2500);
 });
 
+test("historial del club y hitos del socio: mismo resultado en Postgres y en memoria", opts, async () => {
+  async function caso(store, ced, correo) {
+    const e = (estado, deuda = 0) => ({ estado, deuda, alDia: estado === "ACTIVE", plan: "S", numero: "1" });
+    const desde = new Date(Date.now() - 3600000).toISOString();
+    const r0 = await store.resumenHistorialClub({ desde }), c0 = (await store.cohortesDeAlta({ semanas: 2 }))[0] || { registrados: 0, canjearon: 0 };   // la base de pruebas ya tiene otros datos: se mide la diferencia
+    await store.guardarEstadoTuti(ced, e("ACTIVE")); await store.guardarEstadoTuti(ced, e("ACTIVE")); await store.guardarEstadoTuti(ced, e("DEBT", 5000)); await store.guardarEstadoTuti(ced, e("DEBT", 4000)); await store.guardarEstadoTuti(ced, e("ACTIVE"));
+    const h = (await store.historialClubDeCedula(ced)).map((x) => [x.clase, x.deuda, !!x.hasta, !!x.inicial]);
+    const s = await store.createSocio({ email: correo, passwordHash: "x", nombre: "E" });
+    await store.registrarEvento(s.id, "registro"); await store.registrarEvento(s.id, "registro"); await store.registrarEvento(s.id, "primer_canje"); await store.registrarEvento(s.id, "nivel_socio_pausado", { motivo: "mora" }); await store.registrarEvento(s.id, "nivel_socio_pausado", { motivo: "baja" });
+    const ev = (await store.eventosDeSocio(s.id)).map((x) => x.tipo).sort();
+    const r = await store.resumenHistorialClub({ desde });
+    const c = (await store.cohortesDeAlta({ semanas: 2 }))[0];
+    return { h, ev, r: [r.entraron_mora - r0.entraron_mora, r.entraron_baja - r0.entraron_baja, r.volvieron_al_dia - r0.volvieron_al_dia, r.dias_medios_en_mora !== null], c: [c.registrados - c0.registrados, c.canjearon - c0.canjearon] };
+  }
+  const esperado = { h: [["al_dia", 0, false, false], ["mora", 4000, true, false], ["al_dia", 0, true, false]], ev: ["nivel_socio_pausado", "nivel_socio_pausado", "primer_canje", "registro"], r: [1, 0, 1, true], c: [1, 1] };
+  assert.deepStrictEqual(await caso(pg, "9300001", "hp@ejemplo.com"), esperado, "Postgres");
+  assert.deepStrictEqual(await caso(mem, "9300001", "hm@ejemplo.com"), esperado, "memoria");
+});
+
 test("las cédulas con puntos o guiones también cruzan con la base del club (Postgres = memoria)", opts, async () => {
   async function caso(store) {
     const s = await store.createSocio({ email: "ced-puntos@ejemplo.com", passwordHash: "x", nombre: "P", cedula: "7.000.001" });

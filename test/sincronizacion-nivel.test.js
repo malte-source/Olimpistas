@@ -75,6 +75,7 @@ test("encendida: mora y baja pasan a Olimpista con un aviso cada una; al día, l
   assert.deepStrictEqual(await nivel(mora.id), { tier: "olimpista", socio: false, club: "mora" });
   assert.deepStrictEqual(await nivel(baja.id), { tier: "olimpista", socio: false, club: "baja" });
   assert.strictEqual((await store.getSocioById(mora.id)).club_deuda, 150000);
+  assert.deepStrictEqual((await store.eventosDeSocio(mora.id)).filter((e) => e.tipo === "nivel_socio_pausado").map((e) => JSON.parse(e.meta).motivo), ["mora"], "queda el hito de la pausa con su motivo");
   assert.deepStrictEqual(await nivel(dia.id), { tier: "socio", socio: true, club: "al_dia" });
   assert.deepStrictEqual(await nivel(vitalicio.id), { tier: "socio", socio: true, club: "al_dia" });
   assert.strictEqual((await nivel(manual.id)).tier, "socio", "lo dado a mano por un admin no se toca");

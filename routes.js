@@ -367,6 +367,8 @@ function buildRouter() {
   // ─── Auth ───────────────────────────────────────────────────────────────────
   // Instancia 1 — alta de cuenta (mínima). La validación de socio (cédula) es la
   // instancia 3 (/perfil/validar-socio), porque el tier depende de la edad.
+  // Hitos del socio con fecha (lib/eventos.js): alimentan el embudo por cohorte. Nunca frenan ni rompen el flujo que los origina.
+  const evento = (socioId, tipo, meta) => { if (store.registrarEvento && socioId) store.registrarEvento(socioId, tipo, meta).catch(() => {}); };
   r.post("/auth/registro", wrap(async (req, res) => {
     const { email, password } = req.body || {};
     // Sanitiza nombre/apellido en origen (anti-XSS, defensa en profundidad).
@@ -405,6 +407,7 @@ function buildRouter() {
         mailer.enviarVerificacion(socio, link).catch(() => {});
       } catch (e) { log.error({ err: e.message }, "verificación de email no disponible"); }
     }
+    evento(socio.id, "registro", { referido: !!socio.referido_por });
     // Peña: ?pena=slug (igual que ?ref=). Solo cuenta una peña VERIFICADA; un slug inválido nunca rompe el alta.
     const penaSlug = String((req.body || {}).pena || "").trim().toLowerCase().slice(0, 60);
     if (penaSlug && store.getPenaPorSlug) {
@@ -419,6 +422,7 @@ function buildRouter() {
     }
     // Puntos al que invitó: una vez por referido (ref = el id del invitado).
     if (socio.referido_por) darPuntos(socio.referido_por, "referido", socio.id, "Referido: " + (nombre || "un hincha")).catch(() => {});
+    if (socio.referido_por) evento(socio.referido_por, "referido", { invitado: socio.id });
     // Notificar a quien lo invitó (best-effort, no bloquea el alta).
     if (socio.referido_por && store.getSocioById) {
       store.getSocioById(socio.referido_por).then(async (ref) => {
@@ -510,6 +514,7 @@ function buildRouter() {
       const socio = req.query.token ? await store.getSocioByVerifToken(String(req.query.token)) : null;
       if (socio) {
         await store.updateSocio(socio.id, { email_verificado: true, verif_token: null }); ok = true;
+        evento(socio.id, "correo_verificado");
         // Si se inscribió con su cédula, el nivel Socio se activa ahora que el correo está confirmado (en segundo plano).
         const ced = soloDigitos(socio.cedula);
         if (ced.length >= 5 && !socio.es_socio_olimpia) validarSocioCore(socio.id, ced, { silencioso: true }).catch((e) => log.warn({ err: e.message }, "verificar: validación de socio"));
@@ -618,6 +623,7 @@ function buildRouter() {
       throw httpError(400, "Imagen inválida (se espera un data URL de imagen)");
     if (foto.length > 800_000) throw httpError(413, "La imagen es muy grande (máx ~600KB)");
     const socio = auth.sanitize(await store.updateSocio(req.socio.id, { foto }));
+    evento(req.socio.id, "foto");
     const progreso = perfilProgreso(socio);
     if (progreso.pct >= 100) darPuntos(req.socio.id, "perfil", "completo", "Perfil completo").catch(() => {});
     res.json({ ok: true, foto: socio.foto, progreso });
@@ -712,6 +718,7 @@ function buildRouter() {
     const conf = confianza({ cuenta: socioFull, tutiSocio: enClub, ref });   // ¿la cuenta coincide con la persona del club? decide cuánto detalle se muestra
     if (enClub && enClub.plan) store.updateSocio(socioId, { plan_club: enClub.plan }).catch(() => {}); // copia de lectura del plan
     const ahora = new Date().toISOString();
+    const eraSocio = !!socioFull.es_socio_olimpia;   // antes de actualizar la cuenta (el almacén en memoria devuelve el mismo objeto)
 
     // Match contra el padrón (foto de agosto: todo el padrón se tomó como AL DÍA).
     let fila = null, validado = false;
@@ -740,6 +747,7 @@ function buildRouter() {
       if (nro) antig.nro_socio = String(nro).slice(0, 40);
       await store.updateSocio(socioId, { es_socio_olimpia: true, club_estado: "al_dia", club_deuda: null, club_consulta: ahora, ...antig });
       validado = true;
+      if (!eraSocio) evento(socioId, "nivel_socio_activado", { fuente: fila ? "padron" : "api" });
       mailer.enviarReconocido && mailer.enviarReconocido({ ...socioFull, cedula }, tier).catch(() => {});
     }
 
@@ -816,6 +824,7 @@ function buildRouter() {
       await store.setMembresia(f.id, { tierSlug: "olimpista", ciclo: "anio", pagoRef: "club:" + cls.estado });
       await store.updateSocio(f.id, { es_socio_olimpia: false, club_estado: cls.estado, club_deuda: mora && cls.deuda ? Math.round(cls.deuda) : null, club_consulta: ahora });
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: "pausar_socio_club", targetId: f.id, detalle: cls.estado, por: "sistema" });
+      evento(f.id, "nivel_socio_pausado", { motivo: cls.estado });
       if (mora) { out.pausados_mora++; mailer.enviarCuotaPendiente && mailer.enviarCuotaPendiente(f, { deuda: cls.deuda, portal: PORTAL_URL() }).catch(() => {}); }
       else { out.pausados_baja++; mailer.enviarSocioBaja && mailer.enviarSocioBaja(f, { portal: PORTAL_URL() }).catch(() => {}); }
     }
@@ -940,6 +949,7 @@ function buildRouter() {
   // preventa / subasta) — un solo lugar, usado tanto por el webhook real de PAGOPAR como
   // por la confirmación simulada de dev, para que nunca se desalineen entre sí.
   async function cumplirPedidoPagado(pedido) {
+    evento(pedido.socio_id, "primer_pago", { tipo: pedido.tier_slug ? "membresia" : pedido.subasta_id ? "lote" : "entrada" });
     if (pedido.tier_slug) {
       const tier = tierBySlug(pedido.tier_slug);
       if (!tier) throw new Error("el pedido " + pedido.id + " es de un nivel que ya no existe (" + pedido.tier_slug + ")");
@@ -1459,6 +1469,16 @@ function buildRouter() {
     res.json({ dias, filas: filas.map((f) => ({ ...f, lcp_p75: f.lcp_p75 == null ? null : Math.round(f.lcp_p75), inp_p75: f.inp_p75 == null ? null : Math.round(f.inp_p75), ttfb_p75: f.ttfb_p75 == null ? null : Math.round(f.ttfb_p75), cls_p75: f.cls_p75 == null ? null : Math.round(f.cls_p75 * 1000) / 1000 })) });
   }));
   // Reportes de negocio: embudo, membresías (pagas vs gratis), top países, altas/día.
+  // Cohortes de alta (semana de Paraguay): cuántos se registraron y llegaron a cada hito, y mediana de días hasta el primer canje; más los movimientos del club.
+  r.get("/admin/cohortes", requireAdmin, wrap(async (req, res) => {
+    const semanas = Math.min(Math.max(parseInt(req.query.semanas, 10) || 8, 1), 52), ahora = Date.now();
+    const [cohortes, club7, club30] = await Promise.all([
+      store.cohortesDeAlta ? store.cohortesDeAlta({ semanas }) : [],
+      store.resumenHistorialClub ? store.resumenHistorialClub({ desde: new Date(ahora - 7 * 86400000).toISOString() }) : null,
+      store.resumenHistorialClub ? store.resumenHistorialClub({ desde: new Date(ahora - 30 * 86400000).toISOString() }) : null,
+    ]);
+    res.json({ cohortes, club: { dias7: club7, dias30: club30 } });
+  }));
   r.get("/admin/reportes", requireAdmin, wrap(async (_req, res) => {
     res.json(await memoAdmin("reportes", 30000, async () => {
     const [est, porPais] = await Promise.all([
@@ -1742,6 +1762,9 @@ function buildRouter() {
     const pagados = pedidos.filter((p) => p.estado === "pagado");
     const bloqueo = socio.subastas_bloqueo_hasta && new Date(socio.subastas_bloqueo_hasta).getTime() > Date.now() ? socio.subastas_bloqueo_hasta : null;
 
+    // Hitos con fecha (socio_eventos) e historial del estado del club (por cédula): lo que antes no se podía reconstruir.
+    const hitos = store.eventosDeSocio ? await store.eventosDeSocio(socio.id, 100).catch(() => []) : [];
+    const tramosClub = store.historialClubDeCedula && soloDigitos(socio.cedula).length >= 5 ? await store.historialClubDeCedula(claveCedula(socio.cedula)).catch(() => []) : [];
     // Línea de tiempo (lo más nuevo primero): alta, membresías, pagos, canjes, pujas, validaciones.
     const eventos = [{ tipo: "alta", titulo: "Se registró", detalle: "", fecha: socio.creado }];
     for (const m of historial) eventos.push({ tipo: "membresia", titulo: "Nivel " + ((tierBySlug(m.tier_slug) || {}).nombre || m.tier_slug), detalle: m.estado, fecha: m.inicio });
@@ -1755,6 +1778,10 @@ function buildRouter() {
       if (c.resuelta_en) eventos.push({ tipo: "atencion", titulo: "Atención resuelta", detalle: c.motivo || "", fecha: c.resuelta_en });
     }
     if (bloqueo) eventos.push({ tipo: "suspension", titulo: "Suspendido de las subastas", detalle: "hasta " + fechaCorta(bloqueo), fecha: bloqueo });
+    const TIT_HITO = { correo_verificado: "Confirmó su correo", foto: "Subió su foto", nivel_socio_activado: "Se activó su nivel Socio", nivel_socio_pausado: "Su nivel Socio quedó en pausa", primera_puja: "Hizo su primera puja", referido: "Invitó a alguien que se registró" };
+    for (const h of hitos) if (TIT_HITO[h.tipo]) eventos.push({ tipo: "hito", titulo: TIT_HITO[h.tipo], detalle: (() => { try { const m = h.meta ? JSON.parse(h.meta) : null; return m && m.motivo ? "por " + m.motivo : ""; } catch (e) { return ""; } })(), fecha: h.ts });
+    const ETQ_CLASE = { al_dia: "Al día con el club", mora: "En mora con el club", baja: "De baja en el club" };
+    for (const t of tramosClub.filter((x) => !x.inicial)) eventos.push({ tipo: "club", titulo: ETQ_CLASE[t.clase] || t.clase, detalle: t.hasta ? "hasta " + fechaCorta(t.hasta) : "hoy", fecha: t.desde });
     eventos.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
 
     res.json({
@@ -2584,6 +2611,7 @@ function buildRouter() {
       throw httpError(409, msg);
     }
     _subCache.delete(s.id); _listaSub = null; // la puja debe reflejarse al toque
+    evento(req.socio.id, "primera_puja");
     // Avisar por email al líder anterior que lo superaron (best-effort, no rompe la puja).
     if (out.prevGanador) {
       pushLib.avisar(store, out.prevGanador, "subasta", { titulo: "Te superaron en " + s.titulo, cuerpo: "Ahora van " + gsTxt(out.subasta.puja_actual) + ". Entrá y subí tu puja.", url: "/subasta/" + encodeURIComponent(s.slug || s.id), tag: "sub-" + s.id }, { base: baseUrl() }).catch(() => {});
@@ -3670,6 +3698,7 @@ function buildRouter() {
     const ahorro = ben.pct ? Math.round(monto * Number(ben.pct) / 100) : (Number(ben.ahorro_estimado) || 0);
     const out = await store.canjearBeneficio({ beneficioId: ben.id, socioId: socio.id, comercioId: req.comercio.id, validadoPor: req.comercio.nombre, monto: monto || null, ahorro: ahorro || null, tierSlug: tier, ventana });
     if (!out.ok) return res.json({ ok: false, motivo: out.motivo, socio: socioOut });
+    evento(socio.id, "primer_canje", { comercio: req.comercio.id, via });
     // Aviso al socio con lo que ahorró (la prueba de valor del producto); no demora la respuesta de la caja.
     if (mailer.enviarCanjeExitoso && store.getSocioById) store.getSocioById(socio.id).then((s) => { if (s && s.email) return mailer.enviarCanjeExitoso(s, { comercio: req.comercio.nombre, beneficio: ben.titulo, ahorro }); }).catch(() => {});
     res.json({ ok: true, socio: socioOut, beneficio: ben.titulo, ahorro, via, stock: out.stock });

@@ -12,6 +12,24 @@ const postgres = require("postgres");
 
 const ciudadesLib = require("../lib/ciudades");
 const SEED_DOMAIN = "demo.olimpistas.test"; // filas de demo (no cuentan como miembros reales)
+const { claseClub } = require("../lib/club-estado");
+const { UNICOS: EVENTOS_UNICOS } = require("../lib/eventos");
+
+// Historial del estado del club por cédula: abre un tramo nuevo cuando la clase (al_dia | mora | baja) cambia y cierra el anterior; si no cambió solo refresca estado y deuda.
+// Un historial que falla nunca rompe la consulta a la API.
+async function registrarClaseClub(sql, cedula, e) {
+  const estado = String((e && e.estado) || "").slice(0, 30);
+  if (!estado) return;
+  const clase = claseClub({ estado, deuda: e.deuda, alDia: e.alDia }), deuda = e.deuda == null ? null : Math.round(e.deuda);
+  try {
+    await sql.begin(async (tx) => {
+      const [a] = await tx`SELECT id, clase FROM club_estado_historial WHERE cedula = ${cedula} AND hasta IS NULL FOR UPDATE`;
+      if (a && a.clase === clase) { await tx`UPDATE club_estado_historial SET estado = ${estado}, deuda = ${deuda} WHERE id = ${a.id}`; return; }
+      if (a) await tx`UPDATE club_estado_historial SET hasta = now() WHERE id = ${a.id}`;
+      await tx`INSERT INTO club_estado_historial (cedula, clase, estado, deuda) VALUES (${cedula}, ${clase}, ${estado}, ${deuda})`;
+    });
+  } catch (err) { /* sin historial no se frena nada */ }
+}
 
 function uid(prefix) { return `${prefix}_${crypto.randomBytes(8).toString("hex")}`; }
 
@@ -812,6 +830,38 @@ function createPgStore({ databaseUrl, debug }) {
         VALUES (${String(cedula)}, false, ${e.estado || ""}, ${e.plan || ""}, ${e.numero || ""}, ${e.alDia == null ? null : !!e.alDia}, ${e.deuda == null ? null : Math.round(e.deuda)}, ${String(e.correo || "").toLowerCase().slice(0, 160)}, ${String(e.nombre || "").slice(0, 160)}, now(), 1)
         ON CONFLICT (cedula) DO UPDATE SET tuti_estado = EXCLUDED.tuti_estado, tuti_plan = EXCLUDED.tuti_plan, tuti_numero = EXCLUDED.tuti_numero, tuti_al_dia = EXCLUDED.tuti_al_dia,
           tuti_deuda = EXCLUDED.tuti_deuda, tuti_correo = EXCLUDED.tuti_correo, tuti_nombre = EXCLUDED.tuti_nombre, tuti_consultado = now(), tuti_intentos = socios_club.tuti_intentos + 1`;
+      await registrarClaseClub(sql, String(cedula), e);
+    },
+    // Hitos del socio con fecha (ver lib/eventos.js). Los únicos se guardan una sola vez; fire-and-forget desde las rutas.
+    async registrarEvento(socioId, tipo, meta) {
+      await sql`INSERT INTO socio_eventos (socio_id, tipo, meta, unico) VALUES (${socioId}, ${String(tipo).slice(0, 40)}, ${meta == null ? null : JSON.stringify(meta)}, ${EVENTOS_UNICOS.has(tipo)}) ON CONFLICT DO NOTHING`;
+      return true;
+    },
+    async eventosDeSocio(socioId, limit = 100) { return sql`SELECT tipo, ts, meta FROM socio_eventos WHERE socio_id = ${socioId} ORDER BY ts DESC LIMIT ${Math.min(Number(limit) || 100, 500)}`; },
+    async historialClubDeCedula(cedula) { return sql`SELECT clase, estado, deuda, desde, hasta, inicial FROM club_estado_historial WHERE cedula = ${String(cedula)} ORDER BY desde DESC, id DESC LIMIT 50`; },
+    // Movimientos del club desde una fecha: quiénes entraron en mora o de baja, quiénes volvieron al día y cuánto dura una mora (la foto del primer día no cuenta como entrada).
+    async resumenHistorialClub({ desde }) {
+      const [r] = await sql`SELECT
+          count(*) FILTER (WHERE clase = 'mora' AND NOT inicial AND desde >= ${desde})::int AS entraron_mora,
+          count(*) FILTER (WHERE clase = 'baja' AND NOT inicial AND desde >= ${desde})::int AS entraron_baja,
+          count(*) FILTER (WHERE clase = 'al_dia' AND desde >= ${desde} AND EXISTS (SELECT 1 FROM club_estado_historial p WHERE p.cedula = h.cedula AND p.clase IN ('mora', 'baja') AND p.hasta = h.desde))::int AS volvieron_al_dia,
+          round(avg(extract(epoch FROM (hasta - desde)) / 86400) FILTER (WHERE clase = 'mora' AND NOT inicial AND hasta IS NOT NULL AND hasta >= ${desde})::numeric, 1) AS dias_medios_en_mora
+        FROM club_estado_historial h`;
+      return { entraron_mora: r.entraron_mora, entraron_baja: r.entraron_baja, volvieron_al_dia: r.volvieron_al_dia, dias_medios_en_mora: r.dias_medios_en_mora == null ? null : Number(r.dias_medios_en_mora) };
+    },
+    // Embudo por semana de alta (semana de Paraguay): cuántos se registraron y cuántos llegaron a cada hito; mediana de días hasta el primer canje.
+    async cohortesDeAlta({ semanas = 8 } = {}) {
+      const dom = "%@" + SEED_DOMAIN, n = Math.min(Math.max(Number(semanas) || 8, 1), 52);
+      return sql`SELECT to_char(date_trunc('week', s.creado AT TIME ZONE 'America/Asuncion'), 'YYYY-MM-DD') AS semana,
+          count(*)::int AS registrados,
+          count(*) FILTER (WHERE s.email_verificado)::int AS verificaron,
+          count(*) FILTER (WHERE EXISTS (SELECT 1 FROM socio_eventos e WHERE e.socio_id = s.id AND e.tipo = 'nivel_socio_activado'))::int AS socios,
+          count(*) FILTER (WHERE ec.ts IS NOT NULL)::int AS canjearon,
+          count(*) FILTER (WHERE EXISTS (SELECT 1 FROM socio_eventos e WHERE e.socio_id = s.id AND e.tipo = 'primer_pago'))::int AS pagaron,
+          round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM (ec.ts - s.creado)) / 86400) FILTER (WHERE ec.ts IS NOT NULL))::numeric, 1) AS mediana_dias_primer_canje
+        FROM socios s LEFT JOIN socio_eventos ec ON ec.socio_id = s.id AND ec.tipo = 'primer_canje'
+        WHERE s.creado >= now() - make_interval(weeks => ${n}) AND s.email NOT LIKE ${dom}
+        GROUP BY 1 ORDER BY 1 DESC`;
     },
     // A quién consultar ahora en la API: primero las cuentas de Olimpistas con cédula (nunca consultadas o con estado viejo), después quienes
     // figuran en la base con un correo que ya tiene cuenta, y al final el resto de la base (los adherentes de plan familiar al último: la API no los devuelve).
