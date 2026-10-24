@@ -1624,6 +1624,87 @@ function buildRouter() {
       };
     }));
   }));
+  // Qué secciones tiene cada rol EN SU MENÚ (las lecturas por API de algunos roles son más amplias que su menú: los tableros nuevos siguen estrictamente el menú).
+  const vePanel = (rol, seccion) => rol === "owner" || (adminAuth.VER_POR_ROL[rol] || []).includes(seccion);
+  // ── Para hacer ahora: todo lo que espera a una persona del equipo, en un solo lugar (cada fila lleva al área donde se resuelve) ──
+  // Solo trae las colas de las secciones que el rol puede ver, y solo números y antigüedad: nunca nombres ni datos personales.
+  r.get("/admin/pendientes", requireAdmin, wrap(async (req, res) => {
+    const rol = req.adminRole || "owner", ve = (s) => vePanel(rol, s), ahora = Date.now(), H48 = ahora - 48 * 3600000;
+    const cola = (clave, titulo, seccion, area, filas, nota) => {
+      const fechas = (filas || []).map((f) => (f && (f.creado || f.fecha)) || null).filter(Boolean).map((x) => new Date(x).getTime()).filter((t) => Number.isFinite(t));
+      return { clave, titulo, seccion, area, n: (filas || []).length, envejecidos: fechas.filter((t) => t < H48).length, mas_viejo: fechas.length ? new Date(Math.min(...fechas)).toISOString() : null, nota: nota || "" };
+    };
+    const lee = async (seccion, fn) => (ve(seccion) ? fn().catch(() => []) : null);
+    const [pagos, valid, ofertas, penas, canjesPena, subastas, canjesPuntos, atencion] = await Promise.all([
+      lee("pagos", async () => (store.listPedidos ? store.listPedidos({ estado: "pendiente", limit: 500 }) : [])),
+      lee("contenido", async () => (store.listActualizaciones ? store.listActualizaciones({ estado: "pendiente", limit: 500 }) : [])),
+      lee("beneficios", async () => ((store.listBeneficios ? await store.listBeneficios() : []).filter((b) => b.estado === "borrador"))),
+      lee("penas", async () => (store.listPenas ? store.listPenas({ estado: "pendiente" }) : [])),
+      lee("penas", async () => (store.canjesPendientesPena ? store.canjesPendientesPena() : [])),
+      lee("subastas", async () => ((store.listSubastasPublicas ? await store.listSubastasPublicas() : []).filter((s) => s.estado === "cerrada" && s.ganador_id && s.pago_estado !== "pagado").map((s) => ({ creado: s.pago_vence || s.termina })))),
+      lee("puntos", async () => (store.listCanjesPremio ? store.listCanjesPremio({ estado: "pendiente", limit: 500 }) : [])),
+      ve("atencion") ? (store.listBandejaAtencion ? store.listBandejaAtencion({ estado: "humano", limit: 200 }).catch(() => []) : []) : null,
+    ]);
+    const colas = [
+      pagos && cola("pagos", "Pagos pendientes de acreditar", "pagos", "pagos", pagos, "Pedidos que el hincha inició y todavía no se acreditaron."),
+      subastas && cola("subastas", "Lotes ganados sin pagar", "subastas", "contenido", subastas, "El ganador todavía no pagó: pueden vencer y pasar al siguiente."),
+      atencion && cola("atencion", "Conversaciones esperando a una persona", "atencion", "atencion", (atencion || []).map((c) => ({ creado: c.derivada_en || c.actualizado || c.creado })), "El asistente las pasó al equipo."),
+      valid && cola("validaciones", "Validaciones y actualizaciones por revisar", "contenido", "contenido", valid, "Reclamos de socio y datos que hay que unificar o rechazar."),
+      ofertas && cola("ofertas", "Ofertas de comercios por aprobar", "beneficios", "contenido", ofertas, "Los comercios las cargan en borrador y el club las aprueba."),
+      penas && cola("penas", "Peñas por verificar", "penas", "contenido", penas, "Solicitudes nuevas desde la app."),
+      canjesPena && cola("canjes_pena", "Canjes del fondo de peñas por aprobar", "penas", "contenido", canjesPena),
+      canjesPuntos && cola("canjes_puntos", "Premios de puntos por entregar", "puntos", "contenido", canjesPuntos),
+    ].filter(Boolean);
+    res.json({ colas, total: colas.reduce((a, c) => a + c.n, 0), envejecidos: colas.reduce((a, c) => a + c.envejecidos, 0), generado: new Date(ahora).toISOString() });
+  }));
+
+  // ── Gerencia: este período contra el anterior (todo agregado, sin datos personales) ──
+  r.get("/admin/gerencia", requireAdmin, wrap(async (_req, res) => {
+    res.json(await memoAdmin("gerencia", 30000, async () => {
+      const ahora = Date.now(), iso = (ms) => new Date(ms).toISOString(), fin = iso(ahora + 1000), d = (n) => iso(ahora - n * 86400000);
+      const [i30, i30p, i7, i7p, a30, a30p, a7, a7p, c30, c30p, nivel, club30, penas, pagos] = await Promise.all([
+        store.ingresosEntre({ desde: d(30), hasta: fin }), store.ingresosEntre({ desde: d(60), hasta: d(30) }), store.ingresosEntre({ desde: d(7), hasta: fin }), store.ingresosEntre({ desde: d(14), hasta: d(7) }),
+        store.altasEntre({ desde: d(30), hasta: fin }), store.altasEntre({ desde: d(60), hasta: d(30) }), store.altasEntre({ desde: d(7), hasta: fin }), store.altasEntre({ desde: d(14), hasta: d(7) }),
+        store.resumenCanjesEntre({ desde: d(30), hasta: fin }), store.resumenCanjesEntre({ desde: d(60), hasta: d(30) }),
+        store.resumenNivelClub(), store.resumenHistorialClub ? store.resumenHistorialClub({ desde: d(30) }) : null, store.actividadPenas({ desde: d(60) }),
+        store.pagosRecibidos ? store.pagosRecibidos() : { totales: {} },
+      ]);
+      const par = (actual, previo) => ({ actual, previo, delta_pct: previo ? Math.round(((actual - previo) / previo) * 100) : null });
+      const dormidas = penas.filter((p) => !p.altas);
+      return {
+        ingresos: { d30: par(i30.total, i30p.total), d7: par(i7.total, i7p.total), pagos_30: par(i30.n, i30p.n), total_historico: (pagos.totales || {}).total || 0 },
+        altas: { d30: par(a30, a30p), d7: par(a7, a7p) },
+        canjes: { d30: par(c30.canjes, c30p.canjes), ahorro_entregado_30: par(c30.ahorro, c30p.ahorro), socios_que_usaron_30: par(c30.socios, c30p.socios) },
+        club: { ...nivel, movimientos_30: club30 },
+        penas: { verificadas: penas.length, activas_60: penas.length - dormidas.length, dormidas_60: dormidas.length, dormidas_top: dormidas.slice(0, 8).map((p) => ({ nombre: p.nombre, ciudad: p.ciudad, total: p.total })), top_altas_60: penas.filter((p) => p.altas).slice(0, 5).map((p) => ({ nombre: p.nombre, altas: p.altas })) },
+        generado: iso(ahora),
+      };
+    }));
+  }));
+
+  // ── Red de comercios: ranking, dormidos, mes contra mes y ofertas por vencer (agregado, sin datos de hinchas) ──
+  r.get("/admin/comercial", requireAdmin, wrap(async (req, res) => {
+    if (!vePanel(req.adminRole || "owner", "beneficios")) throw httpError(403, "Tu rol no tiene acceso a la red de comercios");
+    res.json(await memoAdmin("comercial", 30000, async () => {
+      const ahora = Date.now(), d = (n) => new Date(ahora - n * 86400000).toISOString();
+      const [r30, r60, bens] = await Promise.all([store.resumenComercios({ desde: d(30) }), store.resumenComercios({ desde: d(60) }), store.listBeneficios ? store.listBeneficios() : []]);
+      const prev = new Map(r60.map((c) => [c.id, c]));
+      const filas = r30.map((c) => { const p = prev.get(c.id) || {}; return { id: c.id, nombre: c.nombre, ciudad: c.ciudad || "", estado: c.estado, canjes_30: Number(c.canjes_mes) || 0, ahorro_30: Number(c.ahorro_mes) || 0, canjes_prev: Math.max(0, (Number(p.canjes_mes) || 0) - (Number(c.canjes_mes) || 0)), ultimo_canje: c.ultimo_canje || null, publicados: Number(c.beneficios_pub) || 0 }; });
+      const activos = filas.filter((c) => c.estado === "activo");
+      const dormidos = activos.filter((c) => c.publicados > 0 && !c.canjes_30).sort((a, b) => String(a.ultimo_canje || "").localeCompare(String(b.ultimo_canje || "")));
+      const en14 = ahora + 14 * 86400000;
+      const porVencer = (bens || []).filter((b) => b.estado === "aprobado" && b.activo !== false && b.vigencia_hasta && new Date(b.vigencia_hasta).getTime() > ahora && new Date(b.vigencia_hasta).getTime() <= en14)
+        .sort((a, b) => new Date(a.vigencia_hasta) - new Date(b.vigencia_hasta)).map((b) => ({ titulo: b.titulo, comercio: b.comercio_nombre || "", hasta: b.vigencia_hasta }));
+      const tot = (k) => filas.reduce((a, c) => a + c[k], 0);
+      return {
+        red: { comercios: filas.length, activos: activos.length, con_ofertas: activos.filter((c) => c.publicados > 0).length, dormidos: dormidos.length, canjes_30: tot("canjes_30"), canjes_prev: tot("canjes_prev"), ahorro_30: tot("ahorro_30") },
+        ranking: filas.slice().sort((a, b) => b.canjes_30 - a.canjes_30 || b.ahorro_30 - a.ahorro_30).slice(0, 10).filter((c) => c.canjes_30 > 0),
+        dormidos: dormidos.slice(0, 15).map((c) => ({ nombre: c.nombre, ciudad: c.ciudad, ultimo_canje: c.ultimo_canje, publicados: c.publicados })),
+        por_vencer: porVencer.slice(0, 15),
+        generado: new Date(ahora).toISOString(),
+      };
+    }));
+  }));
   // Integraciones: qué está conectado y qué no (solo estado; nunca valores ni claves).
   r.get("/admin/integraciones", requireAdmin, wrap(async (_req, res) => {
     const hay = (...vars) => vars.every((v) => !!process.env[v]);

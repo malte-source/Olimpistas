@@ -119,5 +119,5 @@ test("front: la gráfica 'Mi bandera' (sin oro ni emojis), el botón del perfil 
   const a = leer("admin.html");
   assert.match(a, /id="admMapa"/);
   assert.match(a, /async function cargarMapaAdmin\(\)/);
-  assert.match(a, /dashboard: \[cargarTablero, cargarSalud, cargarReportes, cargarRevCount, cargarMapaAdmin\]/);
+  assert.match(a, /dashboard: \[cargarPendientes, cargarTablero, cargarGerencia, cargarComercial, cargarSalud, cargarReportes, cargarRevCount, cargarMapaAdmin\]/);
 });

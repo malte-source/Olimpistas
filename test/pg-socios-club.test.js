@@ -97,6 +97,29 @@ test("historial del club y hitos del socio: mismo resultado en Postgres y en mem
   assert.deepStrictEqual(await caso(mem, "9300001", "hm@ejemplo.com"), esperado, "memoria");
 });
 
+test("agregados de los tableros (ingresos, altas, canjes, nivel Socio, peñas): mismo resultado en Postgres y en memoria", opts, async () => {
+  async function caso(store, tag) {
+    const desde = new Date(Date.now() - 86400000).toISOString(), hasta = new Date(Date.now() + 60000).toISOString();
+    const antes = { i: await store.ingresosEntre({ desde, hasta }), a: await store.altasEntre({ desde, hasta }), c: await store.resumenCanjesEntre({ desde, hasta }), n: await store.resumenNivelClub() };
+    const s = await store.createSocio({ email: `agg-${tag}@ejemplo.com`, passwordHash: "x", nombre: "A" });
+    const p = await store.createPedidoPago({ socioId: s.id, concepto: "Plus", monto: 180000, moneda: "PYG", tierSlug: "premium", ciclo: "anio" });
+    await store.updatePedidoPago(p.id, { estado: "pagado", pagado_en: new Date().toISOString() });
+    const co = await store.crearComercio({ nombre: "Agg " + tag, ciudad: "Asunción", contacto: "a@ejemplo.com" });
+    const b = await store.crearBeneficio({ comercio_id: co.id, titulo: "Agg", valor: "10%", pct: 10, niveles: "todos", estado: "aprobado", activo: true });
+    await store.canjearBeneficio({ beneficioId: b.id, socioId: s.id, comercioId: co.id, validadoPor: "t", monto: 100000, ahorro: 10000, tierSlug: "olimpista" });
+    await store.updateSocio(s.id, { club_estado: "mora", club_deuda: 70000, es_socio_olimpia: false });
+    const pe = await store.crearPena({ nombre: "Peña Agg " + tag, ciudad: "Asunción", pais_iso: "PY", presidente: "P", contacto: "p@ejemplo.com" });
+    await store.updatePena(pe.id, { estado: "verificada" });
+    await store.updateSocio(s.id, { pena_id: pe.id });
+    const d = { i: await store.ingresosEntre({ desde, hasta }), a: await store.altasEntre({ desde, hasta }), c: await store.resumenCanjesEntre({ desde, hasta }), n: await store.resumenNivelClub() };
+    const mi = (await store.actividadPenas({ desde })).find((x) => x.id === pe.id);
+    return { ingresos: [d.i.total - antes.i.total, d.i.n - antes.i.n], altas: d.a - antes.a, canjes: [d.c.canjes - antes.c.canjes, d.c.ahorro - antes.c.ahorro, d.c.monto - antes.c.monto], mora: [d.n.pausados_mora - antes.n.pausados_mora, d.n.deuda_en_mora - antes.n.deuda_en_mora], pena: mi && [mi.altas, mi.total] };
+  }
+  const esperado = { ingresos: [180000, 1], altas: 1, canjes: [1, 10000, 100000], mora: [1, 70000], pena: [1, 1] };
+  assert.deepStrictEqual(await caso(pg, "pg"), esperado, "Postgres");
+  assert.deepStrictEqual(await caso(mem, "mem"), esperado, "memoria");
+});
+
 test("las cédulas con puntos o guiones también cruzan con la base del club (Postgres = memoria)", opts, async () => {
   async function caso(store) {
     const s = await store.createSocio({ email: "ced-puntos@ejemplo.com", passwordHash: "x", nombre: "P", cedula: "7.000.001" });
