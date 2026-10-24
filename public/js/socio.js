@@ -1953,16 +1953,20 @@
 
   const qrListo = () => new Promise((res) => { let n = 0; (function chk() { if (window.qrcode || n++ > 40) return res(); setTimeout(chk, 50); })(); });
   const NIVEL_COLOR = { olimpista: "#c9c7c1", kids: "#ff8a80", premium: "#d9b65a", socio: "#ffffff" };
-  // Frente del carnet, como un carnet de verdad: escudo, nivel, foto de frente, nombre, número y desde cuándo es hincha.
-  // La fecha del carnet: un Socio muestra su antigüedad REAL en el club ("Socio desde marzo de 2014"); si el club todavía no nos la
-  // dio, muestra su número de socio y no una fecha inventada. Quien no es socio muestra desde cuándo es hincha de Olimpistas.
+  // Frente del carnet, como un carnet de verdad: escudo, nivel, foto de frente, nombre, número y las dos antigüedades.
+  // Son dos cosas distintas y se muestran por separado: "Miembro desde" (cuándo se registró en olimpistas.com) y, si es socio del club,
+  // "Socio desde" (su antigüedad REAL en el club). Si el club todavía no nos dio esa fecha, se muestra su número de socio y nunca una fecha inventada.
   const fechaMes = (d) => new Date(d + "T12:00:00").toLocaleDateString(LOC, { year: "numeric", month: "long" });
-  function antiguedadCarnet(c, desdeOlimpistas) {
-    if (c.esSocio) return c.socioDesde ? { et: T("cn_socio_desde"), val: fechaMes(c.socioDesde) } : { et: T("cn_nro_socio"), val: c.nroSocio || "—" };
-    return { et: T("m_cn_desde"), val: desdeOlimpistas };
+  function antiguedadesCarnet(c, desdeOlimpistas) {
+    const filas = [{ et: T("m_cn_desde"), val: desdeOlimpistas }];
+    if (c.esSocio) {
+      if (c.socioDesde) filas.push({ et: T("cn_socio_desde"), val: fechaMes(c.socioDesde) });
+      else if (c.nroSocio) filas.push({ et: T("cn_nro_socio"), val: c.nroSocio });
+    }
+    return filas;
   }
   function carnetFrente(c, { desde, iso, socio }) {
-    const ant = antiguedadCarnet(c, desde);
+    const antig = antiguedadesCarnet(c, desde);
     const code = String(iso || "").toLowerCase().trim();
     const bandera = /^[a-z]{2}$/.test(code) ? `<img class="cn2-flag" src="/assets/flags/4x3/${code}.svg" alt="" loading="lazy" />` : "";
     const foto = c.foto
@@ -1975,7 +1979,7 @@
         <div class="cn2-datos">
           <div class="cn2-dato"><small>${T("cn_nombre")}</small><b class="cn2-nom">${esc(c.nombre)}</b></div>
           <div class="cn2-dato"><small>${T("cn_numero")}</small><b class="cn2-nro">${esc(c.numero)}</b></div>
-          <div class="cn2-dato"><small>${esc(ant.et)}</small><b>${esc(ant.val || "")}</b></div>
+          ${antig.map((a) => `<div class="cn2-dato"><small>${esc(a.et)}</small><b>${esc(a.val || "")}</b></div>`).join("")}
           <div class="cn2-sello">${bandera}${socio ? `<span class="cn2-socio">${OLI.ic("verificado", 14, true)} ${T("cn_socio")}</span>` : ""}</div>
         </div>
       </div>`;
@@ -2038,7 +2042,7 @@
               </div></div>
               <div class="cn2-resumen">
                 <h3>${T("m_sos")} ${tier ? tier.nombre : "Olimpista"} <span style="color:var(--oro)">●</span></h3>
-                <p class="muted">${carnet.esSocio && carnet.socioDesde ? T("cn_socio_desde") + " " + fechaMes(carnet.socioDesde) : T("m_miembro_desde") + " " + (membresia ? fecha(membresia.inicio) : fecha(carnet.desde))}.</p>
+                <p class="muted">${T("m_miembro_desde")} ${membresia ? fecha(membresia.inicio) : fecha(carnet.desde)}.${carnet.esSocio && carnet.socioDesde ? "<br>" + T("cn_socio_desde") + " " + fechaMes(carnet.socioDesde) + "." : ""}</p>
                 ${ubicHtml}
                 ${social}
                 <ul class="benefits">${(tier?.beneficios || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul>
