@@ -1796,8 +1796,12 @@
     _subData = { id: s.id, termina: s.termina, celebrado: false };
     cv().innerHTML = `<div class="section sub-detalle-wrap" style="border:none;padding-top:8px">
       <a class="sub-back">‹ ${T("m_sub_volver")}</a>
+      <div class="sub-cols"><div class="sub-izq">
       <div class="sub-hero">${subastaMedia(s)}<span class="sub-unico">${icon("shield-check", { size: 11 })} ${T("m_sub_unico")}</span></div>
       <h2>${esc(s.titulo)}</h2><p class="lead">${esc(s.descripcion || "")}</p>
+      <h3 class="sub-feed-h">${T("m_sub_feed")}</h3>
+      <div class="sub-feed" id="subFeed">${feedHtml(r.feed)}</div>
+      </div><div class="sub-der">
       <div class="sub-box">
         <div class="sub-lbl">${T("m_sub_actual")}</div>
         <div class="sub-amt" id="subAmt">${gs(s.puja_actual)}</div>
@@ -1808,8 +1812,7 @@
       <p class="sub-meta">${icon("users", { size: 14 })} <b id="subPuj">${r.pujadores}</b> ${T("m_sub_pujando")} · ${T("m_sub_tupuja")}: <b id="subMia">${r.miPuja ? gs(r.miPuja) : "—"}</b></p>
       <p class="sub-antisnipe" id="subAntisnipe"${cerrada ? ' style="display:none"' : ""}>${T("m_sub_antisnipe")}</p>
       <div id="subAcciones">${accionesHtml(r, cerrada)}</div>
-      <h3 style="margin-top:24px">${T("m_sub_feed")}</h3>
-      <div class="sub-feed" id="subFeed">${feedHtml(r.feed)}</div>
+      </div></div>
     </div>`;
     cv().querySelector(".sub-back").onclick = () => { window.scrollTo(0, 0); stopSub(); descSeg = "subastas"; curSubId = null; syncUrl(); vSubastas(); };
     bindPujas(s.id);

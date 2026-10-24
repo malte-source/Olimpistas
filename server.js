@@ -173,7 +173,11 @@ app.use(express.static(PUBLIC, {
       res.setHeader("Cache-Control", "no-cache");                 // el SW debe actualizarse rápido
     } else if (/[\\/](assets|css|js)[\\/]/.test(filePath)) {
       // En prod: cache largo (los assets van versionados con ?v=). En dev: sin cache.
-      res.setHeader("Cache-Control", PROD ? "public, max-age=86400" : "no-cache");
+      // Si el ?v= es EXACTAMENTE la revisión actual (así lo escribe el servidor en el HTML), la URL cambia en cada deploy:
+      // se puede guardar un año y marcar inmutable (el navegador ni siquiera revalida). Un ?v= viejo o a mano (p. ej. ?v=88)
+      // sigue con el cache corto para no fijar nunca una versión vieja.
+      const versionado = PROD && res.req && res.req.query && res.req.query.v === BUILD_ID && !!process.env.K_REVISION;
+      res.setHeader("Cache-Control", versionado ? "public, max-age=31536000, immutable" : PROD ? "public, max-age=86400" : "no-cache");
     }
   },
 }));
