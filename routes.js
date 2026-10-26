@@ -1659,13 +1659,13 @@ function buildRouter() {
     ]);
     const colas = [
       pagos && cola("pagos", "Pagos pendientes de acreditar", "pagos", "pagos", pagos, "Pedidos que el hincha inició y todavía no se acreditaron."),
-      subastas && cola("subastas", "Lotes ganados sin pagar", "subastas", "contenido", subastas, "El ganador todavía no pagó: pueden vencer y pasar al siguiente."),
+      subastas && cola("subastas", "Lotes ganados sin pagar", "subastas", "contenido/catalogo", subastas, "El ganador todavía no pagó: pueden vencer y pasar al siguiente."),
       atencion && cola("atencion", "Conversaciones esperando a una persona", "atencion", "atencion", (atencion || []).map((c) => ({ creado: c.derivada_en || c.actualizado || c.creado })), "El asistente las pasó al equipo."),
-      valid && cola("validaciones", "Validaciones y actualizaciones por revisar", "contenido", "contenido", valid, "Reclamos de socio y datos que hay que unificar o rechazar."),
-      ofertas && cola("ofertas", "Ofertas de comercios por aprobar", "beneficios", "contenido", ofertas, "Los comercios las cargan en borrador y el club las aprueba."),
-      penas && cola("penas", "Peñas por verificar", "penas", "contenido", penas, "Solicitudes nuevas desde la app."),
-      canjesPena && cola("canjes_pena", "Canjes del fondo de peñas por aprobar", "penas", "contenido", canjesPena),
-      canjesPuntos && cola("canjes_puntos", "Premios de puntos por entregar", "puntos", "contenido", canjesPuntos),
+      valid && cola("validaciones", "Validaciones y actualizaciones por revisar", "contenido", "contenido/cola", valid, "Reclamos de socio y datos que hay que unificar o rechazar."),
+      ofertas && cola("ofertas", "Ofertas de comercios por aprobar", "beneficios", "contenido/comercios", ofertas, "Los comercios las cargan en borrador y el club las aprueba."),
+      penas && cola("penas", "Peñas por verificar", "penas", "contenido/penas", penas, "Solicitudes nuevas desde la app."),
+      canjesPena && cola("canjes_pena", "Canjes del fondo de peñas por aprobar", "penas", "contenido/penas", canjesPena),
+      canjesPuntos && cola("canjes_puntos", "Premios de puntos por entregar", "puntos", "contenido/puntos", canjesPuntos),
     ].filter(Boolean);
     res.json({ colas, total: colas.reduce((a, c) => a + c.n, 0), envejecidos: colas.reduce((a, c) => a + c.envejecidos, 0), generado: new Date(ahora).toISOString() });
   }));
