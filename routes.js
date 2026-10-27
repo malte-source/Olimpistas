@@ -814,6 +814,9 @@ function buildRouter() {
     }
     return out;
   }
+  // Correos en fila (avisos de pausa del club): de a uno y con un respiro, para no pasar el límite de pedidos de Resend (10 por segundo).
+  let _colaCorreos = Promise.resolve();
+  const encolarCorreo = (fn) => { _colaCorreos = _colaCorreos.then(() => fn()).catch(() => {}).then(() => new Promise((r) => setTimeout(r, process.env.CORREO_RESPIRO_MS !== undefined ? Number(process.env.CORREO_RESPIRO_MS) : 150))); return _colaCorreos; };
   async function sincronizarSocios() {
     const out = { al_dia: 0, pausados_mora: 0, pausados_baja: 0, pendientes: 0 };
     if (!store.sociosConEstadoClub) return out;
@@ -832,8 +835,8 @@ function buildRouter() {
       await store.updateSocio(f.id, { es_socio_olimpia: false, club_estado: cls.estado, club_deuda: mora && cls.deuda ? Math.round(cls.deuda) : null, club_consulta: ahora });
       if (store.logAccionAdmin) store.logAccionAdmin({ accion: "pausar_socio_club", targetId: f.id, detalle: cls.estado, por: "sistema" });
       evento(f.id, "nivel_socio_pausado", { motivo: cls.estado });
-      if (mora) { out.pausados_mora++; mailer.enviarCuotaPendiente && mailer.enviarCuotaPendiente(f, { deuda: cls.deuda, portal: PORTAL_URL() }).catch(() => {}); }
-      else { out.pausados_baja++; mailer.enviarSocioBaja && mailer.enviarSocioBaja(f, { portal: PORTAL_URL() }).catch(() => {}); }
+      if (mora) { out.pausados_mora++; if (mailer.enviarCuotaPendiente) encolarCorreo(() => mailer.enviarCuotaPendiente(f, { deuda: cls.deuda, portal: PORTAL_URL() })); }
+      else { out.pausados_baja++; if (mailer.enviarSocioBaja) encolarCorreo(() => mailer.enviarSocioBaja(f, { portal: PORTAL_URL() })); }
     }
     return out;
   }

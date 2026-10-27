@@ -12,6 +12,7 @@ process.env.TUTI_MERCHANT_KEY = "falso";
 process.env.TUTI_PAUSA_MS = "0";
 process.env.TUTI_LOTE = "1";
 process.env.TUTI_BARRIDO = "off";
+process.env.CORREO_RESPIRO_MS = "0";
 
 const { test, before, after, beforeEach } = require("node:test");
 const assert = require("node:assert");
@@ -52,7 +53,7 @@ async function socio(cedula, estado, { pagoRef = "socio:padron", deuda = 0 } = {
   if (estado) await store.guardarEstadoTuti(cedula, { estado, plan: "Socio Pleno", numero: "9001", alDia: estado === "ACTIVE" || estado === "LIFETIME", deuda });
   return { id: s.id, h: { Authorization: "Bearer " + token, Cookie: "olimpista_sess=" + token } };
 }
-const cron = async () => (await (await api("/cron/horario", { metodo: "POST", h: CRON, cuerpo: {} })).json()).sincronizacionSocios;
+const cron = async () => { const r = (await (await api("/cron/horario", { metodo: "POST", h: CRON, cuerpo: {} })).json()).sincronizacionSocios; await new Promise((x) => setTimeout(x, 60)); return r; };   // los avisos salen en fila: se espera a que termine
 const nivel = async (id) => ({ tier: (await store.getMembresia(id)).tier_slug, socio: !!(await store.getSocioById(id)).es_socio_olimpia, club: (await store.getSocioById(id)).club_estado });
 
 test("apagada: nadie pierde el nivel, y el panel cuenta a quién se le pausaría", async () => {
@@ -128,4 +129,12 @@ test("los avisos existen en español e inglés y la tarjeta se llama Carnet de O
   assert.match(i, /cn_titulo: "Carnet de Olimpista"/);
   assert.match(i, /cn_titulo: "Olimpista card"/);
   assert.ok(!/Carnet de hincha/.test(i));
+});
+
+test("los avisos de pausa salen en fila (de a uno y con respiro), no todos juntos: así no se pasa el límite de pedidos de Resend", () => {
+  const fs = require("fs"), path = require("path");
+  const r = fs.readFileSync(path.join(__dirname, "..", "routes.js"), "utf8");
+  assert.ok(/const encolarCorreo = \(fn\) => \{ _colaCorreos = _colaCorreos\.then\(\(\) => fn\(\)\)/.test(r));
+  assert.ok(/encolarCorreo\(\(\) => mailer\.enviarCuotaPendiente\(/.test(r) && /encolarCorreo\(\(\) => mailer\.enviarSocioBaja\(/.test(r));
+  assert.ok(!/mailer\.enviarCuotaPendiente\(f, \{ deuda: cls\.deuda, portal: PORTAL_URL\(\) \}\)\.catch/.test(r), "ya no se disparan en paralelo");
 });

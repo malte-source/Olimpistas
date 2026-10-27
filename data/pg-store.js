@@ -480,7 +480,7 @@ function createPgStore({ databaseUrl, debug }) {
         WHERE m.estado='activa' AND m.tier_slug IN ('premium','kids')
           AND m.pago_ref IS NOT NULL AND m.pago_ref <> '' AND m.pago_ref NOT LIKE 'socio:%'
           AND s.email <> '' AND s.email NOT LIKE ${dom} AND coalesce(s.marketing_baja,false) = false
-          AND (m.inicio + interval '1 year')::date BETWEEN now()::date AND (now()::date + ${dias})`;
+          AND (m.inicio + interval '1 year')::date BETWEEN now()::date AND (now()::date + ${Math.max(0, Math.round(Number(dias) || 7))}::int)`;   // el ::int hace falta: sin tipo, Postgres no sabe si `date + ?` es un entero o un intervalo y la consulta fallaba
     },
     // ── Red de Beneficios ──
     async listComercios() { return sql`SELECT * FROM comercios ORDER BY nombre`; },
