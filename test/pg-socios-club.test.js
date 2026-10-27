@@ -189,3 +189,21 @@ test("fechas dudosas: se quita la que puso el sistema, no la declarada ni la de 
   assert.deepStrictEqual(await caso(pg), esperado, "Postgres");
   assert.deepStrictEqual(await caso(mem), esperado, "memoria");
 });
+
+test("aviso de renovación: la consulta de membresías por vencer funciona en Postgres y en memoria (antes fallaba con 'date + unknown')", opts, async () => {
+  async function caso(store, tag) {
+    const mk = async (suf, diasDesdeInicio, pagoRef) => {
+      const s = await store.createSocio({ email: `renov-${suf}-${tag}@ejemplo.com`, passwordHash: "x", nombre: "R" });
+      const m = await store.setMembresia(s.id, { tierSlug: "premium", ciclo: "anio", pagoRef });
+      const inicio = new Date(Date.now() - diasDesdeInicio * 86400000).toISOString();
+      if (store._sql) await store._sql`UPDATE membresias SET inicio = ${inicio} WHERE id = ${m.id}`; else m.inicio = inicio;
+      return s;
+    };
+    const vence5 = await mk("a", 360, "ped_pagado"), vence100 = await mk("b", 265, "ped_pagado"), cortesia = await mk("c", 360, "socio:padron"), sinPago = await mk("d", 360, "");
+    const ids = new Set((await store.membresiasPorVencer(7)).map((x) => x.id));
+    return [ids.has(vence5.id), ids.has(vence100.id), ids.has(cortesia.id), ids.has(sinPago.id)];
+  }
+  const esperado = [true, false, false, false];
+  assert.deepStrictEqual(await caso(pg, "pg"), esperado, "Postgres");
+  assert.deepStrictEqual(await caso(mem, "mem"), esperado, "memoria");
+});
