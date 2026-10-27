@@ -251,6 +251,14 @@
     .soc-tabla thead th { position:sticky; top:0; z-index:2; background:var(--surface-card); }
     .soc-th { all:unset; cursor:pointer; text-transform:inherit; letter-spacing:inherit; font:inherit; color:inherit; }
     .soc-th:focus-visible, .soc-fila:focus-visible { outline:2px solid var(--focus-ring); outline-offset:-2px; }
+    /* Contenido por secciones: una pestaña por tema (en vez de todo apilado en una página larguísima). */
+    .cont-tabs { display:flex; gap:8px; overflow-x:auto; padding:2px 0 12px; margin:0 0 4px; border-bottom:1px solid var(--border-default); scrollbar-width:thin; }
+    .cont-tab { flex:none; min-height:40px; padding:6px 14px; border-radius:999px; border:1px solid var(--border-default); background:transparent; color:var(--text-secondary); font:inherit; font-weight:600; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; }
+    .cont-tab:hover { color:var(--text-primary); }
+    .cont-tab[aria-selected="true"] { background:var(--text-primary); border-color:var(--text-primary); color:var(--surface-page); }
+    .cont-tab:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+    .cont-tab .cont-n { min-width:20px; padding:0 6px; border-radius:999px; background:var(--text-error, #c0392b); color:#fff; font-size:12px; line-height:20px; text-align:center; }
+    .cont-oculto { display:none !important; }
     .soc-fila { cursor:pointer; }
     .soc-fila:hover, .soc-fila:focus-within { background:var(--overlay-soft); }
     .adm .soc-lim select { width:auto; }
@@ -485,7 +493,8 @@
 
         <!-- ÁREA: CONTENIDO -->
         <section class="area" id="area-contenido" hidden>
-          <div data-sec="contenido,subastas,estadio">
+          <nav class="cont-tabs" id="contTabs" role="tablist" aria-label="Secciones de Contenido"></nav>
+          <div data-sec="contenido,subastas,estadio" data-sub="catalogo">
           <h2>Sorteos, preventas y contenido</h2>
           <div class="search-row" style="gap:8px">
             <select id="crudSel" style="flex:0 0 auto;width:auto"><option value="sorteos">Sorteos</option><option value="preventas">Preventas</option><option value="subastas">Subastas</option><option value="encuestas">Encuestas</option><option value="comercios">Comercios</option><option value="contenido">Contenido</option></select>
@@ -495,13 +504,13 @@
           <div id="crudList"><p class="loading">Cargando…</p></div>
           </div>
 
-          <div data-sec="penas">
+          <div data-sec="penas" data-sub="penas">
           <h2>Peñas</h2>
           <p class="hint">Solicitudes para <b>verificar</b>, ranking y canjes del fondo que esperan tu aprobación.</p>
           <div id="penasWrap"><p class="loading">Cargando…</p></div>
           </div>
 
-          <div data-sec="beneficios">
+          <div data-sec="beneficios" data-sub="comercios">
           <h2>Comercios de la red</h2>
           <p class="hint">Qué le falta a cada comercio para estar completo (logo, ubicación, acceso al portal, beneficios) y cómo viene el mes. Se ordena primero por lo que más falta.</p>
           <div class="soc-filtros" style="margin:6px 0">
@@ -514,20 +523,20 @@
           <p class="muted soc-resumen" id="comResumen" aria-live="polite"></p>
           <div id="comWrap"><p class="loading">Cargando…</p></div>
           </div>
-          <div data-sec="beneficios">
+          <div data-sec="beneficios" data-sub="comercios">
           <h2>Ofertas de comercios</h2>
           <p class="hint">Las ofertas que cargan los comercios esperan acá: <b>aprobá y publicá</b> o <b>rechazá</b> con el motivo (lo ve el comercio). El reporte para sponsors cruza canjes, ahorro y ventas por comercio, ciudad y nivel.</p>
           <div class="row-actions" style="margin:6px 0"><button class="btn btn-sm btn-ghost" id="sponsorsCsv">Reporte para sponsors (mes en curso)</button> <button class="btn btn-sm btn-ghost" id="cargarMuestra">Cargar beneficios de muestra (socios)</button></div>
           <div id="ofertasWrap"><p class="loading">Cargando…</p></div>
           </div>
 
-          <div data-sec="puntos">
+          <div data-sec="puntos" data-sub="puntos">
           <h2>Puntos</h2>
           <p class="hint">Reglas de acumulación, catálogo de canje, misión semanal y canjes por entregar. Los puntos vencen tras 12 meses sin actividad (decisión del club).</p>
           <div id="puntosWrap"><p class="loading">Cargando…</p></div>
           </div>
 
-          <div data-sec="contenido">
+          <div data-sec="contenido" data-sub="cola">
           <h2>Cola de Actualización (socios)</h2>
           <p class="hint">Datos capturados en el onboarding. Verificá contra el padrón y <b>Unificá</b> para volcarlos a la base oficial, o <b>Rechazá</b>.</p>
           <div class="search-row" style="margin-bottom:10px">
@@ -740,6 +749,33 @@
       decisiones: [cargarDecisiones],
       sistema: [cargarIntegraciones, cargarUsuarios, cargarMatrizRoles, cargarSelfies, cargarAcciones],
     };
+    // Contenido por secciones: una pestaña por tema, con un globito con lo que está esperando (viene de "Para hacer ahora"). Se puede llegar directo con #/contenido/<seccion>.
+    var CONT_SUBS = [["comercios", "Comercios y ofertas"], ["catalogo", "Subastas, sorteos y contenido"], ["penas", "Peñas"], ["puntos", "Puntos"], ["cola", "Cola de revisión"]];
+    var CONT_ALIAS = { ofertas: "comercios", comercios: "comercios", subastas: "catalogo", sorteos: "catalogo", contenido: "catalogo", catalogo: "catalogo", penas: "penas", puntos: "puntos", validaciones: "cola", cola: "cola" };
+    var CONT_COLA = { comercios: ["ofertas"], catalogo: ["subastas"], penas: ["penas", "canjes_pena"], puntos: ["canjes_puntos"], cola: ["validaciones"] };
+    var contPend = {};
+    function contBloques(sub) { return Array.prototype.slice.call(document.querySelectorAll('#area-contenido [data-sub="' + sub + '"]')); }
+    function contDisponible(sub) { return contBloques(sub).some(function (b) { return veSeccion.apply(null, b.dataset.sec.split(",")); }); }
+    function contSub(sub) {
+      var disp = CONT_SUBS.filter(function (s) { return contDisponible(s[0]); });
+      if (!disp.length) return;
+      if (!disp.some(function (s) { return s[0] === sub; })) sub = disp[0][0];
+      try { sessionStorage.setItem("oli_cont_sub", sub); } catch (e) {}
+      $("contTabs").innerHTML = disp.map(function (s) {
+        var n = (CONT_COLA[s[0]] || []).reduce(function (a, k) { return a + (contPend[k] || 0); }, 0);
+        return '<button type="button" role="tab" class="cont-tab" data-contsub="' + s[0] + '" aria-selected="' + (s[0] === sub) + '">' + esc(s[1]) + (n ? '<span class="cont-n" title="Esperando">' + n + '</span>' : '') + '</button>';
+      }).join("");
+      CONT_SUBS.forEach(function (s) { contBloques(s[0]).forEach(function (b) { b.classList.toggle("cont-oculto", s[0] !== sub); }); });
+    }
+    document.addEventListener("click", function (e) {
+      var t = e.target.closest && e.target.closest("[data-contsub]"); if (!t) return;
+      contSub(t.dataset.contsub);
+      var h = "#/contenido/" + t.dataset.contsub; if (location.hash !== h) { try { history.replaceState(null, "", h); } catch (x) {} }
+    });
+    async function contCargarPendientes() {
+      try { var d = await api("/admin/pendientes"); contPend = {}; (d.colas || []).forEach(function (c) { contPend[c.clave] = c.n; }); contSub(contActual()); } catch (e) { /* sin globitos */ }
+    }
+    function contActual() { var h = (location.hash || "").replace(/^#\/?/, "").split("/"), sub = h[0] === "contenido" && CONT_ALIAS[h[1]]; if (sub) return sub; try { return sessionStorage.getItem("oli_cont_sub") || ""; } catch (e) { return ""; } }
     var areaLoaded = {};
     function navTo(area) {
       if (AREAS.indexOf(area) < 0) area = "dashboard";
@@ -749,9 +785,10 @@
       for (var i = 0; i < links.length; i++) { links[i].classList.toggle("on", links[i].dataset.area === area); }
       $("areaTitle").textContent = AREA_TITLE[area];
       if (!areaLoaded[area]) { areaLoaded[area] = true; (AREA_LOADERS[area] || []).forEach(function (f) { try { f(); } catch (e) {} }); }
+      if (area === "contenido") { contSub(contActual()); contCargarPendientes(); }
       try { window.scrollTo(0, 0); } catch (e) {}
     }
-    function onHash() { var a = (location.hash || "").replace(/^#\/?/, "") || "dashboard"; navTo(a); }
+    function onHash() { var a = (location.hash || "").replace(/^#\/?/, "").split("/")[0] || "dashboard"; navTo(a); }
     window.addEventListener("hashchange", onHash);
 
     async function cargar() {
