@@ -702,21 +702,35 @@
           if (e.target.classList.contains("tbl-filter")) { cont._tbl.filter = e.target.value; cont._tbl.page = 0; renderTablaBody(cont); }
         });
         cont.addEventListener("click", function (e) {
+          if (e.target.closest(".tbl-csv")) { tablaCsv(cont); return; }
           var s = e.target.closest("[data-sort]");
           if (s) { var k = s.dataset.sort; if (cont._tbl.sortKey === k) cont._tbl.sortDir = -cont._tbl.sortDir; else { cont._tbl.sortKey = k; cont._tbl.sortDir = 1; } cont._tbl.page = 0; renderTablaBody(cont); return; }
           var p = e.target.closest("[data-pg]");
           if (p && !p.disabled) { cont._tbl.page += (p.dataset.pg === "next" ? 1 : -1); renderTablaBody(cont); }
         });
       }
-      var filt = opts.filtro ? '<div class="tbl-controls"><input class="tbl-filter" type="search" placeholder="' + esc(opts.filterPh || "Filtrar…") + '" value="' + esc(st.filter) + '" /><span class="tbl-count muted"></span></div>' : '';
+      var filt = (opts.filtro || opts.csv) ? '<div class="tbl-controls">' + (opts.filtro ? '<input class="tbl-filter" type="search" placeholder="' + esc(opts.filterPh || "Filtrar…") + '" aria-label="' + esc(opts.filterPh || "Filtrar") + '" value="' + esc(st.filter) + '" />' : '') + '<span class="tbl-count muted"></span>' + (opts.csv ? '<button type="button" class="btn btn-sm btn-ghost tbl-csv">Exportar CSV</button>' : '') + '</div>' : '';
       cont.innerHTML = filt + '<div class="tbl-body"></div>';
       renderTablaBody(cont);
     }
-    function renderTablaBody(cont) {
-      var st = cont._tbl, cols = st.cols, opts = st.opts;
-      var rows = st.rows.slice();
+    // Las filas que se ven (filtradas y ordenadas), todas las páginas: las usan la pantalla y la exportación a CSV.
+    function tablaFilas(st) {
+      var cols = st.cols, rows = st.rows.slice();
       if (st.filter) { var f = st.filter.toLowerCase(); rows = rows.filter(function (r) { return cols.some(function (c) { return c.text && String(c.text(r) || "").toLowerCase().indexOf(f) > -1; }); }); }
       if (st.sortKey) { var col = cols.filter(function (c) { return c.key === st.sortKey; })[0]; if (col && col.text) rows.sort(function (a, b) { var av = String(col.text(a) || ""), bv = String(col.text(b) || ""); return av.localeCompare(bv, "es", { numeric: true }) * st.sortDir; }); }
+      return rows;
+    }
+    // Exportar a CSV lo que se está viendo (con el filtro y el orden puestos). opts.csv = [{ label, v: function (fila) }]; las celdas que empiezan con = + - @ no se interpretan como fórmula en Excel.
+    function tablaCsv(cont) {
+      var st = cont._tbl, cfg = st && st.opts && st.opts.csv; if (!cfg) return;
+      var q = function (v) { v = String(v == null ? "" : v); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+      var lineas = tablaFilas(st).map(function (r) { return cfg.map(function (c) { return q(c.v(r)); }).join(","); });
+      var blob = new Blob(["﻿" + cfg.map(function (c) { return q(c.label); }).join(",") + "\n" + lineas.join("\n")], { type: "text/csv;charset=utf-8" }), u = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = u; a.download = st.opts.csvNombre || "tabla.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u);
+    }
+    function renderTablaBody(cont) {
+      var st = cont._tbl, cols = st.cols, opts = st.opts;
+      var rows = tablaFilas(st);
       var total = rows.length, pages = Math.max(1, Math.ceil(total / st.pageSize));
       if (st.page >= pages) st.page = pages - 1; if (st.page < 0) st.page = 0;
       var slice = rows.slice(st.page * st.pageSize, st.page * st.pageSize + st.pageSize);
@@ -1472,9 +1486,16 @@
           if (cfg.comercio) comb = '<button class="btn btn-sm btn-ghost" data-comacc="' + esc(x.id) + '">Acceso</button><a class="btn btn-sm btn-ghost" href="/comercio" target="_blank" rel="noopener">Ver como</a>';
           var acc = w ? ('<button class="btn btn-sm btn-ghost" data-edit="' + esc(x.id) + '">Editar</button>' + parts + sub + encb + comb + (cfg.sorteo ? '<button class="btn btn-sm btn-ghost" data-gana="' + esc(x.id) + '">Ganador</button>' : '') + '<button class="btn btn-sm btn-ghost adm-neg" data-del="' + esc(x.id) + '">Borrar</button>') : (parts + sub + encb);
           var estadoPill = cfg.estado ? '<span class="pill ' + (cfg.estado(x).c || "") + '" style="margin-right:8px">' + esc(cfg.estado(x).l) + '</span>' : "";
-          return '<tr><td data-l="Item"><strong>' + esc(cfg.lbl(x) || "—") + '</strong><br>' + estadoPill + '<span class="muted">' + esc(cfg.info(x)) + '</span></td><td data-l=""><div class="row-actions" style="flex-wrap:wrap">' + acc + '</div></td></tr>';
-        }).join("");
-        $("crudList").innerHTML = '<table class="adm-tabla"><tbody>' + rows + '</tbody></table>';
+          return { id: x.id, x: x, estadoPill: estadoPill, acc: acc };
+        });
+        // Misma tabla común que el resto del panel: filtro, orden, páginas y exportar CSV. Los botones de cada fila (con sus permisos) son los mismos de antes.
+        var lista = $("crudList"); if (lista._tbl) { lista._tbl.filter = ""; lista._tbl.sortKey = null; }   // al cambiar de tipo no arrastra el filtro anterior
+        var etq = function (f) { return cfg.estado ? cfg.estado(f.x).l : ""; };
+        tabla(lista, [
+          { key: "item", label: cfg.t, text: function (f) { return (cfg.lbl(f.x) || "") + " " + etq(f) + " " + cfg.info(f.x); }, cell: function (f) { return '<strong>' + esc(cfg.lbl(f.x) || "—") + '</strong><br>' + f.estadoPill + '<span class="muted">' + esc(cfg.info(f.x)) + '</span>'; } },
+          { key: "acc", label: "", sortable: false, cell: function (f) { return '<div class="row-actions" style="flex-wrap:wrap">' + f.acc + '</div>'; } }
+        ], rows, { rowId: function (f) { return f.id; }, filtro: true, filterPh: "Filtrar " + cfg.t.toLowerCase() + " (nombre, estado, detalle)…", empty: "Nada coincide con el filtro.", pageSize: 25, csvNombre: crudActual + ".csv",
+          csv: [{ label: "nombre", v: function (f) { return cfg.lbl(f.x); } }, { label: "estado", v: etq }, { label: "detalle", v: function (f) { return cfg.info(f.x); } }] });
       } catch (e) { $("crudList").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
     // Usuario y contraseña con los que un comercio entra a su portal (/comercio). La contraseña solo se guarda cifrada.
@@ -2073,8 +2094,8 @@
       try {
         var d = await api("/admin/beneficios"), w = puede("beneficios.write");
         var pend = d.items.filter(function (b) { return b.estado === "borrador"; });
-        var rech = d.items.filter(function (b) { return b.estado === "rechazado"; }).slice(0, 5);
-        var pub = d.items.filter(function (b) { return b.estado === "aprobado" && b.activo !== false; }).sort(function (a, b) { return (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0); }).slice(0, 60);
+        var rech = d.items.filter(function (b) { return b.estado === "rechazado"; });
+        var pub = d.items.filter(function (b) { return b.estado === "aprobado" && b.activo !== false; }).sort(function (a, b) { return (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0); });
         var PARA = { todos: "Todos", "premium,socio": "Plus y Socio", socio: "Solo socios" };
         var fila = function (b, acciones, sel) {
           return '<div class="card-row" style="border:1px solid var(--border-default);border-radius:10px;padding:10px;margin:8px 0">' + (sel && w ? '<input type="checkbox" class="of-sel" data-ofsel="' + esc(b.id) + '" aria-label="Seleccionar ' + esc(b.titulo) + '" style="margin-right:8px;width:auto" />' : '') + '<b>' + esc(b.comercio_nombre || "") + '</b> — ' + esc(b.titulo) +
@@ -2084,10 +2105,20 @@
         box.innerHTML = (pend.length > 1 && w ? '<div class="row-actions" id="ofLote" style="margin:6px 0;align-items:center;gap:12px"><label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="ofTodas" style="width:auto" /> Seleccionar todas</label><button type="button" class="btn btn-sm" id="ofAprobarSel" disabled>Aprobar las seleccionadas</button><span class="muted" id="ofLoteMsg" role="status" style="font-size:13px"></span></div>' : '') + (pend.length ? pend.map(function (b) {
           return fila(b, '<button class="btn btn-sm" data-ofapr="' + esc(b.id) + '">Aprobar y publicar</button><button class="btn btn-sm btn-ghost adm-neg" data-ofrec="' + esc(b.id) + '">Rechazar</button>', true);
         }).join("") : '<p class="empty">No hay ofertas esperando aprobación.</p>') +
-          (pub.length ? '<div class="mini" style="margin-top:14px">Publicadas · tocá "Destacar" para que salgan de banner arriba de la Red de Beneficios (' + pub.filter(function (b) { return b.destacado; }).length + ' destacadas)</div>' + pub.map(function (b) {
-            return fila(b, '<button class="btn btn-sm ' + (b.destacado ? "" : "btn-ghost") + '" data-ofdest="' + esc(b.id) + '" data-on="' + (b.destacado ? "0" : "1") + '">' + (b.destacado ? "Destacada · quitar" : "Destacar") + '</button>');
-          }).join("") : "") +
-          (rech.length ? '<div class="mini">Rechazadas recientes</div>' + rech.map(function (b) { return fila(b, '<button class="btn btn-sm btn-ghost" data-ofapr="' + esc(b.id) + '">Aprobar igual</button>'); }).join("") : "");
+          (pub.length || rech.length ? '<div class="mini" style="margin-top:14px">Publicadas y rechazadas · tocá "Destacar" para que salgan de banner arriba de la Red de Beneficios (' + pub.filter(function (b) { return b.destacado; }).length + ' destacadas)</div><div id="ofTabla"></div>' : "");
+        var ofTodas = pub.concat(rech);
+        if (ofTodas.length) {
+          var estadoOf = function (b) { return b.estado === "rechazado" ? "Rechazada" : b.destacado ? "Destacada" : "Publicada"; };
+          tabla($("ofTabla"), [
+            { key: "comercio", label: "Comercio", text: function (b) { return b.comercio_nombre || ""; }, cell: function (b) { return '<b>' + esc(b.comercio_nombre || "—") + '</b>'; } },
+            { key: "oferta", label: "Oferta", text: function (b) { return b.titulo + " " + (b.descripcion || ""); }, cell: function (b) { return esc(b.titulo) + (b.descripcion ? '<br><span class="muted" style="font-size:13px">' + esc(b.descripcion) + '</span>' : ''); } },
+            { key: "valor", label: "Valor", text: function (b) { return b.valor || ""; }, cell: function (b) { return '<span class="pill">' + esc(b.valor || "") + '</span>'; } },
+            { key: "para", label: "Para", text: function (b) { return PARA[b.niveles] || b.niveles || ""; }, cell: function (b) { return esc(PARA[b.niveles] || b.niveles || "") + (b.stock != null ? '<br><span class="muted" style="font-size:13px">cupo ' + b.stock + '</span>' : ''); } },
+            { key: "estado", label: "Estado", text: estadoOf, cell: function (b) { return '<span class="pill ' + (b.estado === "rechazado" ? "pill-warn" : b.destacado ? "pill-ok" : "") + '">' + estadoOf(b) + '</span>' + (b.motivo_rechazo ? '<br><span class="err" style="font-size:13px">' + esc(b.motivo_rechazo) + '</span>' : ''); } },
+            { key: "acc", label: "", sortable: false, cell: function (b) { return !w ? "" : b.estado === "rechazado" ? '<button class="btn btn-sm btn-ghost" data-ofapr="' + esc(b.id) + '">Aprobar igual</button>' : '<button class="btn btn-sm ' + (b.destacado ? "" : "btn-ghost") + '" data-ofdest="' + esc(b.id) + '" data-on="' + (b.destacado ? "0" : "1") + '">' + (b.destacado ? "Destacada · quitar" : "Destacar") + '</button>'; } }
+          ], ofTodas, { rowId: function (b) { return b.id; }, filtro: true, filterPh: "Filtrar ofertas (comercio, oferta, estado)…", empty: "Ninguna oferta coincide.", pageSize: 25, csvNombre: "ofertas.csv",
+            csv: [{ label: "comercio", v: function (b) { return b.comercio_nombre; } }, { label: "oferta", v: function (b) { return b.titulo; } }, { label: "valor", v: function (b) { return b.valor; } }, { label: "para", v: function (b) { return PARA[b.niveles] || b.niveles; } }, { label: "cupo", v: function (b) { return b.stock == null ? "" : b.stock; } }, { label: "estado", v: estadoOf }, { label: "motivo_rechazo", v: function (b) { return b.motivo_rechazo || ""; } }] });
+        }
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
     // Puntos: reglas (stepper), pasivo, canjes por entregar, catálogo y misiones.
@@ -2106,10 +2137,7 @@
           return '<div class="row-actions" style="justify-content:space-between;align-items:center;padding:6px 0"><span><b>' + esc(c.premio) + '</b> — ' + esc([c.nombre, c.apellido].filter(Boolean).join(" ") || c.email) + ' <span class="muted" style="font-size:12px">' + nf(c.costo) + ' pts · ' + esc(fmtFecha(c.creado)) + '</span></span>' +
             (w ? '<span><button class="btn btn-sm" data-canje="' + esc(c.id) + '" data-e="entregado">Entregado</button> <button class="btn btn-sm btn-ghost adm-neg" data-canje="' + esc(c.id) + '" data-e="cancelado">Cancelar</button></span>' : '') + '</div>';
         }).join("") : '<p class="empty">No hay canjes pendientes.</p>');
-        html += '<div class="mini">Catálogo de premios</div>' + (premios.length ? premios.map(function (p) {
-          return '<div class="row-actions" style="justify-content:space-between;align-items:center;padding:6px 0;opacity:' + (p.activo ? 1 : .55) + '"><span><b>' + esc(p.titulo) + '</b> <span class="muted" style="font-size:12px">' + esc(p.escalon) + ' · ' + nf(p.costo) + ' pts · ' + (p.stock == null ? 'sin tope' : 'quedan ' + p.stock) + ' · desde ' + esc(p.nivel_min) + '</span></span>' +
-            (w ? '<button class="btn btn-sm btn-ghost" data-premioact="' + esc(p.id) + '" data-a="' + (p.activo ? 0 : 1) + '">' + (p.activo ? "Ocultar" : "Publicar") + '</button>' : '') + '</div>';
-        }).join("") : '<p class="empty">Todavía no hay premios.</p>');
+        html += '<div class="mini">Catálogo de premios</div>' + (premios.length ? '<div id="premiosTabla"></div>' : '<p class="empty">Todavía no hay premios.</p>');
         if (w) html += '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700">Nuevo premio</summary><div class="fgrid" style="margin-top:8px">' +
           '<div class="full"><label>Título</label><input id="prTitulo" maxlength="120" /></div><div class="full"><label>Descripción (opcional)</label><input id="prDesc" maxlength="400" /></div>' +
           '<div><label>Escalón</label><select id="prEsc"><option value="bronce">Bronce</option><option value="plata">Plata</option><option value="oro">Oro</option></select></div>' +
@@ -2124,6 +2152,16 @@
           '<div class="full"><label>Pregunta</label><input id="miPreg" maxlength="200" /></div><div class="full"><label>Opciones (una por línea, de 2 a 4)</label><textarea id="miOps" rows="3" style="width:100%"></textarea></div></div>' +
           '<div class="row-actions"><button class="btn btn-sm" id="miCrear">Crear misión</button></div></details>';
         box.innerHTML = html;
+        if (premios.length) tabla($("premiosTabla"), [
+          { key: "premio", label: "Premio", text: function (p) { return p.titulo; }, cell: function (p) { return '<b>' + esc(p.titulo) + '</b>'; } },
+          { key: "escalon", label: "Escalón", text: function (p) { return p.escalon || ""; }, cell: function (p) { return esc(p.escalon || ""); } },
+          { key: "costo", label: "Costo", text: function (p) { return String(p.costo).padStart(10, "0"); }, cell: function (p) { return nf(p.costo) + ' pts'; } },
+          { key: "stock", label: "Stock", text: function (p) { return p.stock == null ? "999999999" : String(p.stock).padStart(9, "0"); }, cell: function (p) { return p.stock == null ? 'sin tope' : 'quedan ' + p.stock; } },
+          { key: "nivel", label: "Desde el nivel", text: function (p) { return p.nivel_min || ""; }, cell: function (p) { return esc(p.nivel_min || ""); } },
+          { key: "estado", label: "Estado", text: function (p) { return p.activo ? "Publicado" : "Oculto"; }, cell: function (p) { return '<span class="pill ' + (p.activo ? "pill-ok" : "") + '">' + (p.activo ? "Publicado" : "Oculto") + '</span>'; } },
+          { key: "acc", label: "", sortable: false, cell: function (p) { return w ? '<button class="btn btn-sm btn-ghost" data-premioact="' + esc(p.id) + '" data-a="' + (p.activo ? 0 : 1) + '">' + (p.activo ? "Ocultar" : "Publicar") + '</button>' : ''; } }
+        ], premios, { rowId: function (p) { return p.id; }, filtro: true, filterPh: "Filtrar premios…", empty: "Ningún premio coincide.", pageSize: 25, csvNombre: "premios.csv",
+          csv: [{ label: "premio", v: function (p) { return p.titulo; } }, { label: "escalon", v: function (p) { return p.escalon; } }, { label: "costo_puntos", v: function (p) { return p.costo; } }, { label: "stock", v: function (p) { return p.stock == null ? "sin tope" : p.stock; } }, { label: "desde_nivel", v: function (p) { return p.nivel_min; } }, { label: "estado", v: function (p) { return p.activo ? "publicado" : "oculto"; } }] });
       } catch (e) { box.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
     // Peñas: solicitudes, ranking y canjes del fondo.
