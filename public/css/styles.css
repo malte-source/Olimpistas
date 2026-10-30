@@ -1712,6 +1712,8 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .ih-side > .ih-pf { order: 7; }
 .ih-side > .socio-banner { order: 8; margin-top: 0 !important; }
 .ih-main > .ih-deudas { order: 0; }
+.sub-sigue { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; font-size: var(--t-13); color: var(--text-secondary); }
+.sub-sigue[hidden] { display: none; }
 
 /* Lo que hay que pagar: una tarjeta por deuda, antes que todo lo demás. El oro solo en el botón (cuesta plata). */
 .ih-deudas { display: flex; flex-direction: column; gap: 10px; }

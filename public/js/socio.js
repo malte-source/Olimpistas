@@ -1967,6 +1967,7 @@
         <div class="sub-clock${cd.urg ? " urg" : ""}" id="subClock"><span>${T("m_sub_cierra")}</span> <b id="subCd">${cerrada ? T("m_sub_cerrada") : cd.txt}</b></div>
       </div>
       <p class="sub-meta">${icon("users", { size: 14 })} <b id="subPuj">${r.pujadores}</b> ${T("m_sub_pujando")} · ${T("m_sub_tupuja")}: <b id="subMia">${r.miPuja ? gs(r.miPuja) : "—"}</b></p>
+      <p class="sub-sigue" id="subSigue"${r.miPuja && !cerrada ? "" : " hidden"}>${icon("bell", { size: 14 })} ${T("m_sub_sigue")}</p>
       <p class="sub-antisnipe" id="subAntisnipe"${cerrada ? ' style="display:none"' : ""}>${T("m_sub_antisnipe")}</p>
       <div id="subAcciones">${accionesHtml(r, cerrada)}</div>
       </div></div>
@@ -2028,6 +2029,7 @@
     document.getElementById("subState").innerHTML = estadoHtml(r, cerrada);
     document.getElementById("subPuj").textContent = r.pujadores;
     document.getElementById("subMia").textContent = r.miPuja ? gs(r.miPuja) : "—";
+    const sigue = document.getElementById("subSigue"); if (sigue) sigue.hidden = !(r.miPuja && !cerrada);
     document.getElementById("subFeed").innerHTML = feedHtml(r.feed);
     // El detalle se refresca solo cada pocos segundos: si estás tipeando un monto propio, no se lo borramos.
     const inp = document.getElementById("subCustomInput");

@@ -1170,6 +1170,14 @@ function buildRouter() {
     if (store.registrarVitales && [v.lcp, v.inp, v.cls, v.fcp, v.ttfb].some((x) => x != null)) store.registrarVitales(v).catch(() => {});
     res.status(204).end();
   }));
+  // Cada minuto (Cloud Scheduler): abre, cierra y avisa a quienes siguen un lote, sin depender de que haya visitas. Idempotente y liviano.
+  r.post("/cron/subastas", wrap(async (req, res) => {
+    const tok = process.env.CRON_SECRET;
+    if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
+    _barridoSubT = 0;
+    await barrerEstadosSubastas();
+    res.json({ ok: true });
+  }));
   r.post("/cron/horario", wrap(async (req, res) => {
     const tok = process.env.CRON_SECRET;
     if (!tok || !igualesSeguro(req.headers["x-cron-token"], tok)) return res.status(401).json({ error: "no autorizado" });
@@ -2504,13 +2512,42 @@ function buildRouter() {
       return pend.length;
     } catch (e) { log.error({ err: e.message }, "subastas notificar"); return 0; }
   }
+  // P6 · Quien pujó sigue el lote. Además del "te superaron" (que sale en cada puja), a cada seguidor se le avisa UNA vez cuando faltan 3 minutos
+  // y UNA vez cuando el lote cierra sin que haya ganado. Cada aviso se reserva por lote (reservarNotificacion es atómico), así que no se repite
+  // aunque corran varias instancias a la vez; el push respeta las preferencias de cada persona (tipo "subasta"). Nada de esto frena el cierre.
+  async function avisarSeguidoresSubastas() {
+    try {
+      if (!store.seguidoresSubasta || !store.subastasCierranEn) return;
+      const reservar = store.reservarNotificacion ? (k) => store.reservarNotificacion(k) : async () => true;
+      const aTodos = async (seguidores, armar) => {
+        for (let i = 0; i < seguidores.length; i += 20) await Promise.all(seguidores.slice(i, i + 20).map((f) => pushLib.avisar(store, f.socio_id, "subasta", armar(f), { base: baseUrl() }).catch(() => 0)));
+      };
+      for (const s of await store.subastasCierranEn(3)) {
+        if (!(await reservar("subasta:3min:" + s.id))) continue;
+        await aTodos(await store.seguidoresSubasta(s.id), (f) => ({
+          titulo: "Quedan 3 minutos: " + s.titulo,
+          cuerpo: f.socio_id === s.ganador_id ? "Vas ganando con " + gsTxt(s.puja_actual) + ". Entrá por si te superan." : "Hoy va " + gsTxt(s.puja_actual) + ". Todavía podés pujar.",
+          url: "/subasta/" + encodeURIComponent(s.slug || s.id), tag: "sub3-" + s.id,
+        }));
+      }
+      for (const s of await store.subastasCerradasRecientes(24)) {
+        if (!(await reservar("subasta:cierre-seguidores:" + s.id))) continue;
+        const ganador = s.adjudicado_a || s.ganador_id;
+        await aTodos((await store.seguidoresSubasta(s.id)).filter((f) => f.socio_id !== ganador), () => ({
+          titulo: "Terminó " + s.titulo, cuerpo: "Ganó otra persona con " + gsTxt(s.puja_actual) + ". Mirá los próximos lotes.", url: "/miembro/descubrir/subastas", tag: "subfin-" + s.id,
+        }));
+      }
+    } catch (e) { log.error({ err: e && e.message }, "subastas: avisos a seguidores"); }
+  }
   // Abre programadas + cierra vencidas + notifica. Usado por el cron diario (backstop)
   // y al cerrar manualmente desde el admin.
   async function cerrarYnotificarSubastas() {
     try {
       if (store.abrirProgramadas) await store.abrirProgramadas();
       await cerrarVencidas();
-      return await notificarGanadoresPendientes();
+      const n = await notificarGanadoresPendientes();
+      await avisarSeguidoresSubastas();
+      return n;
     } catch (e) { log.error({ err: e.message }, "subastas cierre"); return 0; }
   }
   // Barrido de estados THROTTLEADO a 1 cada 15s process-wide: abrir programadas + cerrar
@@ -2525,6 +2562,7 @@ function buildRouter() {
       if (store.abrirProgramadas) await store.abrirProgramadas();
       await cerrarVencidas();
       await notificarGanadoresPendientes();
+      await avisarSeguidoresSubastas();
     }
     catch (e) { log.error({ err: e.message }, "subastas barrido"); }
   }
