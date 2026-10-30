@@ -1711,6 +1711,18 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .ih-main > .ih-nov { order: 6; }
 .ih-side > .ih-pf { order: 7; }
 .ih-side > .socio-banner { order: 8; margin-top: 0 !important; }
+.ih-main > .ih-deudas { order: 0; }
+
+/* Lo que hay que pagar: una tarjeta por deuda, antes que todo lo demás. El oro solo en el botón (cuesta plata). */
+.ih-deudas { display: flex; flex-direction: column; gap: 10px; }
+.deu { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; padding: 14px 16px; border-radius: var(--r-22); background: var(--surface-value); border: 1px solid var(--oro-200); color: var(--text-primary); }
+.deu-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 200px; }
+.deu-eb { font-size: var(--t-12); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); }
+.deu-t { font-size: var(--t-17); line-height: 1.25; overflow-wrap: anywhere; }
+.deu-v { font-size: var(--t-13); color: var(--text-secondary); }
+.deu-pg { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+.deu-m { font-family: var(--display); font-size: var(--t-20); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body[data-tab="inicio"] .socio-banner-pago { display: none; }   /* en Inicio la misma deuda ya tiene su tarjeta */
 
 .ih-hero { position: relative; overflow: hidden; isolation: isolate; padding: 24px 18px 18px; border-radius: var(--r-28); color: #fff; background: linear-gradient(145deg, #0a0a0a 0%, #1c1c21 58%, #2b2b32 100%); }
 .ih-hero::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 6px; background: repeating-linear-gradient(90deg, #fff 0 18px, #0a0a0a 18px 36px); }

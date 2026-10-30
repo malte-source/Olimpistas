@@ -647,6 +647,12 @@ function createPgStore({ databaseUrl, debug }) {
         FROM pujas p JOIN subastas s ON s.id = p.subasta_id WHERE p.socio_id = ${socioId}
         GROUP BY s.id ORDER BY MAX(p.creado) DESC LIMIT ${limit}`;
     },
+    // Lotes que ganó la persona y todavía no pagó (con plazo vigente o sin plazo): sus deudas con Olimpistas por subastas.
+    async subastasPorPagar(socioId) {
+      return sql`SELECT id, titulo, puja_actual, pago_vence, ronda FROM subastas
+        WHERE estado = 'cerrada' AND COALESCE(adjudicado_a, ganador_id) = ${socioId} AND pago_estado IS DISTINCT FROM 'pagado'
+          AND (pago_vence IS NULL OR pago_vence > now()) ORDER BY pago_vence NULLS LAST`;
+    },
     async crearSegmento({ nombre, filtros, por }) {
       const id = uid("seg");
       const [s] = await sql`INSERT INTO segmentos_guardados (id, nombre, filtros, creado_por) VALUES (${id}, ${nombre}, ${JSON.stringify(filtros || {})}, ${por || "admin"}) RETURNING *`;

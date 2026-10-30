@@ -221,7 +221,7 @@
     const s = SESSION.socio;
     const nombre = esc((String(s.nombre || s.email || "").trim().split(" ")[0]) || "Olimpista");
     view().innerHTML = skeleton(2);
-    const [subsR, sorteosR, preventasR, encsR, ahorroR, puntosR, penasR, benR, statsR] = await Promise.all([
+    const [subsR, sorteosR, preventasR, encsR, ahorroR, puntosR, penasR, benR, statsR, deudasR] = await Promise.all([
       api("/subastas").catch(() => ({ items: [] })),
       api("/sorteos").catch(() => ({ items: [] })),
       api("/preventas").catch(() => ({ items: [] })),
@@ -231,6 +231,7 @@
       api("/penas").catch(() => null),
       api("/beneficios").catch(() => null),
       api("/stats").catch(() => null),
+      api("/deudas").catch(() => ({ items: [] })),
     ]);
     const subaViva = (subsR.items || []).find((x) => x.estado === "activa");
     const nivelTxt = "Olimpista " + (TIER_LBL[(SESSION.membresia && SESSION.membresia.tier_slug) || "olimpista"] || "").replace(/^Olimpista$/, "").trim();
@@ -295,6 +296,7 @@
     view().innerHTML = `<div class="section ih-sec" style="border:none;padding-top:8px">
       <div class="ih">
         <div class="ih-main">
+          ${wDeudas(deudasR)}
           ${hero}
           ${rail}
           ${vivo ? `<section class="ih-b ih-vivo"><div class="ih-h"><h3>${T("ih_vivo_h")}</h3></div>${vivo}</section>` : ""}
@@ -310,6 +312,7 @@
         </aside>
       </div></div>`;
     view().querySelectorAll("[data-goto]").forEach((el) => el.addEventListener("click", () => { if (el.dataset.seg) descSeg = el.dataset.seg; activar(el.dataset.goto); }));
+    view().querySelectorAll("[data-deuda]").forEach((el) => el.addEventListener("click", () => pagarDeuda(((deudasR && deudasR.items) || [])[Number(el.dataset.deuda)], el)));
     view().querySelectorAll("[data-ben-ini]").forEach((el) => el.addEventListener("click", () => { _benAbrir = el.dataset.benIni; activar("beneficios"); }));
     renderProgreso();
     const inv = view().querySelector("#iniInvitar");
@@ -358,6 +361,25 @@
       </button>`;
   }
   // Tu peña: si ya estás, el puesto y la hinchada; si no, la invitación a elegir una.
+  // Una tarjeta por cada deuda: qué es, cuánto, hasta cuándo y el botón para pagarla. Lo que cuesta plata va primero en Inicio y con el botón de valor.
+  function wDeudas(d) {
+    const items = d && Array.isArray(d.items) ? d.items : [];
+    if (!items.length) return "";
+    const eb = { subasta: "dd_subasta", membresia: "dd_membresia", preventa: "dd_preventa" };
+    const tarjeta = (x, i) => `<article class="deu" data-tipo="${esc(x.tipo)}">
+        <div class="deu-tx"><span class="deu-eb">${T(eb[x.tipo] || "dd_subasta")}</span><b class="deu-t">${esc(x.titulo)}</b>${x.vence ? `<span class="deu-v">${plazoPagoHtml(x.vence, x.ronda)}</span>` : x.tipo === "membresia" ? `<span class="deu-v">${T("dd_sin_completar")}</span>` : ""}</div>
+        <div class="deu-pg"><span class="deu-m">${esc(gs(x.monto))}</span><button type="button" class="btn btn-valor btn-sm" data-deuda="${i}">${T("dd_pagar")}</button></div></article>`;
+    return `<section class="ih-b ih-deudas" aria-label="${esc(T("dd_h"))}"><div class="ih-h"><h3>${T(items.length === 1 ? "dd_h1" : "dd_h")}</h3></div>${items.map(tarjeta).join("")}</section>`;
+  }
+  // Retoma el pago por su mismo checkout si sigue vigente; si no, inicia el pago como siempre (cédula incluida).
+  function pagarDeuda(x, btn) {
+    if (!x) return;
+    if (btn) { btn.disabled = true; setTimeout(() => { btn.disabled = false; }, 6000); }
+    hap();
+    if (x.url) { location.href = x.url; return; }
+    if (x.tipo === "subasta") return pagarSubasta(x.id);
+    if (x.tipo === "membresia") return upgrade(x.tier);
+  }
   function wPenaIni(penas) {
     const items = penas && Array.isArray(penas.items) ? penas.items : null;
     if (!items) return "";

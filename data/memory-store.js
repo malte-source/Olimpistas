@@ -491,6 +491,12 @@ function createMemoryStore({ filePath = null } = {}) {
         return { subasta_id: id, titulo: s.titulo, estado: s.estado, puja_actual: s.puja_actual, ganador_id: s.ganador_id || null, adjudicado_a: s.adjudicado_a || null, pago_estado: s.pago_estado || null, ...e };
       }).sort((a, b) => String(b.ultima).localeCompare(String(a.ultima))).slice(0, limit);
     },
+    async subastasPorPagar(socioId) {
+      const ahora = Date.now();
+      return (db.subastas || []).filter((s) => s.estado === "cerrada" && (s.adjudicado_a || s.ganador_id) === socioId && s.pago_estado !== "pagado" && (!s.pago_vence || new Date(s.pago_vence).getTime() > ahora))
+        .map((s) => ({ id: s.id, titulo: s.titulo, puja_actual: s.puja_actual, pago_vence: s.pago_vence || null, ronda: s.ronda || 1 }))
+        .sort((a, b) => (a.pago_vence ? new Date(a.pago_vence).getTime() : Infinity) - (b.pago_vence ? new Date(b.pago_vence).getTime() : Infinity));
+    },
     async crearSegmento({ nombre, filtros, por }) {
       const s = { id: uid("seg"), nombre, filtros: filtros || {}, creado_por: por || "admin", creado: nowIso() };
       (db.segmentos = db.segmentos || []).push(s); persist(); return s;
