@@ -1498,12 +1498,30 @@
           csv: [{ label: "nombre", v: function (f) { return cfg.lbl(f.x); } }, { label: "estado", v: etq }, { label: "detalle", v: function (f) { return cfg.info(f.x); } }] });
       } catch (e) { $("crudList").innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
     }
-    // Usuario y contraseña con los que un comercio entra a su portal (/comercio). La contraseña solo se guarda cifrada.
+    // Acceso de un comercio a su portal (/comercio). Lo normal: un enlace de un solo uso para que elija SU contraseña (nadie la escribe ni la pasa).
+    // Queda además, escondida, la opción de poner usuario y contraseña a mano (se guarda solo cifrada).
     function accesoComercio(id) {
       var it = crudItems.filter(function (x) { return x.id === id; })[0]; if (!it) return;
-      infoModal("Acceso del comercio", '<p class="muted" style="margin:6px 0 12px">Con esto entra <b>' + esc(it.nombre) + '</b> a ' + esc(location.origin) + '/comercio. Elegí una contraseña de al menos 6 caracteres y pasásela por un canal seguro.</p>' +
-        '<div class="fgrid"><div class="full"><label>Usuario</label><input id="ca_u" autocomplete="off" value="' + esc(it.usuario || "") + '" /></div><div class="full"><label>Contraseña nueva</label><input id="ca_p" type="text" autocomplete="off" /></div></div>' +
-        '<p class="err" id="ca_err"></p><div class="row-actions"><button class="btn" id="ca_ok">Guardar acceso</button></div>');
+      var mailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(it.contacto || "");
+      infoModal("Acceso del comercio",
+        '<p class="muted" style="margin:6px 0 12px">' + (it.usuario ? 'Mandale a <b>' + esc(it.nombre) + '</b> un enlace nuevo para elegir su contraseña (el usuario es <b>' + esc(it.usuario) + '</b>).' : 'Dale acceso a <b>' + esc(it.nombre) + '</b> a ' + esc(location.origin) + '/comercio. Le llega un enlace de un solo uso para elegir su propia contraseña: vos no escribís ni pasás ninguna.') + '</p>' +
+        '<p class="hint" id="ca_dest">' + (mailOk ? 'Se envía a <b>' + esc(it.contacto) + '</b>.' : 'Este comercio no tiene un correo válido: cargalo en «Editar», o copiá el enlace que te mostramos y pasáselo vos.') + '</p>' +
+        '<p class="err" id="ca_err2"></p><div id="ca_res"></div>' +
+        '<div class="row-actions"><button class="btn" id="ca_link">' + (mailOk ? 'Enviar enlace por correo' : 'Generar enlace') + '</button></div>' +
+        '<details style="margin-top:16px"><summary class="muted" style="cursor:pointer">Poner usuario y contraseña a mano</summary>' +
+        '<div class="fgrid" style="margin-top:10px"><div class="full"><label>Usuario</label><input id="ca_u" autocomplete="off" value="' + esc(it.usuario || "") + '" /></div><div class="full"><label>Contraseña nueva (mín. 6)</label><input id="ca_p" type="text" autocomplete="off" /></div></div>' +
+        '<p class="err" id="ca_err"></p><div class="row-actions"><button class="btn btn-ghost" id="ca_ok">Guardar acceso</button></div></details>');
+      $("ca_link").onclick = async function () {
+        var b = $("ca_link"); b.disabled = true; $("ca_err2").textContent = "";
+        try {
+          var r = await api("/admin/comercios/" + encodeURIComponent(id) + "/acceso-enlace", { method: "POST", body: {} });
+          if (r.correo_enviado) { $("uiModalBg").hidden = true; $("uiModalBox").innerHTML = ""; $("uiModalBg").onclick = null; toast("Enlace enviado a " + r.contacto); cargarCrud(); return; }
+          $("ca_res").innerHTML = '<div class="card" style="margin:10px 0"><p class="muted" style="margin:0 0 6px">' + (mailOk ? 'No pudimos mandar el correo.' : 'Sin correo.') + ' Copiá este enlace y pasáselo al comercio (usuario <b>' + esc(r.usuario) + '</b>). Sirve una sola vez y vence en 7 días.</p><input id="ca_url" readonly value="' + esc(r.url) + '" style="width:100%" /><div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" id="ca_copiar">Copiar enlace</button></div></div>';
+          $("ca_copiar").onclick = function () { $("ca_url").select(); try { navigator.clipboard.writeText(r.url).then(function () { toast("Enlace copiado"); }); } catch (e) { document.execCommand("copy"); toast("Enlace copiado"); } };
+          cargarCrud();
+        } catch (e) { $("ca_err2").textContent = e.message; }
+        b.disabled = false;
+      };
       $("ca_ok").onclick = async function () {
         try {
           await api("/admin/comercios/" + encodeURIComponent(id) + "/acceso", { method: "POST", body: { usuario: $("ca_u").value, password: $("ca_p").value } });

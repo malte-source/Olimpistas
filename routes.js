@@ -3699,6 +3699,30 @@ function buildRouter() {
     if (!c) throw httpError(404, "Comercio no encontrado");
     res.json({ ok: true, usuario });
   }));
+  // Alta guiada: el comercio recibe un enlace de UN SOLO USO (vence en 7 días) para elegir su propia contraseña; nadie escribe ni pasa una contraseña a mano.
+  // Si el comercio ya tenía acceso, el mismo botón le manda un enlace nuevo (la contraseña actual sigue valiendo hasta que elija otra).
+  r.post("/admin/comercios/:id/acceso-enlace", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
+    const c = (await store.listComercios()).find((x) => x.id === req.params.id);
+    if (!c) throw httpError(404, "Comercio no encontrado");
+    if (c.estado !== "activo") throw httpError(409, "El comercio está pausado: activalo antes de darle acceso");
+    let usuario = c.usuario;
+    if (!usuario) {
+      const base = String(c.nombre || "comercio").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30) || "comercio";
+      usuario = base.length >= 3 ? base : base + "-red";
+      for (let i = 2; store.getComercioByUsuario && await store.getComercioByUsuario(usuario); i++) usuario = base + "-" + i;
+      // Contraseña al azar que nadie conoce: el comercio elige la suya con el enlace.
+      await store.setComercioAcceso(c.id, usuario, await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 10));
+    }
+    const token = crypto.randomBytes(24).toString("base64url");
+    await store.updateComercio(c.id, { clave_token: huellaToken(token), clave_exp: new Date(Date.now() + 7 * 86400000).toISOString() });
+    const url = baseUrl() + "/comercio?clave=" + encodeURIComponent(token) + "&alta=1";
+    let correo = false;
+    if (emailOk(c.contacto) && mailer.enviarComercioAcceso) {
+      await mailer.enviarComercioAcceso({ email: c.contacto }, { comercio: c, usuario, url }).then((e) => { correo = !!(e && e.ok && e.modo === "resend"); }).catch(() => {});   // enviar() no lanza si falla: hay que mirar el resultado
+    }
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "comercios:acceso-enlace", targetId: c.id, detalle: c.nombre + (correo ? " · enviado por correo" : " · sin correo"), por: req.adminUser });
+    res.json({ ok: true, usuario, correo_enviado: correo, contacto: emailOk(c.contacto) ? c.contacto : "", ...(correo ? {} : { url }) });
+  }));
   // Login del comercio.
   r.post("/comercio/login", wrap(async (req, res) => {
     const usuario = String(req.body?.usuario || "").toLowerCase().trim();
