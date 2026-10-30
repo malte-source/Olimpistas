@@ -707,22 +707,83 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     async sincronizarMiembrosPena({ socioId } = {}) {
       const digitos = (v) => String(v || "").replace(/\D/g, "");
-      let vinculados = 0, asignados = 0;
+      let vinculados = 0, invitados = 0;
       for (const m of (db.pena_miembros || [])) {
         if (m.socio_id || !m.cedula) continue;
         const s = (db.socios || []).find((x) => digitos(x.cedula) === m.cedula && (!socioId || x.id === socioId));
         if (s) { m.socio_id = s.id; vinculados++; }
       }
+      // La peña ya los tiene en su padrón (aceptó): se les INVITA, y entran cuando confirman (mismo contrato que pg-store).
+      const sols = (db.pena_solicitudes = db.pena_solicitudes || []);
       const orden = (db.pena_miembros || []).filter((m) => m.socio_id && (db.penas || []).some((p) => p.id === m.pena_id && p.estado === "verificada"))
         .sort((a, b) => (a.orden - b.orden) || String(a.creado).localeCompare(String(b.creado)));
       const visto = new Set();
       for (const m of orden) {
-        if (visto.has(m.socio_id)) continue; visto.add(m.socio_id);
+        if (visto.has(m.socio_id)) continue;
         const s = (db.socios || []).find((x) => x.id === m.socio_id);
-        if (s && !s.pena_id && (!socioId || s.id === socioId)) { s.pena_id = m.pena_id; asignados++; }
+        if (!s || s.pena_id || (socioId && s.id !== socioId)) continue;
+        if (sols.some((q) => q.socio_id === s.id && (q.estado === "pendiente" || q.pena_id === m.pena_id))) continue;
+        visto.add(m.socio_id);
+        sols.push({ id: uid("psl"), socio_id: s.id, pena_id: m.pena_id, origen: "pena", estado: "pendiente", creado: nowIso(), resuelto: null }); invitados++;
       }
       persist();
-      return { vinculados, asignados };
+      return { vinculados, invitados };
+    },
+    // ── Membresía de peña de los dos lados (mismo contrato que pg-store) ──
+    async pedirPena({ socioId, penaId, origen }) {
+      const s = (db.socios || []).find((x) => x.id === socioId);
+      if (!s) return { error: "socio" };
+      if (s.pena_id) return { error: s.pena_id === penaId ? "ya_es" : "ya_tiene" };
+      const sols = (db.pena_solicitudes = db.pena_solicitudes || []);
+      const pend = sols.find((q) => q.socio_id === socioId && q.estado === "pendiente");
+      let ambas = false;
+      if (pend && pend.pena_id === penaId) {
+        if (pend.origen === origen) return { estado: "pendiente", solicitud: { ...pend } };
+        ambas = true;
+      } else if (pend) {
+        if (origen === "pena") return { error: "otra_pendiente" };
+        pend.estado = "cancelada"; pend.resuelto = nowIso();
+      }
+      if (!ambas && origen === "socio") {
+        const ced = String(s.cedula || "").replace(/[^0-9]/g, "");
+        ambas = (db.pena_miembros || []).some((m) => m.pena_id === penaId && (m.socio_id === socioId || (ced && m.cedula === ced)));
+      }
+      if (ambas) {
+        let sol = pend && pend.pena_id === penaId ? pend : null;
+        if (sol) { sol.estado = "aceptada"; sol.resuelto = nowIso(); }
+        else { sol = { id: uid("psl"), socio_id: socioId, pena_id: penaId, origen, estado: "aceptada", creado: nowIso(), resuelto: nowIso() }; sols.push(sol); }
+        s.pena_id = penaId; persist();
+        return { estado: "aceptada", solicitud: { ...sol } };
+      }
+      const sol = { id: uid("psl"), socio_id: socioId, pena_id: penaId, origen, estado: "pendiente", creado: nowIso(), resuelto: null };
+      sols.push(sol); persist();
+      return { estado: "pendiente", solicitud: { ...sol } };
+    },
+    async resolverSolicitudPena({ id, por, aceptar }) {
+      const sol = (db.pena_solicitudes || []).find((q) => q.id === id);
+      if (!sol) return { ok: false, motivo: "no_existe" };
+      if (sol.estado !== "pendiente") return { ok: false, motivo: "ya_resuelta", estado: sol.estado, solicitud: { ...sol } };
+      if (aceptar) {
+        if (sol.origen === por) return { ok: false, motivo: "no_corresponde" };
+        const s = (db.socios || []).find((x) => x.id === sol.socio_id);
+        if (!s || s.pena_id) { sol.estado = "cancelada"; sol.resuelto = nowIso(); persist(); return { ok: false, motivo: "ya_tiene", solicitud: { ...sol } }; }
+        sol.estado = "aceptada"; sol.resuelto = nowIso(); s.pena_id = sol.pena_id; persist();
+        return { ok: true, estado: "aceptada", solicitud: { ...sol } };
+      }
+      sol.estado = sol.origen === por ? "cancelada" : "rechazada"; sol.resuelto = nowIso(); persist();
+      return { ok: true, estado: sol.estado, solicitud: { ...sol } };
+    },
+    async getSolicitudPena(id) { const q = (db.pena_solicitudes || []).find((x) => x.id === id); return q ? { ...q } : null; },
+    async solicitudPenaPendiente(socioId) {
+      const q = (db.pena_solicitudes || []).find((x) => x.socio_id === socioId && x.estado === "pendiente");
+      if (!q) return null;
+      const p = (db.penas || []).find((x) => x.id === q.pena_id) || {};
+      return { ...q, pena_nombre: p.nombre, pena_slug: p.slug, pena_ciudad: p.ciudad };
+    },
+    async solicitudesPena(penaId) {
+      const tier = (sid) => { const m = (db.membresias || []).filter((x) => x.socio_id === sid && x.estado === "activa").slice(-1)[0]; return m ? m.tier_slug : "olimpista"; };
+      return (db.pena_solicitudes || []).filter((q) => q.pena_id === penaId && q.estado === "pendiente").sort((a, b) => String(a.creado).localeCompare(String(b.creado)))
+        .map((q) => { const s = (db.socios || []).find((x) => x.id === q.socio_id) || {}; return { id: q.id, socio_id: q.socio_id, origen: q.origen, creado: q.creado, nombre: s.nombre, apellido: s.apellido, ciudad: s.ciudad, tier_slug: tier(q.socio_id) }; });
     },
     async resumenMiembrosPena() {
       const por = new Map();

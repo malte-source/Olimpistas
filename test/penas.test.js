@@ -23,7 +23,7 @@ after(() => srv && srv.close());
 
 // Espías de correo
 let correos;
-const orig = {}, NOMBRES = ["enviarPenaVerificada", "enviarPenaSumoSocio", "enviarBienvenidaCompra"];
+const orig = {}, NOMBRES = ["enviarPenaVerificada", "enviarPenaSumoSocio", "enviarPenaSolicitudSocio", "enviarBienvenidaCompra"];
 before(() => NOMBRES.forEach((n) => { orig[n] = mailer[n]; }));
 after(() => NOMBRES.forEach((n) => { mailer[n] = orig[n]; }));
 beforeEach(async () => {
@@ -41,10 +41,16 @@ const webhook = (hash, pagado = true) => api("/pagos/webhook", { metodo: "POST",
 
 let n = 0;
 const emailUnico = (p) => `${p}${++n}-${Date.now()}@ejemplo.com`;
-async function socio(nombre, extra = {}) {
+// Con { pena } el hincha pide sumarse por el link: salvo { pendiente: true }, la comisión de la peña lo acepta enseguida (los dos lados, como en producción).
+async function socio(nombre, { pendiente, ...extra } = {}) {
   const r = await api("/auth/registro", { metodo: "POST", cuerpo: { email: emailUnico(nombre), password: "clave-larga-123", nombre, apellido: "Prueba", ...extra } });
   const { token, socio: s } = await r.json();
-  return { id: s.id, pena_id: s.pena_id, h: { Authorization: "Bearer " + token, Cookie: "olimpista_sess=" + token } };
+  let pena_id = s.pena_id;
+  if (extra.pena && !pendiente) {
+    const q = await store.solicitudPenaPendiente(s.id);
+    if (q) { await store.resolverSolicitudPena({ id: q.id, por: "pena", aceptar: true }); pena_id = (await store.getSocioById(s.id)).pena_id; }
+  }
+  return { id: s.id, pena_id, h: { Authorization: "Bearer " + token, Cookie: "olimpista_sess=" + token } };
 }
 // Una peña verificada con comisión que ya eligió contraseña; devuelve el token de sesión del panel.
 async function penaLista(nombre = "Peña Olimpista Test") {
@@ -150,17 +156,40 @@ test("reenviar acceso: link nuevo y se cierran las sesiones anteriores", async (
 });
 
 // ── Link de captación y pertenencia ──────────────────────────────────────────
-test("registro con ?pena=slug: el hincha queda en la peña y la comisión recibe UN aviso por día", async () => {
+test("registro con ?pena=slug: queda pendiente hasta que la comisión acepte, y la comisión recibe UN aviso por día", async () => {
   const p = await penaLista("Peña Captación");
   correos = [];
-  const a = await socio("Ana", { pena: p.pena.slug });
-  await socio("Beto", { pena: p.pena.slug });
-  assert.strictEqual(a.pena_id, p.id);
-  assert.strictEqual((await store.getSocioById(a.id)).pena_id, p.id);
+  const a = await socio("Ana", { pena: p.pena.slug, pendiente: true });
+  const b2 = await socio("Beto", { pena: p.pena.slug, pendiente: true });
+  assert.ok(!a.pena_id, "todavía no es de la peña: falta que la peña acepte");
+  assert.ok(!(await store.getSocioById(a.id)).pena_id);
+  const q = await store.solicitudPenaPendiente(a.id);
+  assert.deepStrictEqual([q.origen, q.pena_id], ["socio", p.id]);
   await new Promise((x) => setTimeout(x, 80));
-  const avisos = correos.filter((c) => c.n === "enviarPenaSumoSocio");
-  assert.strictEqual(avisos.length, 1, "un aviso por día aunque se sumen varios");
-  assert.match(avisos[0].datos.invitado, /^Ana P\.$/, "solo nombre e inicial del apellido");
+  const avisos = correos.filter((c) => c.n === "enviarPenaSolicitudSocio");
+  assert.strictEqual(avisos.length, 1, "un aviso por día aunque pidan varios");
+  assert.match(avisos[0].datos.solicitante, /^Ana P\.$/, "solo nombre e inicial del apellido");
+  // la comisión lo ve en su panel (sin datos sensibles) y lo acepta: recién ahí entra
+  const panel = await (await api("/pena/panel", { h: p.hp })).json();
+  assert.strictEqual(panel.solicitudes.pedidos.length, 2);
+  const pedido = panel.solicitudes.pedidos.find((x) => x.nombre === "Ana P.");
+  assert.deepStrictEqual(Object.keys(pedido).sort(), ["ciudad", "desde", "id", "nivel", "nombre"]);
+  assert.strictEqual((await api("/pena/solicitudes/" + pedido.id + "/aceptar", { metodo: "POST", h: p.hp, cuerpo: {} })).status, 200);
+  assert.strictEqual((await store.getSocioById(a.id)).pena_id, p.id);
+  assert.strictEqual((await api("/pena/solicitudes/" + pedido.id + "/aceptar", { metodo: "POST", h: p.hp, cuerpo: {} })).status, 409, "una solicitud ya resuelta no se resuelve dos veces");
+  // rechazar: no entra y puede volver a pedir otra peña
+  const beto = panel.solicitudes.pedidos.find((x) => x.nombre === "Beto P.");
+  assert.strictEqual((await api("/pena/solicitudes/" + beto.id + "/rechazar", { metodo: "POST", h: p.hp, cuerpo: {} })).status, 200);
+  assert.strictEqual(await store.solicitudPenaPendiente(b2.id), null);
+  assert.ok(!(await store.getSocioById(b2.id)).pena_id);
+});
+
+test("una peña solo resuelve las solicitudes de SU peña", async () => {
+  const p1 = await penaLista("Peña Uno"), p2 = await penaLista("Peña Dos");
+  const s = await socio("Sol", { pena: p1.pena.slug, pendiente: true });
+  const q = await store.solicitudPenaPendiente(s.id);
+  assert.strictEqual((await api("/pena/solicitudes/" + q.id + "/aceptar", { metodo: "POST", h: p2.hp, cuerpo: {} })).status, 404);
+  assert.ok(!(await store.getSocioById(s.id)).pena_id);
 });
 
 test("registro con un slug inválido o de una peña NO verificada: el alta sale bien y sin peña", async () => {
@@ -172,16 +201,34 @@ test("registro con un slug inválido o de una peña NO verificada: el alta sale 
   }
 });
 
-test("sumarse y dejar la peña desde el perfil; una peña no verificada no se puede elegir", async () => {
-  const p = await penaLista("Peña Perfil");
+test("pedir sumarse, esperar a la peña, una sola peña por persona y dejarla desde el perfil; una peña no verificada no se puede elegir", async () => {
+  const p = await penaLista("Peña Perfil"), otra = await penaLista("Peña Otra");
   const s = await socio("Cami");
-  assert.strictEqual((await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: p.id } })).status, 200);
-  assert.strictEqual((await store.getSocioById(s.id)).pena_id, p.id);
-  const lista = await (await api("/penas", { h: s.h })).json();
-  assert.strictEqual(lista.mia, p.id);
-  assert.strictEqual(lista.items.find((x) => x.id === p.id).es_tuya, true);
+  const pedido = await (await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: p.id } })).json();
+  assert.strictEqual(pedido.pena.estado, "pendiente");
+  assert.ok(!(await store.getSocioById(s.id)).pena_id, "pedir no alcanza: la peña tiene que aceptar");
+  let lista = await (await api("/penas", { h: s.h })).json();
+  assert.ok(!lista.mia);
+  assert.deepStrictEqual([lista.solicitud.origen, lista.solicitud.pena.nombre], ["socio", p.pena.nombre]);
+  // pedir otra peña mientras espera: reemplaza el pedido (una sola solicitud a la vez)
+  assert.strictEqual((await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: otra.id } })).status, 200);
+  assert.strictEqual((await store.solicitudPenaPendiente(s.id)).pena_id, otra.id);
+  assert.strictEqual((await store.solicitudesPena(p.id)).length, 0);
+  // la peña acepta: es su peña, y no puede sumarse a una segunda
+  const q = await store.solicitudPenaPendiente(s.id);
+  assert.strictEqual((await api("/pena/solicitudes/" + q.id + "/aceptar", { metodo: "POST", h: otra.hp, cuerpo: {} })).status, 200);
+  lista = await (await api("/penas", { h: s.h })).json();
+  assert.strictEqual(lista.mia, otra.id);
+  assert.strictEqual(lista.items.find((x) => x.id === otra.id).es_tuya, true);
+  assert.strictEqual((await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: p.id } })).status, 409, "ya está en una peña: tiene que dejarla primero");
+  assert.strictEqual((await store.getSocioById(s.id)).pena_id, otra.id);
   assert.strictEqual((await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: null } })).status, 200);
   assert.ok(!(await store.getSocioById(s.id)).pena_id);
+  // retirar un pedido pendiente
+  await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: p.id } });
+  assert.ok(await store.solicitudPenaPendiente(s.id));
+  assert.strictEqual((await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: null } })).status, 200);
+  assert.strictEqual(await store.solicitudPenaPendiente(s.id), null);
   const pend = await store.crearPena({ nombre: "Peña Aun No " + (++n), ciudad: "x", pais_iso: "PY", presidente: "p", contacto: emailUnico("p") });
   assert.strictEqual((await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: pend.id } })).status, 400);
   assert.strictEqual((await api("/perfil", { metodo: "PATCH", h: s.h, cuerpo: { pena_id: "pen_inventada" } })).status, 400);

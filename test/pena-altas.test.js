@@ -34,7 +34,10 @@ async function pena() {
 async function alta(slug, nombre, apellido) {
   n++;
   const r = await api("/auth/registro", { metodo: "POST", cuerpo: { email: `al${n}-${Date.now()}@ejemplo.com`, password: "clave-larga-123", nombre, apellido, pena: slug } });
-  return (await r.json()).socio;
+  const s = (await r.json()).socio;
+  const q = await store.solicitudPenaPendiente(s.id);   // la comisión acepta el pedido: recién ahí cuenta como alta de la peña
+  if (q) await store.resolverSolicitudPena({ id: q.id, por: "pena", aceptar: true });
+  return s;
 }
 
 test("el panel trae las altas por mes de los últimos 12 meses, con ceros, y cuenta las del link", async () => {

@@ -43,6 +43,10 @@ test("panel: avance del listado del club (cuántos ya están en la app), ranking
   const cuenta = await store.createSocio({ email: `cm-${sufijo()}@ejemplo.com`, passwordHash: "x", nombre: "Persona" });
   await store.updateSocio(cuenta.id, { cedula: miembro.cedula });
   await store.sincronizarMiembrosPena({ socioId: cuenta.id });
+  const pendiente = await (await api("/pena/panel", { h })).json();
+  assert.strictEqual(pendiente.solicitudes.invitaciones, 1, "la comisión ve que hay una invitación esperando a la persona");
+  assert.strictEqual(pendiente.padron.con_cuenta, 0, "todavía no confirmó");
+  await store.resolverSolicitudPena({ id: (await store.solicitudPenaPendiente(cuenta.id)).id, por: "socio", aceptar: true });
   const p = await (await api("/pena/panel", { h })).json();
   assert.deepStrictEqual(p.padron, { miembros: 6, con_cuenta: 1, pendientes: 5 });
   assert.strictEqual(p.kpis.hinchada, 6, "la persona vinculada no se cuenta dos veces");

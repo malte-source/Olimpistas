@@ -49,7 +49,7 @@ test("una invitación manda sobre el utm: referido y peña", async () => {
   const slug = (await store.getPena(id)).slug;
   const dePena = await registrar({ pena: slug, origen: { fuente: "facebook" } });
   assert.strictEqual(dePena.origen_fuente, "pena");
-  assert.strictEqual(dePena.pena_id, id);
+  assert.strictEqual((await store.solicitudPenaPendiente(dePena.id)).pena_id, id, "queda el pedido a la peña, que todavía tiene que aceptar");
 });
 
 test("el panel cuenta cada origen y cuántos llegaron a cada hito", async () => {
