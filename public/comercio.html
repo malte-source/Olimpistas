@@ -261,8 +261,8 @@
 
     <!-- ELEGIR CONTRASEÑA NUEVA (link de un solo uso del correo) -->
     <div class="com-card com-login hide" id="claveCard">
-      <h3>Elegí tu contraseña nueva</h3>
-      <p class="com-muted">Es para entrar al panel de tu comercio.</p>
+      <h3 id="claveTit">Elegí tu contraseña nueva</h3>
+      <p class="com-muted" id="claveSub">Es para entrar al panel de tu comercio.</p>
       <label class="com-lbl" for="clave1">Contraseña (mínimo 8 caracteres)</label>
       <input id="clave1" type="password" autocomplete="new-password" />
       <label class="com-lbl" for="clave2">Repetila</label>
@@ -934,7 +934,13 @@
     });
 
     // Arranque: con el link del correo, elegir la contraseña nueva; si ya hay token, ir directo al panel.
-    if(tokenClave){ $("loginCard").classList.add("hide"); $("claveCard").classList.remove("hide"); }
+    if(tokenClave){
+      $("loginCard").classList.add("hide"); $("claveCard").classList.remove("hide");
+      if(new URLSearchParams(location.search).get("alta")){   // primera vez: bienvenida en vez de "contraseña nueva"
+        $("claveTit").textContent = "Bienvenido a la Red de Beneficios";
+        $("claveSub").textContent = "Elegí tu contraseña para entrar al panel de tu comercio. Desde ahí validás el carnet de los hinchas, ves tus canjes y cargás tus ofertas.";
+      }
+    }
     else if(tok()) entrarPanel();
   })();
   </script>
