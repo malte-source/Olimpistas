@@ -3643,6 +3643,38 @@ function buildRouter() {
     res.json({ tier, ciudad: (sFull && sFull.ciudad) || "", codigo, items, ahorro, potencial: potencial && potencial.mensual > 0 ? potencial : null });
   }));
 
+  // Todo lo que la persona debe pagar a Olimpistas, una entrada por deuda (monto, vencimiento y cómo seguir): subastas ganadas sin pagar, pagos de
+  // Plus o Junior sin completar y entradas reservadas sin pagar. La cuota del club se paga en el Portal y no está acá.
+  // Un pago ya iniciado se retoma por su mismo checkout (`url`) mientras siga vigente; si no, el cliente vuelve a iniciar el pago como siempre.
+  r.get("/deudas", auth.requireSocio, wrap(async (req, res) => {
+    const id = req.socio.id, ahora = Date.now(), VENTANA = 72 * 3600000;
+    const [lotes, pedidos, mem] = await Promise.all([
+      store.subastasPorPagar ? store.subastasPorPagar(id) : [], store.listPedidos ? store.listPedidos({ estado: "pendiente", socioId: id, limit: 50 }) : [], store.getMembresia(id),
+    ]);
+    const urlDe = (p) => { const t = new Date(p.creado).getTime(); return ahora - t < VENTANA ? pagopar.urlCheckout(p.ref_externa) : ""; };
+    const items = [], porLote = new Map((pedidos || []).filter((p) => p.subasta_id).map((p) => [p.subasta_id, p]));
+    for (const s of lotes) items.push({ tipo: "subasta", id: s.id, titulo: s.titulo, monto: Number(s.puja_actual) || 0, vence: s.pago_vence || null, ronda: s.ronda || 1, url: porLote.has(s.id) ? urlDe(porLote.get(s.id)) : "" });
+    const vistos = new Set();
+    for (const p of pedidos || []) {
+      if (p.subasta_id) continue;
+      const t = new Date(p.creado).getTime();
+      if (!(ahora - t < 7 * 86400000)) continue;                       // un pago abandonado hace más de una semana ya no es una deuda
+      if (p.reserva_id) {
+        const reserva = store.getReserva ? await store.getReserva(p.reserva_id) : null;
+        const preventa = reserva && store.getPreventa ? await store.getPreventa(reserva.preventa_id) : null;
+        const vence = new Date(t + (Number(process.env.RESERVA_HORAS) || 75) * 3600000);
+        if (!preventa || vence.getTime() < ahora || !urlDe(p)) continue;   // sin checkout vigente la reserva ya se va a liberar: no se ofrece pagar
+        items.push({ tipo: "preventa", id: p.id, titulo: preventa.evento, monto: Number(p.monto) || 0, vence: vence.toISOString(), url: urlDe(p) });
+      } else if (p.tier_slug && p.tier_slug !== (mem && mem.tier_slug) && !vistos.has(p.tier_slug)) {
+        vistos.add(p.tier_slug);
+        const tier = tierBySlug(p.tier_slug);
+        items.push({ tipo: "membresia", id: p.id, tier: p.tier_slug, titulo: tier ? tier.nombre : p.concepto, monto: Number(p.monto) || 0, vence: null, url: urlDe(p) });
+      }
+    }
+    items.sort((a, b) => (a.vence ? new Date(a.vence).getTime() : Infinity) - (b.vence ? new Date(b.vence).getTime() : Infinity));
+    res.json({ items });
+  }));
+
   // La persona cuenta desde qué año es socia del club (la base del club se equivoca en algunos grupos). Queda marcado como declarado por ella:
   // la base del club y las revalidaciones no lo pisan, y el administrador lo ve en la ficha y puede corregirlo.
   r.post("/socio-desde", auth.requireSocio, wrap(async (req, res) => {
