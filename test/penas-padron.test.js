@@ -63,12 +63,16 @@ test("aplicarPlan: peñas VERIFICADAS, padrón cargado, cuentas vinculadas y la 
   assert.strictEqual(r1.penas_creadas, 2);
   assert.strictEqual(r1.miembros_nuevos, 4);
   assert.ok(r1.vinculados >= 2, "Ana figura en las dos peñas y se vincula en ambas");
-  assert.ok(r1.asignados >= 1);
+  assert.ok(r1.invitados >= 1);
   assert.strictEqual((await store.listPenas()).length, antes + 2);
   const penas = (await store.listPenas()).filter((p) => [A, B].includes(p.nombre));
   assert.ok(penas.every((p) => p.estado === "verificada"));
   const pa = penas.find((p) => p.nombre === A), pb = penas.find((p) => p.nombre === B);
-  assert.strictEqual((await store.getSocioById(registrada.id)).pena_id, pa.id, "la primera peña del informe");
+  const qa = await store.solicitudPenaPendiente(registrada.id);
+  assert.deepStrictEqual([qa.origen, qa.pena_id], ["pena", pa.id], "se la invita a la primera peña del informe");
+  assert.ok(!(await store.getSocioById(registrada.id)).pena_id, "falta que ella confirme");
+  assert.strictEqual((await store.resolverSolicitudPena({ id: qa.id, por: "socio", aceptar: true })).estado, "aceptada");
+  assert.strictEqual((await store.getSocioById(registrada.id)).pena_id, pa.id);
   const pa2 = (await store.listPenas()).find((p) => p.id === pa.id);
   assert.strictEqual(pa2.miembros, 2);
   assert.strictEqual(pa2.hinchada, 2, "la cuenta de Ana ya figura en el padrón: no se cuenta dos veces");
@@ -88,8 +92,11 @@ test("al cargar la cédula después, la cuenta se vincula y se suma sola a su pe
   assert.ok(!(await store.getSocioById(luis.id)).pena_id);
   await store.updateSocio(luis.id, { cedula: ced });
   const r = await store.sincronizarMiembrosPena({ socioId: luis.id });
-  assert.strictEqual(r.asignados, 1);
+  assert.strictEqual(r.invitados, 1);
   const pena = (await store.listPenas()).find((p) => p.nombre === P);
+  assert.ok(!(await store.getSocioById(luis.id)).pena_id, "se lo invita; entra cuando confirma");
+  const ql = await store.solicitudPenaPendiente(luis.id);
+  await store.resolverSolicitudPena({ id: ql.id, por: "socio", aceptar: true });
   assert.strictEqual((await store.getSocioById(luis.id)).pena_id, pena.id);
   const otra = await store.crearPena({ nombre: "Otra " + s, ciudad: "X", pais_iso: "PY", presidente: "P", contacto: "p@ejemplo.com" });
   await store.updatePena(otra.id, { estado: "verificada" });
@@ -99,6 +106,7 @@ test("al cargar la cédula después, la cuenta se vincula y se suma sola a su pe
   await store.updateSocio(marta.id, { cedula: ced2, pena_id: otra.id });
   await store.sincronizarMiembrosPena({ socioId: marta.id });
   assert.strictEqual((await store.getSocioById(marta.id)).pena_id, otra.id, "quien ya eligió otra peña la conserva");
+  assert.strictEqual(await store.solicitudPenaPendiente(marta.id), null, "y no se la invita a una segunda");
 });
 
 test("el estado de la cuota lo ve solo el owner: la lista de miembros y el CSV están cerrados para los demás roles", async () => {

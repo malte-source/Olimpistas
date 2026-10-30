@@ -363,12 +363,17 @@
     if (!items) return "";
     const mia = items.find((p) => p.es_tuya);
     const hinchada = mia ? (mia.hinchada != null ? mia.hinchada : mia.altas) : 0;
+    const sol = !mia && penas.solicitud ? penas.solicitud : null;   // pedido o invitación pendiente: falta que acepte la otra parte
     const ini = mia ? esc(String(mia.nombre || "P").replace(/^peña\s+/i, "").trim().charAt(0).toUpperCase()) : "";
+    const eb = mia ? T("pn_tu") : sol ? T(sol.origen === "pena" ? "pn_inv_eb" : "pn_pend_eb") : T("m_wg_pena");
+    const tit = mia ? esc(mia.nombre) : sol ? esc(sol.pena.nombre) : T("m_wg_pena_sumate");
+    const sub = mia ? "#" + mia.ranking + " · " + hinchada.toLocaleString(LOC) + " " + T(hinchada === 1 ? "m_pena_hincha" : "m_pena_hinchas") : sol ? T(sol.origen === "pena" ? "pn_inv_corto" : "pn_pend_corto") : T("m_wg_pena_p");
+    const go = mia ? T("ih_ver_pena") : sol ? T(sol.origen === "pena" ? "pn_inv_si" : "pn_pend_ver") : T("pn_elegi");
     return `<button type="button" class="ih-pena${mia ? " mia" : ""}" data-goto="descubrir" data-seg="penas" data-ini="${ini}" aria-label="${T("m_wg_pena")}">
-        <span class="ih-pena-eb">${mia ? T("pn_tu") : T("m_wg_pena")}</span>
-        <b>${mia ? esc(mia.nombre) : T("m_wg_pena_sumate")}</b>
-        <small>${mia ? "#" + mia.ranking + " · " + hinchada.toLocaleString(LOC) + " " + T(hinchada === 1 ? "m_pena_hincha" : "m_pena_hinchas") : T("m_wg_pena_p")}</small>
-        <span class="ih-pena-go">${mia ? T("ih_ver_pena") : T("pn_elegi")} ›</span>
+        <span class="ih-pena-eb">${eb}</span>
+        <b>${tit}</b>
+        <small>${sub}</small>
+        <span class="ih-pena-go">${go} ›</span>
       </button>`;
   }
   // Reto de la semana (la pregunta de la misión de Puntos).
@@ -1330,6 +1335,7 @@
     try { d = await api("/penas"); } catch (e) { cv().innerHTML = vacio(T("m_error_generico")); return; }
     const todas = Array.isArray(d.items) ? d.items : [];
     const mia = todas.find((p) => p.es_tuya) || null;
+    const sol = !mia && d.solicitud ? d.solicitud : null;   // pedido propio (espera a la peña) o invitación de la peña (espera al socio)
     const link = (p) => location.origin + "/?pena=" + encodeURIComponent(p.slug);
     const norm = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
     const ciudadSocio = norm(SESSION && SESSION.socio && SESSION.socio.ciudad);
@@ -1345,7 +1351,11 @@
         <p class="pn-hero-sub">${esc(lugar(mia))} · #${mia.ranking} · ${esc(hinchasTxt(mia))}</p>
         <p class="pn-hero-p">${T("m_pena_link_p")}</p>
         <div class="pn-hero-acc"><button type="button" class="btn" id="penaCompartir">${T("m_pena_compartir")}</button><button type="button" class="btn btn-ghost" id="penaDejar">${T("m_pena_dejar")}</button></div>
-      </section>` : `<section class="pn-elegi"><h3>${T("pn_elegi")}</h3><p>${T("pn_elegi_p")}</p><button type="button" class="btn btn-ghost" id="penaCerca">${T("pn_cerca_btn")}</button></section>`;
+      </section>` : sol && sol.origen === "pena" ? `<section class="pn-elegi" id="pnInv"><h3>${T("pn_inv_t").replace("{nombre}", esc(sol.pena.nombre))}</h3><p>${T("pn_inv_p")}</p>
+        <div class="pn-hero-acc"><button type="button" class="btn" id="pnInvSi">${T("pn_inv_si")}</button><button type="button" class="btn btn-ghost" id="pnInvNo">${T("pn_inv_no")}</button></div></section>`
+      : sol ? `<section class="pn-elegi" id="pnPend"><span class="chip">${T("pn_pend_chip")}</span><h3>${T("pn_pend_t").replace("{nombre}", esc(sol.pena.nombre))}</h3><p>${T("pn_pend_p")}</p>
+        <button type="button" class="btn btn-ghost" id="pnPendNo">${T("pn_pend_retirar")}</button></section>`
+      : `<section class="pn-elegi"><h3>${T("pn_elegi")}</h3><p>${T("pn_elegi_p")}</p><button type="button" class="btn btn-ghost" id="penaCerca">${T("pn_cerca_btn")}</button></section>`;
 
     const top = todas.slice().sort((a, b) => nHinchas(b) - nHinchas(a)).slice(0, 5);
     const rankingCard = top.length ? `<div class="pn-top"><h3>${T("pn_top")}</h3>${top.map((p, i) => `<button type="button" class="pn-top-fila" data-pena-det="${esc(p.id)}"><span class="pn-top-n">${i + 1}</span><span class="pn-top-t"><b>${esc(p.nombre)}</b><small>${esc(hinchasTxt(p))}</small></span></button>`).join("")}</div>` : "";
@@ -1381,7 +1391,7 @@
         <span class="pn-av" aria-hidden="true">${inicial(p)}</span>
         <span class="pn-tx"><b>${esc(p.nombre)}</b><small>${esc(lugar(p))}${p.distancia_km != null ? " · " + T("pn_km").replace("{km}", p.distancia_km.toLocaleString(LOC)) : ""}</small>
           <span class="pn-meta"><span class="bx-tag">${esc(hinchasTxt(p))}</span><span class="bx-tag">#${p.ranking}</span>${enMiCiudad(p) ? `<span class="ben-loc">${T("pn_en_ciudad")}</span>` : ""}</span></span>
-        ${p.es_tuya ? `<span class="chip on">${T("m_pena_tuya_chip")}</span>` : OLI.ic("chevron-derecha", 18).replace('class="ic"', 'class="ic grupo-chev"')}</button>`;
+        ${p.es_tuya ? `<span class="chip on">${T("m_pena_tuya_chip")}</span>` : sol && sol.pena_id === p.id ? `<span class="chip">${T("pn_pend_chip")}</span>` : OLI.ic("chevron-derecha", 18).replace('class="ic"', 'class="ic grupo-chev"')}</button>`;
     const pintar = () => {
       const toks = norm(st.q).split(/\s+/).filter(Boolean);
       let a = (st.cerca || todas).filter((p) => !toks.length || toks.every((t) => norm([p.nombre, p.ciudad, p.pais_iso].join(" ")).includes(t)));
@@ -1401,8 +1411,8 @@
         <p class="ben-hoja-eb">${T("pn_tit")}</p>
         <div class="bx-hoja-cab"><span class="pn-av grande" aria-hidden="true">${inicial(p)}</span><div><h3 class="ben-hoja-t">${esc(p.nombre)}</h3><p class="ben-hoja-p muted">${esc(lugar(p))}</p></div></div>
         <dl class="bx-dl"><div><dt>${T("pn_hinchada")}</dt><dd>${esc(hinchasTxt(p))}</dd></div><div><dt>${T("pn_puesto")}</dt><dd>#${p.ranking} ${T("pn_de")} ${todas.length}</dd></div>${p.miembros ? `<div><dt>${T("pn_listado")}</dt><dd>${p.miembros.toLocaleString(LOC)}</dd></div>` : ""}</dl>
-        ${p.es_tuya ? `<p class="ben-hoja-p">${T("pn_ya_sos")}</p>` : `<p class="ben-hoja-p">${T("pn_sumarte_p")}</p>`}
-        ${p.es_tuya ? "" : `<button type="button" class="btn btn-block" id="pnSumar">${T("pn_confirmar")}</button>`}
+        ${p.es_tuya ? `<p class="ben-hoja-p">${T("pn_ya_sos")}</p>` : mia ? `<p class="ben-hoja-p">${T("pn_una_sola")}</p>` : sol && sol.pena_id === p.id ? `<p class="ben-hoja-p">${T(sol.origen === "pena" ? "pn_inv_p" : "pn_pend_p")}</p>` : `<p class="ben-hoja-p">${T("pn_sumarte_p")}</p>`}
+        ${p.es_tuya || mia || (sol && sol.pena_id === p.id) ? "" : `<button type="button" class="btn btn-block" id="pnSumar">${T("pn_confirmar")}</button>`}
         <button type="button" class="btn btn-ghost btn-block" id="pnCerrar">${T("up_cerrar")}</button>`);
       root.querySelector("#pnCerrar").onclick = close;
       const sumar = root.querySelector("#pnSumar");
@@ -1411,13 +1421,22 @@
         try {
           const r = await api("/perfil", { method: "PATCH", body: { pena_id: p.id } });
           if (SESSION && SESSION.socio && r.socio) SESSION.socio.pena_id = r.socio.pena_id;
-          close(); toast(T("m_pena_sumada")); vPenas();
+          close(); toast(T(r.pena && r.pena.estado === "pendiente" ? "m_pena_pedida" : "m_pena_sumada")); vPenas();
         } catch (e) { sumar.disabled = false; toast(e.message); }
       };
     };
     cv().querySelectorAll(".pn-top [data-pena-det]").forEach((el) => el.addEventListener("click", () => abrirPena(todas.find((p) => p.id === el.dataset.penaDet))));
     lista.addEventListener("click", (e) => { const el = e.target.closest("[data-pena-det]"); if (el) abrirPena(todas.find((p) => p.id === el.dataset.penaDet)); });
 
+    // Invitación de la peña (la confirma la persona) y pedido propio que todavía espera a la peña (se puede retirar).
+    const responder = async (accion, msg) => {
+      try { await api("/penas/mi-solicitud/" + accion, { method: "POST", body: {} }); toast(T(msg)); vPenas(); }
+      catch (e) { toast(e.message); }
+    };
+    const invSi = cv().querySelector("#pnInvSi"), invNo = cv().querySelector("#pnInvNo"), pendNo = cv().querySelector("#pnPendNo");
+    if (invSi) invSi.addEventListener("click", () => { invSi.disabled = true; responder("aceptar", "m_pena_sumada"); });
+    if (invNo) invNo.addEventListener("click", () => { invNo.disabled = true; responder("rechazar", "m_pena_inv_no_ok"); });
+    if (pendNo) pendNo.addEventListener("click", () => { pendNo.disabled = true; responder("rechazar", "m_pena_pedido_retirado"); });
     // Dejar la peña (con confirmación), compartir su link, y las más cercanas.
     const dejar = cv().querySelector("#penaDejar");
     if (dejar && mia) dejar.addEventListener("click", () => {

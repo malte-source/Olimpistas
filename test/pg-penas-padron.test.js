@@ -44,9 +44,14 @@ test("pg: carga del padrón idempotente, miembros sin cédula incluidos, víncul
   const r1 = await aplicarPlan(pg, plan, { fuente: "test" });
   assert.deepStrictEqual([r1.penas_creadas, r1.miembros_nuevos, r1.miembros_actualizados], [2, 5, 0]);
   assert.strictEqual(r1.vinculados, 2);
-  assert.strictEqual(r1.asignados, 1);
+  assert.strictEqual(r1.invitados, 1);
+  const q1 = await pg.solicitudPenaPendiente(cuenta.id);
+  assert.deepStrictEqual([q1.origen, q1.pena_nombre], ["pena", "Peña Uno"], "se la invita a la primera del informe");
+  assert.ok(!(await pg.getSocioById(cuenta.id)).pena_id, "falta que ella confirme");
+  assert.strictEqual((await pg.resolverSolicitudPena({ id: q1.id, por: "pena", aceptar: true })).motivo, "no_corresponde", "la invitación de la peña no la acepta la peña");
+  assert.strictEqual((await pg.resolverSolicitudPena({ id: q1.id, por: "socio", aceptar: true })).estado, "aceptada");
   const uno = (await pg.listPenas()).find((p) => p.nombre === "Peña Uno");
-  assert.strictEqual((await pg.getSocioById(cuenta.id)).pena_id, uno.id, "la primera del informe");
+  assert.strictEqual((await pg.getSocioById(cuenta.id)).pena_id, uno.id);
   assert.strictEqual(uno.estado, "verificada");
   assert.deepStrictEqual([uno.miembros, uno.vinculados, uno.altas, uno.hinchada], [3, 1, 1, 3]);
 
@@ -64,12 +69,14 @@ test("pg: carga del padrón idempotente, miembros sin cédula incluidos, víncul
   const dario = await pg.createSocio({ email: "dario@ejemplo.com", passwordHash: "x", nombre: "Dario" });
   await pg.updateSocio(dario.id, { cedula: "2222222" });
   const r3 = await pg.sincronizarMiembrosPena({ socioId: dario.id });
-  assert.strictEqual(r3.asignados, 1);
+  assert.strictEqual(r3.invitados, 1);
+  assert.ok(!(await pg.getSocioById(dario.id)).pena_id, "se lo invita; entra cuando confirma");
+  assert.strictEqual((await pg.pedirPena({ socioId: dario.id, penaId: uno.id, origen: "socio" })).estado, "aceptada", "si la peña ya lo tiene en su padrón, pedir basta: valen las dos aceptaciones");
   assert.strictEqual((await pg.getSocioById(dario.id)).pena_id, uno.id);
   // una peña pendiente no recibe a nadie por el padrón
   const pend = await pg.crearPena({ nombre: "Pendiente", ciudad: "X", pais_iso: "PY", presidente: "P", contacto: "p@ejemplo.com" });
   await pg.importarMiembrosPena(pend.id, [{ cedula: "3333333", nombre: "Elena", nro_socio: "", estado_cuota: "al_dia", orden: 0 }], "test");
   const elena = await pg.createSocio({ email: "elena@ejemplo.com", passwordHash: "x", nombre: "Elena" });
   await pg.updateSocio(elena.id, { cedula: "3333333" });
-  assert.strictEqual((await pg.sincronizarMiembrosPena({ socioId: elena.id })).asignados, 0);
+  assert.strictEqual((await pg.sincronizarMiembrosPena({ socioId: elena.id })).invitados, 0);
 });

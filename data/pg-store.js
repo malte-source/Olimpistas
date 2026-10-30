@@ -1632,11 +1632,86 @@ function createPgStore({ databaseUrl, debug }) {
       const solo = socioId ? sql`AND s.id = ${socioId}` : sql``;
       const v = await sql`UPDATE pena_miembros m SET socio_id = s.id FROM socios s
         WHERE m.socio_id IS NULL AND m.cedula <> '' AND regexp_replace(coalesce(s.cedula, ''), '[^0-9]', '', 'g') = m.cedula ${solo} RETURNING m.id`;
-      const a = await sql`UPDATE socios s SET pena_id = x.pena_id FROM (
-          SELECT DISTINCT ON (m.socio_id) m.socio_id, m.pena_id FROM pena_miembros m JOIN penas p ON p.id = m.pena_id AND p.estado = 'verificada'
-          WHERE m.socio_id IS NOT NULL ORDER BY m.socio_id, m.orden, m.creado) x
-        WHERE s.id = x.socio_id AND s.pena_id IS NULL ${solo} RETURNING s.id`;
-      return { vinculados: v.length, asignados: a.length };
+      // La peña ya los tiene en su padrón (aceptó): se les INVITA, y entran cuando confirman. Una sola invitación a la vez, a la primera peña del informe
+      // que no hayan rechazado antes. Quien ya tiene peña o tiene una solicitud pendiente no se toca.
+      const cand = await sql`SELECT DISTINCT ON (m.socio_id) m.socio_id, m.pena_id FROM pena_miembros m
+          JOIN penas p ON p.id = m.pena_id AND p.estado = 'verificada' JOIN socios s ON s.id = m.socio_id
+        WHERE s.pena_id IS NULL ${solo}
+          AND NOT EXISTS (SELECT 1 FROM pena_solicitudes q WHERE q.socio_id = m.socio_id AND (q.estado = 'pendiente' OR q.pena_id = m.pena_id))
+        ORDER BY m.socio_id, m.orden, m.creado`;
+      let invitados = 0;
+      for (let i = 0; i < cand.length; i += 400) {
+        const r = await sql`INSERT INTO pena_solicitudes ${sql(cand.slice(i, i + 400).map((c) => ({ id: uid("psl"), socio_id: c.socio_id, pena_id: c.pena_id, origen: "pena" })))} ON CONFLICT DO NOTHING RETURNING id`;
+        invitados += r.length;
+      }
+      return { vinculados: v.length, invitados };
+    },
+    // ── Membresía de peña de los dos lados (migración 0025): una sola peña por socio; se entra cuando aceptan el socio y la peña ──
+    // origen 'socio' = el socio la pidió (la acepta la comisión) · origen 'pena' = la peña lo invita desde su padrón (lo acepta el socio).
+    // Si la peña ya lo tiene en su padrón, valen las dos aceptaciones y entra directo.
+    async pedirPena({ socioId, penaId, origen }) {
+      return sql.begin(async (tx) => {
+        const [s] = await tx`SELECT id, pena_id, cedula FROM socios WHERE id = ${socioId} FOR UPDATE`;
+        if (!s) return { error: "socio" };
+        if (s.pena_id) return { error: s.pena_id === penaId ? "ya_es" : "ya_tiene" };
+        const [pend] = await tx`SELECT * FROM pena_solicitudes WHERE socio_id = ${socioId} AND estado = 'pendiente' FOR UPDATE`;
+        let ambas = false;
+        if (pend && pend.pena_id === penaId) {
+          if (pend.origen === origen) return { estado: "pendiente", solicitud: pend };
+          ambas = true;
+        } else if (pend) {
+          if (origen === "pena") return { error: "otra_pendiente" };
+          await tx`UPDATE pena_solicitudes SET estado = 'cancelada', resuelto = now() WHERE id = ${pend.id}`;
+        }
+        if (!ambas && origen === "socio") {
+          const ced = String(s.cedula || "").replace(/[^0-9]/g, "");
+          const [pm] = await tx`SELECT 1 AS x FROM pena_miembros WHERE pena_id = ${penaId} AND (socio_id = ${socioId} OR (${ced} <> '' AND cedula = ${ced})) LIMIT 1`;
+          ambas = !!pm;
+        }
+        if (ambas) {
+          let sol;
+          if (pend && pend.pena_id === penaId) [sol] = await tx`UPDATE pena_solicitudes SET estado = 'aceptada', resuelto = now() WHERE id = ${pend.id} RETURNING *`;
+          else [sol] = await tx`INSERT INTO pena_solicitudes (id, socio_id, pena_id, origen, estado, resuelto) VALUES (${uid("psl")}, ${socioId}, ${penaId}, ${origen}, 'aceptada', now()) RETURNING *`;
+          await tx`UPDATE socios SET pena_id = ${penaId} WHERE id = ${socioId}`;
+          return { estado: "aceptada", solicitud: sol };
+        }
+        const [sol] = await tx`INSERT INTO pena_solicitudes (id, socio_id, pena_id, origen) VALUES (${uid("psl")}, ${socioId}, ${penaId}, ${origen}) RETURNING *`;
+        return { estado: "pendiente", solicitud: sol };
+      });
+    },
+    // La acepta la parte que NO la inició (por: 'socio' | 'pena'); la rechaza (la otra parte) o la cancela (quien la inició) cualquiera de las dos.
+    async resolverSolicitudPena({ id, por, aceptar }) {
+      return sql.begin(async (tx) => {
+        const [sol] = await tx`SELECT * FROM pena_solicitudes WHERE id = ${id} FOR UPDATE`;
+        if (!sol) return { ok: false, motivo: "no_existe" };
+        if (sol.estado !== "pendiente") return { ok: false, motivo: "ya_resuelta", estado: sol.estado, solicitud: sol };
+        if (aceptar) {
+          if (sol.origen === por) return { ok: false, motivo: "no_corresponde" };
+          const [s] = await tx`SELECT pena_id FROM socios WHERE id = ${sol.socio_id} FOR UPDATE`;
+          if (!s || s.pena_id) {
+            const [x] = await tx`UPDATE pena_solicitudes SET estado = 'cancelada', resuelto = now() WHERE id = ${id} RETURNING *`;
+            return { ok: false, motivo: "ya_tiene", solicitud: x };
+          }
+          const [x] = await tx`UPDATE pena_solicitudes SET estado = 'aceptada', resuelto = now() WHERE id = ${id} RETURNING *`;
+          await tx`UPDATE socios SET pena_id = ${sol.pena_id} WHERE id = ${sol.socio_id}`;
+          return { ok: true, estado: "aceptada", solicitud: x };
+        }
+        const estado = sol.origen === por ? "cancelada" : "rechazada";
+        const [x] = await tx`UPDATE pena_solicitudes SET estado = ${estado}, resuelto = now() WHERE id = ${id} RETURNING *`;
+        return { ok: true, estado, solicitud: x };
+      });
+    },
+    async getSolicitudPena(id) { const [x] = await sql`SELECT * FROM pena_solicitudes WHERE id = ${id}`; return x || null; },
+    async solicitudPenaPendiente(socioId) {
+      const [x] = await sql`SELECT q.*, p.nombre AS pena_nombre, p.slug AS pena_slug, p.ciudad AS pena_ciudad FROM pena_solicitudes q JOIN penas p ON p.id = q.pena_id
+        WHERE q.socio_id = ${socioId} AND q.estado = 'pendiente' LIMIT 1`;
+      return x || null;
+    },
+    async solicitudesPena(penaId) {
+      return sql`SELECT q.id, q.socio_id, q.origen, q.creado, s.nombre, s.apellido, s.ciudad, coalesce(m.tier_slug, 'olimpista') AS tier_slug
+        FROM pena_solicitudes q JOIN socios s ON s.id = q.socio_id
+        LEFT JOIN LATERAL (SELECT tier_slug FROM membresias WHERE socio_id = s.id AND estado = 'activa' ORDER BY inicio DESC LIMIT 1) m ON true
+        WHERE q.pena_id = ${penaId} AND q.estado = 'pendiente' ORDER BY q.creado`;
     },
     async resumenMiembrosPena() {
       return sql`SELECT pena_id, COUNT(*)::int AS miembros, COUNT(socio_id)::int AS con_cuenta,

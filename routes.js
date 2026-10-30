@@ -410,13 +410,15 @@ function buildRouter() {
     evento(socio.id, "registro", { referido: !!socio.referido_por });
     // Peña: ?pena=slug (igual que ?ref=). Solo cuenta una peña VERIFICADA; un slug inválido nunca rompe el alta.
     const penaSlug = String((req.body || {}).pena || "").trim().toLowerCase().slice(0, 60);
+    let viaPena = false;
     if (penaSlug && store.getPenaPorSlug) {
       try {
         const pe = await store.getPenaPorSlug(penaSlug);
         if (pe && pe.estado === "verificada") {
-          await store.updateSocio(socio.id, { pena_id: pe.id });
-          socio.pena_id = pe.id; _penasPub = null;
-          avisarPenaSumo(pe, { nombre, apellido }).catch(() => {});
+          // La peña tiene que aceptarlo: queda pendiente hasta que su comisión lo apruebe (salvo que ya figure en su padrón, que entra directo).
+          const rp = await pedirPenaSocio(socio, pe);
+          viaPena = true;
+          if (rp.estado === "aceptada") socio.pena_id = pe.id;
         }
       } catch (e) { log.warn({ err: e.message }, "registro: no se pudo asignar la peña"); }
     }
@@ -424,7 +426,7 @@ function buildRouter() {
     try {
       const o = (req.body && typeof req.body.origen === "object" && req.body.origen) || {};
       const limpio = (v) => String(v == null ? "" : v).toLowerCase().replace(/[^a-z0-9._:-]/g, "").slice(0, 40);
-      const fuente = socio.referido_por ? "referido" : socio.pena_id ? "pena" : limpio(o.fuente) || limpio(o.referrer) || "directo";
+      const fuente = socio.referido_por ? "referido" : viaPena || socio.pena_id ? "pena" : limpio(o.fuente) || limpio(o.referrer) || "directo";
       await store.updateSocio(socio.id, { origen_fuente: fuente, origen_medio: limpio(o.medio), origen_campana: limpio(o.campana) });
     } catch (e) { log.warn({ err: e.message }, "registro: no se pudo guardar el origen"); }
     // Puntos al que invitó: una vez por referido (ref = el id del invitado).
@@ -598,13 +600,17 @@ function buildRouter() {
     }
     // Ciudad oficial (GeoNames): la elegida con el autocompletado, la que coincide con el texto, o la más cercana a su casa.
     await asignarCiudad(req.socio, patch, b);
-    // Peña: sumarse a una peña verificada, o dejarla (null / "").
+    // Peña: pedir sumarse a una peña verificada (queda pendiente hasta que la peña acepte; una sola por persona), o dejarla / retirar el pedido (null / "").
+    let penaRes = null;
     if (b.pena_id !== undefined) {
-      if (b.pena_id === null || b.pena_id === "") patch.pena_id = null;
-      else {
+      if (b.pena_id === null || b.pena_id === "") {
+        if (req.socio.pena_id) patch.pena_id = null;
+        const pend = store.solicitudPenaPendiente ? await store.solicitudPenaPendiente(req.socio.id) : null;
+        if (pend) await store.resolverSolicitudPena({ id: pend.id, por: "socio", aceptar: false });
+      } else {
         const pe = store.getPena ? await store.getPena(String(b.pena_id)) : null;
         if (!pe || pe.estado !== "verificada") throw httpError(400, "Esa peña no está disponible");
-        patch.pena_id = pe.id;
+        penaRes = await pedirPenaSocio(req.socio, pe);
       }
       _penasPub = null;
     }
@@ -617,11 +623,11 @@ function buildRouter() {
         throw httpError(400, "Fecha de nacimiento inválida");
       patch.fecha_nacimiento = f;
     }
-    if (!Object.keys(patch).length) throw httpError(400, "Nada para actualizar");
-    const socio = auth.sanitize(await store.updateSocio(req.socio.id, patch));
+    if (!Object.keys(patch).length && b.pena_id === undefined) throw httpError(400, "Nada para actualizar");
+    const socio = auth.sanitize(Object.keys(patch).length ? await store.updateSocio(req.socio.id, patch) : await store.getSocioById(req.socio.id));
     const progreso = perfilProgreso(socio);
     if (progreso.pct >= 100) darPuntos(req.socio.id, "perfil", "completo", "Perfil completo").catch(() => {});
-    res.json({ socio, progreso });
+    res.json({ socio, progreso, ...(penaRes ? { pena: { estado: penaRes.estado, nombre: penaRes.pena.nombre } } : {}) });
   }));
 
   r.post("/perfil/foto", auth.requireSocio, wrap(async (req, res) => {
@@ -3131,7 +3137,33 @@ function buildRouter() {
     if (conUbic) {
       items = items.filter((p) => p.lat != null && p.lng != null).map((p) => ({ ...p, distancia_km: Math.round(ciudadesLib.distanciaKm(cerca[0], cerca[1], p.lat, p.lng) * 10) / 10 })).sort((a, b) => a.distancia_km - b.distancia_km).slice(0, 5);
     }
-    res.json({ items, mia: mia || null });
+    const sol = req.socio && store.solicitudPenaPendiente ? await store.solicitudPenaPendiente(req.socio.id) : null;
+    res.json({ items, mia: mia || null, solicitud: sol ? { id: sol.id, origen: sol.origen, pena_id: sol.pena_id, pena: { nombre: sol.pena_nombre, slug: sol.pena_slug, ciudad: sol.pena_ciudad || "" } } : null });
+  }));
+  // Una sola peña por socio y se entra cuando aceptan los dos lados. El socio pide (o acepta la invitación de una peña que ya lo tiene en su padrón);
+  // la comisión de la peña acepta desde su panel. Devuelve "aceptada" (entró) o "pendiente" (falta la otra parte).
+  async function pedirPenaSocio(socio, pena) {
+    const out = await store.pedirPena({ socioId: socio.id, penaId: pena.id, origen: "socio" });
+    if (out.error === "ya_tiene") throw httpError(409, "Ya estás en una peña. Dejala primero si querés sumarte a otra.");
+    if (out.error === "ya_es") return { estado: "aceptada", pena };
+    if (out.error) throw httpError(400, "No se pudo pedir la peña");
+    _penasPub = null;
+    if (out.estado === "aceptada") avisarPenaSumo(pena, socio).catch(() => {});
+    else avisarPenaSolicitud(pena, socio).catch(() => {});
+    return { estado: out.estado, pena, solicitud_id: out.solicitud && out.solicitud.id };
+  }
+  // El socio responde la invitación de una peña (aceptar = entra) o retira su pedido / rechaza la invitación.
+  r.post("/penas/mi-solicitud/:accion", auth.requireSocio, wrap(async (req, res) => {
+    const accion = req.params.accion;
+    if (!["aceptar", "rechazar"].includes(accion)) throw httpError(404, "No existe");
+    const pend = await store.solicitudPenaPendiente(req.socio.id);
+    if (!pend) throw httpError(404, "No tenés ninguna solicitud de peña pendiente");
+    if (accion === "aceptar" && pend.origen !== "pena") throw httpError(409, "Tu pedido espera la respuesta de la peña; no hace falta que hagas nada más");
+    const out = await store.resolverSolicitudPena({ id: pend.id, por: "socio", aceptar: accion === "aceptar" });
+    if (!out.ok) throw httpError(409, out.motivo === "ya_tiene" ? "Ya estás en una peña." : "Esa solicitud ya estaba resuelta");
+    _penasPub = null;
+    if (accion === "aceptar") { const pe = await store.getPena(pend.pena_id); if (pe) avisarPenaSumo(pe, req.socio).catch(() => {}); }
+    res.json({ ok: true, estado: out.estado });
   }));
   r.get("/penas/:slug", wrap(async (req, res) => {
     const p = (await penasVerificadas()).find((x) => x.slug === String(req.params.slug).toLowerCase());
@@ -3294,8 +3326,11 @@ function buildRouter() {
       return meses;
     })();
     const mia = ranking.find((x) => x.id === req.pena.id);
+    // Quienes piden sumarse (la comisión los acepta o no) y a quiénes invitó el padrón (los confirma cada persona). Nombre e inicial, nada más.
+    const pend = store.solicitudesPena ? await store.solicitudesPena(req.pena.id) : [];
     res.json({
       pena: { nombre: f.pena.nombre, slug: f.pena.slug, ciudad: f.pena.ciudad, pais_iso: f.pena.pais_iso, estado: f.pena.estado },
+      solicitudes: { pedidos: pend.filter((q) => q.origen === "socio").map((q) => ({ id: q.id, nombre: nombreCorto(q), ciudad: q.ciudad || "", nivel: (tierBySlug(q.tier_slug) || {}).nombre || "Olimpista", desde: q.creado })), invitaciones: pend.filter((q) => q.origen === "pena").length },
       ranking: mia ? mia.ranking : null, total_penas: ranking.length,
       kpis: { altas: f.pena.altas, socios: f.pena.socios, plus: f.pena.plus, saldo: f.saldo, miembros: f.pena.miembros || 0, hinchada: f.pena.hinchada != null ? f.pena.hinchada : f.pena.altas },
       link: linkPena(f.pena), pct: Number(pct) || 10, fondo_activo: process.env.PENA_FONDO_ACTIVO === "1",
@@ -3328,6 +3363,18 @@ function buildRouter() {
     _penasPub = null;
     log.info({ penaId: req.pena.id, campos: Object.keys(patch) }, "peña: datos editados por la comisión");
     res.json({ ok: true, datos: { nombre: p.nombre, ciudad: p.ciudad || "", pais_iso: p.pais_iso || "PY", presidente: p.presidente || "", contacto: p.contacto || "" } });
+  }));
+  // La comisión acepta o rechaza a quien pidió sumarse. (Una invitación del padrón la acepta la persona, no la peña: acá solo se puede retirar.)
+  r.post("/pena/solicitudes/:id/:accion", requirePena, noLectura, wrap(async (req, res) => {
+    const accion = req.params.accion;
+    if (!["aceptar", "rechazar"].includes(accion)) throw httpError(404, "No existe");
+    const sol = await store.getSolicitudPena(req.params.id);
+    if (!sol || sol.pena_id !== req.pena.id) throw httpError(404, "Solicitud no encontrada");
+    const out = await store.resolverSolicitudPena({ id: sol.id, por: "pena", aceptar: accion === "aceptar" });
+    if (!out.ok) throw httpError(409, out.motivo === "ya_tiene" ? "Esa persona ya se sumó a otra peña." : out.motivo === "no_corresponde" ? "Esa invitación la confirma la persona, no la peña." : "Esa solicitud ya estaba resuelta.");
+    _penasPub = null;
+    log.info({ penaId: req.pena.id, solicitud: sol.id, estado: out.estado }, "peña: solicitud resuelta por la comisión");
+    res.json({ ok: true, estado: out.estado });
   }));
   r.get("/pena/fondo", requirePena, wrap(async (req, res) => {
     const [f, mov, pct] = await Promise.all([fondoDe(req.pena.id), store.movimientosPena(req.pena.id, 40), decision("pct")]);
@@ -3441,7 +3488,7 @@ function buildRouter() {
   // según el informe del club. Nunca frena el flujo que la dispara.
   function unirPenaPorCedula(socioId) {
     if (!store.sincronizarMiembrosPena) return;
-    store.sincronizarMiembrosPena({ socioId }).then((r) => { if (r && r.asignados) { _penasPub = null; log.info({ socioId }, "peña: asignada por el padrón del club"); } }).catch((e) => log.warn({ err: e.message }, "peña: no se pudo vincular con el padrón"));
+    store.sincronizarMiembrosPena({ socioId }).then((r) => { if (r && r.invitados) log.info({ socioId }, "peña: invitada por el padrón del club (falta que la persona confirme)"); }).catch((e) => log.warn({ err: e.message }, "peña: no se pudo vincular con el padrón"));
   }
   // Padrón de una peña (solo el owner del panel): incluye el estado de la cuota, que es dato del club y no se comparte con la comisión.
   r.get("/admin/penas/:id/miembros", requireAdmin, exigirOwner, wrap(async (req, res) => {
@@ -3468,6 +3515,13 @@ function buildRouter() {
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "penas:editar", targetId: p.id, detalle: Object.keys(patch).join(","), por: req.adminUser });
     res.json({ ok: true, pena: p });
   }));
+  // Aviso a la comisión de que alguien pidió sumarse y espera su respuesta: como máximo uno por día y peña.
+  async function avisarPenaSolicitud(pena, socio) {
+    if (!emailOk(pena.contacto) || !mailer.enviarPenaSolicitudSocio) return;
+    const reservar = store.reservarNotificacion ? (k) => store.reservarNotificacion(k) : async () => true;
+    if (!(await reservar("pena:pidio:" + pena.id + ":" + new Date().toISOString().slice(0, 10)))) return;
+    await mailer.enviarPenaSolicitudSocio({ email: pena.contacto }, { pena, solicitante: nombreCorto(socio) }).catch(() => {});
+  }
   // Aviso a la comisión de que se sumó un hincha: como máximo uno por día y peña.
   async function avisarPenaSumo(pena, socio) {
     if (!emailOk(pena.contacto) || !mailer.enviarPenaSumoSocio) return;

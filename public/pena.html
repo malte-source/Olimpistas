@@ -217,6 +217,8 @@
 
       <!-- HINCHADA -->
       <section id="vHinchada" class="hide" aria-label="Hinchada">
+        <div class="pen-card" id="pedidosCard"><h3>Pedidos para sumarse</h3><div id="pedidos"></div>
+          <p class="pen-muted" style="margin:10px 0 0">Una persona entra a la peña cuando la comisión la acepta. Solo puede estar en una peña a la vez. Ves el nombre y la inicial del apellido.</p><div class="pen-msg" id="pedidosErr" role="alert"></div></div>
         <div class="pen-card"><h3>Últimas altas por tu link</h3><div id="altas"></div>
           <p class="pen-muted" style="margin:10px 0 0">Ves el nombre y la inicial del apellido. Los datos personales del listado del club no se comparten con la comisión.</p>
           <div class="row-actions" style="margin-top:12px"><button type="button" class="btn btn-sm btn-ghost" id="altasCsv">Descargar todas las altas (CSV)</button></div><div class="pen-msg" id="altasCsvErr" role="alert"></div></div>
@@ -293,6 +295,12 @@
     try { window.scrollTo(0, 0); } catch (e) {}
   }
   $("tabs").addEventListener("click", function (e) { var b = e.target.closest("button[data-vista]"); if (b) irVista(b.dataset.vista); });
+  $("pedidos").addEventListener("click", async function (e) {
+    var b = e.target.closest("button[data-sol]"); if (!b) return;
+    var m = $("pedidosErr"); m.className = "pen-msg"; m.textContent = ""; b.disabled = true;
+    try { await api("/pena/solicitudes/" + encodeURIComponent(b.dataset.sol) + "/" + b.dataset.acc, { method: "POST", body: {} }); cargar(); }
+    catch (err) { m.textContent = err.message; b.disabled = false; cargar(); }
+  });
   $("progInvitar").onclick = function () { irVista("invitar"); };
 
   var NIVEL_MOV = { ingreso: "Aporte", canje: "Canje" };
@@ -345,6 +353,13 @@
         var b = e.target.closest("button[data-copiar]"); if (!b) return;
         navigator.clipboard.writeText(msgs[Number(b.dataset.copiar)]).then(function () { b.textContent = "¡Copiado!"; setTimeout(function () { b.textContent = "Copiar mensaje"; }, 1500); });
       };
+      // Pedidos para sumarse: la comisión acepta o rechaza; las invitaciones del listado las confirma cada persona.
+      var sol = d.solicitudes || { pedidos: [], invitaciones: 0 };
+      $("pedidos").innerHTML = (sol.pedidos.length ? sol.pedidos.map(function (q) {
+        return '<div class="pen-row" style="align-items:center;gap:10px"><div style="flex:1">' + esc(q.nombre) + '<small>' + esc(q.ciudad || "") + ' · ' + esc(q.nivel) + ' · ' + esc(fecha(q.desde)) + '</small></div>' +
+          '<button type="button" class="btn btn-sm" data-sol="' + esc(q.id) + '" data-acc="aceptar">Aceptar</button> <button type="button" class="btn btn-sm btn-ghost" data-sol="' + esc(q.id) + '" data-acc="rechazar">Rechazar</button></div>';
+      }).join("") : '<p class="pen-muted" style="padding:6px 0;margin:0">No hay pedidos pendientes.</p>') +
+        (sol.invitaciones ? '<p class="pen-muted" style="padding:8px 0 0;margin:0">' + sol.invitaciones + (sol.invitaciones === 1 ? ' persona del listado del club espera' : ' personas del listado del club esperan') + ' confirmar su lugar en la peña.</p>' : "");
       // Hinchada
       $("altas").innerHTML = d.ultimas_altas.length ? d.ultimas_altas.map(function (a) {
         return '<div class="pen-row"><div>' + esc(a.nombre) + '<small>' + esc(a.ciudad || "") + ' · ' + esc(a.nivel) + '</small></div><span class="pen-muted">' + esc(fecha(a.creado)) + '</span></div>';
