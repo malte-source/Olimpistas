@@ -2083,9 +2083,31 @@
 
   // ─── Carnet digital (mismo componente que la landing, color por nivel) ───────
   // Vista UNIFICADA: carnet + nivel + beneficios + social + compartir + upsell.
+  // <U7> Carnet listo para la puerta: mientras se ve el QR la pantalla no se apaga. El sistema suelta el bloqueo al pasar a segundo plano:
+  // se vuelve a pedir al volver. Sin soporte (o si el sistema lo rechaza, p. ej. batería baja) simplemente no pasa nada.
+  let _wake = null;
+  async function mantenerPantalla() {
+    try {
+      if (_wake || document.hidden || !navigator.wakeLock) return;
+      const w = await navigator.wakeLock.request("screen");
+      _wake = w;
+      w.addEventListener("release", () => { if (_wake === w) _wake = null; });
+    } catch (e) { _wake = null; }
+  }
+  function soltarPantalla() { const w = _wake; _wake = null; try { if (w) w.release(); } catch (e) {} }
+  // Una sola vez por dispositivo, y solo en el celular: el QR se lee mejor con brillo alto.
+  function avisoBrillo() {
+    try {
+      if (!window.matchMedia || !matchMedia("(pointer: coarse)").matches || localStorage.getItem("oli_brillo_aviso")) return;
+      localStorage.setItem("oli_brillo_aviso", "1");
+      setTimeout(() => { if (document.getElementById("qrBen")) toast(T("m_qr_brillo")); }, 700);
+    } catch (e) { /* un aviso nunca rompe el carnet */ }
+  }
+  // </U7>
+
   // ─── QR rotativo para usar los beneficios en caja: se renueva cada 60 s con un token firmado por el servidor ───
   let _qrTimer = null, _qrVence = 0, _qrCargando = false;
-  function detenerQrBeneficios() { if (_qrTimer) clearInterval(_qrTimer); _qrTimer = null; _qrCargando = false; }
+  function detenerQrBeneficios() { if (_qrTimer) clearInterval(_qrTimer); _qrTimer = null; _qrCargando = false; soltarPantalla(); }
   async function refrescarQr() {
     if (_qrCargando) return;
     _qrCargando = true;
@@ -2109,6 +2131,7 @@
     detenerQrBeneficios();
     if (!document.getElementById("qrBen")) return;
     refrescarQr();
+    mantenerPantalla(); avisoBrillo();
     _qrTimer = setInterval(() => {
       if (!document.getElementById("qrBenImg")) return detenerQrBeneficios();
       if (document.hidden) return;                       // pestaña en segundo plano: no se pide nada
@@ -2119,7 +2142,7 @@
       if (resta <= 0) refrescarQr();
     }, 1000);
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && _qrTimer) refrescarQr(); }); // al volver, token nuevo ya
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && _qrTimer) { refrescarQr(); mantenerPantalla(); } }); // al volver, token nuevo ya y la pantalla de nuevo encendida
 
   const qrListo = () => new Promise((res) => { let n = 0; (function chk() { if (window.qrcode || n++ > 40) return res(); setTimeout(chk, 50); })(); });
   const NIVEL_COLOR = { olimpista: "#c9c7c1", kids: "#ff8a80", premium: "#d9b65a", socio: "#ffffff" };
