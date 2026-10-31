@@ -1716,6 +1716,7 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .pts-mt-barra > i { display: block; height: 100%; border-radius: inherit; background: var(--text-primary); transition: width var(--t-cambio, 240ms) cubic-bezier(.2, .8, .2, 1); }
 .pts-mt.hecha .pts-mt-barra > i { background: var(--text-success, #1f8a4c); }
 @media (prefers-reduced-motion: reduce) { .pts-mt-barra > i { transition: none; } }
+.bx-tag.cerca { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--text-primary); }
 .sub-sigue { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; font-size: var(--t-13); color: var(--text-secondary); }
 .sub-sigue[hidden] { display: none; }
 
