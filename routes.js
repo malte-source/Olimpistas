@@ -32,6 +32,7 @@ const { baseUrl } = require("./lib/url");
 const { urlImagen } = require("./lib/imagen-subasta");
 const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib/puntos");
 const carnetLib = require("./lib/carnet");
+const resumenComercioLib = require("./lib/resumen-comercio");
 const atencionLib = require("./lib/atencion");
 const campanasLib = require("./lib/campanas");
 const h3lib = require("./lib/h3");
@@ -1226,6 +1227,7 @@ function buildRouter() {
         if (mailer.enviarRenovacion) await mailer.enviarRenovacion(s, { tier: s.tier_slug, dias: Number(s.dias_rest) }).catch(() => {}); out.renovaciones++; await new Promise((done) => setTimeout(done, 300));
       }
     } catch (e) { log.error({ err: e.message }, "cron renov"); }
+    try { out.resumenesComercio = await resumenComercioLib.enviarResumenesMensuales({ store, mailer, hoyPy: hoyPy(), log }); } catch (e) { falla("resumen mensual a comercios")(e); }
     try { if (store.purgarVitales) out.vitalesPurgados = await store.purgarVitales(); } catch (e) { log.error({ err: e.message }, "cron purga vitales"); }
     try { if (store.purgarSesionesVencidas) out.sesionesPurgadas = await store.purgarSesionesVencidas(); } catch (e) { log.error({ err: e.message }, "cron purga sesiones"); }
     log.info(out, "cron diario");
@@ -3792,6 +3794,20 @@ function buildRouter() {
     }
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "comercios:acceso-enlace", targetId: c.id, detalle: c.nombre + (correo ? " · enviado por correo" : " · sin correo"), por: req.adminUser });
     res.json({ ok: true, usuario, correo_enviado: correo, contacto: emailOk(c.contacto) ? c.contacto : "", ...(correo ? {} : { url }) });
+  }));
+  // Resumen del mes pasado de un comercio, a pedido del admin: por defecto al correo del comercio; con { a } como VISTA PREVIA a ese correo
+  // (para ver cómo queda antes de que salga solo el día 1). No consume el envío automático del mes.
+  r.post("/admin/comercios/:id/resumen-mensual", requireAdmin, requirePerm("beneficios.write"), wrap(async (req, res) => {
+    const c = (await store.listComercios()).find((x) => x.id === req.params.id);
+    if (!c) throw httpError(404, "Comercio no encontrado");
+    const a = String(req.body?.a || "").trim().toLowerCase();
+    if (a && !emailOk(a)) throw httpError(400, "Poné un correo válido para la vista previa");
+    const destino = a || c.contacto;
+    if (!emailOk(destino)) throw httpError(409, "El comercio no tiene un correo válido: cargalo en «Editar» o mandá la vista previa a tu correo");
+    const r2 = await resumenComercioLib.armarResumen({ store, comercio: c, mes: resumenComercioLib.mesAnterior(hoyPy()), hoyPy: hoyPy(), beneficios: store.listBeneficios ? await store.listBeneficios() : [] });
+    const e = await mailer.enviarResumenComercio({ email: destino }, { ...r2, vistaPrevia: !!a });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: a ? "comercios:resumen-vista-previa" : "comercios:resumen-enviado", targetId: c.id, detalle: c.nombre + " · " + r2.mes.etiqueta, por: req.adminUser });
+    res.json({ ok: !(e && e.ok === false), enviado_a: destino, mes: r2.mes.etiqueta, canjes: r2.actual.canjes, vista_previa: !!a });
   }));
   // Login del comercio.
   r.post("/comercio/login", wrap(async (req, res) => {
