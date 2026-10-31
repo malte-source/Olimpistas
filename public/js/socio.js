@@ -1301,6 +1301,14 @@
       : `<div class="pts-m"><span class="pts-m-eb">${T("m_pts_mision")} · +${nf(m.puntos)}</span><p class="pts-m-q">${esc(m.pregunta)}</p>
           <div class="pts-m-ops">${m.opciones.map((o, i) => `<button type="button" class="pts-m-op" data-mision="${esc(m.id)}" data-op="${i}">${esc(o)}</button>`).join("")}</div></div>`;
     const fila = (tx, sub, der, off) => `<div class="grupo-fila"${off ? ' style="opacity:.45"' : ""}><span class="grupo-tx"><b>${tx}</b>${sub ? `<small>${sub}</small>` : ""}</span>${der || ""}</div>`;
+    // Misiones de la temporada: cada una con su barra de avance (lo calcula el sistema) y lo que da al cumplirla.
+    const mt = Array.isArray(d.misiones_temporada) ? d.misiones_temporada : [];
+    const nuevaMt = mt.find((x) => x.nueva);
+    const mtHtml = !mt.length ? "" : `<div class="grupo-h">${T("m_pts_temp_h")}</div><div class="grupo sin-ic">${mt.map((x) => `<div class="grupo-fila pts-mt${x.completada ? " hecha" : ""}">
+        <span class="grupo-tx"><b>${esc(x.titulo)}</b>${x.descripcion ? `<small>${esc(x.descripcion)}</small>` : ""}
+          <span class="pts-mt-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${x.meta}" aria-valuenow="${x.progreso}"><i style="width:${Math.round(100 * x.progreso / x.meta)}%"></i></span>
+          <small>${x.completada ? T("m_pts_temp_hecha") : T("m_pts_temp_de").replace("{n}", x.progreso).replace("{m}", x.meta)} · ${T("m_pts_temp_hasta").replace("{fecha}", esc(fecha(x.hasta + "T12:00:00")))}</small></span>
+        <span class="pts-n">${x.completada ? OLI.ic("check-circulo", 22, true) : "+" + nf(x.puntos)}</span></div>`).join("")}</div>`;
     const reglasHtml = d.reglas.map((r) => fila(esc(r.titulo), esc(r.fuente) + " · " + T("m_pts_q_" + r.quien) + (r.pendiente ? " · " + T("m_pts_pronto") : ""),
       `<span class="pts-n">${r.activa ? "+" + nf(r.puntos) : "—"}</span>`, !(r.aplica && r.activa))).join("");
     const premiosHtml = pr.items.length ? pr.items.map((p) => {
@@ -1317,6 +1325,7 @@
           <div class="pts-resumen"><div class="pts-anillo2" style="--p:${Math.max(0, Math.min(100, Number(esc2.pct) || 0))}">${OLI.ic("puntos", 34, true)}</div>
             <span class="pts-saldo"><b>${nf(d.saldo)}</b><small>${T("m_pts_escalon")} ${esc(esc2.nombre || "")} · ${falta}</small></span></div>
           ${misionHtml}
+          ${mtHtml}
           <div class="grupo-h">${T("m_pts_como")}</div><div class="grupo sin-ic">${reglasHtml}</div>
         </div>
         <div class="pts-col">
@@ -1326,6 +1335,7 @@
         </div>
       </div>
     </div>`;
+    if (nuevaMt) toast(T("m_pts_temp_ok").replace("{puntos}", nf(nuevaMt.puntos)));
     view().querySelectorAll("[data-mision]").forEach((b) => b.addEventListener("click", async () => {
       view().querySelectorAll("[data-mision]").forEach((x) => { x.disabled = true; });
       try {

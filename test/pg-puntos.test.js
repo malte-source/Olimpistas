@@ -40,7 +40,7 @@ test("0006: tablas, reglas sembradas con los valores del paquete y restricciones
   const t = (await pg._sql`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('puntos_reglas','puntos_movimientos','premios','canjes_premio','misiones','mision_respuestas')`).length;
   assert.strictEqual(t, 6);
   const reglas = Object.fromEntries((await pg.listReglas()).map((r) => [r.clave, r.puntos]));
-  assert.deepStrictEqual(reglas, { cuota: 100, debito: 500, estadio: 150, liberar: 200, mision: 50, perfil: 100, referido: 300 });
+  assert.deepStrictEqual(reglas, { cuota: 100, debito: 500, estadio: 150, liberar: 200, mision: 50, mision_temporada: 300, pago_rapido: 50, perfil: 100, referido: 300 });
   await assert.rejects(() => pg._sql`INSERT INTO premios (id, titulo, costo) VALUES ('x', 'x', 0)`, "costo > 0");
   await assert.rejects(() => pg._sql`INSERT INTO premios (id, titulo, costo, stock) VALUES ('y', 'y', 5, -1)`, "stock >= 0");
 });

@@ -49,7 +49,7 @@ test("mes y día del mes en hora de Paraguay", () => {
 });
 
 test("las reglas del paquete están todas, y las de Tuti sin endpoint figuran como pendientes", () => {
-  assert.deepStrictEqual(Object.keys(REGLAS_META).sort(), ["cuota", "debito", "estadio", "liberar", "mision", "perfil", "referido"]);
+  assert.deepStrictEqual(Object.keys(REGLAS_META).sort(), ["cuota", "debito", "estadio", "liberar", "mision", "mision_temporada", "pago_rapido", "perfil", "referido"]);
   assert.ok(REGLAS_META.estadio.pendiente && REGLAS_META.liberar.pendiente);
   assert.ok(!REGLAS_META.referido.pendiente);
 });
@@ -355,7 +355,7 @@ test("admin de canjes: entregar avisa al hincha; cancelar devuelve los puntos y 
 // ── Reglas editables y resumen ───────────────────────────────────────────────
 test("admin de reglas: ver, ajustar y desactivar (con permiso); valida", async () => {
   const lista = (await (await admin("/puntos/reglas")).json()).items;
-  assert.strictEqual(lista.length, 7);
+  assert.strictEqual(lista.length, 9);
   assert.strictEqual(lista.find((r) => r.clave === "referido").puntos, 300);
   assert.strictEqual((await adminRegla("referido", { puntos: 350 })).status, 200);
   assert.strictEqual((await adminRegla("referido", { puntos: -5 })).status, 400);

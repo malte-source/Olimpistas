@@ -30,7 +30,7 @@ const geo = require("./lib/geo");
 const tutiApi = require("./lib/tuti");
 const { baseUrl } = require("./lib/url");
 const { urlImagen } = require("./lib/imagen-subasta");
-const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy } = require("./lib/puntos");
+const { escalonDe, REGLAS_META, semanaIso, mesPy, diaDelMesPy, METRICAS_MISION, ventanaMision } = require("./lib/puntos");
 const carnetLib = require("./lib/carnet");
 const resumenComercioLib = require("./lib/resumen-comercio");
 const atencionLib = require("./lib/atencion");
@@ -1011,6 +1011,12 @@ function buildRouter() {
       }
       if (store.marcarSubastaPagada) await store.marcarSubastaPagada(pedido.subasta_id);
       const s = actual;
+      // G8 · pagar a tiempo suma: +50 si se paga dentro de las primeras 24 h del plazo (una vez por lote; sumarPuntos es único por socio y lote).
+      try {
+        const horas = (await plazosHoras())[s.ronda === 2 ? "r2" : "r1"];
+        const inicio = s.pago_vence ? new Date(s.pago_vence).getTime() - horas * 3600000 : s.termina ? new Date(s.termina).getTime() : null;
+        if (inicio && Date.now() - inicio <= 24 * 3600000) darPuntos(pedido.socio_id, "pago_rapido", "subasta:" + s.id, "Pagaste a tiempo: " + s.titulo).catch(() => {});
+      } catch (e) { log.warn({ err: e && e.message }, "puntos: pago rápido"); }
       const socio = await store.getSocioById(pedido.socio_id).catch(() => null);
       if (socio && socio.email && s && mailer.enviarSubastaPagoConfirmado) {
         const urlCertificado = (process.env.APP_URL || "https://www.olimpistas.com") + "/subasta/" + encodeURIComponent(s.slug || s.id) + "/certificado";
@@ -2962,14 +2968,37 @@ function buildRouter() {
     return { id: m.id, semana: m.semana, pregunta: m.pregunta, opciones: m.opciones, puntos: regla.activa ? regla.puntos : 0, respondida: resp ? { opcion: resp.opcion, correcta: resp.correcta } : null };
   }
 
+  // G3 · Misiones de temporada vigentes con su progreso (calculado de lo que ya hay). Al llegar a la meta se premian UNA vez (el movimiento es único
+  // por persona y misión), aunque la pantalla se abra a la vez desde dos dispositivos. Si la regla `mision_temporada` está apagada se ven pero no premian.
+  async function misionesTemporadaParaSocio(socioId) {
+    if (!store.listMisionesTemporada) return [];
+    const lista = await store.listMisionesTemporada({ vigentesEn: hoyPy() });
+    if (!lista.length) return [];
+    const [hechas, reglas] = await Promise.all([store.refsPuntos(socioId, "mision_temporada"), reglasPuntos()]);
+    const premia = !!(reglas.mision_temporada && reglas.mision_temporada.activa);
+    const out = [];
+    for (const m of lista) {
+      const desde = String(m.desde).slice(0, 10), hasta = String(m.hasta).slice(0, 10), { ini, fin } = ventanaMision(desde, hasta);
+      const progreso = Math.min(m.meta, await store.progresoMisionTemporada({ socioId, metrica: m.metrica, ini, fin }));
+      let completada = hechas.includes(m.id), nueva = false;
+      if (!completada && progreso >= m.meta && premia) {
+        const mov = await store.sumarPuntos({ socioId, motivo: "mision_temporada", refId: m.id, puntos: m.puntos, detalle: "Misión de temporada: " + m.titulo });
+        completada = true; nueva = !!mov;
+      }
+      out.push({ id: m.id, titulo: m.titulo, descripcion: m.descripcion || "", metrica: m.metrica, meta: m.meta, progreso, puntos: m.puntos, hasta, completada, nueva });
+    }
+    return out;
+  }
+
   r.get("/puntos", auth.requireSocio, wrap(async (req, res) => {
     const id = req.socio.id;
+    const misionesTemp = await misionesTemporadaParaSocio(id).catch((e) => { log.error({ err: e && e.message }, "puntos: misiones de temporada"); return []; });   // antes que el saldo: si acaba de cumplir una, el saldo ya la incluye
     const [saldo, movimientos, reglas, membresia, mision, venc] = await Promise.all([
       store.saldoPuntos(id), store.movimientosPuntos(id, 20), reglasPuntos(), store.getMembresia(id), misionParaSocio(id), decision("venc"),
     ]);
     const esSocio = !!req.socio.es_socio_olimpia || (membresia && membresia.tier_slug === "socio");
     res.json({
-      saldo, escalon: escalonDe(saldo), movimientos, mision, vencen: venc === "12_meses",
+      saldo, escalon: escalonDe(saldo), movimientos, mision, misiones_temporada: misionesTemp, vencen: venc === "12_meses",
       reglas: Object.entries(REGLAS_META).map(([clave, m]) => ({
         clave, titulo: m.t, fuente: m.fuente, quien: m.quien, pendiente: !!m.pendiente,
         puntos: (reglas[clave] || {}).puntos || 0, activa: !!(reglas[clave] || {}).activa,
@@ -3095,6 +3124,33 @@ function buildRouter() {
     catch (e) { if (e.code === "23505") throw httpError(409, "Ya hay una misión para esa semana"); throw e; }
     if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:mision-crear", targetId: m.id, detalle: semana, por: req.adminUser });
     res.status(201).json({ ok: true, mision: m });
+  }));
+  // Misiones de temporada (G3): las carga el club. El progreso lo calcula el sistema; la persona no marca nada.
+  r.get("/admin/puntos/misiones-temporada", requireAdmin, wrap(async (_req, res) => {
+    res.json({ items: store.listMisionesTemporada ? (await store.listMisionesTemporada()).map((m) => ({ ...m, desde: String(m.desde).slice(0, 10), hasta: String(m.hasta).slice(0, 10) })) : [], metricas: METRICAS_MISION, hoy: hoyPy(), puntos_por_defecto: ((await reglasPuntos()).mision_temporada || {}).puntos || 300 });
+  }));
+  r.post("/admin/puntos/misiones-temporada", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
+    const b = req.body || {}, limpio = (s, max) => String(s == null ? "" : s).replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+    const titulo = limpio(b.titulo, 100), descripcion = limpio(b.descripcion, 200), metrica = String(b.metrica || "");
+    const meta = Number(b.meta), desde = String(b.desde || ""), hasta = String(b.hasta || "");
+    const puntos = b.puntos == null || b.puntos === "" ? Number(((await reglasPuntos()).mision_temporada || {}).puntos) || 300 : Number(b.puntos);
+    const fechaOk = (f) => /^\d{4}-\d{2}-\d{2}$/.test(f) && !isNaN(new Date(f + "T12:00:00Z").getTime());
+    if (titulo.length < 3) throw httpError(400, "Poné un título (mínimo 3 letras)");
+    if (!METRICAS_MISION[metrica]) throw httpError(400, "Elegí qué se mide: " + Object.keys(METRICAS_MISION).join(", "));
+    if (!Number.isInteger(meta) || meta < 1 || meta > 100) throw httpError(400, "La meta es un número entero de 1 a 100");
+    if (!fechaOk(desde) || !fechaOk(hasta)) throw httpError(400, "Las fechas van como 2026-11-01");
+    if (hasta < desde) throw httpError(400, "La misión no puede terminar antes de empezar");
+    if (!Number.isInteger(puntos) || puntos < 1 || puntos > 5000) throw httpError(400, "Los puntos van de 1 a 5.000");
+    const m = await store.crearMisionTemporada({ titulo, descripcion, metrica, meta, desde, hasta, puntos });
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: "puntos:mision-temporada-crear", targetId: m.id, detalle: titulo + " · " + metrica + " ≥ " + meta + " · +" + puntos, por: req.adminUser });
+    res.status(201).json({ ok: true, mision: m });
+  }));
+  r.patch("/admin/puntos/misiones-temporada/:id", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
+    if (typeof (req.body && req.body.activa) !== "boolean") throw httpError(400, "Indicá activa: true o false");
+    const m = await store.updateMisionTemporada(req.params.id, { activa: req.body.activa });
+    if (!m) throw httpError(404, "Misión no encontrada");
+    if (store.logAccionAdmin) store.logAccionAdmin({ accion: req.body.activa ? "puntos:mision-temporada-activar" : "puntos:mision-temporada-pausar", targetId: m.id, detalle: m.titulo, por: req.adminUser });
+    res.json({ ok: true, mision: m });
   }));
   r.patch("/admin/puntos/misiones/:id", requireAdmin, requirePerm("puntos.write"), wrap(async (req, res) => {
     if (typeof (req.body && req.body.activa) !== "boolean") throw httpError(400, "Indicá activa: true o false");

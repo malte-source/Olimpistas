@@ -1841,6 +1841,27 @@ function createPgStore({ databaseUrl, debug }) {
         ON CONFLICT (socio_id, motivo, ref_id) DO NOTHING RETURNING *`;
       return m || null;
     },
+    // ── Misiones de temporada (G3, migración 0026): el progreso se calcula de lo que ya existe ──
+    async crearMisionTemporada({ titulo, descripcion, metrica, meta, desde, hasta, puntos }) {
+      const [m] = await sql`INSERT INTO misiones_temporada (id, titulo, descripcion, metrica, meta, desde, hasta, puntos)
+        VALUES (${uid("mst")}, ${titulo}, ${descripcion || ""}, ${metrica}, ${meta}, ${desde}, ${hasta}, ${puntos}) RETURNING *`;
+      return m;
+    },
+    async listMisionesTemporada({ vigentesEn } = {}) {
+      if (vigentesEn) return sql`SELECT * FROM misiones_temporada WHERE activa AND desde <= ${vigentesEn}::date AND hasta >= ${vigentesEn}::date ORDER BY hasta, creado`;
+      return sql`SELECT * FROM misiones_temporada ORDER BY desde DESC, creado DESC LIMIT 100`;
+    },
+    async updateMisionTemporada(id, patch) { const [m] = await sql`UPDATE misiones_temporada SET ${sql(patch)} WHERE id = ${id} RETURNING *`; return m || null; },
+    async progresoMisionTemporada({ socioId, metrica, ini, fin }) {
+      let r;
+      if (metrica === "referidos") [r] = await sql`SELECT COUNT(*)::int AS n FROM socios WHERE referido_por = ${socioId} AND creado >= ${ini}::timestamptz AND creado < ${fin}::timestamptz`;
+      else if (metrica === "canjes") [r] = await sql`SELECT COUNT(*)::int AS n FROM canjes WHERE socio_id = ${socioId} AND creado >= ${ini}::timestamptz AND creado < ${fin}::timestamptz`;
+      else if (metrica === "rubros") [r] = await sql`SELECT COUNT(DISTINCT lower(trim(co.rubro)))::int AS n FROM canjes c JOIN comercios co ON co.id = c.comercio_id
+        WHERE c.socio_id = ${socioId} AND coalesce(trim(co.rubro), '') <> '' AND c.creado >= ${ini}::timestamptz AND c.creado < ${fin}::timestamptz`;
+      else if (metrica === "pujas") [r] = await sql`SELECT COUNT(DISTINCT subasta_id)::int AS n FROM pujas WHERE socio_id = ${socioId} AND creado >= ${ini}::timestamptz AND creado < ${fin}::timestamptz`;
+      return r ? r.n : 0;
+    },
+    async refsPuntos(socioId, motivo) { return (await sql`SELECT ref_id FROM puntos_movimientos WHERE socio_id = ${socioId} AND motivo = ${motivo}`).map((x) => x.ref_id); },
     async saldoPuntos(socioId) { const [r] = await sql`SELECT COALESCE(SUM(puntos), 0)::int AS s FROM puntos_movimientos WHERE socio_id = ${socioId}`; return r.s; },
     // Los movimientos de 0 puntos son marcas internas ("revisado este mes"): no se muestran.
     async movimientosPuntos(socioId, limit = 20) {

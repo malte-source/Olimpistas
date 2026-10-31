@@ -1712,6 +1712,10 @@ body.app:not([data-tab="inicio"]) .socio-banner:not(.socio-banner-pago) { displa
 .ih-side > .ih-pf { order: 7; }
 .ih-side > .socio-banner { order: 8; margin-top: 0 !important; }
 .ih-main > .ih-deudas { order: 0; }
+.pts-mt-barra { display: block; height: 6px; margin: 8px 0 4px; border-radius: 999px; background: var(--border-default); overflow: hidden; }
+.pts-mt-barra > i { display: block; height: 100%; border-radius: inherit; background: var(--text-primary); transition: width var(--t-cambio, 240ms) cubic-bezier(.2, .8, .2, 1); }
+.pts-mt.hecha .pts-mt-barra > i { background: var(--text-success, #1f8a4c); }
+@media (prefers-reduced-motion: reduce) { .pts-mt-barra > i { transition: none; } }
 .sub-sigue { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; font-size: var(--t-13); color: var(--text-secondary); }
 .sub-sigue[hidden] { display: none; }
 

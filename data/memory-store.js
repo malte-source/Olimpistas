@@ -890,7 +890,8 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     // ── Motor de puntos (mismo contrato que pg-store) ──
     async listReglas() {
-      if (!db.puntos_reglas) db.puntos_reglas = [["referido", 300], ["mision", 50], ["estadio", 150], ["liberar", 200], ["cuota", 100], ["debito", 500], ["perfil", 100]].map(([clave, puntos]) => ({ clave, puntos, activa: true }));
+      if (!db.puntos_reglas) db.puntos_reglas = [];
+      for (const [clave, puntos] of [["referido", 300], ["mision", 50], ["estadio", 150], ["liberar", 200], ["cuota", 100], ["debito", 500], ["perfil", 100], ["pago_rapido", 50], ["mision_temporada", 300]]) if (!db.puntos_reglas.some((r) => r.clave === clave)) db.puntos_reglas.push({ clave, puntos, activa: true });
       return db.puntos_reglas.slice().sort((a, b) => a.clave.localeCompare(b.clave));
     },
     async setRegla(clave, patch) { await this.listReglas(); const r = db.puntos_reglas.find((x) => x.clave === clave); if (!r) return null; Object.assign(r, patch); persist(); return r; },
@@ -900,6 +901,33 @@ function createMemoryStore({ filePath = null } = {}) {
       const m = { id: uid("pmo"), socio_id: socioId, puntos, motivo, ref_id: refId || "", detalle: detalle || "", vence: null, creado: nowIso() };
       db.puntos_mov.push(m); persist(); return m;
     },
+    // ── Misiones de temporada (G3, migración 0026): el progreso se calcula de lo que ya existe (mismo contrato que pg-store) ──
+    async crearMisionTemporada({ titulo, descripcion, metrica, meta, desde, hasta, puntos }) {
+      const m = { id: uid("mst"), titulo, descripcion: descripcion || "", metrica, meta, desde, hasta, puntos, activa: true, creado: nowIso() };
+      (db.misiones_temporada = db.misiones_temporada || []).push(m); persist(); return { ...m };
+    },
+    async listMisionesTemporada({ vigentesEn } = {}) {
+      const l = (db.misiones_temporada || []).filter((m) => !vigentesEn || (m.activa && m.desde <= vigentesEn && m.hasta >= vigentesEn));
+      return l.map((m) => ({ ...m })).sort(vigentesEn ? (a, b) => a.hasta.localeCompare(b.hasta) || a.creado.localeCompare(b.creado) : (a, b) => b.desde.localeCompare(a.desde) || b.creado.localeCompare(a.creado)).slice(0, 100);
+    },
+    async updateMisionTemporada(id, patch) { const m = (db.misiones_temporada || []).find((x) => x.id === id); if (!m) return null; Object.assign(m, patch); persist(); return { ...m }; },
+    async progresoMisionTemporada({ socioId, metrica, ini, fin }) {
+      const a = new Date(ini).getTime(), b = new Date(fin).getTime(), dentro = (v) => { const t = new Date(v).getTime(); return t >= a && t < b; };
+      if (metrica === "referidos") return (db.socios || []).filter((s) => s.referido_por === socioId && dentro(s.creado)).length;
+      if (metrica === "canjes") return (db.canjes || []).filter((c) => c.socio_id === socioId && dentro(c.creado)).length;
+      if (metrica === "rubros") {
+        const set = new Set();
+        for (const c of (db.canjes || [])) {
+          if (c.socio_id !== socioId || !dentro(c.creado)) continue;
+          const co = (db.comercios || []).find((x) => x.id === c.comercio_id), r = String((co && co.rubro) || "").trim().toLowerCase();
+          if (r) set.add(r);
+        }
+        return set.size;
+      }
+      if (metrica === "pujas") return new Set((db.pujas || []).filter((p) => p.socio_id === socioId && dentro(p.creado)).map((p) => p.subasta_id)).size;
+      return 0;
+    },
+    async refsPuntos(socioId, motivo) { return (db.puntos_mov || []).filter((m) => m.socio_id === socioId && m.motivo === motivo).map((m) => m.ref_id); },
     async saldoPuntos(socioId) { return (db.puntos_mov || []).filter((m) => m.socio_id === socioId).reduce((a, m) => a + m.puntos, 0); },
     async movimientosPuntos(socioId, limit = 20) {
       return (db.puntos_mov || []).filter((m) => m.socio_id === socioId && m.puntos !== 0).sort((a, b) => String(b.creado).localeCompare(String(a.creado))).slice(0, limit)

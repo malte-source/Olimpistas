@@ -2143,8 +2143,8 @@
     async function cargarPuntosAdmin() {
       var box = $("puntosWrap"); if (!box) return;
       try {
-        var rs = await Promise.all([api("/admin/puntos/resumen"), api("/admin/puntos/reglas"), api("/admin/puntos/premios"), api("/admin/puntos/canjes?estado=pendiente"), api("/admin/puntos/misiones")]);
-        var res = rs[0], reglas = rs[1].items, premios = rs[2].items, canjes = rs[3].items, mis = rs[4];
+        var rs = await Promise.all([api("/admin/puntos/resumen"), api("/admin/puntos/reglas"), api("/admin/puntos/premios"), api("/admin/puntos/canjes?estado=pendiente"), api("/admin/puntos/misiones"), api("/admin/puntos/misiones-temporada")]);
+        var res = rs[0], reglas = rs[1].items, premios = rs[2].items, canjes = rs[3].items, mis = rs[4], mt = rs[5];
         var w = puede("puntos.write"), nf = function (n) { return Number(n || 0).toLocaleString("es-PY"); };
         var html = '<div style="background:#0a0a0a;color:#fff;border-radius:12px;padding:14px;margin:8px 0"><div style="font-size:12px;opacity:.7">PASIVO DE PUNTOS (lo que el club debe en premios)</div><b style="font-size:24px">' + nf(res.pasivo) + ' pts</b> <span style="opacity:.7">· ' + nf(res.socios_con_saldo) + ' hinchas con saldo · ' + nf(res.canjes_pendientes) + ' canjes por entregar</span></div>';
         html += '<div class="mini">Reglas de acumulación</div>' + reglas.map(function (r) {
@@ -2169,6 +2169,19 @@
           '<div><label>Semana</label><input id="miSemana" value="' + esc(mis.semana_actual) + '" /></div><div><label>Opción correcta (1, 2, 3…)</label><input id="miOk" type="number" min="1" max="4" value="1" /></div>' +
           '<div class="full"><label>Pregunta</label><input id="miPreg" maxlength="200" /></div><div class="full"><label>Opciones (una por línea, de 2 a 4)</label><textarea id="miOps" rows="3" style="width:100%"></textarea></div></div>' +
           '<div class="row-actions"><button class="btn btn-sm" id="miCrear">Crear misión</button></div></details>';
+        // Misiones de temporada: el progreso lo calcula el sistema; acá se define qué se mide, la meta, el período y los puntos.
+        html += '<div class="mini">Misiones de temporada <span class="muted">(se cumplen solas: el sistema mide el avance de cada persona)</span></div>' + (mt.items.length ? mt.items.map(function (m) {
+          var vigente = m.activa && m.desde <= mt.hoy && m.hasta >= mt.hoy;
+          return '<div class="row-actions" style="justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-default);padding:6px 0;opacity:' + (m.activa ? 1 : .55) + '"><span><b>' + esc(m.titulo) + '</b> <span class="muted" style="font-size:12px">· ' + esc(mt.metricas[m.metrica] || m.metrica) + ' ≥ ' + m.meta + ' · +' + nf(m.puntos) + ' · ' + esc(m.desde) + ' a ' + esc(m.hasta) + (vigente ? ' · vigente' : '') + '</span></span>' +
+            (w ? '<button class="btn btn-sm btn-ghost" data-mtact="' + esc(m.id) + '" data-a="' + (m.activa ? "0" : "1") + '">' + (m.activa ? "Pausar" : "Activar") + '</button>' : '') + '</div>';
+        }).join("") : '<p class="empty">No hay misiones de temporada.</p>');
+        if (w) html += '<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700">Nueva misión de temporada</summary><div class="fgrid" style="margin-top:8px">' +
+          '<div class="full"><label>Título</label><input id="mtTitulo" maxlength="100" /></div><div class="full"><label>Descripción (opcional)</label><input id="mtDesc" maxlength="200" /></div>' +
+          '<div><label>Qué se mide</label><select id="mtMetrica">' + Object.keys(mt.metricas).map(function (k) { return '<option value="' + k + '">' + esc(mt.metricas[k]) + '</option>'; }).join("") + '</select></div>' +
+          '<div><label>Meta (cantidad)</label><input id="mtMeta" type="number" min="1" max="100" value="2" /></div>' +
+          '<div><label>Desde</label><input id="mtDesde" type="date" value="' + esc(mt.hoy) + '" /></div><div><label>Hasta</label><input id="mtHasta" type="date" /></div>' +
+          '<div><label>Puntos</label><input id="mtPuntos" type="number" min="1" max="5000" value="' + mt.puntos_por_defecto + '" /></div></div>' +
+          '<div class="row-actions"><button class="btn btn-sm" id="mtCrear">Crear misión de temporada</button></div></details>';
         box.innerHTML = html;
         if (premios.length) tabla($("premiosTabla"), [
           { key: "premio", label: "Premio", text: function (p) { return p.titulo; }, cell: function (p) { return '<b>' + esc(p.titulo) + '</b>'; } },
@@ -2744,6 +2757,12 @@
         } else if (b.id === "prCrear") {
           await api("/admin/puntos/premios", { method: "POST", body: { titulo: $("prTitulo").value, descripcion: $("prDesc").value, escalon: $("prEsc").value, costo: Number($("prCosto").value), stock: $("prStock").value === "" ? null : Number($("prStock").value), nivel_min: $("prNivel").value } });
           toast("Premio creado");
+        } else if (b.dataset.mtact) {
+          await api("/admin/puntos/misiones-temporada/" + encodeURIComponent(b.dataset.mtact), { method: "PATCH", body: { activa: b.dataset.a === "1" } });
+          toast(b.dataset.a === "1" ? "Misión activada" : "Misión pausada");
+        } else if (b.id === "mtCrear") {
+          await api("/admin/puntos/misiones-temporada", { method: "POST", body: { titulo: $("mtTitulo").value, descripcion: $("mtDesc").value, metrica: $("mtMetrica").value, meta: Number($("mtMeta").value), desde: $("mtDesde").value, hasta: $("mtHasta").value, puntos: Number($("mtPuntos").value) } });
+          toast("Misión de temporada creada");
         } else if (b.id === "miCrear") {
           await api("/admin/puntos/misiones", { method: "POST", body: { semana: $("miSemana").value.trim(), pregunta: $("miPreg").value, opciones: $("miOps").value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean), correcta: Number($("miOk").value) - 1 } });
           toast("Misión creada");
