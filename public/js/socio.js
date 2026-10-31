@@ -1646,6 +1646,17 @@
     const hero = '<section class="bx-hero" aria-label="' + esc(T("bx_destacados")) + '"><h3 class="bx-h">' + T("bx_destacados") + '</h3>' +
       '<div class="bx-rail' + (dest.length === 1 ? " uno" : "") + '">' + dest.map(banner).join("") + '</div></section>';
 
+    // <N3> Cerca tuyo: la ubicación se pide al elegir "Más cerca", se usa SOLO en el teléfono (nunca se manda al servidor) y las distancias se calculan acá.
+    const distanciaKm = (la1, lo1, la2, lo2) => {
+      const r = Math.PI / 180, dLa = (la2 - la1) * r, dLo = (lo2 - lo1) * r;
+      const h = Math.sin(dLa / 2) ** 2 + Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin(dLo / 2) ** 2;
+      return 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
+    };
+    const conUbicacion = (x) => x.comercio_lat != null && x.comercio_lng != null && x.comercio_lat !== "" && x.comercio_lng !== "" && isFinite(Number(x.comercio_lat)) && isFinite(Number(x.comercio_lng));
+    const kmDesde = (lista, pos) => { lista.forEach((x) => { x._km = conUbicacion(x) ? distanciaKm(pos.lat, pos.lng, Number(x.comercio_lat), Number(x.comercio_lng)) : null; }); };
+    const porCercania = (x, y) => (x._km == null ? Infinity : x._km) - (y._km == null ? Infinity : y._km);   // sin ubicación, al final
+    const distTxt = (km) => km < 1 ? T("bx_dist_m").replace("{n}", Math.max(10, Math.round(km * 100) * 10)) : T("pn_km").replace("{km}", (Math.round(km * 10) / 10).toLocaleString(LOC));
+    // </N3>
     // Rubros con su cantidad, de mayor a menor.
     const porRubro = {};
     items.forEach((x) => { const k = x.comercio_rubro || ""; if (k) porRubro[k] = (porRubro[k] || 0) + 1; });
@@ -1660,7 +1671,7 @@
           '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="mios">' + T("bx_d_mios") + '</button>' +
           '<button type="button" role="radio" class="ctl-seg-b" aria-checked="false" data-d="bloq">' + T("bx_d_bloq") + '</button></div>' : "") +
         '<p class="bx-n" id="bxN" aria-live="polite"></p>' +
-        '<select id="bxOrden" class="bx-orden" aria-label="' + esc(T("bx_orden")) + '"><option value="local">' + T("bx_o_rec") + '</option><option value="desc">' + T("bx_o_desc") + '</option><option value="az">' + T("bx_o_az") + '</option></select>' +
+        '<select id="bxOrden" class="bx-orden" aria-label="' + esc(T("bx_orden")) + '"><option value="local">' + T("bx_o_rec") + '</option><option value="desc">' + T("bx_o_desc") + '</option><option value="az">' + T("bx_o_az") + '</option>' + (items.some(conUbicacion) ? '<option value="cerca">' + T("bx_o_cerca") + '</option>' : "") + '</select>' +
       '</div></div>';
 
     // Lo que falta para completar la columna derecha: cómo usarlos y subir de nivel.
@@ -1671,11 +1682,12 @@
       (nivelUp === "socio" ? '<a class="btn" href="' + esc(portalClub()) + '" target="_blank" rel="noopener">' + ctaAsociate() + '</a><button type="button" class="btn btn-ghost" id="bxUp" style="margin-top:8px">' + yaSoyTxt() + '</button>'
         : '<button type="button" class="btn" id="bxUp">' + T("m_ben_subi") + " " + (TL[nivelUp] || "Plus") + '</button>') + '</div>' : "";
 
+    const distTag = (x) => (st.pos && x._km != null ? '<span class="bx-tag cerca">' + icon("map-pin", { size: 12 }) + " " + distTxt(x._km) + '</span>' : "");
     const fila = (x) => '<button type="button" class="bx-card' + (x.desbloqueado ? "" : " lock") + '" data-ben="' + esc(x.id) + '">' +
       '<span class="bx-card-top">' + logoDe(x) +
       '<span class="grupo-tx"><b>' + esc(x.comercio_nombre || "") + '</b><small>' + esc(x.titulo || "") + '</small></span>' +
       '<span class="bx-val' + (x.desbloqueado ? "" : " lock") + (String(x.valor || "").length > 5 ? " chico" : "") + '">' + esc(x.valor || "") + '</span></span>' +
-      '<span class="bx-card-meta">' + (x.comercio_rubro ? '<span class="bx-tag">' + esc(x.comercio_rubro) + '</span>' : "") + (x.comercio_ciudad ? '<span class="bx-tag' + (hayMezcla && esLocal(x) ? " loc" : "") + '">' + (hayMezcla && esLocal(x) ? icon("map-pin", { size: 12 }) + " " : "") + esc(x.comercio_ciudad) + '</span>' : "") +
+      '<span class="bx-card-meta">' + distTag(x) + (x.comercio_rubro ? '<span class="bx-tag">' + esc(x.comercio_rubro) + '</span>' : "") + (x.comercio_ciudad ? '<span class="bx-tag' + (hayMezcla && esLocal(x) ? " loc" : "") + '">' + (hayMezcla && esLocal(x) ? icon("map-pin", { size: 12 }) + " " : "") + esc(x.comercio_ciudad) + '</span>' : "") +
       (x.desbloqueado ? "" : '<span class="bx-estado">' + estadoDe(x) + '</span>') + '</span></button>';
 
     view().innerHTML = '<div class="section" style="border:none;padding-top:8px">' +
@@ -1686,7 +1698,7 @@
       '</div></div>';
 
     // Estado de los filtros y pintado de la lista.
-    const st = { q: "", cat: "", disp: "todos", orden: "local" };
+    const st = { q: "", cat: "", disp: "todos", orden: "local", pos: null };
     const lista = view().querySelector("#bxLista"), nEl = view().querySelector("#bxN");
     const visibles = () => {
       const toks = norm(st.q).split(/\s+/).filter(Boolean);
@@ -1698,6 +1710,7 @@
         return true;
       });
       if (st.orden === "az") a.sort((x, y) => String(x.comercio_nombre).localeCompare(String(y.comercio_nombre), "es"));
+      else if (st.orden === "cerca" && st.pos) a.sort((x, y) => porCercania(x, y) || pctDe(y) - pctDe(x));
       else if (st.orden === "desc") a.sort((x, y) => pctDe(y) - pctDe(x) || esLocal(y) - esLocal(x));
       else a.sort((x, y) => esLocal(y) - esLocal(x) || pctDe(y) - pctDe(x));
       return a;
@@ -1736,7 +1749,15 @@
       view().querySelectorAll("#bxDisp button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
       pintar();
     });
-    view().querySelector("#bxOrden").addEventListener("change", (e) => { st.orden = e.target.value; pintar(); });
+    view().querySelector("#bxOrden").addEventListener("change", (e) => {
+      const sel = e.target, antes = st.orden;
+      if (sel.value !== "cerca") { st.orden = sel.value; pintar(); return; }
+      if (!navigator.geolocation) { sel.value = antes; return toast(T("m_geo_no")); }
+      toast(T("m_ben_ubicando"));
+      navigator.geolocation.getCurrentPosition((pos) => {
+        st.pos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; kmDesde(items, st.pos); st.orden = "cerca"; pintar(); toast(T("bx_cerca_priv"));
+      }, () => { sel.value = antes; toast(T("m_geo_err")); }, { timeout: 8000, maximumAge: 600000 });
+    });
     view().querySelector(".bx").addEventListener("click", (e) => {
       if (e.target.closest("#bxLimpiar")) { limpiar(); return; }
       const el = e.target.closest("[data-ben]");
