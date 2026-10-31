@@ -1572,6 +1572,18 @@ function createPgStore({ databaseUrl, debug }) {
     async abrirProgramadas() { return sql`UPDATE subastas SET estado = 'activa', termina = COALESCE(termina, inicia + make_interval(hours => COALESCE(duracion_horas, 48))) WHERE estado = 'programada' AND inicia IS NOT NULL AND inicia <= now() RETURNING *`; },
     async marcarSubastaNotificada(id) { await sql`UPDATE subastas SET notificado = true WHERE id = ${id}`; return true; },
     async subastasSinNotificar() { return sql`SELECT * FROM subastas WHERE estado = 'cerrada' AND ganador_id IS NOT NULL AND notificado = false`; },
+    // ── Seguir una subasta (P6): quien pujó la sigue ──
+    async subastasCierranEn(minutos) {
+      return sql`SELECT id, slug, titulo, termina, puja_actual, ganador_id FROM subastas
+        WHERE estado = 'activa' AND termina > now() AND termina <= now() + make_interval(mins => ${Math.max(1, Math.round(Number(minutos) || 3))}::int)`;
+    },
+    async subastasCerradasRecientes(horas) {
+      return sql`SELECT id, slug, titulo, termina, puja_actual, ganador_id, adjudicado_a FROM subastas
+        WHERE estado = 'cerrada' AND ganador_id IS NOT NULL AND termina > now() - make_interval(hours => ${Math.max(1, Math.round(Number(horas) || 24))}::int)`;
+    },
+    async seguidoresSubasta(subastaId) {
+      return sql`SELECT socio_id, MAX(monto)::int AS mejor FROM pujas WHERE subasta_id = ${subastaId} GROUP BY socio_id`;
+    },
 
     // ── Peñas oficiales (migración 0005) ──
     async crearPena({ nombre, ciudad, pais_iso, presidente, contacto }) {

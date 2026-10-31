@@ -673,6 +673,22 @@ function createMemoryStore({ filePath = null } = {}) {
     },
     async marcarSubastaNotificada(id) { const s = (db.subastas || []).find((x) => x.id === id); if (s) { s.notificado = true; persist(); } return true; },
     async subastasSinNotificar() { return (db.subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && !s.notificado); },
+    // ── Seguir una subasta (P6): quien pujó la sigue (mismo contrato que pg-store) ──
+    async subastasCierranEn(minutos) {
+      const ahora = Date.now(), tope = ahora + Math.max(1, Math.round(Number(minutos) || 3)) * 60000;
+      return (db.subastas || []).filter((s) => s.estado === "activa" && s.termina && new Date(s.termina).getTime() > ahora && new Date(s.termina).getTime() <= tope)
+        .map((s) => ({ id: s.id, slug: s.slug, titulo: s.titulo, termina: s.termina, puja_actual: s.puja_actual, ganador_id: s.ganador_id || null }));
+    },
+    async subastasCerradasRecientes(horas) {
+      const desde = Date.now() - Math.max(1, Math.round(Number(horas) || 24)) * 3600000;
+      return (db.subastas || []).filter((s) => s.estado === "cerrada" && s.ganador_id && s.termina && new Date(s.termina).getTime() > desde)
+        .map((s) => ({ id: s.id, slug: s.slug, titulo: s.titulo, termina: s.termina, puja_actual: s.puja_actual, ganador_id: s.ganador_id, adjudicado_a: s.adjudicado_a || null }));
+    },
+    async seguidoresSubasta(subastaId) {
+      const por = new Map();
+      for (const p of (db.pujas || [])) if (p.subasta_id === subastaId) por.set(p.socio_id, Math.max(por.get(p.socio_id) || 0, p.monto));
+      return [...por.entries()].map(([socio_id, mejor]) => ({ socio_id, mejor }));
+    },
 
     // ── Peñas oficiales (mismo contrato que pg-store) ──
     async crearPena({ nombre, ciudad, pais_iso, presidente, contacto }) {
